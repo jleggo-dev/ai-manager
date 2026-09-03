@@ -44,6 +44,9 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [items, setItems] = useState<RepertoireItem[]>([]);
   const [collisions, setCollisions] = useState<RepertoireCollisionGroup[]>([]);
+  // The collections already in use, for the item screen's Collection select. Read here rather than
+  // there because this screen already holds the list read that carries them.
+  const [collections, setCollections] = useState<string[]>([]);
   const [actionError, setActionError] = useState('');
   const [openItem, setOpenItem] = useState<{ item: RepertoireItem; collidesWithLabel: string | null } | null>(null);
   const [seedCollection, setSeedCollection] = useState<string | null>(null);
@@ -57,6 +60,7 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
       if (!res.ok) return setLoad({ kind: 'fault', fault: res.fault });
       setItems(res.items);
       setCollisions(res.collisions);
+      setCollections(res.collections);
       setLoad({ kind: 'ready' });
     });
   }, [goalId]);
@@ -102,6 +106,7 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
       <ItemScreen
         item={openItem.item}
         collidesWithLabel={openItem.collidesWithLabel}
+        collections={collections}
         onBack={() => {
           setOpenItem(null);
           void refresh();

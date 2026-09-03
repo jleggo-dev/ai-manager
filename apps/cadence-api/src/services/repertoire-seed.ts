@@ -26,7 +26,14 @@
  *    than a looser one: a row nothing can resolve reads as a record and behaves as a hole, and the
  *    only useful answer is to say which label needs a fuller name.
  */
-import { MAX_SEED_ITEMS, isSeedStatus, qualifierMeta, type SeedStatus } from '@cadence/shared';
+import {
+  MAX_SEED_ITEMS,
+  collapseCollection,
+  collectionsOf,
+  isSeedStatus,
+  qualifierMeta,
+  type SeedStatus,
+} from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { compactTitle, normTitle } from './goal-identity.ts';
 import { listRepertoire, upsertRepertoireItem } from '../repos/repertoire.ts';
@@ -39,12 +46,11 @@ import {
   samePiece,
 } from './repertoire-practice.ts';
 
-/** One piece the job proposed, after the app has normalized it. Nothing here is stored yet. */
+/** One item the job proposed, after the app has normalized it. Nothing here is stored yet. */
 export interface SeedCandidate {
   label: string;
   composer: string | null;
   collection: string | null;
-  catalogue: string | null;
   /** 1-based position in the collection's own order — dense, assigned here, never by the model. */
   rank: number;
   /** True when this label cannot be told from another candidate's or from one already on file. */
@@ -67,7 +73,6 @@ export interface SeedRowInput {
   label: string;
   composer?: string | null;
   collection?: string | null;
-  catalogue?: string | null;
   rank?: number | null;
   status: SeedStatus;
 }
@@ -127,7 +132,6 @@ interface RawItem {
   label?: unknown;
   composer?: unknown;
   collection?: unknown;
-  catalogue?: unknown;
 }
 
 /**
@@ -146,7 +150,6 @@ function normalizeItems(raw: unknown[]): Omit<SeedCandidate, 'ambiguous'>[] {
         label: scrub(item.label),
         composer: orNull(item.composer),
         collection: orNull(item.collection),
-        catalogue: orNull(item.catalogue),
       };
     })
     .filter((c) => c.label.length > 0)
@@ -245,11 +248,11 @@ const twinInBatch = (rows: Array<{ label: string }>, index: number): boolean =>
 function refusalReason(shelf: Array<{ label: string }>, rows: Array<{ label: string }>, index: number): string {
   const label = rows[index]!.label;
   if (twinInBatch(rows, index)) {
-    return 'two of these carry the same name — give one of them the composer or the catalogue number so each names one piece';
+    return 'two of these carry the same name — put what tells them apart into one of the labels so each names one item';
   }
   const clash = shelf.filter((i) => !samePiece(i.label, label) && itemNamedIn(i.label, matchHay([label])));
-  const named = clash.length ? clash.map((c) => `"${c.label}"`).join(' and ') : 'a piece you already have';
-  return `already the title of ${named} — add the composer, the catalogue number, or the collection so it names one piece`;
+  const named = clash.length ? clash.map((c) => `"${c.label}"`).join(' and ') : 'something you already have';
+  return `already the title of ${named} — add who made it, the collection it comes from, or whatever tells them apart, so the label names one item`;
 }
 
 /** The candidates the screen must warn about. Same rule the confirm refuses on. */
@@ -331,7 +334,6 @@ export async function confirmSeed(
       label: scrub(r.label),
       composer: orNull(r.composer),
       collection: orNull(r.collection),
-      catalogue: orNull(r.catalogue),
       rank: typeof r.rank === 'number' && Number.isInteger(r.rank) && r.rank >= 1 ? r.rank : undefined,
       status: r.status,
     }))
@@ -344,6 +346,7 @@ export async function confirmSeed(
     return null;
   });
   if (shelf === null) return { ok: false, fault: CONFIRM_FAULT };
+  const known = collectionsOf(shelf);
 
   // Judged against the WHOLE batch, never against the survivors: refusing the first of two twins
   // must not make the second one look unique.
@@ -364,8 +367,10 @@ export async function confirmSeed(
           goal_id: goalId,
           meta: qualifierMeta({
             composer: r.composer ?? undefined,
-            collection: r.collection ?? undefined,
-            catalogue: r.catalogue ?? undefined,
+            // Folded onto a spelling already on the shelf, so confirming "suzuki book 2" a second
+            // time joins the group the person already has rather than starting a near-twin beside
+            // it (owner ruling 2026-09-03). Same rule, same helper, as the item screen's PATCH.
+            collection: r.collection ? collapseCollection(known, r.collection) : undefined,
             rank: r.rank,
           }),
           // Never. A seed is a backfill, and only a crossing we watched happen is stamped.

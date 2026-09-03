@@ -14,11 +14,13 @@ export interface RepertoireItemPatch {
   label?: string;
   composer?: string;
   collection?: string;
-  catalogue?: string;
+  /** Their own words for WHICH ONE this is. Replaced the music-only `catalogue` field (owner
+   *  ruling 2026-09-03); bounded server-side at `DESCRIPTION_MAX`, twice a qualifier's 120. */
+  description?: string;
   status?: RepertoireStatus;
   /** 1-based position for a drag-ordered standing (the Up next group, P6 "the room"). */
   rank?: number;
-  /** WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu" (P8). */
+  /** How the work is going, right now (P8). */
   note?: string;
 }
 

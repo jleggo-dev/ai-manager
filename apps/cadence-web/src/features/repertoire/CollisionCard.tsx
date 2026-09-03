@@ -6,7 +6,7 @@
  *
  * The app never proposes the distinction, only names that one exists — the same restraint
  * ItemScreen's own collision notice holds to. Its verb always opens the item screen on THIS row,
- * so "naming them apart" is a rename or a composer/collection/catalogue field, never a choice this
+ * so "naming them apart" is a rename, or the By/Collection/Description fields, never a choice this
  * card makes for the person.
  */
 

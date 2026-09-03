@@ -58,6 +58,26 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
   get_practice_totals: {
     properties: { days: { type: 'integer', description: 'How many days back to add up (default 30, up to 365).' } },
   },
+  /**
+   * Both optional, and both exist for one reason: the context block caps the finished group at the
+   * 12 most recent and states the total (owner ruling 2026-09-03), so she needs a way to ask for
+   * the rest of a several-hundred-item record without it riding every turn. Omit both and the tool
+   * behaves exactly as it did before they existed.
+   */
+  get_repertoire: {
+    properties: {
+      standing: {
+        type: 'string',
+        enum: ['queued', 'working', 'known', 'retired'],
+        description: 'Read one group only. Omit to read every group.',
+      },
+      all: {
+        type: 'boolean',
+        description:
+          'Set true with standing "retired" for the whole finished list. Omit and finished is the 12 most recent.',
+      },
+    },
+  },
   get_journal: {
     properties: { limit: { type: 'integer', description: 'How many entries to return (default 8, up to 20).' } },
   },

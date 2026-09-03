@@ -36,6 +36,12 @@ export const CAPABILITIES: CapabilityGroup[] = [
       'talk through what you are building and turn it into goals with a why beside each',
       'remember what you told me — your goals, what you are working around, what you have to work with, what you are learning and already know (pieces, katas, poems) — so you never repeat yourself',
       // The manifest and the drawer must name the same abilities (the Progress Engine lesson,
+      // below): `offer_repertoire_review` has had a drawer hook since it shipped, and without a
+      // line here she can hold the hook and still answer "I can't do that" — measured before, on
+      // the Progress page (A19). Worded plainly and across three domains on the owner's ruling
+      // (2026-09-03): a person asking about their kata syllabus must be able to see themselves in it.
+      'show you everything in a book, grading syllabus, or reading list you are learning from, so you can mark what you already know',
+      // The manifest and the drawer must name the same abilities (the Progress Engine lesson,
       // above): update_equipment landed 2026-08-31 after she searched the drawer seven times for
       // an equipment write that did not exist and told the owner a correction was made when
       // nothing could make it.

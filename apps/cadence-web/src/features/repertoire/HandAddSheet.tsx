@@ -33,7 +33,7 @@ export function HandAddSheet({ goalId, onClose, onSaved }: HandAddSheetProps) {
     setBusy(true);
     setError('');
     const res = await confirmSeed(
-      [{ label: trimmed, composer: null, collection: null, catalogue: null, rank: null, status: 'working' }],
+      [{ label: trimmed, composer: null, collection: null, rank: null, status: 'working' }],
       goalId,
     );
     setBusy(false);
@@ -68,7 +68,7 @@ export function HandAddSheet({ goalId, onClose, onSaved }: HandAddSheetProps) {
               className="ri-input"
               value={label}
               disabled={busy}
-              placeholder="what is it?"
+              placeholder="What you call it"
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void save()}
             />

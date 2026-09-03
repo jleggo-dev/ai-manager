@@ -121,8 +121,69 @@ describe('findItemForTitle falls through to description', () => {
   });
 });
 
+/**
+ * The stored description (owner ruling 2026-09-03) — the person's own words for WHICH ONE this is,
+ * now read alongside the title, the composer and the collection. "The fast one in G" names a piece
+ * perfectly for whoever wrote it on the row and appears nowhere in its title, which is exactly the
+ * gap the field was added to close.
+ *
+ * The negatives matter more than the positives here, as everywhere in this file: a description is
+ * free text, so it is the loosest identity fact on the row, and a shared one must decide NOTHING —
+ * the same rule a shared title has always obeyed.
+ */
+describe('the description resolves what the title cannot', () => {
+  const withMeta = (label: string, meta: Record<string, unknown>) => ({ label, status: 'known', goal_id: PIANO, meta });
+
+  it('finds the piece from a description that shares no word with its title', () => {
+    const items = [
+      withMeta('Minuet in G Major, BWV 822', { description: 'the fast one my teacher set' }),
+      withMeta('Minuet in G Major (from Notebook for Anna Magdalena Bach)', { description: 'the slow gentle one' }),
+    ];
+    expect(describedItems(items, ['ran the fast one my teacher set']).map((i) => i.label)).toEqual([
+      'Minuet in G Major, BWV 822',
+    ]);
+  });
+
+  it('reaches a kata, where there is no composer and no collection to help', () => {
+    const items = [
+      withMeta('Heian Shodan', { description: 'the first kata, straight line up and back' }),
+      withMeta('Heian Nidan', { description: 'the one with the hammer fists' }),
+    ];
+    expect(describedItems(items, ['drilled the one with the hammer fists']).map((i) => i.label)).toEqual([
+      'Heian Nidan',
+    ]);
+  });
+
+  it('a description two items SHARE decides nothing — the shared-words rule, applied to prose', () => {
+    const items = [
+      withMeta('Study in C, no. 1', { description: 'the one my teacher set' }),
+      withMeta('Study in C, no. 2', { description: 'the one my teacher set' }),
+    ];
+    expect(describedItems(items, ['worked the one my teacher set'])).toEqual([]);
+  });
+
+  it('the composer alone reaches it too — "the Bartok one"', () => {
+    const items = [
+      withMeta('Hungarian Folk Song', { composer: 'Bartok' }),
+      withMeta('Cradle Song', { composer: 'Weber' }),
+    ];
+    expect(describedItems(items, ['played the Bartok']).map((i) => i.label)).toEqual(['Hungarian Folk Song']);
+  });
+
+  it('a row with no description behaves exactly as it did before the field existed', () => {
+    expect(described('played the minuet from the Anna Magdalena notebook')).toEqual([
+      'Minuet in G Major (from Notebook for Anna Magdalena Bach)',
+    ]);
+  });
+
+  it('a blank or non-string description is ignored rather than matching everything', () => {
+    const items = [withMeta('Arietta', { description: '   ' }), withMeta('Chanson', { description: 42 })];
+    expect(describedItems(items, ['worked on something today'])).toEqual([]);
+  });
+});
+
 describe('contentWords', () => {
-  it('drops articles, prepositions and catalogue scaffolding', () => {
+  it('drops articles, prepositions and the scaffolding a shelf shares', () => {
     expect(contentWords('The Happy Farmer (from Album for the Young, Op. 68, No. 10)')).toEqual([
       'happy',
       'farmer',

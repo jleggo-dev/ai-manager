@@ -12,10 +12,10 @@ import { SeedReview } from '../repertoire/SeedReview.tsx';
  * is nothing, exactly as WeekReviewCard and ChangeCard do beside it. A turn that describes the
  * offer loosely still cannot change which book is up: the pointer is the truth.
  *
- * BOTH DOORS OPEN ONE ROOM. "Lay them out" mounts P4's `SeedReview` — the same screen the ＋ door
+ * BOTH DOORS OPEN ONE ROOM. "Show me the list" mounts P4's `SeedReview` — the same screen the ＋ door
  * on the list opens, with the same confirm — and the only thing hers adds is `whereYouAre`, her
  * heard split pre-applied. There is no second review, and she writes nothing: the confirm on that
- * screen is still the only writer, which is why "Lay them out" alone changes nothing at all.
+ * screen is still the only writer, which is why "Show me the list" alone changes nothing at all.
  *
  * What comes back afterwards is a RECEIPT, not another card. The person has already decided; a
  * second editable card would ask them to decide again. So: one row saying what landed with a way
@@ -26,12 +26,14 @@ import { SeedReview } from '../repertoire/SeedReview.tsx';
 /** No stylesheet of its own: the offer wears ChangeCard/WeekReviewCard's frame (`cfm chg`), and
  *  the review wears the full-screen page class the list and item screens already use (`js`). */
 const OFFER_LINE =
-  "I can lay the whole thing out so you can tick what's yours. Nothing goes on your list until you say so.";
+  'I can show you everything in it so you can mark what you already know. Nothing goes on your list until you say so.';
 
 /** The receipt's own words. The count is a fact about what the person confirmed, so it comes from
  *  what the review actually wrote — never from what she offered. */
 function receiptLine(written: number): string {
-  return `${written} ${written === 1 ? 'piece' : 'pieces'} added to What I'm learning`;
+  // No noun: one row holds pieces, kata, books and verses, so any noun here is wrong for three of
+  // the four (owner ruling 2026-09-03). Singular and plural read the same without one.
+  return `${written} added to What I'm learning`;
 }
 
 /**
@@ -41,10 +43,10 @@ function receiptLine(written: number): string {
  */
 function seededNote(collection: string, written: number): string {
   return (
-    `The user has just confirmed the collection you offered: ${written} piece(s) from "${collection}" are now on ` +
-    'their list. You did not choose those pieces and you have not seen them — they ticked them. Read the list ' +
+    `The user has just confirmed the collection you offered: ${written} items from "${collection}" are now on ` +
+    'their list. You did not choose them and you have not seen them — they ticked them. Read the list ' +
     'back (get_repertoire) before you name anything from it, then say in ONE line what you would do with it ' +
-    'next. Do not list the pieces back to them and do not thank them for the list.'
+    'next. Do not list them back to them and do not thank them for the list.'
   );
 }
 
@@ -136,7 +138,7 @@ export function RepertoireOfferCard({
       <div className="chg-t">{offer.collection}</div>
       <div className="cfm-mute">{OFFER_LINE}</div>
       <button type="button" className="cfm-build" onClick={() => setView('review')}>
-        Lay them out
+        Show me the list
       </button>
       <button type="button" className="cfm-more" onClick={notNow}>
         Not now

@@ -1,12 +1,16 @@
 /**
- * Repertoire rotation + rendering — pure functions, shared so the API's prescribe path and any
- * future UI agree on what "due next" means.
+ * Repertoire rendering — pure functions, shared so the API's prescribe path and the list screen
+ * read one set of facts about a shelf.
  *
- * The rule is deliberately boring: among 'known' items, the one resting LONGEST is due, and an
- * item never practiced rests longer than any that has. Boring is the point — a rotation the user
- * can predict ("it cycles") is one they can trust, and the coach may still override it for a
- * stated reason (the tool hands her the facts plus the computed pick; she adjudicates —
- * TOOL-HARNESS.md's inversion, applied here).
+ * FACTS ONLY (owner ruling 2026-09-03). What the coach reads here says what is on file — the
+ * standing, when each item was last worked, its settled tempo, its practice note — and what a
+ * standing MEANS. It never says which item to choose, how many to take, or which order to prefer
+ * them in. She is a reasoning model with the whole shelf in front of her and the person to talk to;
+ * a computed "due next" pick used to ride these lines, and biasing her that way made the app read
+ * as a program running her rather than a coach thinking. `pickDueNext` was deleted with it.
+ *
+ * `byRest` survives as a DISPLAY comparator only — the list screen orders an unranked Keeping-up
+ * group by it and prints each row's date, so the order states a fact the person can check.
  */
 import type { RepertoireStatus } from './types/repertoire.ts';
 import { type MetronomeSpec, DEFAULT_METER, normalizeMetronome } from './metronome.ts';
@@ -50,42 +54,73 @@ export function tempoMeta(spec: MetronomeSpec): Record<string, unknown> {
 }
 
 /* ── Qualifiers ─────────────────────────────────────────────────────────────────────────────
-   The fields that tell two pieces with one title apart — composer, the collection it comes from,
-   a catalogue number — and, for material that has an order (a book, a grading ladder), its rank.
-   Structured in `meta` so the title can stay short and the qualifier does the work: "Minuet in G
-   Major" is three pieces on one shelf until BWV 822 or the Anna Magdalena notebook is named.
+   The fields that tell two items with one title apart — who wrote it, the collection it comes
+   from, and the person's own description of which one it is — plus, for material that has an
+   order (a book, a grading ladder), its rank. Structured in `meta` so the title can stay short
+   and the qualifier does the work: "Minuet in G Major" is three pieces on one shelf until Bach,
+   the Anna Magdalena notebook, or "the fast one my teacher set" is named.
+
+   A `catalogue` field lived here until 2026-09-03 and was removed on the owner's ruling —
+   *"Catalogue number is very music-specific and adds little; that can go in the title or
+   description. We're overly optimising for one use case."* No migration came with it: a row whose
+   `meta` still holds a `catalogue` key is simply never read, which costs nothing and loses
+   nothing, since the same fact belongs in the label or the description now.
 
    Spelled ONCE here. The seed writes these, the item screen edits them, identity reads them for
    the collision check, and the list renders them on the row's second line — four call sites in
    three packages, which is exactly the hand-copied-key drift the weigh-in regex taught. */
 export const COMPOSER_KEY = 'composer';
 export const COLLECTION_KEY = 'collection';
-export const CATALOGUE_KEY = 'catalogue';
 /** 1-based position in an ordered collection. Present on every item of a goal ⇒ the list is a ladder. */
 export const RANK_KEY = 'rank';
 
 /**
- * WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu". Unlike the
- * three qualifiers above, this says nothing about which piece it is; it says what is on file about
- * how it is being practised. Read by both consumers of "the durable facts on a row" (the coach's
- * own practice-note line in session-practice-facts.ts, and this row's second line on the list
+ * The person's own words for WHICH ONE this is — "the fast one in G", "the one my teacher set",
+ * "the version with the repeat". Free text, and the answer to the same question composer and
+ * collection answer, for the many items that have neither: a kata, a poem, a prayer, a book.
+ *
+ * Added 2026-09-03 on the owner's ruling, together with the removal of `catalogue`: a BWV number
+ * is one domain's way of saying which one, and a sentence is everybody's. The coach may write it
+ * (`update_repertoire`), the item screen edits it, and the matcher reads its words, so "the fast
+ * one in G" resolves against the row that says so.
+ */
+export const DESCRIPTION_KEY = 'description';
+
+/**
+ * The practice note — how it is going, right now: "bars 9-16", "p. 240", "first stanza",
+ * "for 5th kyu". Unlike the qualifiers above it says nothing about WHICH item this is; it is what
+ * is on file about how the work is going. Read by both consumers of "the durable facts on a row"
+ * (the coach's own line in session-practice-facts.ts, and this row's second line on the list
  * screen) so the two never drift into separate vocabularies for the same fact. Folded into the
  * SAME qualifier read/patch below rather than a parallel pair of functions, so the item screen's
- * one PATCH writes the note alongside composer/collection/catalogue/rank in a single merge.
+ * one PATCH writes the note alongside composer/collection/description/rank in a single merge.
+ *
+ * The schema key stays `practice_note`; the person sees "Notes" (CLAUDE.md's nomenclature rule).
  */
 export const PRACTICE_NOTE_KEY = 'practice_note';
 
 export interface PieceQualifiers {
   composer?: string;
   collection?: string;
-  catalogue?: string;
+  /** See `DESCRIPTION_KEY` — their own words for which one it is. Capped at `DESCRIPTION_MAX`. */
+  description?: string;
   rank?: number;
-  /** See `PRACTICE_NOTE_KEY` — WHERE the work is, not WHICH piece this is. */
+  /** See `PRACTICE_NOTE_KEY` — how the work is going, not WHICH item this is. */
   note?: string;
 }
 
-const qualifierString = (v: unknown): string | undefined =>
-  typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : undefined;
+/** A qualifier is a phrase, not a paragraph. */
+const QUALIFIER_MAX = 120;
+
+/** The description gets twice the room: it is a sentence about which one this is, and the fields
+ *  it replaces for non-music domains (a catalogue number, an opus) were terse in a way a sentence
+ *  is not. Still bounded — it rides the coach's context on every practice turn. */
+export const DESCRIPTION_MAX = 240;
+
+const boundedString = (v: unknown, max: number): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
+
+const qualifierString = (v: unknown): string | undefined => boundedString(v, QUALIFIER_MAX);
 
 /** The qualifiers on an item, or nothing where a field is absent or unusable. Never throws. */
 export function pieceQualifiers(meta: Record<string, unknown> | null | undefined): PieceQualifiers {
@@ -93,12 +128,12 @@ export function pieceQualifiers(meta: Record<string, unknown> | null | undefined
   const out: PieceQualifiers = {};
   const composer = qualifierString(meta[COMPOSER_KEY]);
   const collection = qualifierString(meta[COLLECTION_KEY]);
-  const catalogue = qualifierString(meta[CATALOGUE_KEY]);
+  const description = boundedString(meta[DESCRIPTION_KEY], DESCRIPTION_MAX);
   const note = qualifierString(meta[PRACTICE_NOTE_KEY]);
   const rank = meta[RANK_KEY];
   if (composer) out.composer = composer;
   if (collection) out.collection = collection;
-  if (catalogue) out.catalogue = catalogue;
+  if (description) out.description = description;
   if (note) out.note = note;
   if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 1) out.rank = rank;
   return out;
@@ -110,14 +145,52 @@ export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   const composer = qualifierString(q.composer);
   const collection = qualifierString(q.collection);
-  const catalogue = qualifierString(q.catalogue);
+  const description = boundedString(q.description, DESCRIPTION_MAX);
   const note = qualifierString(q.note);
   if (composer) patch[COMPOSER_KEY] = composer;
   if (collection) patch[COLLECTION_KEY] = collection;
-  if (catalogue) patch[CATALOGUE_KEY] = catalogue;
+  if (description) patch[DESCRIPTION_KEY] = description;
   if (note) patch[PRACTICE_NOTE_KEY] = note;
   if (typeof q.rank === 'number' && Number.isInteger(q.rank) && q.rank >= 1) patch[RANK_KEY] = q.rank;
   return patch;
+}
+
+/**
+ * The collections already on this shelf, most-used first, each in the spelling it first appeared in.
+ *
+ * A collection only groups if it is CHOSEN rather than typed (owner ruling 2026-09-03: *"a
+ * collection only works if it's not free-text"*) — "Suzuki Book 2", "Suzuki book 2" and "suzuki
+ * bk 2" are three groups where the person meant one. So the item screen offers this list and the
+ * writers collapse a typed name onto whichever spelling is already here.
+ *
+ * Ordered by how many items carry it, then by name, so the shelf's own vocabulary leads the list
+ * rather than whatever happened to be inserted first; the tie-break keeps it stable.
+ */
+export function collectionsOf(items: Array<{ meta?: Record<string, unknown> | null }>): string[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const item of items) {
+    const name = pieceQualifiers(item.meta).collection;
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const seen = counts.get(key);
+    // First spelling wins: a later "suzuki book 2" must not rename the group the person reads.
+    if (seen) seen.count += 1;
+    else counts.set(key, { name, count: 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : 1)).map((c) => c.name);
+}
+
+/**
+ * A typed collection name, folded onto the spelling already on the shelf when one matches.
+ *
+ * Trim plus lower-case equality, and deliberately nothing else — this is a SPELLING guard, not a
+ * matcher. Anything fuzzier ("Suzuki 2" ≈ "Suzuki Book 2") would silently file an item under a
+ * collection the person did not choose, which is worse than the second group they can see and fix.
+ */
+export function collapseCollection(existing: readonly string[], typed: string): string {
+  const trimmed = typed.trim();
+  const key = trimmed.toLowerCase();
+  return existing.find((name) => name.trim().toLowerCase() === key) ?? trimmed;
 }
 
 /** The practice note on its own, or undefined where there is none (or it is blank) — for a caller
@@ -129,16 +202,25 @@ export function practiceNoteOf(meta: Record<string, unknown> | null | undefined)
   return qualifierString(meta[PRACTICE_NOTE_KEY]);
 }
 
+/** The description on its own, for the renders that print it as a fact. Same shape as
+ *  `practiceNoteOf`, at the description's own bound. */
+export function descriptionOf(meta: Record<string, unknown> | null | undefined): string | undefined {
+  if (!meta) return undefined;
+  return boundedString(meta[DESCRIPTION_KEY], DESCRIPTION_MAX);
+}
+
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
 
 /** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
- *  then by codepoint label order — locale-independent, so the pick is identical on a dev laptop
+ *  then by codepoint label order — locale-independent, so the order is identical on a dev laptop
  *  and a UTC server rather than dependent on ICU data or row order.
  *
- *  Exported (2026-09-02, P6 "the room"): the list screen sorts the WHOLE Keeping-up group by this
- *  same comparator, not just the one due pick `pickDueNext` returns — so the coach and the screen
- *  read one rest-order, never a second spelling of "longest rest" drifting from this one
- *  (CLAUDE.md: a comparator that decides behaviour lives in `@cadence/shared` once). */
+ *  A DISPLAY order, and since 2026-09-03 nothing but that: the list screen sorts an unranked
+ *  Keeping-up group by it and shows each row's date, so the order only restates a fact already on
+ *  the row. It no longer feeds anything the coach reads — `pickDueNext`, which returned the first
+ *  of this order and rode the prompt as "DUE NEXT", was deleted under the facts-not-picks ruling.
+ *  Lives in `@cadence/shared` because a comparator that decides what a person sees belongs in one
+ *  place (CLAUDE.md), never hand-copied per call site. */
 export function byRest(a: RepertoireLike, b: RepertoireLike): number {
   const at = time(a.last_practiced_at);
   const bt = time(b.last_practiced_at);
@@ -150,12 +232,6 @@ export function byRest(a: RepertoireLike, b: RepertoireLike): number {
   const bs = time(b.started_at);
   if (!Number.isNaN(as) && !Number.isNaN(bs) && as !== bs) return as - bs;
   return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
-}
-
-/** The 'known' item resting longest — null when nothing is in the rotation pool. */
-export function pickDueNext(items: RepertoireLike[]): RepertoireLike | null {
-  const sorted = [...items.filter((i) => i.status === 'known')].sort(byRest);
-  return sorted[0] ?? null;
 }
 
 /** "worked today" / "worked 3 days ago" — relative day-counts, never calendar dates: the server
@@ -176,87 +252,180 @@ const tempoNote = (i: RepertoireLike): string | null => {
   return t.meter === DEFAULT_METER ? `settled tempo ${t.bpm} bpm` : `settled tempo ${t.bpm} bpm, ${t.meter} to the bar`;
 };
 
-/** How many items a group may render before it cuts and says so — a two-year repertoire must not
- *  become a 200-line block in every prescribe prompt and context pack. */
-const GROUP_CAP = 15;
+/** "note: bars 9-16" — how the work on this item is going, stored by the item screen (P8) and read
+ *  through the one qualifier reader, never a hand-spelled meta key. Added to this render 2026-09-03:
+ *  it was already on the row's second line and in the prescribe facts, and holding it back here left
+ *  her reading "worked yesterday" with no way to know what was worked on. */
+const noteMark = (i: RepertoireLike): string | null => {
+  const note = practiceNoteOf(i.meta);
+  return note ? `note: ${note}` : null;
+};
+
+/** "description: the fast one in G" — the person's own words for which item this is, so a request
+ *  phrased their way ("the fast one") reaches her already resolved. */
+const descriptionMark = (i: RepertoireLike): string | null => {
+  const description = descriptionOf(i.meta);
+  return description ? `description: ${description}` : null;
+};
 
 /**
- * The four groups, in the order she reads them, each header carrying the standing's instruction.
+ * How many Learned items she is shown, and the ONLY cap on what she reads (owner ruling
+ * 2026-09-03).
+ *
+ * What they are working on — Learning, Up next, Keeping up — goes in full: those are the facts a
+ * session is built from and a cut there hides live material. Learned only grows, and a reading
+ * record can reach several hundred, so she gets the most recent 12 plus the total, and asks
+ * `get_repertoire` for the rest when the conversation is actually about it. Owner: *"a 500-piece
+ * Learned list should not go to the coach every turn; the total plus the ability to ask for more
+ * limits tokens and gives her a more relevant list."*
+ */
+export const LEARNED_CAP = 12;
+
+/**
+ * When a finished item was last touched: the LATER of the day they finished it and any practice
+ * since. NaN when it carries neither date (backfilled — they already knew it when they told us).
+ *
+ * Both dates are practices, so ranking on either alone hides half the shelf: a piece finished in
+ * 2019 and played last week is recent, and so is one finished last week and never touched again.
+ */
+function lastTouched(i: RepertoireLike): number {
+  const dates = [time(i.last_practiced_at), time(i.learned_at)].filter((t) => !Number.isNaN(t));
+  return dates.length ? Math.max(...dates) : Number.NaN;
+}
+
+/** Most recently touched first; an item with no date at all sorts last, never at a guessed
+ *  position among the dated ones, with the label breaking a tie so the order is stable. */
+export function byLastTouched(a: RepertoireLike, b: RepertoireLike): number {
+  const at = lastTouched(a);
+  const bt = lastTouched(b);
+  const aNone = Number.isNaN(at);
+  const bNone = Number.isNaN(bt);
+  if (aNone !== bNone) return aNone ? 1 : -1;
+  if (!aNone && at !== bt) return bt - at;
+  return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
+}
+
+/** The Learned items she is shown, most recently touched first, and how many there are in all.
+ *  Both renders read this one function so the coach's context block and the prescribe prompt can
+ *  never disagree about which twelve, or about the number. */
+export function cappedLearned(items: RepertoireLike[]): { shown: RepertoireLike[]; total: number } {
+  const learned = items.filter((i) => i.status === 'retired');
+  return { shown: [...learned].sort(byLastTouched).slice(0, LEARNED_CAP), total: learned.length };
+}
+
+/** "Learned: 214 items — 12 most recent shown" — the count is always stated, so a capped group can
+ *  never read as the whole record. Domain-neutral noun: the same row holds kata, books and verses
+ *  (P8), so "pieces" would be wrong for three of the four. */
+export function learnedTotalLine(total: number, shown: number): string {
+  const head = `Learned: ${total} item${total === 1 ? '' : 's'}`;
+  return total > shown ? `${head} — ${shown} most recent shown` : head;
+}
+
+/**
+ * The four groups, in the order she reads them, each header DEFINING its standing.
  *
  * Two things every header must do, because this text is read by a MODEL (tool-catalog.ts, "HOW TO
  * WRITE THE STRINGS IN THIS FILE"):
  *
- *  1. **State what to DO with the group**, not what it is. "Keeping up" alone makes her infer a
- *     rule; "draw warm-up and play-out material from here, longest rest first" is one.
+ *  1. **State what the group MEANS, and stop there.** Until 2026-09-03 these headers gave orders —
+ *     "draw warm-up and play-out material from here, longest rest first", "keep it to one or two",
+ *     "propose the top one". The owner ruled all of it out: *"We don't need to give the coach ANY
+ *     direction on how to pick... We continue to try to influence or bias the LLM's natural
+ *     reasoning, but we shouldn't. That will make our application seem unnatural."* She has the
+ *     whole shelf and the person in front of her; a definition is what she is missing, not a rule.
  *  2. **Name the status word she writes back.** The user-facing label and the schema word differ
  *     on purpose, and one pair collides outright: the group called "Learned" is `retired`, while
  *     `learned` is the verb for the opposite move (crossed into Keeping up just now, celebrated
  *     once). Without the word in the header she would write status "learned" to file something
- *     under Learned and land it in the rotation with a cheer attached.
+ *     under Learned and land it back among what they still play, with a cheer attached.
+ *
+ * The one imperative left is `queued`'s "Never start one unless they ask". It is a consent
+ * boundary, not a picking rule — it says what she may not do to their material unasked, and says
+ * nothing about which item today's work comes from. (The same distinction keeps "nothing is saved
+ * until they confirm" in the tool descriptions.)
  *
  * Exported (2026-09-02, P6 "the room") for the GROUP ORDER only: the list screen renders its four
  * sections in exactly this array's order (`working, queued, known, retired`), read off here so the
  * screen and the coach can never disagree about which standing comes first. The HEADER TEXT below
- * is not for the screen — it is imperative, third-person, and names the schema word by design,
- * because it is a prompt string a MODEL reads (see the two rules above), and putting it in front of
- * a person would break the warm-UI/boring-prompt split CLAUDE.md's nomenclature rule draws. The
- * screen carries its own short, warm line per standing instead (`GROUP_LINES` in
- * `repertoireListCopy.ts`, web package) — a first attempt at reusing this text verbatim for the UI
- * was wrong and was reverted (owner review, 2026-09-02).
+ * is not for the screen — it is third-person and names the schema word by design, because it is a
+ * prompt string a MODEL reads, and putting it in front of a person would break the
+ * warm-UI/boring-prompt split CLAUDE.md's nomenclature rule draws. The screen carries its own
+ * short, warm line per standing instead (`GROUP_LINES` in `repertoireListCopy.ts`, web package) —
+ * a first attempt at reusing this text verbatim for the UI was wrong and was reverted (owner
+ * review, 2026-09-02).
  */
-export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
-  {
-    status: 'working',
-    header: 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:',
-  },
-  {
-    status: 'queued',
-    header:
-      'Up next (status "queued") — not started yet, in the user\'s order. Propose the top one when something is learned; never start one unasked:',
-  },
-  {
-    status: 'known',
-    header:
-      'Keeping up (status "known") — learned and in the rotation. Draw warm-up and play-out material from here, longest rest first:',
-  },
-  {
-    status: 'retired',
-    header: 'Learned (status "retired") — finished. Count these; never schedule them:',
-  },
-];
+/**
+ * Schema word → the standing's name. The web's own `STANDING_WORDS` (repertoireItemCopy.ts) is the
+ * same four words for the SCREEN, where they are button labels; these are the ones the coach reads,
+ * and they live here because the header above and the API's per-item line (session-practice-facts)
+ * both need them and a third hand-typed copy is how a name drifts.
+ */
+export const STANDING_NAMES: Record<RepertoireStatus, string> = {
+  working: 'Learning',
+  queued: 'Up next',
+  known: 'Keeping up',
+  retired: 'Learned',
+};
+
+/**
+ * What each standing MEANS — the definition half of what she is handed, spelled once.
+ *
+ * `queued`'s second sentence is a consent boundary, not a picking rule: it says what she may not do
+ * to their material unasked. The facts-not-picks ruling removed the rules ("draw warm-up material
+ * from here", "keep it to one or two") and kept this, because the two are different things — one
+ * biases her reasoning, the other protects the person's material from being started for them.
+ */
+export const STANDING_MEANS: Record<RepertoireStatus, string> = {
+  working: 'being worked on now',
+  queued: "not started, in the user's own order. Never start one unless they ask",
+  known: 'learned and still played',
+  retired: 'finished; not played any more',
+};
+
+export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = (
+  ['working', 'queued', 'known', 'retired'] as const
+).map((status) => ({
+  status,
+  header: `${STANDING_NAMES[status]} (status "${status}") — ${STANDING_MEANS[status]}:`,
+}));
 
 /**
  * The compact text both consumers inject — get_repertoire's render and prescribe-session's
  * {{repertoire}} variable. One renderer so the coach in chat and the coach programming a session
- * read the same facts in the same words. Empty string when there is nothing on file. The known
- * group is ordered longest-rest first, so a cut can never drop the DUE NEXT item, and a cut
- * always says how much it dropped (a silent truncation is a quiet lie about completeness).
- * `now` is injectable for tests; callers omit it.
+ * read the same facts in the same words. Empty string when there is nothing on file.
+ *
+ * Every line is a FACT about one item — its kind, when it was last worked, its settled tempo, its
+ * practice note — and nothing on it ranks one item against another. No item is marked, and no
+ * header says which group today's work comes from.
+ *
+ * Learning, Up next and Keeping up go in FULL. Learned is the one capped group — the 12 most
+ * recently touched, under a line stating how many there are in all, so she can see the size of the
+ * record and ask `get_repertoire` for the rest (`LEARNED_CAP`). `now` is injectable for tests;
+ * callers omit it. `allLearned` lifts the cap, and exists for exactly one caller: `get_repertoire`
+ * answering the ask the total line invites.
  */
-export function renderRepertoire(items: RepertoireLike[], now = Date.now()): string {
+export function renderRepertoire(
+  items: RepertoireLike[],
+  now = Date.now(),
+  opts: { allLearned?: boolean } = {},
+): string {
   if (!items.length) return '';
-  const due = pickDueNext(items);
   const line = (i: RepertoireLike): string => {
-    const marks = [
-      i.kind,
-      practicedNote(i, now),
-      tempoNote(i),
-      due && i === due ? 'DUE NEXT by rotation' : null,
-    ].filter(Boolean);
+    const marks = [i.kind, practicedNote(i, now), tempoNote(i), descriptionMark(i), noteMark(i)].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
-  };
-  const capped = (group: RepertoireLike[]): string[] => {
-    const shown = group.slice(0, GROUP_CAP).map(line);
-    if (group.length > GROUP_CAP) shown.push(`  …and ${group.length - GROUP_CAP} more on file`);
-    return shown;
   };
   const sections: string[] = [];
   for (const spec of REPERTOIRE_GROUPS) {
     const members = items.filter((i) => i.status === spec.status);
-    // Only 'known' rotates, so only 'known' is ordered by rest — that ordering is what makes a cut
-    // safe there (the DUE NEXT item can never be the one dropped).
-    const ordered = spec.status === 'known' ? [...members].sort(byRest) : members;
-    if (ordered.length) sections.push(`${spec.header}\n${capped(ordered).join('\n')}`);
+    if (!members.length) continue;
+    if (spec.status === 'retired') {
+      const { shown, total } = opts.allLearned
+        ? { shown: [...members].sort(byLastTouched), total: members.length }
+        : cappedLearned(members);
+      sections.push(`${spec.header}\n  ${learnedTotalLine(total, shown.length)}\n${shown.map(line).join('\n')}`);
+      continue;
+    }
+    sections.push(`${spec.header}\n${members.map(line).join('\n')}`);
   }
   return sections.join('\n');
 }

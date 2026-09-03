@@ -5,7 +5,7 @@
  * tag, so this asks the SERVER what is offered and draws nothing when the answer is nothing —
  * which is what makes it safe to mount beside every finished turn.
  *
- * The two that carry the feature are the two the design is about: "Lay them out" opens the SAME
+ * The two that carry the feature are the two the design is about: "Show me the list" opens the SAME
  * review the person's own ＋ door opens, prefilled with what she heard; and the confirm comes back
  * as a receipt row, not another card to edit. The rest are the ways it must not go wrong — an
  * offer declined must not reappear, and nothing may be claimed as saved before the review says so.
@@ -73,7 +73,7 @@ describe('the offer', () => {
   it('names the collection she heard, and claims nothing about their list', async () => {
     render(<RepertoireOfferCard />);
     expect(await screen.findByText('Suzuki Piano Book 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Lay them out' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show me the list' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
     expect(screen.getByText(/Nothing goes on your list until you say so/)).toBeInTheDocument();
   });
@@ -88,10 +88,10 @@ describe('the offer', () => {
   });
 });
 
-describe('"Lay them out"', () => {
+describe('"Show me the list"', () => {
   it('opens the same review the ＋ door opens, prefilled with what she heard', async () => {
     render(<RepertoireOfferCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
 
     expect(await screen.findByText('REVIEW:Suzuki Piano Book 2')).toBeInTheDocument();
     expect(screen.getByText('WHERE:Hungarian Folk Song')).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('"Lay them out"', () => {
   it('passes no prefill when she heard no piece', async () => {
     api.getRepertoireOffer.mockResolvedValueOnce({ ...OFFER, where_you_are: null });
     render(<RepertoireOfferCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
 
     await screen.findByText('REVIEW:Suzuki Piano Book 2');
     expect(seedProps).toHaveBeenCalledWith(expect.objectContaining({ whereYouAre: undefined }));
@@ -111,18 +111,18 @@ describe('"Lay them out"', () => {
 
   it('does not clear the offer just for opening it — only an answer clears it', async () => {
     render(<RepertoireOfferCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
     await screen.findByText('REVIEW:Suzuki Piano Book 2');
     expect(api.clearRepertoireOffer).not.toHaveBeenCalled();
   });
 
   it('backs out to the offer without saving anything', async () => {
     render(<RepertoireOfferCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
     await screen.findByText('REVIEW:Suzuki Piano Book 2');
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
-    expect(await screen.findByRole('button', { name: 'Lay them out' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Show me the list' })).toBeInTheDocument();
     expect(api.clearRepertoireOffer).not.toHaveBeenCalled();
   });
 });
@@ -130,28 +130,30 @@ describe('"Lay them out"', () => {
 describe('the receipt', () => {
   async function seed(props: Record<string, unknown> = {}) {
     render(<RepertoireOfferCard {...props} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
     fireEvent.click(await screen.findByRole('button', { name: 'finish' }));
   }
 
   it('is a row saying what landed, not another card to edit', async () => {
     await seed({ onOpenList: vi.fn() });
-    expect(await screen.findByText("9 pieces added to What I'm learning")).toBeInTheDocument();
+    expect(await screen.findByText("9 added to What I'm learning")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open ›' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Lay them out' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show me the list' })).not.toBeInTheDocument();
   });
 
   it('offers no way in when the host has nowhere to take them — onboarding has no Progress tab', async () => {
     await seed();
-    expect(await screen.findByText("9 pieces added to What I'm learning")).toBeInTheDocument();
+    expect(await screen.findByText("9 added to What I'm learning")).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open ›' })).not.toBeInTheDocument();
   });
 
-  it('counts one piece as one piece', async () => {
+  /** One reads the same as nine, because the receipt carries no noun: the same row holds
+   *  pieces, kata, books and verses, so any noun would be wrong for three of the four. */
+  it('counts one the same way it counts nine — no noun to get wrong', async () => {
     render(<RepertoireOfferCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
     seedProps.mock.calls[0]![0].onDone(1);
-    expect(await screen.findByText("1 piece added to What I'm learning")).toBeInTheDocument();
+    expect(await screen.findByText("1 added to What I'm learning")).toBeInTheDocument();
   });
 
   it('clears the offer, so the same book is never offered twice', async () => {
@@ -180,7 +182,7 @@ describe('the receipt', () => {
 
   it('says nothing at all when the review wrote nothing', async () => {
     const { container } = render(<RepertoireOfferCard />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Lay them out' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Show me the list' }));
     seedProps.mock.calls[0]![0].onDone(0);
     await waitFor(() => expect(container.textContent).toBe(''));
   });

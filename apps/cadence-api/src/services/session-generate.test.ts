@@ -105,13 +105,14 @@ describe('prescribe retry-on-normalize-null', () => {
 });
 
 /**
- * A practice session is built from the standings, so the prompt is handed WHICH items each part
- * draws on rather than asked to work it out: the warm-up (the Keeping up item rested longest), the
- * swap (the next-rested), Learning with each piece's note and last words, and the top of Up next as
- * a forecast. All four are empty for a goal with no shelf — an empty tag the template ignores, so a
- * gym session's prompt is unchanged.
+ * A practice session is built from the shelf, so the prompt is handed the WHOLE shelf as facts and
+ * she chooses (owner ruling 2026-09-03). Four variables used to name the picks for her —
+ * `warmup_pick`, `next_rested`, `learning`, `up_next_top` — and they are gone; `repertoire` is the
+ * one variable now. It is empty for a goal with no shelf of its own (an empty tag the template
+ * ignores, so a gym session's prompt is unchanged) and carries the fault sentence, never an empty
+ * string, when the read broke.
  */
-describe('the prescribe prompt is handed the practice standings', () => {
+describe('the prescribe prompt is handed the whole shelf', () => {
   const row = (label: string, status: string, extra: Record<string, unknown> = {}) => ({
     item_id: label,
     user_id: 'u1',
@@ -127,7 +128,7 @@ describe('the prescribe prompt is handed the practice standings', () => {
   });
 
   const SHELF = [
-    row('Arietta', 'known'), // never worked ⇒ rests longest ⇒ the warm-up
+    row('Arietta', 'known'), // never worked — a fact on its line, no longer a pick
     row('Écossaise (Hummel)', 'known', { last_practiced_at: '2026-08-20T18:00:00.000Z' }),
     row('Hungarian Folk Song', 'working'),
     row('Melody (Schumann)', 'queued'),
@@ -141,7 +142,7 @@ describe('the prescribe prompt is handed the practice standings', () => {
     vi.mocked(listRepertoire).mockResolvedValue([] as never);
   });
 
-  it('names the warm-up, the swap, Learning and the top of Up next', async () => {
+  it('sends every item on the shelf, whatever its standing', async () => {
     vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-piano', area: 'practice' }] as never);
     vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-piano' } as never);
     vi.mocked(listRepertoire).mockResolvedValueOnce(SHELF as never);
@@ -149,16 +150,29 @@ describe('the prescribe prompt is handed the practice standings', () => {
     await getOccurrenceDetail('u1', 'o1');
 
     const vars = varsOfLastCall();
-    expect(vars.warmup_pick).toContain('Arietta');
-    expect(vars.next_rested).toContain('Écossaise (Hummel)');
-    expect(vars.learning).toContain('Hungarian Folk Song');
-    expect(vars.up_next_top).toContain('Melody (Schumann)');
-    // Learned is never scheduled, and Up next is a forecast — neither is a part of the session.
-    expect(`${vars.warmup_pick}${vars.next_rested}${vars.learning}`).not.toContain('Cradle Song');
-    expect(`${vars.warmup_pick}${vars.next_rested}${vars.learning}`).not.toContain('Melody (Schumann)');
+    for (const label of SHELF.map((r) => r.label)) expect(vars.repertoire).toContain(label);
   });
 
-  it('sends all four empty for a goal whose shelf holds nothing of its own', async () => {
+  /**
+   * The near-miss, and the reason this test exists at all: the four variables it replaces would
+   * still be BUILT if a merge put the old spread back, and nothing would throw — the prompt would
+   * simply start naming picks again. Asserting their absence at the call boundary catches that.
+   */
+  it('sends ONE repertoire variable — no warm-up, swap, Learning or Up-next pick rides along', async () => {
+    vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-piano', area: 'practice' }] as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-piano' } as never);
+    vi.mocked(listRepertoire).mockResolvedValueOnce(SHELF as never);
+
+    await getOccurrenceDetail('u1', 'o1');
+
+    const vars = varsOfLastCall();
+    for (const gone of ['warmup_pick', 'next_rested', 'learning', 'up_next_top']) {
+      expect(vars, `${gone} names a pick and must not be sent`).not.toHaveProperty(gone);
+    }
+    expect(vars.repertoire).not.toMatch(/DUE NEXT|longest rest|rested longest/i);
+  });
+
+  it('sends it empty for a goal whose shelf holds nothing of its own', async () => {
     vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-gym', area: 'movement' }] as never);
     vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-gym' } as never);
     // Unlinked items reach practice-area goals only; these are the piano goal's.
@@ -166,24 +180,17 @@ describe('the prescribe prompt is handed the practice standings', () => {
 
     await getOccurrenceDetail('u1', 'o1');
 
-    const vars = varsOfLastCall();
-    expect(vars.warmup_pick).toBe('');
-    expect(vars.next_rested).toBe('');
-    expect(vars.learning).toBe('');
-    expect(vars.up_next_top).toBe('');
+    expect(varsOfLastCall().repertoire).toBe('');
   });
 
-  it('sends all four empty when the shelf could not be read, and says so in <repertoire>', async () => {
+  it('says the shelf could not be read, rather than sending an empty one', async () => {
     vi.mocked(listGoalsByStatus).mockResolvedValueOnce([{ goal_id: 'g-piano', area: 'practice' }] as never);
     vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), goal_id: 'g-piano' } as never);
     vi.mocked(listRepertoire).mockRejectedValueOnce(new Error('db down'));
 
     await getOccurrenceDetail('u1', 'o1');
 
-    const vars = varsOfLastCall();
-    expect(vars.warmup_pick).toBe('');
-    expect(vars.learning).toBe('');
-    expect(vars.repertoire).toContain('NOT an empty record');
+    expect(varsOfLastCall().repertoire).toContain('NOT an empty record');
   });
 });
 
