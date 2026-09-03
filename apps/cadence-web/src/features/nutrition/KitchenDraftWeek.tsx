@@ -1,5 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { readProgressLine, type ReadProgressStep } from '@cadence/shared';
 import { generateMealPlan, mealPlanDayLabel, shoppingListSummary, type MealPlanDraft } from '../../lib/api.ts';
+
+/**
+ * Drafting a week takes ~85s (measured 2026-09-03, broker profile) — same ruling as the photo
+ * read and the session prep: don't hide the wait, narrate it, and be specific. The tail line
+ * HOLDS however long it runs.
+ */
+const DRAFT_WEEK_STEPS: ReadProgressStep[] = [
+  { at: 0, text: 'Reading what you like and what we work around…' },
+  { at: 8000, text: 'Sketching the week, dinner first…' },
+  { at: 25000, text: 'Balancing the days against your targets…' },
+  { at: 45000, text: 'Writing out each meal…' },
+  { at: 70000, text: 'Putting the shopping list together…' },
+  { at: 95000, text: 'Nearly there — checking the week reads right…' },
+];
 
 /**
  * Draft this week — AI week-drafting, back in the Kitchen (owner ruling 2026-09-02: "that is
@@ -24,7 +39,16 @@ export function KitchenDraftWeek({
   const [prefs, setPrefs] = useState('');
   const [draft, setDraft] = useState<MealPlanDraft | null>(null);
   const [drafting, setDrafting] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!drafting) return;
+    setElapsed(0);
+    const t0 = Date.now();
+    const tick = setInterval(() => setElapsed(Date.now() - t0), 1000);
+    return () => clearInterval(tick);
+  }, [drafting]);
 
   async function run() {
     if (drafting) return;
@@ -85,6 +109,7 @@ export function KitchenDraftWeek({
         />
       </label>
       {err && <div className="kt-note">{err}</div>}
+      {drafting && <div className="kt-count">{readProgressLine(DRAFT_WEEK_STEPS, elapsed)}</div>}
       <button className="kt-primary" disabled={drafting} onClick={() => void run()}>
         {drafting ? 'Drafting…' : 'Draft the week'} <i aria-hidden>›</i>
       </button>
