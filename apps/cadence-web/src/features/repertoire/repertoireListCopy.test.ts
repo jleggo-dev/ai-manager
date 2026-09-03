@@ -6,16 +6,29 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { RepertoireItem } from '@cadence/shared';
-import { CATALOGUE_KEY, COLLECTION_KEY, COMPOSER_KEY, RANK_KEY, REPERTOIRE_GROUPS } from '@cadence/shared';
 import {
+  CATALOGUE_KEY,
+  COLLECTION_KEY,
+  COMPOSER_KEY,
+  PRACTICE_NOTE_KEY,
+  RANK_KEY,
+  REPERTOIRE_GROUPS,
+} from '@cadence/shared';
+import {
+  bucketsByYear,
   buildSecondLine,
   collisionPartnersFor,
+  findMatches,
   formatRowDate,
   GROUP_LINES,
+  groupStandingWord,
   headerCountLine,
   moveQueuedRank,
   orderGroupItems,
+  shouldCollapseByYear,
   splitUnattached,
+  standingWordFor,
+  yearBucketLine,
 } from './repertoireListCopy.ts';
 
 function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
@@ -160,6 +173,36 @@ describe('buildSecondLine — composer · catalogue · collection · date, only 
     const i = item({ status: 'working', last_practiced_at: null, learned_at: daysAgo(10, now) });
     expect(buildSecondLine(i, now)).toBe('');
   });
+
+  /**
+   * The practice note (P8) — leads the line, ahead of composer/catalogue/collection, so a book or
+   * a kata (which rarely carries the other three) still gets an informative first segment.
+   */
+  it('a stored note leads the line, ahead of composer', () => {
+    const i = item({ meta: { [PRACTICE_NOTE_KEY]: 'bars 9-16', [COMPOSER_KEY]: 'Debussy' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('bars 9-16 · Debussy');
+  });
+
+  it('a note with nothing else on file is the whole second line — kata (for 5th kyu)', () => {
+    const i = item({ meta: { [PRACTICE_NOTE_KEY]: 'for 5th kyu' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('for 5th kyu');
+  });
+
+  it('a note plus the practiced date — books (a page, then when it was last opened)', () => {
+    const i = item({ meta: { [PRACTICE_NOTE_KEY]: 'p. 240' }, last_practiced_at: daysAgo(1, now) });
+    expect(buildSecondLine(i, now)).toBe('p. 240 · yesterday');
+  });
+
+  it('verses: "first stanza" reads as a plain fact, and no author never breaks the line', () => {
+    const i = item({ meta: { [PRACTICE_NOTE_KEY]: 'first stanza' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('first stanza');
+    expect(buildSecondLine(i, now)).not.toMatch(/only|just|still|behind/i);
+  });
+
+  it('a blank note is dropped, same as a blank composer — never a dangling separator', () => {
+    const i = item({ meta: { [PRACTICE_NOTE_KEY]: '   ', [COMPOSER_KEY]: 'Hummel' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('Hummel');
+  });
 });
 
 /**
@@ -223,6 +266,55 @@ describe('orderGroupItems', () => {
       item({ status: 'retired', label: 'C', learned_at: null, last_practiced_at: null }),
     ];
     expect(orderGroupItems('retired', items).map((i) => i.label)).toEqual(['A', 'B', 'C']);
+  });
+
+  /**
+   * A kata ladder (P8) — a shelf where every item carries a rank reads in rank order instead of
+   * the standing's own rule. All-or-nothing: table-tested for a full ladder and its near-miss
+   * (one ungraded item), on every standing this router handles.
+   */
+  describe('a full ladder (P8) overrides the standing rule', () => {
+    const ranked = (rank: number, label: string, status: RepertoireItem['status'] = 'known') =>
+      item({ status, label, meta: { [RANK_KEY]: rank } });
+
+    it('with ranks, order is by rank — even for known, where rest order would otherwise win', () => {
+      const items = [
+        item({ status: 'known', label: 'brown belt', meta: { [RANK_KEY]: 3 }, last_practiced_at: daysAgo(1) }),
+        item({ status: 'known', label: 'yellow belt', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(9) }),
+        item({ status: 'known', label: 'orange belt', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(19) }),
+      ];
+      // Rest order alone would read orange (19d), yellow (9d), brown (1d) — rank order overrides it.
+      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['yellow belt', 'orange belt', 'brown belt']);
+    });
+
+    it('remove one rank and the shelf falls back to the standing rule (known: rest order)', () => {
+      const items = [
+        item({ status: 'known', label: 'yellow belt', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(1) }),
+        item({ status: 'known', label: 'ungraded', meta: null, last_practiced_at: daysAgo(19) }),
+        item({ status: 'known', label: 'orange belt', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(9) }),
+      ];
+      // Falls back to byRest: longest-resting (ungraded, 19 days) first — NOT rank order.
+      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['ungraded', 'orange belt', 'yellow belt']);
+    });
+
+    it('a full ladder in Learned (retired) still reads by rank, not newest-finished-first', () => {
+      const items = [
+        item({ status: 'retired', label: 'black belt', meta: { [RANK_KEY]: 3 }, learned_at: daysAgo(1) }),
+        item({ status: 'retired', label: 'yellow belt', meta: { [RANK_KEY]: 1 }, learned_at: daysAgo(400) }),
+        item({ status: 'retired', label: 'orange belt', meta: { [RANK_KEY]: 2 }, learned_at: daysAgo(200) }),
+      ];
+      expect(orderGroupItems('retired', items).map((i) => i.label)).toEqual([
+        'yellow belt',
+        'orange belt',
+        'black belt',
+      ]);
+    });
+
+    it('a single-item shelf with a rank is trivially a full ladder', () => {
+      expect(orderGroupItems('working', [ranked(1, 'white belt', 'working')]).map((i) => i.label)).toEqual([
+        'white belt',
+      ]);
+    });
   });
 });
 
@@ -319,5 +411,146 @@ describe('headerCountLine', () => {
 
   it('uppercases whatever noun the payload gives, including one seen for the first time', () => {
     expect(headerCountLine(3, 0, 'katas')).toBe('3 KATAS · 0 LEARNED THIS YEAR');
+  });
+
+  it('a books shelf reads FINISHED, not LEARNED, this year (P8)', () => {
+    expect(headerCountLine(41, 41, 'books')).toBe('41 BOOKS · 41 FINISHED THIS YEAR');
+  });
+
+  it('the FINISHED swap is case-insensitive on the noun, but only matches "books" itself', () => {
+    expect(headerCountLine(1, 1, 'Books')).toBe('1 BOOKS · 1 FINISHED THIS YEAR');
+    expect(headerCountLine(1, 1, 'notebooks')).toBe('1 NOTEBOOKS · 1 LEARNED THIS YEAR');
+  });
+
+  it("a verses shelf reads BY HEART, matching cardHeader.ts's own word for the same domain (P5)", () => {
+    expect(headerCountLine(5, 5, 'verses')).toBe('5 VERSES · 5 BY HEART THIS YEAR');
+    expect(headerCountLine(1, 1, 'verse')).toBe('1 VERSE · 1 BY HEART THIS YEAR');
+  });
+});
+
+/**
+ * `standingWordFor` / `groupStandingWord` — the standing word a book's Learned status reads as
+ * "Finished" (P8). The row-level function is per-item and stays accurate in a mixed shelf; the
+ * group-level one is one word for a whole section, so it only swaps when EVERY item in the group
+ * is a book.
+ */
+describe('standingWordFor — the per-row standing word', () => {
+  it('is unchanged for every standing except a book in Learned', () => {
+    expect(standingWordFor('book', 'queued')).toBe('Up next');
+    expect(standingWordFor('book', 'working')).toBe('Learning');
+    expect(standingWordFor('book', 'known')).toBe('Keeping up');
+    expect(standingWordFor(null, 'retired')).toBe('Learned');
+    expect(standingWordFor('piece', 'retired')).toBe('Learned');
+  });
+
+  it('a book in Learned reads "Finished"', () => {
+    expect(standingWordFor('book', 'retired')).toBe('Finished');
+  });
+
+  it('matches "book" case-insensitively and trimmed, but not a longer word containing it', () => {
+    expect(standingWordFor('Book', 'retired')).toBe('Finished');
+    expect(standingWordFor('  book  ', 'retired')).toBe('Finished');
+    expect(standingWordFor('notebook', 'retired')).toBe('Learned');
+  });
+});
+
+describe('groupStandingWord — the section header word', () => {
+  it('reads "Finished" only when every item in the group is a book', () => {
+    const allBooks = [item({ kind: 'book' }), item({ kind: 'book' })];
+    expect(groupStandingWord('retired', allBooks)).toBe('Finished');
+  });
+
+  it('a shelf mixing a book with something else keeps "Learned" — a header is one word for the section', () => {
+    const mixed = [item({ kind: 'book' }), item({ kind: 'piece' })];
+    expect(groupStandingWord('retired', mixed)).toBe('Learned');
+  });
+
+  it('an empty group never claims "Finished" — nothing to be all-books about', () => {
+    expect(groupStandingWord('retired', [])).toBe('Learned');
+  });
+
+  it('only the Learned standing is eligible — a book in Learning still reads "Learning"', () => {
+    expect(groupStandingWord('working', [item({ kind: 'book', status: 'working' })])).toBe('Learning');
+  });
+});
+
+/**
+ * The Learned-books collapse (P8: "books — a record, 200 long"): once an all-book Learned group
+ * passes 30 items, it collapses into year buckets behind a find field. Table: the threshold, and
+ * the two ways a shelf is NOT eligible.
+ */
+describe('shouldCollapseByYear', () => {
+  const books = (n: number, over: Partial<RepertoireItem> = {}) =>
+    Array.from({ length: n }, (_, i) => item({ item_id: `b${i}`, kind: 'book', status: 'retired', ...over }));
+
+  it('collapses an all-book Learned shelf once it passes the threshold', () => {
+    expect(shouldCollapseByYear('retired', books(31))).toBe(true);
+  });
+
+  it('does not collapse at or under the threshold', () => {
+    expect(shouldCollapseByYear('retired', books(30))).toBe(false);
+  });
+
+  it('does not collapse a non-Learned group, even with plenty of books', () => {
+    expect(shouldCollapseByYear('known', books(50, { status: 'known' }))).toBe(false);
+  });
+
+  it('does not collapse a large Learned shelf that is not ALL books', () => {
+    const mostlyBooks = books(30).concat(item({ item_id: 'p1', kind: 'piece', status: 'retired' }));
+    expect(shouldCollapseByYear('retired', mostlyBooks)).toBe(false);
+  });
+});
+
+describe('bucketsByYear', () => {
+  it('one bucket per calendar year, newest first', () => {
+    const items = [
+      item({ learned_at: '2024-03-01T00:00:00Z' }),
+      item({ learned_at: '2025-01-15T00:00:00Z' }),
+      item({ learned_at: '2025-11-30T00:00:00Z' }),
+    ];
+    expect(bucketsByYear(items)).toEqual([
+      { year: 2025, count: 2 },
+      { year: 2024, count: 1 },
+    ]);
+  });
+
+  it('an undated (backfilled) item buckets separately and sorts last, after every real year', () => {
+    const items = [item({ learned_at: '2025-01-15T00:00:00Z' }), item({ learned_at: null })];
+    expect(bucketsByYear(items)).toEqual([
+      { year: 2025, count: 1 },
+      { year: null, count: 1 },
+    ]);
+  });
+});
+
+describe('yearBucketLine', () => {
+  it('renders "YYYY · N finished ›", verbatim', () => {
+    expect(yearBucketLine({ year: 2025, count: 41 })).toBe('2025 · 41 finished ›');
+  });
+
+  it('an undated bucket reads "Not dated", never a guessed year', () => {
+    expect(yearBucketLine({ year: null, count: 3 })).toBe('Not dated · 3 finished ›');
+  });
+});
+
+describe('findMatches — the collapsed shelf’s own filter', () => {
+  const shelf = [
+    item({ label: 'The Hobbit' }),
+    item({ label: 'The Fellowship of the Ring' }),
+    item({ label: 'Silas Marner' }),
+  ];
+
+  it('matches a case-insensitive substring of the label', () => {
+    expect(findMatches(shelf, 'hobbit').map((i) => i.label)).toEqual(['The Hobbit']);
+    expect(findMatches(shelf, 'THE F').map((i) => i.label)).toEqual(['The Fellowship of the Ring']);
+  });
+
+  it('an empty or whitespace-only query returns everything, unfiltered', () => {
+    expect(findMatches(shelf, '')).toEqual(shelf);
+    expect(findMatches(shelf, '   ')).toEqual(shelf);
+  });
+
+  it('no match is an empty list, not an error or the unfiltered shelf', () => {
+    expect(findMatches(shelf, 'nonexistent title')).toEqual([]);
   });
 });

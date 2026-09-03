@@ -11,7 +11,7 @@
 import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
 import { byRest, pieceQualifiers } from '@cadence/shared';
 import type { RepertoireCollisionGroup } from '../../lib/api/repertoire-list.ts';
-import { MONTH_ABBR } from './repertoireItemCopy.ts';
+import { MONTH_ABBR, STANDING_WORDS } from './repertoireItemCopy.ts';
 
 /**
  * The group header's own warm line — the coach's voice, never the model's. `REPERTOIRE_GROUPS` in
@@ -67,14 +67,26 @@ function rowDateFor(item: RepertoireItem, now: Date): string {
   return item.status === 'retired' ? formatRowDate(item.learned_at, now) : '';
 }
 
-/** composer · catalogue · collection · practiced-relative-date — each segment present only when
- *  there is a fact behind it (no "practice note" segment yet: that meta key does not exist on file
- *  today). Catalogue sits right after composer, ahead of collection: it is the qualifier that
- *  actually tells two same-titled pieces apart (three Minuets in G, one collection), so it earns
- *  the second slot rather than trailing where a long collection name could push it off the row. */
+/**
+ * note · composer · catalogue · collection · practiced-relative-date — each segment present only
+ * when there is a fact behind it. This is the one place all four domains (piece, book, kata,
+ * verse — P8) meet: none of them gets a bespoke line, they simply carry different facts, and this
+ * function only formats and orders whatever is on file (the file's own rule, stated above).
+ *
+ * The practice note (P8: "the practice note gets a store" — `bars 9-16`, `p. 240`, `first stanza`,
+ * `for 5th kyu`) LEADS the line, ahead of the identity qualifiers — the same lead position the
+ * coach's own prompt render uses for it (session-practice-facts.ts's `practiceNote`), one
+ * vocabulary for both. Leading with it also means a book or a kata — which carry a note but
+ * rarely a composer — still gets an informative first segment instead of an empty one, with no
+ * per-domain branch anywhere in this function.
+ *
+ * Catalogue sits right after composer, ahead of collection: it is the qualifier that actually
+ * tells two same-titled pieces apart (three Minuets in G, one collection), so it earns the second
+ * slot rather than trailing where a long collection name could push it off the row.
+ */
 export function buildSecondLine(item: RepertoireItem, now: Date = new Date()): string {
   const q = pieceQualifiers(item.meta);
-  const segments = [q.composer, q.catalogue, q.collection, rowDateFor(item, now)].filter((s): s is string =>
+  const segments = [q.note, q.composer, q.catalogue, q.collection, rowDateFor(item, now)].filter((s): s is string =>
     Boolean(s),
   );
   return segments.join(' · ');
@@ -111,11 +123,25 @@ function byLearnedDesc(a: RepertoireItem, b: RepertoireItem): number {
   return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
 }
 
+/** A kata ladder (P8: "kata — a ladder"): a shelf whose items EVERY ONE carries a rank reads as
+ *  one ordered ladder instead of the standing's own rule — the belt order matters more than which
+ *  of the four groups a grade currently sits in. A single ungraded item means the ladder is not
+ *  complete yet, so this is deliberately all-or-nothing: one missing rank falls back to the
+ *  standing's normal order rather than sorting the unranked item to an arbitrary end. Checked
+ *  against exactly the items `orderGroupItems` was handed — one standing at a time, the only
+ *  slice this function ever sees. */
+function isFullLadder(items: RepertoireItem[]): boolean {
+  return items.length > 0 && items.every((i) => pieceQualifiers(i.meta).rank !== undefined);
+}
+
 /**
  * The one place that decides which order a standing's rows render in — a router, table-tested
  * (repertoireListCopy.test.ts) the way every deterministic router in this codebase is, because a
  * swapped case is silent: the wrong order still renders a plausible list, and nothing throws.
  *
+ *  - a full ladder (every item ranked, P8) — rank order, ascending, REGARDLESS of standing: no
+ *    rotation, no rank-drag-order-vs-rest distinction, just the belt order. Checked first, so a
+ *    kata shelf never falls through to a standing rule that would silently re-sort it.
  *  - `known` ("Keeping up") — longest rest first, via the SAME `byRest` the coach's own rotation
  *    reads (`pickDueNext`), so the screen and the coach can never disagree about what is due.
  *  - `queued` ("Up next") — the person's own drag order (`RANK_KEY`, ascending); unranked rows
@@ -128,6 +154,7 @@ function byLearnedDesc(a: RepertoireItem, b: RepertoireItem): number {
  *    never invents one.
  */
 export function orderGroupItems(status: RepertoireStatus, items: RepertoireItem[]): RepertoireItem[] {
+  if (isFullLadder(items)) return [...items].sort((a, b) => rankOf(a) - rankOf(b));
   if (status === 'known') return [...items].sort(byRest);
   if (status === 'retired') return [...items].sort(byLearnedDesc);
   if (status === 'queued') {
@@ -148,10 +175,108 @@ export function splitUnattached<T extends { goal_id: string | null }>(items: T[]
   return { linked, unattached };
 }
 
+/**
+ * Books — a record, not a repertoire (P8): `kind: 'book'` exactly (case-insensitive, trimmed),
+ * the one canonical spelling, not a fuzzy match against the coach's free-text `kind` field. A
+ * looser match risks a false positive on some other domain's kind that happens to contain the
+ * word; an exact one is a router CLAUDE.md's own rule asks for a table test on, which
+ * `repertoireListCopy.test.ts` carries.
+ */
+function isBookKind(kind: string | null | undefined): boolean {
+  return (kind ?? '').trim().toLowerCase() === 'book';
+}
+
+/** The standing word for one item's own status. Identical to `STANDING_WORDS` for every standing
+ *  and every domain except one: a book's Learned standing reads "Finished" — "Learned" reads oddly
+ *  for a record that was simply read to the end (the design's own word swap, P8). Used for the
+ *  ROW's own right-side label and its move-menu, which are per-item and so stay domain-accurate
+ *  even in a shelf that mixes books with something else. */
+export function standingWordFor(kind: string | null | undefined, status: RepertoireStatus): string {
+  if (status === 'retired' && isBookKind(kind)) return 'Finished';
+  return STANDING_WORDS[status];
+}
+
+/** The GROUP HEADER's own standing word — "Finished" only when EVERY item in the group is a book:
+ *  a header is one word for the whole section, so a shelf mixing a book into a pile of pieces
+ *  keeps "Learned" rather than mislabeling the pieces. (The per-item row word above has no such
+ *  problem — it reads that row's own kind.) */
+export function groupStandingWord(status: RepertoireStatus, items: RepertoireItem[]): string {
+  if (status === 'retired' && items.length > 0 && items.every((i) => isBookKind(i.kind))) return 'Finished';
+  return STANDING_WORDS[status];
+}
+
+/** Nouns for material held in memory rather than played, read, or performed — "by heart" reads
+ *  better than "learned" for a verse. Mirrors `cardHeader.ts`'s own `BY_HEART_NOUNS` (the progress
+ *  card's header tag, P5) exactly in spirit — same idiom, same trigger — so a verses shelf reads
+ *  the same verb on the card and on this list screen, never two words for one domain. */
+const BY_HEART_NOUNS = new Set(['verse', 'verses']);
+
 /** "14 PIECES · 6 LEARNED THIS YEAR" — both numbers and the noun come from the payload; this only
- *  formats them, never counts anything itself. */
+ *  formats them, never counts anything itself. The verb after the year count swaps for two
+ *  domains, matched off the noun itself since this function's signature is a shared contract with
+ *  the screen that calls it and could not grow a new domain parameter without touching that
+ *  caller: "FINISHED" for books (`groupStandingWord`'s own reasoning applies here too), "BY HEART"
+ *  for verses (see `BY_HEART_NOUNS`), "LEARNED" for everything else, including a noun never seen
+ *  before. */
 export function headerCountLine(totalCount: number, learnedInYear: number, noun: string): string {
-  return `${totalCount} ${noun.toUpperCase()} · ${learnedInYear} LEARNED THIS YEAR`;
+  const n = noun.trim().toLowerCase();
+  const verb = n === 'books' ? 'FINISHED' : BY_HEART_NOUNS.has(n) ? 'BY HEART' : 'LEARNED';
+  return `${totalCount} ${noun.toUpperCase()} · ${learnedInYear} ${verb} THIS YEAR`;
+}
+
+/** Once a Learned books shelf crosses this many items, individual rows give way to year buckets
+ *  (P8: "books — a record, 200 long") — a 200-book reading record cannot stay a flat scroll the
+ *  way a repertoire of a few dozen pieces can. Below the threshold, or for any non-book shelf,
+ *  rows render exactly as they always have. */
+const BOOK_COLLAPSE_THRESHOLD = 30;
+
+/** True once a Learned group should collapse into year buckets behind a find field: every item is
+ *  a book, and there are enough of them that a flat list stops being one a person can scan. */
+export function shouldCollapseByYear(status: RepertoireStatus, items: RepertoireItem[]): boolean {
+  return status === 'retired' && items.length > BOOK_COLLAPSE_THRESHOLD && items.every((i) => isBookKind(i.kind));
+}
+
+export interface YearBucket {
+  /** null = no `learned_at` on file (backfilled: already read when they told us) — counted, never
+   *  dated wrong. */
+  year: number | null;
+  count: number;
+}
+
+/** One bucket per calendar year an item finished in, newest year first; the undated bucket sorts
+ *  last, after every real year — never a guessed position among them. Read off the ISO string
+ *  directly, matching `learnedInYear`'s own server-timezone-independent rule. */
+export function bucketsByYear(items: RepertoireItem[]): YearBucket[] {
+  const counts = new Map<number | null, number>();
+  for (const item of items) {
+    const year = item.learned_at ? Number(item.learned_at.slice(0, 4)) : null;
+    counts.set(year, (counts.get(year) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => {
+      if (a.year === null) return 1;
+      if (b.year === null) return -1;
+      return b.year - a.year;
+    });
+}
+
+/** "2025 · 41 finished ›" — a year bucket's own line. "finished" rather than "learned" is safe to
+ *  hardcode here (unlike the general header/group words above): `shouldCollapseByYear` only ever
+ *  says yes for an all-book Learned group, so this is never rendered for any other domain. */
+export function yearBucketLine(bucket: YearBucket): string {
+  const label = bucket.year === null ? 'Not dated' : String(bucket.year);
+  return `${label} · ${bucket.count} finished ›`;
+}
+
+/** The find field's own match rule, once a shelf has collapsed: a case-insensitive substring of
+ *  the label — the same "type a few letters" behaviour the rest of the app filters by name with,
+ *  never a fuzzy or tokenized search a 200-book shelf does not need. An empty query matches
+ *  everything, so clearing the field returns to the full list rather than an empty one. */
+export function findMatches(items: RepertoireItem[], query: string): RepertoireItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return items;
+  return items.filter((i) => i.label.toLowerCase().includes(q));
 }
 
 /** Every OTHER label sharing a collision group with `label` — a label can appear in more than one

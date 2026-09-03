@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { RepertoireItem } from '@cadence/shared';
-import { CATALOGUE_KEY, COMPOSER_KEY, RANK_KEY } from '@cadence/shared';
+import { CATALOGUE_KEY, COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY } from '@cadence/shared';
 
 const getRepertoireListItems = vi.hoisted(() => vi.fn());
 const useProgressRepertoire = vi.hoisted(() => vi.fn());
@@ -414,5 +414,216 @@ describe('scoping', () => {
     });
     await screen.findByText('Clair de lune');
     expect(screen.getByText('Debussy · L. 75')).toBeInTheDocument();
+  });
+});
+
+/**
+ * A kata ladder (P8 "kata — a ladder"): a shelf where every item carries a rank reads in rank
+ * order instead of the standing's own rule, end to end through the real DOM (the ordering rule
+ * itself is table-tested at the unit level in repertoireListCopy.test.ts; this pins the WIRING).
+ */
+describe('a kata ladder (P8)', () => {
+  const belt = (rank: number, label: string, note?: string) =>
+    item({
+      item_id: `belt-${rank}`,
+      label,
+      status: 'known',
+      kind: 'kata',
+      // Rest order alone would read Orange (20d), Brown (10d), Yellow (1d) — the opposite of rank
+      // order — so a pass here proves rank actually overrode rest, not a coincidence of the data.
+      last_practiced_at: daysAgo(rank === 1 ? 1 : rank === 2 ? 20 : 10),
+      meta: note ? { [RANK_KEY]: rank, [PRACTICE_NOTE_KEY]: note } : { [RANK_KEY]: rank },
+    });
+
+  it('a fully-ranked shelf renders Keeping up in rank order, not rest order', async () => {
+    const { container } = mount({
+      items: [belt(3, 'Brown belt'), belt(1, 'Yellow belt'), belt(2, 'Orange belt')],
+      collisions: [],
+    });
+    await screen.findByText('Yellow belt');
+    const section = groupSection(container, 'Keeping up');
+    const titles = within(section)
+      .getAllByText(/^(Yellow belt|Orange belt|Brown belt)$/)
+      .map((n) => n.textContent);
+    expect(titles).toEqual(['Yellow belt', 'Orange belt', 'Brown belt']);
+  });
+
+  it('the grading note is the whole second line when there is nothing else on file yet', async () => {
+    mount({
+      items: [
+        item({
+          item_id: 'belt-1',
+          label: 'Yellow belt',
+          status: 'queued',
+          kind: 'kata',
+          meta: { [RANK_KEY]: 1, [PRACTICE_NOTE_KEY]: 'for 5th kyu' },
+        }),
+      ],
+      collisions: [],
+    });
+    await screen.findByText('Yellow belt');
+    expect(screen.getByText('for 5th kyu')).toBeInTheDocument();
+  });
+
+  it('one ungraded belt and the shelf falls back to the standing rule (rest order)', async () => {
+    const { container } = mount({
+      items: [
+        belt(1, 'Yellow belt'),
+        item({
+          item_id: 'ungraded',
+          label: 'Ungraded belt',
+          status: 'known',
+          kind: 'kata',
+          last_practiced_at: daysAgo(30),
+        }),
+      ],
+      collisions: [],
+    });
+    await screen.findByText('Yellow belt');
+    const section = groupSection(container, 'Keeping up');
+    // Falls back to byRest (longest-resting first): the ungraded belt rested 30 days, Yellow 1 —
+    // rank order would have put Yellow first, so this proves the fallback actually fired.
+    const titles = within(section)
+      .getAllByText(/^(Yellow belt|Ungraded belt)$/)
+      .map((n) => n.textContent);
+    expect(titles).toEqual(['Ungraded belt', 'Yellow belt']);
+  });
+});
+
+/**
+ * Books, 200 long (P8 "books — a record"): an all-book Learned group collapses into year buckets
+ * behind a find field once it passes 30 items. Table: the collapse itself, opening a bucket,
+ * returning to the buckets, the find field bypassing them, and the Learned→Finished word swap —
+ * end to end, on top of the same helpers repertoireListCopy.test.ts already table-tests.
+ */
+describe('a books shelf, 200 long (P8)', () => {
+  function bookShelf(): RepertoireItem[] {
+    const books: RepertoireItem[] = [];
+    for (let i = 0; i < 25; i++) {
+      books.push(
+        item({
+          item_id: `b25-${i}`,
+          label: `2025 Book ${i}`,
+          status: 'retired',
+          kind: 'book',
+          learned_at: '2025-06-01T00:00:00Z',
+        }),
+      );
+    }
+    for (let i = 0; i < 10; i++) {
+      books.push(
+        item({
+          item_id: `b24-${i}`,
+          label: `2024 Book ${i}`,
+          status: 'retired',
+          kind: 'book',
+          learned_at: '2024-06-01T00:00:00Z',
+        }),
+      );
+    }
+    return books; // 35 total — over the 30-item threshold.
+  }
+
+  it('collapses into year buckets with a find field, hiding the individual rows', async () => {
+    mount({ items: bookShelf(), collisions: [] });
+    await screen.findByLabelText('Find a title');
+    expect(screen.getByText('2025 · 25 finished ›')).toBeInTheDocument();
+    expect(screen.getByText('2024 · 10 finished ›')).toBeInTheDocument();
+    expect(screen.queryByText('2025 Book 0')).not.toBeInTheDocument();
+  });
+
+  it('opening a year bucket shows that year alone, and "All years" returns to the buckets', async () => {
+    const user = userEvent.setup();
+    mount({ items: bookShelf(), collisions: [] });
+    await user.click(await screen.findByText('2024 · 10 finished ›'));
+    expect(await screen.findByText('2024 Book 0')).toBeInTheDocument();
+    expect(screen.queryByText('2025 Book 0')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('‹ All years'));
+    expect(await screen.findByText('2025 · 25 finished ›')).toBeInTheDocument();
+    expect(screen.queryByText('2024 Book 0')).not.toBeInTheDocument();
+  });
+
+  it('the find field filters across every year, bypassing the buckets entirely', async () => {
+    const user = userEvent.setup();
+    mount({ items: bookShelf(), collisions: [] });
+    await screen.findByLabelText('Find a title');
+    await user.type(screen.getByLabelText('Find a title'), '2024 Book 3');
+    expect(await screen.findByText('2024 Book 3')).toBeInTheDocument();
+    expect(screen.queryByText('2025 Book 0')).not.toBeInTheDocument();
+    expect(screen.queryByText('2025 · 25 finished ›')).not.toBeInTheDocument();
+  });
+
+  it('a shelf at the threshold (30) does not collapse — rows and no find field', async () => {
+    mount({ items: bookShelf().slice(0, 30), collisions: [] });
+    await screen.findByText('2025 Book 0');
+    expect(screen.queryByLabelText('Find a title')).not.toBeInTheDocument();
+  });
+
+  it('the group header and each row read "Finished", never "Learned", for an all-books shelf', async () => {
+    const user = userEvent.setup();
+    const { container } = mount({ items: bookShelf(), collisions: [] });
+    await screen.findByLabelText('Find a title');
+    expect(groupSection(container, 'Finished')).toBeTruthy();
+
+    await user.click(screen.getByText('2024 · 10 finished ›'));
+    const title = await screen.findByText('2024 Book 0');
+    const row = title.closest('.rl-row') as HTMLElement;
+    expect(within(row).getByText('Finished')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Verses, by heart (P8 "verses — by heart"): "first stanza" is a plain fact on the line, an item
+ * with no author simply omits it, and Progress's own noun for this shelf ("verses", read as "by
+ * heart" by cardHeader.ts and by this screen's own headerCountLine) passes through unchanged —
+ * never the books "Finished" swap, which is books-only.
+ */
+describe('verses, by heart (P8)', () => {
+  it('an item with no author on file renders the note alone, never a shortfall', async () => {
+    mount({
+      items: [
+        item({
+          item_id: 'v1',
+          label: 'The Road Not Taken',
+          status: 'working',
+          kind: 'verse',
+          meta: { [PRACTICE_NOTE_KEY]: 'first stanza' },
+        }),
+      ],
+      collisions: [],
+    });
+    await screen.findByText('The Road Not Taken');
+    expect(screen.getByText('first stanza')).toBeInTheDocument();
+    expect(screen.queryByText(/only|just|still|behind/i)).not.toBeInTheDocument();
+  });
+
+  it('an author on file leads ahead of the note, reusing the same composer qualifier', async () => {
+    mount({
+      items: [
+        item({
+          item_id: 'v2',
+          label: 'Sonnet 18',
+          status: 'working',
+          kind: 'verse',
+          meta: { [COMPOSER_KEY]: 'Shakespeare', [PRACTICE_NOTE_KEY]: 'first stanza' },
+        }),
+      ],
+      collisions: [],
+    });
+    await screen.findByText('Sonnet 18');
+    expect(screen.getByText('first stanza · Shakespeare')).toBeInTheDocument();
+  });
+
+  it("the header count line reads BY HEART for verses — the same word P5's progress card uses", async () => {
+    getRepertoireListItems.mockResolvedValue({
+      ok: true,
+      items: [item({ item_id: 'v1', label: 'The Road Not Taken', status: 'working', kind: 'verse' })],
+      collisions: [],
+    });
+    useProgressRepertoire.mockReturnValue({ data: { learned_in_year: 2, noun: 'verses' } });
+    getReview.mockResolvedValue({ goals: [] });
+    render(<ListScreen goalId="g-piano" goalName="Verses" onBack={() => {}} />);
+    expect(await screen.findByText('1 VERSES · 2 BY HEART THIS YEAR')).toBeInTheDocument();
   });
 });

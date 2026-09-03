@@ -11,11 +11,16 @@
  * brief's own fallback ("or use its ⋯") and the existing button-per-behavior convention (see
  * StandingControl.tsx) already sanction, so every move — standing change and Up next reorder alike
  * — goes through it. Functionally identical either way: the same PATCH, with the same body.
+ *
+ * One row component for every domain (P8): the standing word on the right and in the move menu
+ * comes from `standingWordFor`, which reads THIS item's own `kind` — a book's Learned standing
+ * says "Finished" there, everything else is `STANDING_WORDS` unchanged. No second row type, no
+ * per-domain branch in this file.
  */
 import { useState } from 'react';
 import type { RepertoireItem, RepertoireStatus } from '@cadence/shared';
-import { STANDING_ORDER, STANDING_WORDS } from './repertoireItemCopy.ts';
-import { buildSecondLine } from './repertoireListCopy.ts';
+import { STANDING_ORDER } from './repertoireItemCopy.ts';
+import { buildSecondLine, standingWordFor } from './repertoireListCopy.ts';
 
 const MARK_TONE: Record<RepertoireStatus, string> = {
   working: 'rl-mark--working',
@@ -48,7 +53,7 @@ export function RepertoireRow({ item, onOpen, onChangeStanding, onMoveUp, onMove
           <span className="rl-row-title">{item.label}</span>
           {secondLine && <span className="rl-row-sub">{secondLine}</span>}
         </span>
-        <span className="rl-row-standing">{STANDING_WORDS[item.status]}</span>
+        <span className="rl-row-standing">{standingWordFor(item.kind, item.status)}</span>
       </button>
 
       <div className="rl-row-menu-wrap">
@@ -104,7 +109,7 @@ export function RepertoireRow({ item, onOpen, onChangeStanding, onMoveUp, onMove
                   onChangeStanding(s);
                 }}
               >
-                Move to {STANDING_WORDS[s]}
+                Move to {standingWordFor(item.kind, s)}
               </button>
             ))}
           </div>
