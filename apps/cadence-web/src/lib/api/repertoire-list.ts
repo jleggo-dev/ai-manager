@@ -8,7 +8,7 @@
  * words, never `ok: true` with an empty list — a screen that cannot tell "we broke" from "you have
  * nothing on file" would tell the person the wrong one.
  */
-import type { RepertoireItem } from '@cadence/shared';
+import type { RepertoireCollection, RepertoireItem } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /** One title two or more pieces answer to — `{ shared, labels }` from `collidingTitles`. */
@@ -22,11 +22,11 @@ export type RepertoireListResult =
       ok: true;
       items: RepertoireItem[];
       collisions: RepertoireCollisionGroup[];
-      /** Every collection already in use on this person's WHOLE shelf, most-used first — the names
-       *  the item screen offers instead of a free-text box (owner ruling 2026-09-03). Computed by
-       *  the route from the rows it already read; never narrowed by the goal scope, because a book
-       *  kept under another goal is still a group this person uses. */
-      collections: string[];
+      /** Every collection this person has, most-used first — the rows the item screen's picker
+       *  offers instead of a free-text box (owner ruling 2026-09-03). Read from their own table
+       *  since migration 0056, so a collection with nothing in it yet is here too; never narrowed
+       *  by the goal scope, because a book kept under another goal is still one of their groups. */
+      collections: RepertoireCollection[];
     }
   | { ok: false; fault: string };
 
@@ -54,7 +54,7 @@ export async function getRepertoireListItems(goalId: string | null): Promise<Rep
     items: body.items as RepertoireItem[],
     collisions: Array.isArray(body.collisions) ? (body.collisions as RepertoireCollisionGroup[]) : [],
     // An older API that does not send it yet reads as "no collections on file", which is the same
-    // thing the screen shows for a shelf that genuinely has none — never a crash.
-    collections: Array.isArray(body.collections) ? (body.collections as string[]) : [],
+    // thing the screen shows for a person who genuinely has none — never a crash.
+    collections: Array.isArray(body.collections) ? (body.collections as RepertoireCollection[]) : [],
   };
 }

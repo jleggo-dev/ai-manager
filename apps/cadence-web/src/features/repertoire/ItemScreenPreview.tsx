@@ -9,16 +9,23 @@ const BASE: RepertoireItem = {
   label: 'Clair de lune',
   status: 'known',
   kind: 'piece',
-  meta: { composer: 'Debussy', collection: 'Suite bergamasque', tempo_bpm: 60, tempo_meter: 4 },
+  meta: { composer: 'Debussy', tempo_bpm: 60, tempo_meter: 4 },
+  collection_id: 'preview-collection',
+  collection_name: 'Suite bergamasque',
   started_at: '2026-01-05T09:00:00Z',
   learned_at: '2026-03-14T09:00:00Z',
   last_practiced_at: '2026-08-29T18:00:00Z',
 };
 
+const COLLECTIONS = [
+  { collection_id: 'preview-collection', name: 'Suite bergamasque', item_count: 4 },
+  { collection_id: 'preview-collection-2', name: 'Suzuki Piano Book 2', item_count: 12 },
+];
+
 const FIXTURES: Record<string, { item: RepertoireItem; collidesWithLabel?: string | null; sessionCount?: number }> = {
   'plain (Keeping up, with tempo)': { item: BASE, sessionCount: 23 },
   'colliding title': {
-    item: { ...BASE, label: 'Minuet in G Major', meta: { composer: 'Petzold' } },
+    item: { ...BASE, label: 'Minuet in G Major', meta: { composer: 'Petzold' }, collection_id: null, collection_name: null },
     collidesWithLabel: 'Minuet in G Major (Anna Magdalena Notebook)',
   },
   'up next, backfilled, no tempo': {
@@ -26,12 +33,14 @@ const FIXTURES: Record<string, { item: RepertoireItem; collidesWithLabel?: strin
       ...BASE,
       status: 'queued',
       meta: null,
+      collection_id: null,
+      collection_name: null,
       learned_at: null,
       last_practiced_at: null,
     },
   },
   'learned, no month on file (backfilled)': {
-    item: { ...BASE, status: 'retired', learned_at: null, meta: null },
+    item: { ...BASE, status: 'retired', learned_at: null, meta: null, collection_id: null, collection_name: null },
   },
 };
 
@@ -64,6 +73,7 @@ export function ItemScreenPreview() {
         item={fixture.item}
         collidesWithLabel={fixture.collidesWithLabel}
         sessionCount={fixture.sessionCount}
+        collections={COLLECTIONS}
         onBack={() => {}}
         onDeleted={() => {}}
       />

@@ -6,7 +6,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import type { ProgressWindow, RepertoireItem, RepertoireStatus, SessionFeedbackKind } from '@cadence/shared';
-import { collapseCollection, collectionsOf, qualifierMeta } from '@cadence/shared';
+import { qualifierMeta } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { isMeal } from '../services/nutrition-parse.ts';
 import { getShelf } from '../services/progress-nontemporal-shelf.ts';
@@ -25,6 +25,7 @@ import {
   RepertoireRenameConflictError,
   updateRepertoireItem,
 } from '../repos/repertoire.ts';
+import { listCollections } from '../repos/repertoire-collections.ts';
 import { collidingTitles, invalidateSessionsFor } from '../services/repertoire-practice.ts';
 import { parseBody, patchRepertoireItemBodySchema, BodyValidationError } from '../validation/body.ts';
 
@@ -203,11 +204,11 @@ router.get('/repertoire/items', async (req: Request, res: Response) => {
   try {
     const all = await listRepertoire(userId);
     const items = typeof goalId === 'string' ? all.filter((i) => i.goal_id === goalId) : all;
-    // Collections come off the WHOLE shelf, never the goal scope: the item screen offers them as
-    // the groups this person already uses, and a book they keep under another goal is still one of
-    // those. Computed here from rows the route already read — a second endpoint for a list this
-    // short would be a round-trip for nothing.
-    res.json({ items, collisions: collidingTitles(items), collections: collectionsOf(all) });
+    // Collections come off the person's own table, never the goal scope and never the items: the
+    // item screen offers them as the groups this person has, a book they keep under another goal is
+    // still one of those, and since 0056 an empty collection is a real thing that must appear. Read
+    // here rather than from a second call so the screen gets the list in one round trip.
+    res.json({ items, collisions: collidingTitles(items), collections: await listCollections(userId) });
   } catch (err) {
     console.error('[GET /progress/repertoire/items]', err);
     res.status(500).json({ error: 'failed to load repertoire items' });
@@ -219,7 +220,7 @@ router.get('/repertoire/items', async (req: Request, res: Response) => {
  * throughout: no coach call, no AI. Two repo writes because the screen itself makes two
  * independent choices (label/qualifiers commit together on "Save the name"; the standing control
  * acts on its own), but the route accepts either or both in one call since the API contract is
- * "any of label, composer, collection, description, note, rank, status".
+ * "any of label, composer, collection_id, description, note, rank, status".
  */
 
 /** PATCH /progress/repertoire/:id — rename, edit the qualifiers, and/or flip the standing. */
@@ -242,29 +243,24 @@ router.patch('/repertoire/:id', async (req: Request, res: Response) => {
       if (!row) return void res.status(404).json({ error: 'repertoire item not found' });
     }
 
-    // A typed collection folds onto the spelling already on this shelf, so "suzuki book 2" joins
-    // the group rather than starting a second one beside it (owner ruling 2026-09-03: a collection
-    // only groups if it is chosen). The shelf read is best-effort — a name that could not be
-    // checked is stored as typed, which is the pre-2026-09-03 behaviour, never a dropped edit.
-    let collection = body.collection;
-    if (collection !== undefined) {
-      const shelf = await listRepertoire(userId).catch((e): null => {
-        console.error('[PATCH /progress/repertoire] collection read failed:', e);
-        return null;
-      });
-      if (shelf) collection = collapseCollection(collectionsOf(shelf), collection);
-    }
-
     const meta = qualifierMeta({
       composer: body.composer,
-      collection,
       description: body.description,
       rank: body.rank,
       note: body.note,
     });
     const status = body.status as RepertoireStatus | undefined;
-    if (status !== undefined || Object.keys(meta).length > 0) {
-      row = await updateRepertoireItem(userId, itemId, { status, meta: Object.keys(meta).length ? meta : undefined });
+    // `collection_id` carries three cases and the repo honours all three: omitted leaves the row's
+    // collection alone, a uuid files it there, and an explicit null takes it out of every
+    // collection ("None" on the item screen). It is not a qualifier any more — a collection is its
+    // own row (migration 0056), so nothing about it goes through `meta`.
+    const collectionId = body.collection_id;
+    if (status !== undefined || collectionId !== undefined || Object.keys(meta).length > 0) {
+      row = await updateRepertoireItem(userId, itemId, {
+        status,
+        meta: Object.keys(meta).length ? meta : undefined,
+        ...(collectionId !== undefined ? { collection_id: collectionId } : {}),
+      });
       if (!row) return void res.status(404).json({ error: 'repertoire item not found' });
     }
     if (!row) return void res.status(404).json({ error: 'repertoire item not found' });

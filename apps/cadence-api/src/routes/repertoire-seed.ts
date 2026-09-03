@@ -76,7 +76,15 @@ router.post('/repertoire/seed/confirm', async (req: Request, res: Response) => {
     const { goal_id, rows } = parseBody(confirmBodySchema, req.body);
     const result = await confirmSeed(userId, rows, goal_id ?? null);
     if (!result.ok) return void res.status(502).json({ error: result.fault });
-    res.json({ written: result.written, labels: result.labels, refused: result.refused });
+    // `collection` is the row these pieces were filed into (migration 0056) — `{collection_id,
+    // name}`, or null when the rows named none. The screen refreshes its list off it rather than
+    // guessing which of the person's collections this confirm just made.
+    res.json({
+      written: result.written,
+      labels: result.labels,
+      refused: result.refused,
+      collection: result.collection,
+    });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /progress/repertoire/seed/confirm]', err);

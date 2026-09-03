@@ -25,6 +25,11 @@ export interface RepertoireLike {
   started_at?: string;
   /** Durable per-item facts. The settled tempo rides here — see `settledTempo`. */
   meta?: Record<string, unknown> | null;
+  /** The name of the collection this item is in, joined from `cadence.repertoire_collections`, or
+   *  null when it is in none. A NAME on the row rather than in `meta`: a collection is its own row
+   *  now (migration 0056), so the name is stored once and every reader is handed the same copy of
+   *  it — a rename cannot leave half a shelf on the old spelling. */
+  collection_name?: string | null;
 }
 
 /* ── The settled tempo ───────────────────────────────────────────────────────────────────────
@@ -54,30 +59,33 @@ export function tempoMeta(spec: MetronomeSpec): Record<string, unknown> {
 }
 
 /* ── Qualifiers ─────────────────────────────────────────────────────────────────────────────
-   The fields that tell two items with one title apart — who wrote it, the collection it comes
-   from, and the person's own description of which one it is — plus, for material that has an
-   order (a book, a grading ladder), its rank. Structured in `meta` so the title can stay short
-   and the qualifier does the work: "Minuet in G Major" is three pieces on one shelf until Bach,
-   the Anna Magdalena notebook, or "the fast one my teacher set" is named.
+   The fields that tell two items with one title apart — who wrote it, and the person's own
+   description of which one it is — plus, for material that has an order (a book, a grading
+   ladder), its rank. Structured in `meta` so the title can stay short and the qualifier does the
+   work: "Minuet in G Major" is three pieces on one shelf until Bach or "the fast one my teacher
+   set" is named.
 
-   A `catalogue` field lived here until 2026-09-03 and was removed on the owner's ruling —
-   *"Catalogue number is very music-specific and adds little; that can go in the title or
-   description. We're overly optimising for one use case."* No migration came with it: a row whose
-   `meta` still holds a `catalogue` key is simply never read, which costs nothing and loses
-   nothing, since the same fact belongs in the label or the description now.
+   TWO FIELDS LEFT THIS SET, both on owner rulings, and both the same way: no migration removed
+   the key, so a row in the wild still carries it and the read simply never looks at it.
+
+    - `catalogue`, 2026-09-03 — *"Catalogue number is very music-specific and adds little; that can
+      go in the title or description. We're overly optimising for one use case."*
+    - `collection`, 2026-09-03 — a collection is a ROW now (migration 0056), not a name copied onto
+      every item. The name lives once, in `cadence.repertoire_collections`; the item carries a
+      `collection_id` and reads its name back as `collection_name`. A name on each item could not be
+      renamed in one place, could not exist before its first item, and was matched by spelling.
 
    Spelled ONCE here. The seed writes these, the item screen edits them, identity reads them for
    the collision check, and the list renders them on the row's second line — four call sites in
    three packages, which is exactly the hand-copied-key drift the weigh-in regex taught. */
 export const COMPOSER_KEY = 'composer';
-export const COLLECTION_KEY = 'collection';
 /** 1-based position in an ordered collection. Present on every item of a goal ⇒ the list is a ladder. */
 export const RANK_KEY = 'rank';
 
 /**
  * The person's own words for WHICH ONE this is — "the fast one in G", "the one my teacher set",
- * "the version with the repeat". Free text, and the answer to the same question composer and
- * collection answer, for the many items that have neither: a kata, a poem, a prayer, a book.
+ * "the version with the repeat". Free text, and the answer to the same question the composer and
+ * the collection answer, for the many items that have neither: a kata, a poem, a prayer, a book.
  *
  * Added 2026-09-03 on the owner's ruling, together with the removal of `catalogue`: a BWV number
  * is one domain's way of saying which one, and a sentence is everybody's. The coach may write it
@@ -93,7 +101,7 @@ export const DESCRIPTION_KEY = 'description';
  * (the coach's own line in session-practice-facts.ts, and this row's second line on the list
  * screen) so the two never drift into separate vocabularies for the same fact. Folded into the
  * SAME qualifier read/patch below rather than a parallel pair of functions, so the item screen's
- * one PATCH writes the note alongside composer/collection/description/rank in a single merge.
+ * one PATCH writes the note alongside composer/description/rank in a single merge.
  *
  * The schema key stays `practice_note`; the person sees "Notes" (CLAUDE.md's nomenclature rule).
  */
@@ -101,7 +109,6 @@ export const PRACTICE_NOTE_KEY = 'practice_note';
 
 export interface PieceQualifiers {
   composer?: string;
-  collection?: string;
   /** See `DESCRIPTION_KEY` — their own words for which one it is. Capped at `DESCRIPTION_MAX`. */
   description?: string;
   rank?: number;
@@ -127,12 +134,10 @@ export function pieceQualifiers(meta: Record<string, unknown> | null | undefined
   if (!meta) return {};
   const out: PieceQualifiers = {};
   const composer = qualifierString(meta[COMPOSER_KEY]);
-  const collection = qualifierString(meta[COLLECTION_KEY]);
   const description = boundedString(meta[DESCRIPTION_KEY], DESCRIPTION_MAX);
   const note = qualifierString(meta[PRACTICE_NOTE_KEY]);
   const rank = meta[RANK_KEY];
   if (composer) out.composer = composer;
-  if (collection) out.collection = collection;
   if (description) out.description = description;
   if (note) out.note = note;
   if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 1) out.rank = rank;
@@ -144,53 +149,13 @@ export function pieceQualifiers(meta: Record<string, unknown> | null | undefined
 export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   const composer = qualifierString(q.composer);
-  const collection = qualifierString(q.collection);
   const description = boundedString(q.description, DESCRIPTION_MAX);
   const note = qualifierString(q.note);
   if (composer) patch[COMPOSER_KEY] = composer;
-  if (collection) patch[COLLECTION_KEY] = collection;
   if (description) patch[DESCRIPTION_KEY] = description;
   if (note) patch[PRACTICE_NOTE_KEY] = note;
   if (typeof q.rank === 'number' && Number.isInteger(q.rank) && q.rank >= 1) patch[RANK_KEY] = q.rank;
   return patch;
-}
-
-/**
- * The collections already on this shelf, most-used first, each in the spelling it first appeared in.
- *
- * A collection only groups if it is CHOSEN rather than typed (owner ruling 2026-09-03: *"a
- * collection only works if it's not free-text"*) — "Suzuki Book 2", "Suzuki book 2" and "suzuki
- * bk 2" are three groups where the person meant one. So the item screen offers this list and the
- * writers collapse a typed name onto whichever spelling is already here.
- *
- * Ordered by how many items carry it, then by name, so the shelf's own vocabulary leads the list
- * rather than whatever happened to be inserted first; the tie-break keeps it stable.
- */
-export function collectionsOf(items: Array<{ meta?: Record<string, unknown> | null }>): string[] {
-  const counts = new Map<string, { name: string; count: number }>();
-  for (const item of items) {
-    const name = pieceQualifiers(item.meta).collection;
-    if (!name) continue;
-    const key = name.toLowerCase();
-    const seen = counts.get(key);
-    // First spelling wins: a later "suzuki book 2" must not rename the group the person reads.
-    if (seen) seen.count += 1;
-    else counts.set(key, { name, count: 1 });
-  }
-  return [...counts.values()].sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : 1)).map((c) => c.name);
-}
-
-/**
- * A typed collection name, folded onto the spelling already on the shelf when one matches.
- *
- * Trim plus lower-case equality, and deliberately nothing else — this is a SPELLING guard, not a
- * matcher. Anything fuzzier ("Suzuki 2" ≈ "Suzuki Book 2") would silently file an item under a
- * collection the person did not choose, which is worse than the second group they can see and fix.
- */
-export function collapseCollection(existing: readonly string[], typed: string): string {
-  const trimmed = typed.trim();
-  const key = trimmed.toLowerCase();
-  return existing.find((name) => name.trim().toLowerCase() === key) ?? trimmed;
 }
 
 /** The practice note on its own, or undefined where there is none (or it is blank) — for a caller
@@ -266,6 +231,14 @@ const noteMark = (i: RepertoireLike): string | null => {
 const descriptionMark = (i: RepertoireLike): string | null => {
   const description = descriptionOf(i.meta);
   return description ? `description: ${description}` : null;
+};
+
+/** "collection: Suzuki Book 2" — the group this item belongs to, read off the joined name rather
+ *  than `meta` (migration 0056). A fact about the item like every other mark on the line: it says
+ *  which one this is when a title alone does not, and says nothing about what to do with it. */
+const collectionMark = (i: RepertoireLike): string | null => {
+  const name = typeof i.collection_name === 'string' ? i.collection_name.trim() : '';
+  return name ? `collection: ${name}` : null;
 };
 
 /**
@@ -394,9 +367,9 @@ export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string
  * {{repertoire}} variable. One renderer so the coach in chat and the coach programming a session
  * read the same facts in the same words. Empty string when there is nothing on file.
  *
- * Every line is a FACT about one item — its kind, when it was last worked, its settled tempo, its
- * practice note — and nothing on it ranks one item against another. No item is marked, and no
- * header says which group today's work comes from.
+ * Every line is a FACT about one item — its kind, when it was last worked, its settled tempo, the
+ * collection it is in, its practice note — and nothing on it ranks one item against another. No
+ * item is marked, and no header says which group today's work comes from.
  *
  * Learning, Up next and Keeping up go in FULL. Learned is the one capped group — the 12 most
  * recently touched, under a line stating how many there are in all, so she can see the size of the
@@ -411,7 +384,14 @@ export function renderRepertoire(
 ): string {
   if (!items.length) return '';
   const line = (i: RepertoireLike): string => {
-    const marks = [i.kind, practicedNote(i, now), tempoNote(i), descriptionMark(i), noteMark(i)].filter(Boolean);
+    const marks = [
+      i.kind,
+      practicedNote(i, now),
+      tempoNote(i),
+      collectionMark(i),
+      descriptionMark(i),
+      noteMark(i),
+    ].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
   };
   const sections: string[] = [];

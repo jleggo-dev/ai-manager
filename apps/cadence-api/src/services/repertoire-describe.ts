@@ -86,16 +86,22 @@ const isWeakNumber = (word: string): boolean => /^\d{1,2}$/.test(word);
  * so a request phrased their way lands. Composer and collection ride along for the same reason
  * ("the Bartok one", "the one from Book 2"), and they were always on the row — they were simply
  * never read here.
+ *
+ * The collection is read off `collection_name`, joined from its own row since migration 0056, and
+ * matches on its WORDS exactly as it did when the name lived in `meta` — so "the one from Book 2"
+ * still lands, and a renamed collection is matched by its new words from the next read on.
  */
 function identityTexts(item: IdentifiableItem): string[] {
   const q = pieceQualifiers(item.meta);
-  return [item.label, q.composer, q.collection, q.description].filter((s): s is string => !!s?.trim());
+  return [item.label, q.composer, item.collection_name, q.description].filter((s): s is string => !!s?.trim());
 }
 
-/** What this module needs off a row: the label, and whatever `meta` says about which one it is. */
+/** What this module needs off a row: the label, whatever `meta` says about which one it is, and
+ *  the name of the collection it is filed in. */
 export interface IdentifiableItem {
   label: string;
   meta?: Record<string, unknown> | null;
+  collection_name?: string | null;
 }
 
 /**

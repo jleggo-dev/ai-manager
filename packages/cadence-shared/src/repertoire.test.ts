@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  COLLECTION_KEY,
   DESCRIPTION_KEY,
   DESCRIPTION_MAX,
   PRACTICE_NOTE_KEY,
@@ -9,8 +8,6 @@ import {
   STANDING_NAMES,
   TEMPO_BPM_KEY,
   byRest,
-  collapseCollection,
-  collectionsOf,
   descriptionOf,
   pieceQualifiers,
   practiceNoteOf,
@@ -323,7 +320,7 @@ describe('renderRepertoire — Learned is capped at 12, and says how many there 
 
 describe('piece qualifiers', () => {
   it('round-trips through the patch it writes', () => {
-    const q = { composer: 'J.S. Bach', collection: 'Suzuki Book 2', description: 'the fast one in G', rank: 4 };
+    const q = { composer: 'J.S. Bach', description: 'the fast one in G', note: 'bars 9-16', rank: 4 };
     expect(pieceQualifiers(qualifierMeta(q))).toEqual(q);
   });
 
@@ -333,7 +330,7 @@ describe('piece qualifiers', () => {
   });
 
   it('ignores blanks, non-strings, and a rank that is not a positive whole number', () => {
-    expect(pieceQualifiers({ composer: '  ', collection: 7, description: null, rank: 0 })).toEqual({});
+    expect(pieceQualifiers({ composer: '  ', description: null, rank: 0 })).toEqual({});
     expect(pieceQualifiers({ rank: 2.5 })).toEqual({});
     expect(pieceQualifiers({ rank: '3' })).toEqual({});
     expect(qualifierMeta({ composer: '   ', rank: -1 })).toEqual({});
@@ -467,67 +464,57 @@ describe('the practice note', () => {
 });
 
 /**
- * Collections are chosen, not typed (owner ruling 2026-09-03: *"a collection only works if it's
- * not free-text"*). These two functions are what makes that true — the list the item screen offers,
- * and the fold that stops a second spelling starting a second group.
+ * A collection is a ROW now, not a name copied onto every item (owner ruling 2026-09-03: *"a
+ * collection only works if it's not free-text"*). The item carries `collection_id` and reads back
+ * `collection_name`; `meta.collection` is no longer written or read, and the two helpers that made
+ * the old name behave — `collectionsOf` and `collapseCollection` — went with it, because the
+ * database's unique index on (user_id, lower(name)) does that job now.
+ *
+ * Both halves are pinned for the same reason `catalogue` is: rows in the wild still carry the old
+ * key, and a read that still returned it would keep the field alive on every screen that renders
+ * whatever `pieceQualifiers` hands back.
  */
-describe('the collections on a shelf', () => {
-  const inCollection = (label: string, collection?: string) =>
-    item(label, { meta: collection ? { [COLLECTION_KEY]: collection } : {} });
-
-  it('lists each collection once, most-used first', () => {
-    const shelf = [
-      inCollection('a', 'ABRSM Grade 3'),
-      inCollection('b', 'Suzuki Book 2'),
-      inCollection('c', 'Suzuki Book 2'),
-      inCollection('d', 'Suzuki Book 2'),
-      inCollection('e', 'ABRSM Grade 3'),
-      inCollection('f', 'Shotokan kata'),
-    ];
-    expect(collectionsOf(shelf)).toEqual(['Suzuki Book 2', 'ABRSM Grade 3', 'Shotokan kata']);
-  });
-
-  it('keeps the spelling it first saw, whatever later rows type', () => {
-    const shelf = [inCollection('a', 'Suzuki Book 2'), inCollection('b', 'suzuki book 2')];
-    expect(collectionsOf(shelf)).toEqual(['Suzuki Book 2']);
-  });
-
-  it('breaks a tie on count by name, so the list is stable between reads', () => {
-    expect(collectionsOf([inCollection('a', 'Zebra'), inCollection('b', 'Alpha')])).toEqual(['Alpha', 'Zebra']);
-  });
-
-  it('is empty for a shelf where nothing carries one', () => {
-    expect(collectionsOf([inCollection('a'), inCollection('b')])).toEqual([]);
-    expect(collectionsOf([])).toEqual([]);
-  });
-
-  describe('collapseCollection — a spelling guard, never a matcher', () => {
-    const existing = ['Suzuki Book 2', 'Shotokan kata syllabus'];
-
-    it.each([
-      ['suzuki book 2', 'Suzuki Book 2'],
-      ['SUZUKI BOOK 2', 'Suzuki Book 2'],
-      ['  Suzuki Book 2  ', 'Suzuki Book 2'],
-      ['Suzuki Book 2', 'Suzuki Book 2'],
-    ])('folds %s onto the spelling already on the shelf', (typed, expected) => {
-      expect(collapseCollection(existing, typed)).toBe(expected);
+describe('the collection is off meta', () => {
+  it('ignores a collection left on an old row, rather than reading it back as a field', () => {
+    expect(pieceQualifiers({ collection: 'Suzuki Book 2' })).toEqual({});
+    expect(pieceQualifiers({ composer: 'J.S. Bach', collection: 'Suzuki Book 2' })).toEqual({
+      composer: 'J.S. Bach',
     });
+  });
 
-    /** The near-miss half: anything looser would file an item under a group nobody chose. */
-    it.each([['Suzuki 2'], ['Suzuki Book Two'], ['Suzuki  Book  2'], ['Suzuki Book 3'], ['kata']])(
-      'leaves %s alone — it is not the same name, only a similar one',
-      (typed) => {
-        expect(collapseCollection(existing, typed)).toBe(typed.trim());
-      },
+  it('never writes a collection back, even when one is handed in', () => {
+    expect(qualifierMeta({ composer: 'J.S. Bach', collection: 'Suzuki Book 2' } as never)).toEqual({
+      composer: 'J.S. Bach',
+    });
+  });
+
+  it('reaches the coach on the item line, from the joined name', () => {
+    const out = renderRepertoire([item('Ecossaise', { kind: 'piece', collection_name: 'Suzuki Book 2' })]);
+    expect(out).toContain('- Ecossaise (piece; not worked yet while on file; collection: Suzuki Book 2)');
+  });
+
+  it('says nothing at all when the item is in none — never an empty "collection:"', () => {
+    expect(renderRepertoire([item('Ecossaise')])).not.toContain('collection:');
+    expect(renderRepertoire([item('Ecossaise', { collection_name: null })])).not.toContain('collection:');
+  });
+
+  it('is not read off meta any more, however the old key still reads', () => {
+    expect(renderRepertoire([item('Ecossaise', { meta: { collection: 'Suzuki Book 2' } })])).not.toContain(
+      'collection:',
     );
+  });
 
-    it('trims a new name rather than storing the whitespace', () => {
-      expect(collapseCollection(existing, '  ABRSM Grade 3 ')).toBe('ABRSM Grade 3');
-    });
-
-    it('has nothing to fold onto when the shelf carries none', () => {
-      expect(collapseCollection([], 'Suzuki Book 2')).toBe('Suzuki Book 2');
-    });
+  it('keeps the collection alongside the other facts on the line', () => {
+    const out = renderRepertoire([
+      item('Ecossaise', {
+        kind: 'piece',
+        collection_name: 'Suzuki Book 2',
+        meta: { tempo_bpm: 66, [DESCRIPTION_KEY]: 'the fast one in G', [PRACTICE_NOTE_KEY]: 'bars 9-16' },
+      }),
+    ]);
+    expect(out).toContain(
+      'settled tempo 66 bpm; collection: Suzuki Book 2; description: the fast one in G; note: bars 9-16)',
+    );
   });
 });
 

@@ -17,13 +17,14 @@
  * pass `isResolvable` together, so nothing the seed offers is a row that can never be found again.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { COLLECTION_KEY, COMPOSER_KEY, RANK_KEY, type RepertoireItem } from '@cadence/shared';
+import { COMPOSER_KEY, RANK_KEY, type RepertoireItem } from '@cadence/shared';
 
 const runJobBySlug = vi.fn();
 const listRepertoire = vi.fn();
 const upsertRepertoireItem = vi.fn();
 const clearPendingSessionsForGoal = vi.fn(async (..._a: unknown[]) => 0);
 const stampPracticed = vi.fn(async (..._a: unknown[]) => {});
+const resolveCollectionByName = vi.fn();
 
 vi.mock('../ai/aim.ts', () => ({ runJobBySlug: (...a: unknown[]) => runJobBySlug(...a) }));
 vi.mock('../config.ts', () => ({
@@ -38,6 +39,18 @@ vi.mock('../repos/repertoire.ts', () => ({
   upsertRepertoireItem: (...a: unknown[]) => upsertRepertoireItem(...a),
   clearPendingSessionsForGoal: (...a: unknown[]) => clearPendingSessionsForGoal(...a),
   stampPracticed: (...a: unknown[]) => stampPracticed(...a),
+}));
+
+// The collections repo is mocked, not the SQL: what this file pins is that the seed resolves each
+// distinct name ONCE and hands the id to the write, never that Postgres upserts correctly.
+// `collectionKey` is the real one — a second spelling of "which names are the same name" here is
+// exactly the drift the shared rule exists to stop.
+const actualCollections = await vi.importActual<typeof import('../repos/repertoire-collections.ts')>(
+  '../repos/repertoire-collections.ts',
+);
+vi.mock('../repos/repertoire-collections.ts', () => ({
+  collectionKey: (name: string) => actualCollections.collectionKey(name),
+  resolveCollectionByName: (...a: unknown[]) => resolveCollectionByName(...a),
 }));
 
 const { expandCollection, confirmSeed } = await import('./repertoire-seed.ts');
@@ -71,6 +84,8 @@ function row(label: string, goalId: string | null = 'g1'): RepertoireItem {
     status: 'known',
     kind: null,
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-09-01T00:00:00.000Z',
     learned_at: null,
     last_practiced_at: null,
@@ -80,6 +95,11 @@ function row(label: string, goalId: string | null = 'g1'): RepertoireItem {
 beforeEach(() => {
   vi.clearAllMocks();
   listRepertoire.mockResolvedValue([]);
+  resolveCollectionByName.mockImplementation(async (_u: string, name: string) => ({
+    collection_id: `c-${actualCollections.collectionKey(name)}`,
+    name,
+    item_count: 0,
+  }));
   upsertRepertoireItem.mockImplementation(async (_u: string, item: { label: string }) => ({
     item: row(item.label),
     learnedNow: false,
@@ -231,15 +251,14 @@ describe('confirmSeed — what actually gets written', () => {
       written: 3,
       labels: ['Écossaise', 'Long, Long Ago', 'Chanson'],
       refused: [],
+      collection: { collection_id: 'c-suzuki piano book 2', name: 'Suzuki Piano Book 2' },
     });
     expect(upsertRepertoireItem).toHaveBeenCalledTimes(3);
     const [, first] = upsertRepertoireItem.mock.calls[0] as [string, Record<string, unknown>];
     expect(first).toMatchObject({ label: 'Écossaise', status: 'known', goal_id: 'g1' });
-    expect(first.meta).toEqual({
-      [COMPOSER_KEY]: 'J.N. Hummel',
-      [COLLECTION_KEY]: 'Suzuki Piano Book 2',
-      [RANK_KEY]: 1,
-    });
+    // The collection is a foreign key now (migration 0056), never a name in meta.
+    expect(first.collection_id).toBe('c-suzuki piano book 2');
+    expect(first.meta).toEqual({ [COMPOSER_KEY]: 'J.N. Hummel', [RANK_KEY]: 1 });
   });
 
   it('never stamps a crossing — a backfilled book invents no anniversaries', async () => {
@@ -268,24 +287,52 @@ describe('confirmSeed — what actually gets written', () => {
   });
 
   /**
-   * A collection only groups if it is one group (owner ruling 2026-09-03). Confirming the same book
-   * a second time types its name again, and "suzuki piano book 2" beside "Suzuki Piano Book 2" is
-   * two groups nothing will ever merge — a silent failure, because both look right on the screen.
+   * A collection only groups if it is one group (owner ruling 2026-09-03), and since migration 0056
+   * the row is what makes that true: the seed resolves the name to a collection this person already
+   * has — ignoring case — or makes one, and every piece is filed by its id.
+   *
+   * Silent both ways, which is why both halves are here: resolving twice would put "suzuki piano
+   * book 2" beside "Suzuki Piano Book 2" as two groups nothing will ever merge, and resolving too
+   * loosely would file a kata syllabus into a piano book.
    */
-  it('folds a typed collection onto the spelling already on the shelf', async () => {
-    listRepertoire.mockResolvedValue([{ ...row('Écossaise'), meta: { [COLLECTION_KEY]: 'Suzuki Piano Book 2' } }]);
-    await confirmSeed('u1', [{ label: 'Chanson', collection: 'suzuki piano book 2', status: 'queued' as const }]);
-    const [, first] = upsertRepertoireItem.mock.calls[0] as [string, { meta: Record<string, unknown> }];
-    expect(first.meta[COLLECTION_KEY]).toBe('Suzuki Piano Book 2');
+  it('resolves the collection ONCE for the whole batch and files every row by its id', async () => {
+    await confirmSeed('u1', [
+      { label: 'Chanson', collection: 'Suzuki Piano Book 2', status: 'queued' as const },
+      { label: 'Musette', collection: 'suzuki piano book 2', status: 'queued' as const },
+    ]);
+    expect(resolveCollectionByName).toHaveBeenCalledTimes(1);
+    expect(resolveCollectionByName).toHaveBeenCalledWith('u1', 'Suzuki Piano Book 2');
+    const ids = upsertRepertoireItem.mock.calls.map((c) => (c[1] as { collection_id: string | null }).collection_id);
+    expect(ids).toEqual(['c-suzuki piano book 2', 'c-suzuki piano book 2']);
   });
 
-  it('leaves a genuinely new collection as typed — the fold is a spelling guard, not a matcher', async () => {
-    listRepertoire.mockResolvedValue([{ ...row('Écossaise'), meta: { [COLLECTION_KEY]: 'Suzuki Piano Book 2' } }]);
+  it('a genuinely different name is its own collection', async () => {
     await confirmSeed('u1', [
+      { label: 'Chanson', collection: 'Suzuki Piano Book 2', status: 'queued' as const },
       { label: 'Heian Shodan', collection: 'Shotokan kata syllabus', status: 'queued' as const },
     ]);
-    const [, first] = upsertRepertoireItem.mock.calls[0] as [string, { meta: Record<string, unknown> }];
-    expect(first.meta[COLLECTION_KEY]).toBe('Shotokan kata syllabus');
+    expect(resolveCollectionByName).toHaveBeenCalledTimes(2);
+    const ids = upsertRepertoireItem.mock.calls.map((c) => (c[1] as { collection_id: string | null }).collection_id);
+    expect(ids).toEqual(['c-suzuki piano book 2', 'c-shotokan kata syllabus']);
+  });
+
+  it("a row naming no collection is written with none — never filed into somebody else's book", async () => {
+    await confirmSeed('u1', [{ label: 'Chanson', status: 'queued' as const }]);
+    expect(resolveCollectionByName).not.toHaveBeenCalled();
+    const [, first] = upsertRepertoireItem.mock.calls[0] as [string, { collection_id: string | null }];
+    expect(first.collection_id).toBeNull();
+  });
+
+  /** A collection that could not be made aborts the whole write. Saving sixty rows ungrouped would
+   *  look exactly like a book someone deliberately laid out loose, and nothing downstream could
+   *  tell the two apart. */
+  it('reports a fault and writes nothing when the collection cannot be resolved', async () => {
+    resolveCollectionByName.mockRejectedValue(new Error('db down'));
+    const res = await confirmSeed('u1', [{ label: 'Chanson', collection: 'Suzuki Piano Book 2', status: 'queued' }]);
+    expect(res).toMatchObject({ ok: false });
+    if (res.ok) throw new Error('expected a fault');
+    expect(res.fault).toMatch(/Nothing was saved/);
+    expect(upsertRepertoireItem).not.toHaveBeenCalled();
   });
 
   // The ruling (supervisor, 2026-09-02): the seed applies `update_repertoire`'s own gate. A row
@@ -365,7 +412,7 @@ describe('confirmSeed — what actually gets written', () => {
 
   it('an empty confirm writes nothing and reports zero', async () => {
     const res = await confirmSeed('u1', [], 'g1');
-    expect(res).toEqual({ ok: true, written: 0, labels: [], refused: [] });
+    expect(res).toEqual({ ok: true, written: 0, labels: [], refused: [], collection: null });
     expect(upsertRepertoireItem).not.toHaveBeenCalled();
   });
 });

@@ -46,11 +46,31 @@ export interface RepertoireItem {
   status: RepertoireStatus;
   /** What sort of thing it is, in the coach's plain words — "piece", "kata", "poem". Optional. */
   kind: string | null;
-  /** Free room for durable per-item facts (composer, book, settled metronome bpm). */
+  /** Free room for durable per-item facts (composer, settled metronome bpm). */
   meta: Record<string, unknown> | null;
+  /** The collection this item is in, or null when it is not grouped. A foreign key, not a name:
+   *  a collection is its own row since migration 0056, so renaming one renames it everywhere. */
+  collection_id: string | null;
+  /** That collection's name, joined on the read. Null when the item is in none. Written nowhere —
+   *  every write names the collection by its `collection_id`. */
+  collection_name: string | null;
   started_at: string;
   /** Set when it crossed working → known in front of us — absent for backfilled items they
    *  already knew when they told us. */
   learned_at: string | null;
   last_practiced_at: string | null;
+}
+
+/**
+ * One collection — a book, a syllabus, a reading list, a set of poems, a grading ladder.
+ *
+ * A row of its own since migration 0056 (owner ruling 2026-09-03: *"a collection only works if
+ * it's not free-text"*). Names are unique per person ignoring case, the same rule item labels
+ * follow. `item_count` is how many items point at it right now, counted by the read — a collection
+ * with none is legitimate and shows zero, never disappears.
+ */
+export interface RepertoireCollection {
+  collection_id: string;
+  name: string;
+  item_count: number;
 }

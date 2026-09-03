@@ -18,6 +18,7 @@ import progressRoutes from './routes/progress.ts';
 import progressExtrasRoutes from './routes/progress-extras.ts';
 import progressPhotosRoutes from './routes/progress-photos.ts';
 import repertoireSeedRoutes from './routes/repertoire-seed.ts';
+import repertoireCollectionsRoutes from './routes/repertoire-collections.ts';
 import nutritionRoutes from './routes/nutrition.ts';
 import nutritionDraftRoutes from './routes/nutrition-draft.ts';
 import foodSweepRoutes from './routes/food-sweep.ts';
@@ -59,6 +60,7 @@ export function createApp() {
   app.use('/progress', progressExtrasRoutes);
   app.use('/progress', progressPhotosRoutes);
   app.use('/progress', repertoireSeedRoutes);
+  app.use('/progress', repertoireCollectionsRoutes);
   app.use('/journal', journalRoutes);
   app.use('/nutrition', nutritionRoutes);
   app.use('/nutrition', nutritionDraftRoutes);

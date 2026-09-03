@@ -57,6 +57,7 @@ export const DEV_CHILD_TABLES = [
   'recaps',
   'recipes',
   'repertoire',
+  'repertoire_collections',
   'session_feedback',
   'user_routines',
   'water_logs',

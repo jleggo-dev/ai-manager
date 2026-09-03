@@ -88,6 +88,10 @@ function rowDateFor(item: RepertoireItem, now: Date): string {
  * book or a kata, which rarely carries a composer or a collection, still gets an informative line:
  * the note is simply the first (and often only) segment present.
  *
+ * The collection's NAME comes off the row's joined `collection_name` (migration 0056), not `meta`:
+ * the name lives on the collection's own row now, so a rename shows up on every item at once
+ * instead of on whichever ones happened to be written since.
+ *
  * TWO FIELDS ARE DELIBERATELY ABSENT.
  *  - `catalogue` was here until 2026-09-03 and is not a field any more (owner: *"very
  *    music-specific and adds little"*).
@@ -97,7 +101,8 @@ function rowDateFor(item: RepertoireItem, now: Date): string {
  */
 export function buildSecondLine(item: RepertoireItem, now: Date = new Date()): string {
   const q = pieceQualifiers(item.meta);
-  const segments = [q.composer, q.collection, q.note, rowDateFor(item, now)].filter((s): s is string => Boolean(s));
+  const collection = item.collection_name?.trim() || undefined;
+  const segments = [q.composer, collection, q.note, rowDateFor(item, now)].filter((s): s is string => Boolean(s));
   return segments.join(' · ');
 }
 

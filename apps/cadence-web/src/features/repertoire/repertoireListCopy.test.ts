@@ -8,7 +8,6 @@ import { describe, it, expect } from 'vitest';
 import type { RepertoireItem } from '@cadence/shared';
 import {
   DESCRIPTION_KEY,
-  COLLECTION_KEY,
   COMPOSER_KEY,
   PRACTICE_NOTE_KEY,
   RANK_KEY,
@@ -40,6 +39,8 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
     status: 'known',
     kind: 'piece',
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-01-01T00:00:00Z',
     learned_at: null,
     last_practiced_at: null,
@@ -130,12 +131,13 @@ describe('formatRowDate — relative, then month, then year (coarser than the it
   });
 });
 
-describe('buildSecondLine — composer · catalogue · collection · date, only what is on file', () => {
+describe('buildSecondLine — composer · collection · note · date, only what is on file', () => {
   const now = new Date('2026-09-02T12:00:00Z');
 
   it('composer and collection both on file, joined with the practiced date', () => {
     const i = item({
-      meta: { [COMPOSER_KEY]: 'Debussy', [COLLECTION_KEY]: 'Suite bergamasque' },
+      meta: { [COMPOSER_KEY]: 'Debussy' },
+      collection_name: 'Suite bergamasque',
       last_practiced_at: daysAgo(1, now),
     });
     expect(buildSecondLine(i, now)).toBe('Debussy · Suite bergamasque · yesterday');
@@ -150,19 +152,33 @@ describe('buildSecondLine — composer · catalogue · collection · date, only 
   });
 
   it('collection alone reads as a plain fact', () => {
-    const i = item({ meta: { [COLLECTION_KEY]: 'Anna Magdalena Notebook' }, last_practiced_at: null });
+    const i = item({ meta: null, collection_name: 'Anna Magdalena Notebook', last_practiced_at: null });
     expect(buildSecondLine(i, now)).toBe('Anna Magdalena Notebook');
   });
 
   it('all three segments, in order: composer, collection, date', () => {
     const i = item({
-      meta: {
-        [COMPOSER_KEY]: 'J.S. Bach',
-        [COLLECTION_KEY]: 'Anna Magdalena Notebook',
-      },
+      meta: { [COMPOSER_KEY]: 'J.S. Bach' },
+      collection_name: 'Anna Magdalena Notebook',
       last_practiced_at: daysAgo(1, now),
     });
     expect(buildSecondLine(i, now)).toBe('J.S. Bach · Anna Magdalena Notebook · yesterday');
+  });
+
+  /**
+   * The collection's NAME comes off the row's joined column (migration 0056), never `meta` — so a
+   * rename shows on every item at once. A name left in the old meta key must NOT reappear here: it
+   * would be the pre-rename spelling, shown beside items already carrying the new one, and nothing
+   * on the screen would say which was which.
+   */
+  it('never renders a collection left in the old meta key', () => {
+    const i = item({ meta: { collection: 'Suite bergamasque' }, collection_name: null, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('');
+  });
+
+  it('a blank joined name is no segment at all, never a lone separator', () => {
+    const i = item({ meta: { [COMPOSER_KEY]: 'Debussy' }, collection_name: '   ', last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('Debussy');
   });
 
   /**
@@ -200,7 +216,7 @@ describe('buildSecondLine — composer · catalogue · collection · date, only 
   });
 
   /**
-   * The practice note (P8) — sits after composer/catalogue/collection (the design's own order:
+   * The practice note (P8) — sits after composer/collection (the design's own order:
    * WHICH item, then how the work is going, then WHEN), so a book or a kata (which rarely carries the
    * other three) still gets an informative line — the note is simply the first segment present.
    */

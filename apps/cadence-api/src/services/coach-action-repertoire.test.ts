@@ -106,12 +106,30 @@ describe('the tool description', () => {
   it('teaches the description field, with a quoted worked example', () => {
     expect(description).toContain('"description"');
     expect(description).toContain('"the fast one in G"');
-    expect(description).toMatch(/a free-text description in their words/i);
+    expect(description).toMatch(/their own words for which one it is/i);
+  });
+
+  /**
+   * The collection field (P11) — the book, list or syllabus an item is part of. She sends a NAME;
+   * the write path turns it into the row this person already has under that name, or a new one.
+   * Taught in the prose for the same reason every other field is: the Broker reads this string and
+   * never sees the JSON schema (TOOL-HARNESS.md §3), so a declared parameter absent from the prose
+   * is a parameter that is never filled.
+   */
+  it('teaches the collection field, with a quoted worked example', () => {
+    expect(description).toContain('"collection"');
+    expect(description).toContain('"Suzuki Book 2"');
+  });
+
+  /** It is a NAME she writes, not an id — she has never seen an id. A description that asked for
+   *  one would produce a field she can only ever guess at. */
+  it('never asks her for a collection id', () => {
+    expect(description).not.toMatch(/collection_id/i);
   });
 
   it('declares exactly the fields it teaches — nothing silently undocumented', () => {
     const props = (UPDATE_REPERTOIRE.parameters.properties.items as { items: { properties: object } }).items.properties;
-    expect(Object.keys(props).sort()).toEqual(['description', 'kind', 'label', 'status']);
+    expect(Object.keys(props).sort()).toEqual(['collection', 'description', 'kind', 'label', 'status']);
     for (const key of Object.keys(props)) expect(description).toContain(`"${key}"`);
   });
 });

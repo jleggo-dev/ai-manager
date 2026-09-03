@@ -1,6 +1,7 @@
 /**
- * The ＋ door (P6 "the room", top right of the list screen): three rows, always in this order —
- * start from a collection, add one by hand, or just say it in chat. Reuses the app's generic
+ * The ＋ door (P6 "the room", top right of the list screen): four rows, always in this order —
+ * start from a collection, add one by hand, just say it in chat, or open your collections. Reuses
+ * the app's generic
  * bottom-sheet chrome (`.sheet-scrim`/`.sheet`/`.sheet-head`/`.sheet-body`, styles.css) and its
  * quick-add row shape (`.ld-row`/`.ld-row-t`, the same rows the ＋ tab's own sheet uses) rather
  * than inventing a second "a few tappable rows" pattern.
@@ -12,16 +13,20 @@
  * the tap; where each leads is ListScreen's job.
  */
 import { COLLECTION_LOOKUP_PLACEHOLDER } from './itemFieldCopy.ts';
+import { COLLECTIONS_TITLE } from './collectionsCopy.ts';
 import { useState } from 'react';
 
 export interface AddDoorProps {
   onStartCollection: (collection: string) => void;
   onAddByHand: () => void;
   onOpenChat: () => void;
+  /** Opens "Your collections" (P11) — the one place a collection is renamed or removed. Last,
+   *  because it is the only row that adds nothing to the list; it tidies what is already there. */
+  onOpenCollections: () => void;
   onClose: () => void;
 }
 
-export function AddDoor({ onStartCollection, onAddByHand, onOpenChat, onClose }: AddDoorProps) {
+export function AddDoor({ onStartCollection, onAddByHand, onOpenChat, onOpenCollections, onClose }: AddDoorProps) {
   const [naming, setNaming] = useState(false);
   const [collection, setCollection] = useState('');
 
@@ -85,6 +90,15 @@ export function AddDoor({ onStartCollection, onAddByHand, onOpenChat, onClose }:
               <span className="ld-row-t">
                 <b>Just tell me in chat</b>
                 <span>say it however you&rsquo;d say it to me</span>
+              </span>
+              <span className="rl-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+            <button type="button" className="ld-row" onClick={onOpenCollections}>
+              <span className="ld-row-t">
+                <b>{COLLECTIONS_TITLE}</b>
+                <span>rename or remove a group</span>
               </span>
               <span className="rl-chevron" aria-hidden="true">
                 ›

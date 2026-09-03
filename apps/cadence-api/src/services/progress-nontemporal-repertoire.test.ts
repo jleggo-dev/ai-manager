@@ -13,6 +13,8 @@ function item(label: string, status: RepertoireStatus, over: Partial<RepertoireI
     status,
     kind: 'piece',
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-07-20T09:00:00Z',
     learned_at: null,
     last_practiced_at: null,
