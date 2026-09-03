@@ -32,6 +32,7 @@ import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
 import { findItemForTitle, renderRepertoireForCoach } from './repertoire-practice.ts';
+import { practiceVariables } from './session-practice-facts.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { coachingPhase, normalizeSession } from './session-normalize.ts';
@@ -127,6 +128,16 @@ async function generateSession(
         .catch(() => '')
     : '';
 
+  // The shelf THIS session may draw on. Scoped once, then used twice — for the rendered
+  // {{repertoire}} and for the deterministic picks below — so what she is shown and what she is
+  // handed can never disagree about which pieces belong to this practice.
+  const shelf =
+    repertoire?.filter(
+      (i) =>
+        i.goal_id === occ.goal_id ||
+        (i.goal_id == null && goals.find((g) => g.goal_id === occ.goal_id)?.area === 'practice'),
+    ) ?? null;
+
   const variables = {
     activity: JSON.stringify({
       title: occ.title,
@@ -148,15 +159,15 @@ async function generateSession(
     // come up DUE NEXT in a piano session, and the piano book must not ride every run's prompt.
     // Unlinked items reach practice-area goals only. A failed read says so — never "empty".
     repertoire:
-      repertoire === null
+      shelf === null
         ? 'Could not be read just now — a fault on our side, NOT an empty record. Do not assume they know nothing, and do not invent items.'
-        : renderRepertoireForCoach(
-            repertoire.filter(
-              (i) =>
-                i.goal_id === occ.goal_id ||
-                (i.goal_id == null && goals.find((g) => g.goal_id === occ.goal_id)?.area === 'practice'),
-            ),
-          ),
+        : renderRepertoireForCoach(shelf),
+    // The parts of a practice session, drawn from the standings: which Keeping up item is due for
+    // the warm-up, what a swap offers instead, the Learning pieces with their practice note and the
+    // last words logged about each, and the top of Up next as a forecast. All four are empty for a
+    // goal with no shelf and for a shelf that could not be read — the template ignores an empty tag.
+    // The code says what is due; she still composes the session.
+    ...practiceVariables(shelf, history),
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,
