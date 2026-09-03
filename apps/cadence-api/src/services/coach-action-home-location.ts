@@ -42,7 +42,7 @@ export const SET_HOME_LOCATION: CoachActionTool = {
   },
   async run(userId, params) {
     const place = String(params.place ?? '').trim();
-    if (!place) return 'No place was given, so nothing changed. Ask where they live.';
+    if (!place) return 'No place was given, so nothing changed.';
 
     const geo = await geocodeCity(place);
     if (!geo) return `"${place}" could not be found; nothing was changed.`;
@@ -56,7 +56,7 @@ export const SET_HOME_LOCATION: CoachActionTool = {
       after?.home_location?.lon === geo.lon &&
       after?.home_location?.label === geo.label;
     if (!landed) {
-      return `Home location did NOT get set — the write did not take. Do not say it is done; say you could not save it just now.`;
+      return `Home location did NOT get set — the write did not take. Do not say it is done.`;
     }
 
     return `Home location set to ${geo.label} (${geo.lat}, ${geo.lon}). Weather and daylight for outdoor sessions are read from here from now on.`;

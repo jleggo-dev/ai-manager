@@ -251,7 +251,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
   revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
   start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
-  set_home_location: 'record where they live, so weather and daylight can be read for outdoor sessions',
+  set_home_location: 'ACTION: record where they live, so weather and daylight can be read for outdoor sessions',
 };
 
 /**
