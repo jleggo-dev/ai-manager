@@ -20,6 +20,7 @@ const deleteMealPlan = vi.fn();
 const getDietaryProfile = vi.fn();
 const structureRecipeFromChat = vi.fn();
 const probeRecipeDiscovery = vi.fn();
+const generateMealPlan = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   listRecipes: (...a: unknown[]) => listRecipes(...a),
@@ -34,6 +35,9 @@ vi.mock('../../lib/api.ts', () => ({
   parseFridgePhoto: vi.fn(),
   generateRecipesFromIngredients: vi.fn(),
   saveRecipe: vi.fn(),
+  generateMealPlan: (...a: unknown[]) => generateMealPlan(...a),
+  mealPlanDayLabel: (d: string) => d,
+  shoppingListSummary: (l: unknown[]) => `${l.length} to get`,
   weekOfMonday: () => '2026-08-24',
   // The real one-liner, not a stub — the per-serving numbers are the point of 10a.
   recipeMacroHint: (m: { kcal?: number; protein_g?: number }) =>
@@ -249,7 +253,7 @@ describe('the composer — a recipe onto a day and a slot (10b)', () => {
 });
 
 describe('the shopping list is generated, never kept (10c)', () => {
-  it('works the list out from the planned recipes and writes nothing', async () => {
+  it('works the list out from the planned recipes — merely LOOKING writes nothing', async () => {
     getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
     await mountKitchen();
 
@@ -259,12 +263,19 @@ describe('the shopping list is generated, never kept (10c)', () => {
     expect(within(list).getByText('ground beef')).toBeInTheDocument();
     expect(within(list).getByText('kidney beans')).toBeInTheDocument();
     expect(within(list).getByText('2 things left')).toBeInTheDocument();
-    expect(within(list).getByText(/WORKED OUT FROM THIS WEEK — NOT SAVED/i)).toBeInTheDocument();
+    expect(within(list).getByText(/WORKED OUT FROM THIS WEEK/i)).toBeInTheDocument();
     expect(patchMealPlan).not.toHaveBeenCalled();
   });
 
-  it('ticks an item for the length of the shop without saving it anywhere', async () => {
+  /**
+   * Owner ruling 2026-09-02: the ticks are KEPT (the session-only version lost the basket to a
+   * phone lock mid-shop). A toggle writes the derived list with its checked flags onto the plan
+   * row — the plan's DAYS are never touched, so the list itself still re-derives and cannot go
+   * stale.
+   */
+  it('a tick persists to the plan row, and only the ticks — never the days', async () => {
     getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    patchMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
     await mountKitchen();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Shopping' }));
@@ -273,8 +284,27 @@ describe('the shopping list is generated, never kept (10c)', () => {
 
     expect(screen.getByRole('button', { name: /ground beef/i }).className).toMatch(/is-checked/);
     expect(screen.getByText('1 thing left')).toBeInTheDocument();
-    expect(patchMealPlan).not.toHaveBeenCalled();
+    await waitFor(() => expect(patchMealPlan).toHaveBeenCalledTimes(1));
+    const [id, patch] = patchMealPlan.mock.calls[0]!;
+    expect(id).toBe('mp1');
+    expect(Object.keys(patch)).toEqual(['shopping_list']);
+    expect(patch.shopping_list).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'ground beef', checked: true })]),
+    );
     expect(saveMealPlan).not.toHaveBeenCalled();
+  });
+
+  it('seeds the basket from the plan row, so a tick survives leaving and coming back', async () => {
+    getCurrentMealPlan.mockResolvedValue({
+      status: 'ok',
+      plan: { ...savedWeek, shopping_list: [{ name: 'kidney beans', qty: '400 g', category: 'other', checked: true }] },
+    });
+    await mountKitchen();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Shopping' }));
+    const row = await screen.findByRole('button', { name: /kidney beans/i });
+    expect(row.className).toMatch(/is-checked/);
+    expect(screen.getByText('1 thing left')).toBeInTheDocument();
   });
 
   it('points at planning rather than showing an empty list when nothing is planned', async () => {
@@ -328,6 +358,10 @@ describe('opening on a named section (the pill re-point)', () => {
     getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
     render(<FoodKitchen initialView="shop" />);
     expect(await screen.findByRole('region', { name: /Shopping list/i })).toBeInTheDocument();
+    // The plan lands after the deep-linked mount — its saved ticks seed the basket in place.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /ground beef/i }).className).not.toMatch(/is-checked/),
+    );
   });
 
   it('opens on the planner when asked', async () => {
@@ -360,5 +394,77 @@ describe('the other ways a recipe gets in', () => {
     await mountKitchen();
     fireEvent.click(await screen.findByRole('button', { name: /Find a real recipe/i }));
     expect(await screen.findByRole('region', { name: /Find a real recipe/i })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Owner rulings, 2026-09-02 — the capabilities the July-panel deletion dropped come back as
+ * Kitchen capabilities: week paging (read-only past), and AI week-drafting in the Kitchen.
+ */
+describe('week paging — \u2039 walks into past weeks, read-only', () => {
+  it('fetches the earlier week and stows every editing door', async () => {
+    getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    await mountKitchen();
+    fireEvent.click(screen.getByRole('tab', { name: 'The week' }));
+    await screen.findByRole('button', { name: /Draft this week/i });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Earlier week' }));
+    await waitFor(() => expect(getCurrentMealPlan).toHaveBeenCalledWith('2026-08-17'));
+    expect(await screen.findByRole('button', { name: /Back to this week/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Draft this week/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Define a meal/i })).toBeNull();
+
+    // A past day reads back, but its slots take no edits.
+    fireEvent.click(screen.getAllByRole('button', { name: /Mon 17 Aug|Tue 18 Aug/i })[0]!);
+    expect(screen.queryByRole('button', { name: /Pick a recipe/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Take it off/i })).toBeNull();
+  });
+
+  it('the later-week arrow never pages past the running week', async () => {
+    await mountKitchen();
+    fireEvent.click(screen.getByRole('tab', { name: 'The week' }));
+    expect((await screen.findByRole('button', { name: 'Later week' })).hasAttribute('disabled')).toBe(true);
+  });
+});
+
+describe('AI week-drafting, back in the Kitchen', () => {
+  const draft = {
+    week_of: '2026-08-24',
+    days: [
+      {
+        day: '2026-08-24',
+        meals: [{ slot: 'dinner', recipe: { name: 'Beef chili', servings: 4, ingredients: [], steps: [], tags: [] } }],
+      },
+    ],
+    shopping_list: [{ name: 'ground beef', qty: '500 g', category: 'protein', checked: false }],
+    notes: null,
+  };
+
+  it('drafts from a note and keeps nothing until "Keep this week"', async () => {
+    generateMealPlan.mockResolvedValue({ status: 'ok', draft });
+    saveMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    await mountKitchen();
+    fireEvent.click(screen.getByRole('tab', { name: 'The week' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Draft this week/i }));
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'more fish' } });
+    fireEvent.click(screen.getByRole('button', { name: /Draft the week/i }));
+    await waitFor(() => expect(generateMealPlan).toHaveBeenCalledWith({ week_of: '2026-08-24', prefs: 'more fish' }));
+    // The draft is on screen and still unsaved — keeping is the only way it lands.
+    expect(await screen.findByText(/dinner: Beef chili/i)).toBeInTheDocument();
+    expect(saveMealPlan).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep this week/i }));
+    await waitFor(() => expect(saveMealPlan).toHaveBeenCalledWith(draft));
+  });
+
+  it('says plainly that keeping a draft replaces an already-planned week', async () => {
+    getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    generateMealPlan.mockResolvedValue({ status: 'ok', draft });
+    await mountKitchen();
+    fireEvent.click(screen.getByRole('tab', { name: 'The week' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Draft this week/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Draft the week/i }));
+    expect(await screen.findByText(/replaces what's planned for the week/i)).toBeInTheDocument();
   });
 });
