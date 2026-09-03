@@ -31,6 +31,7 @@ import { ConfirmCard } from './ConfirmCard.tsx';
 import { ChangeCard } from './ChangeCard.tsx';
 import { WeekReviewCard } from './WeekReviewCard.tsx';
 import { LayoutProposalCard } from './LayoutProposalCard.tsx';
+import { RepertoireOfferCard } from './RepertoireOfferCard.tsx';
 
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
@@ -104,6 +105,7 @@ export function OnboardingChat({
   onOpenWeekReview,
   onShowChanges,
   onShowPlan,
+  onOpenRepertoire,
   autoSend = null,
 }: {
   /**
@@ -133,6 +135,10 @@ export function OnboardingChat({
   /** ChangeCard's "See your whole week" tap — the host opens the full plan sheet. The card shows
    *  only the delta; this is the door to everything it lands in. */
   onShowPlan?: () => void;
+  /** "Open ›" on the seed receipt (design frame 1e) — the host takes them to "What I'm learning".
+   *  The list lives on the Progress tab and there is one of it, so this surface never opens a
+   *  second; omitted, the receipt simply carries no way in. */
+  onOpenRepertoire?: () => void;
   /**
    * A canned message the host wants SENT, visibly — a real user bubble and a real coach turn,
    * unlike `sessionNote`'s invisible nudge. Today's one caller is the end-of-trail card's "Start
@@ -445,6 +451,21 @@ export function OnboardingChat({
                        */}
                       {last && !streaming && (
                         <LayoutProposalCard key={`lpc${i}`} onConfirmed={(receipt) => void sendText(receipt)} />
+                      )}
+                      {/**
+                       * Fourth sibling, same contract: `offer_repertoire_review` writes a pointer
+                       * and no repertoire row, so this asks the server what is offered and draws
+                       * nothing when the answer is nothing. What it hands back is NOT a receipt in
+                       * the user's own bubble — they never wrote it — so unlike LayoutProposalCard
+                       * above it rides `nudge`, the invisible note the health hand-off already
+                       * uses. The visible receipt is the card's own row.
+                       */}
+                      {last && !streaming && (
+                        <RepertoireOfferCard
+                          key={`rep${i}`}
+                          onOpenList={onOpenRepertoire}
+                          onSeeded={(note) => void nudge(note)}
+                        />
                       )}
                       {/**
                        * Her block says WHAT, never how. The only thing left for it to declare is

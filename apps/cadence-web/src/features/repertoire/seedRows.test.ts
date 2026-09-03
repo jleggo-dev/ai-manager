@@ -15,6 +15,7 @@ import {
   applyHere,
   blockedRanks,
   markedRanks,
+  prefillHereRank,
   refusedNote,
   rowStanding,
   saveLabel,
@@ -35,6 +36,11 @@ function rows(count: number): SeedRowState[] {
     selected: false,
   }));
 }
+
+/** Rows with real titles — for the rules that read the LABEL, where `Piece 1`…`Piece 5` prove
+ *  nothing: the refusal gate below, and the coach's prefill. Moved up here from beside the
+ *  refusal gate when the prefill became its second caller. */
+const named = (labels: string[]): SeedRowState[] => labels.map((label, i) => ({ ...rows(1)[0]!, label, rank: i + 1 }));
 
 describe('standingFor — the where-you-are split', () => {
   const table: Array<[number, number | null, string | null]> = [
@@ -109,6 +115,71 @@ describe('applyHere — the tap that sets the split', () => {
   it('re-tapping a later piece re-ticks from scratch — it never keeps a stale tail', () => {
     const after = applyHere(applyHere(rows(5), 4), 2);
     expect(after.map((r) => r.selected)).toEqual([true, true, false, false, false]);
+  });
+});
+
+/**
+ * The coach's half of the same tap (P7, design frame 1e). She hears "I'm on the Hungarian folk
+ * song" and hands those words over; this is what turns them into the tap, or refuses to.
+ *
+ * It is the same silent router `standingFor` is, one step earlier and with a worse failure mode:
+ * a loose match here decides sixty standings off a phrase nobody confirmed. So the near-misses
+ * carry the weight — above all a phrase that fits SEVERAL rows ("minuet in g", and Suzuki Book 2
+ * really does hold four of them). She may not invent a distinction between two titles, so an
+ * ambiguous phrase must prefill NOTHING and become a tap the person makes.
+ */
+describe('prefillHereRank — her heard split, or none at all', () => {
+  const BOOK = named([
+    'Écossaise',
+    'Long, Long Ago',
+    'The Happy Farmer',
+    'Minuet in G Major, BWV Anh. 114',
+    'Minuet in G Minor, BWV Anh. 115',
+    'Minuet in G Major, BWV Anh. 116',
+    'Hungarian Folk Song',
+    'Chanson',
+  ]);
+
+  const table: Array<[string, string | null | undefined, number | null]> = [
+    // Their own words, exactly and loosely — the ordinary case the door exists for.
+    ['the title as printed', 'Hungarian Folk Song', 7],
+    ['lower case, as typed in chat', 'hungarian folk song', 7],
+    ['their shorthand for it', 'the hungarian folk song', 7],
+    ['a fragment that names one row', 'hungarian', 7],
+    // Accents fold both ways: she will write "Ecossaise" as often as the person writes "Écossaise".
+    ['an accent she dropped', 'ecossaise', 1],
+    ['an accent she kept', 'Écossaise', 1],
+    // Punctuation is not identity — "Long, Long Ago" and "long long ago" are one piece.
+    ['punctuation she left out', 'long long ago', 2],
+    // A phrase that fits three rows names none of them. This is the ruling, as a row.
+    ['a phrase three pieces answer to', 'minuet in g', null],
+    ['a phrase two pieces answer to', 'minuet in g major, bwv anh. 11', null],
+    // …and the qualifier that separates them still works.
+    ['the same phrase, qualified', 'minuet in g minor', 5],
+    // Nothing said, nothing marked. She may leave it out and the screen must not guess.
+    ['nothing said at all', null, null],
+    ['nothing said at all, undefined', undefined, null],
+    ['blank space', '   ', null],
+    // A needle too short to be evidence: "a" sits inside half the book.
+    ['one letter', 'a', null],
+    ['three letters', 'the', null],
+    // A piece that is not in this book at all — she misheard, or they own two books.
+    ['a piece the book does not hold', 'Für Elise', null],
+  ];
+
+  for (const [what, heard, expected] of table) {
+    it(`${what} → ${expected === null ? 'no prefill' : `rank ${expected}`}`, () => {
+      expect(prefillHereRank(BOOK, heard)).toBe(expected);
+    });
+  }
+
+  it('prefills exactly the tap, so both doors open the same screen', () => {
+    const rank = prefillHereRank(BOOK, 'hungarian folk song')!;
+    expect(applyHere(BOOK, rank).map((r) => r.selected)).toEqual(applyHere(BOOK, 7).map((r) => r.selected));
+  });
+
+  it('decides nothing on an empty book — a fault must not read as a match', () => {
+    expect(prefillHereRank([], 'hungarian folk song')).toBeNull();
   });
 });
 
@@ -202,8 +273,6 @@ describe('saveLabel — the button says what it will do', () => {
    The seed applies `update_repertoire`'s own rule: a title two pieces answer to is refused, never
    written. The server is the authority — it refuses and names what it refused — and these are the
    screen's half: mark the row, and hold the button while a marked row would be written. */
-
-const named = (labels: string[]): SeedRowState[] => labels.map((label, i) => ({ ...rows(1)[0]!, label, rank: i + 1 }));
 
 describe('markedRanks — the labels the screen will not let through as they are', () => {
   it('marks a row the server already judged unresolvable', () => {

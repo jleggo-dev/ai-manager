@@ -124,6 +124,57 @@ describe('the tap that says where you are', () => {
   });
 });
 
+/**
+ * The coach's door onto this same screen (P7, design frame 1e): she heard where in the book they
+ * are, so the screen opens with that tap already applied. Nothing else about it changes — same
+ * screen, same confirm, same "nothing saved yet" — which is the whole point of there being one
+ * review rather than two.
+ */
+describe('opened with the coach’s heard split', () => {
+  const openPrefilled = (whereYouAre?: string, onDone = vi.fn()) =>
+    render(<SeedReview collection="Suzuki Piano Book 2" whereYouAre={whereYouAre} onDone={onDone} />);
+
+  it('marks exactly what the tap would have marked', async () => {
+    const { container } = openPrefilled('the happy farmer');
+    await screen.findByText('Écossaise');
+    expect(standings(container)).toEqual(['Keeping up', 'Keeping up', 'Keeping up', 'Learning', ...Array(8).fill('—')]);
+    expect(saveButton()).toHaveTextContent('Save 4 pieces');
+  });
+
+  it('still saves nothing on its own — the confirm is the person’s, prefilled or not', async () => {
+    openPrefilled('the happy farmer');
+    await screen.findByText('Écossaise');
+    expect(screen.getByText('12 PIECES FOUND · NOTHING SAVED YET')).toBeInTheDocument();
+    expect(confirmSeed).not.toHaveBeenCalled();
+  });
+
+  it('says she marked it, instead of asking them to tap what is already tapped', async () => {
+    openPrefilled('the happy farmer');
+    expect(await screen.findByText(/I.ve marked where I think you are/)).toBeInTheDocument();
+    expect(screen.queryByText(/Tap the piece you.re on now/)).not.toBeInTheDocument();
+  });
+
+  it('lets them move the split afterwards, exactly as if they had tapped it themselves', async () => {
+    const { container } = openPrefilled('the happy farmer');
+    await screen.findByText('Écossaise');
+    fireEvent.click(screen.getByRole('button', { name: 'Long, Long Ago' }));
+    expect(standings(container)).toEqual(['Keeping up', 'Learning', ...Array(10).fill('—')]);
+  });
+
+  it('marks nothing when her words name three pieces — she may not pick between them', async () => {
+    const { container } = openPrefilled('minuet in g major');
+    await screen.findByText('Écossaise');
+    expect(standings(container)).toEqual(Array(12).fill('—'));
+    expect(screen.getByText(/Tap the piece you.re on now/)).toBeInTheDocument();
+  });
+
+  it('marks nothing when she heard no piece at all', async () => {
+    const { container } = openPrefilled(undefined);
+    await screen.findByText('Écossaise');
+    expect(standings(container)).toEqual(Array(12).fill('—'));
+  });
+});
+
 describe('a tick', () => {
   it('flips exactly one row and leaves the others where they were', async () => {
     const { container } = open();

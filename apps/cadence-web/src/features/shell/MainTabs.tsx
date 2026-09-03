@@ -101,6 +101,13 @@ export function MainTabs({
   /** ChangeCard's "Show me" tap — mounts the Changes sheet for a check-in-offered swap (check-in
    *  rebuild, step 7 client half). Same idiom as weekReviewOpen just above. */
   const [weekChangesOpen, setWeekChangesOpen] = useState(false);
+  /**
+   * "Open ›" on the coach's seed receipt (design frame 1e). The list lives on the Progress tab and
+   * there is exactly one of it, so this switches tabs and asks ProgressView to open its own
+   * drill-down — the same one the Progress repertoire card opens — rather than mounting a second
+   * copy over the chat. ProgressView clears it once consumed.
+   */
+  const [openRepertoire, setOpenRepertoire] = useState(false);
   const [logDidOpen, setLogDidOpen] = useState(false);
   const [planReload, setPlanReload] = useState(0); // bump → PlanView refetches after a ＋ log
   /** App-authored context for the next coach turn (e.g. the session they just finished). */
@@ -252,6 +259,10 @@ export function MainTabs({
               onOpenWeekReview={() => setWeekReviewOpen(true)}
               onShowChanges={() => setWeekChangesOpen(true)}
               onShowPlan={() => setPlanCardOpen(true)}
+              onOpenRepertoire={() => {
+                setOpenRepertoire(true);
+                setTab('progress');
+              }}
               autoSend={autoSend}
             />
             {/* The deterministic way back to the crafted plan UI from inside the conversation. */}
@@ -266,6 +277,8 @@ export function MainTabs({
               setCoachNote(note);
               setTab('coach');
             }}
+            openRepertoire={openRepertoire}
+            onRepertoireOpened={() => setOpenRepertoire(false)}
           />
         )}
         {tab !== 'coach' && !food && !settingsRoomOpen && !building.open && (

@@ -30,6 +30,7 @@ import {
   applyHere,
   blockedRanks,
   markedRanks,
+  prefillHereRank,
   refusedNote,
   rowStanding,
   saveLabel,
@@ -40,6 +41,10 @@ import {
 
 const COACH_LINE =
   "Here's the book in order. Tap the piece you're on now and I'll mark everything before it as Keeping up. Tick or untick anything I got wrong.";
+/** The same screen, opened from the conversation: she already heard where they are, so asking them
+ *  to tap what is already tapped would read as if she had not been listening. */
+const PREFILLED_LINE =
+  "Here's the book in order. I've marked where I think you are, from what you told me — move it or untick anything I got wrong.";
 const UNKNOWN_LINE = "I don't know that one — add pieces by hand, or tell me more about it.";
 const ADD_BY_HAND = 'Missing something? Add a piece by hand ›';
 const LOOKING = 'Reading the book…';
@@ -49,11 +54,18 @@ type Load = { kind: 'loading' } | { kind: 'fault'; fault: string } | { kind: 're
 interface Props {
   /** The collection the person named. */
   collection: string;
+  /**
+   * The piece the coach heard them say they are on, in their own words (P7, design frame 1e) —
+   * the ONE thing her door adds. It is applied exactly as a tap on that row is, and it resolves to
+   * nothing whenever the words fit more than one piece: she may pre-mark, she may not pick between
+   * two titles (prefillHereRank). Omitted for the person's own ＋ door, which marks nothing.
+   */
+  whereYouAre?: string;
   /** Called with the number of rows actually written. Navigation belongs to the caller. */
   onDone: (written: number) => void;
 }
 
-export function SeedReview({ collection, onDone }: Props) {
+export function SeedReview({ collection, whereYouAre, onDone }: Props) {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [title, setTitle] = useState(collection);
   const [rows, setRows] = useState<SeedRowState[]>([]);
@@ -73,8 +85,13 @@ export function SeedReview({ collection, onDone }: Props) {
         if (!live) return;
         if (!res.ok) return setLoad({ kind: 'fault', fault: res.fault });
         setTitle(res.collection);
-        setRows(res.candidates.map((c) => ({ ...c, selected: false })));
-        setHereRank(null);
+        const fresh = res.candidates.map((c) => ({ ...c, selected: false }));
+        // Her heard split, applied through the SAME function the tap runs, so a prefilled screen
+        // and a tapped one cannot differ. Null when she heard nothing, or heard something several
+        // pieces answer to — then this is the person's own door exactly as it was.
+        const here = prefillHereRank(fresh, whereYouAre);
+        setRows(here === null ? fresh : applyHere(fresh, here));
+        setHereRank(here);
         setLoad({ kind: 'ready', found: res.candidates.length });
       })
       .catch(() => {
@@ -83,7 +100,7 @@ export function SeedReview({ collection, onDone }: Props) {
     return () => {
       live = false;
     };
-  }, [collection, attempt]);
+  }, [collection, whereYouAre, attempt]);
 
   // Best-effort: no goals is a usable screen ("No goal — just keep it" is a real answer), so a
   // failed read leaves the chip row short rather than blocking the seed.
@@ -154,7 +171,7 @@ export function SeedReview({ collection, onDone }: Props) {
       {load.kind === 'ready' && load.found > 0 ? (
         <>
           <div className="pw-head-tag sr-count">{`${load.found} PIECES FOUND · NOTHING SAVED YET`}</div>
-          <p className="screen-sub">{COACH_LINE}</p>
+          <p className="screen-sub">{hereRank === null ? COACH_LINE : PREFILLED_LINE}</p>
         </>
       ) : null}
 

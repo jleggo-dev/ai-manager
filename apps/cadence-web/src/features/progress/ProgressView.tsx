@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ProgressWindow } from '@cadence/shared';
 import { JournalStore } from '../journal/JournalStore.tsx';
 import { useProgressLayout, usePlan } from '../../lib/query/index.ts';
@@ -85,7 +85,20 @@ function TalkRow({ onCoach }: { onCoach?: (note: string) => void }) {
   );
 }
 
-export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) {
+export function ProgressView({
+  onCoach,
+  openRepertoire = false,
+  onRepertoireOpened,
+}: {
+  onCoach?: (note: string) => void;
+  /** Land straight on "What I'm learning", unscoped — the coach's seed receipt taps "Open ›" and
+   *  the host switches to this tab with this set. It is the same drill-down `onOpenRepertoire`
+   *  below opens, never a second screen. */
+  openRepertoire?: boolean;
+  /** Consumed — the host clears its request so coming back to this tab later lands on Progress
+   *  itself, not on the list they already closed once. */
+  onRepertoireOpened?: () => void;
+}) {
   const [journalOpen, setJournalOpen] = useState(false);
   const [window, setWindow] = useState<ProgressWindow>('month');
   const [drill, setDrill] = useState<string | null>(null);
@@ -93,9 +106,17 @@ export function ProgressView({ onCoach }: { onCoach?: (note: string) => void }) 
   /** repertoire drill-down (P6 "the room"): which scope opened the list screen, or null when it
    *  is closed. `goalId` null means the card itself was unscoped ("everything they keep"). */
   const [repertoireScope, setRepertoireScope] = useState<{ goalId: string | null; goalName: string | null } | null>(
-    null,
+    openRepertoire ? { goalId: null, goalName: null } : null,
   );
   const { data: layout, error } = useProgressLayout();
+
+  // The host's request, consumed once. It re-runs harmlessly after the clear (the flag is false by
+  // then), so there is no ref latch to keep in step with the state it guards.
+  useEffect(() => {
+    if (!openRepertoire) return;
+    setRepertoireScope((s) => s ?? { goalId: null, goalName: null });
+    onRepertoireOpened?.();
+  }, [openRepertoire, onRepertoireOpened]);
   // Shared /plan cache (PERF-01) — the header subline and StreakLine read it, never a new endpoint.
   const { data: plan } = usePlan();
 
