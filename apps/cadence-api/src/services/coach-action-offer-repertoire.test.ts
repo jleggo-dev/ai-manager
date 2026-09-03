@@ -172,9 +172,33 @@ describe('offer_repertoire_review — the description the harness would audit', 
     expect(d).toMatch(/\bUse\b/);
   });
 
-  it('states the gate — in the harness phrase AND in words about their list', () => {
-    expect(d).toMatch(/does NOT change anything/);
-    expect(d).toMatch(/does NOT add anything to their list/);
+  /**
+   * The gate, in plain words (owner ruling 2026-09-03). It read "This does NOT change anything and
+   * does NOT add anything to their list" — the harness's own stock phrase, twice. The ruling asked
+   * for plain simple language, so it now says what is true in the words a person would use, and
+   * says it once: *"This saves nothing: no item goes on their list until they mark it and confirm
+   * on that screen."*
+   *
+   * Still asserted, and this is why: the whole value of this tool is that the confirm happens on a
+   * screen the person is looking at. A description that lost the gate would leave a model free to
+   * report the collection as recorded.
+   */
+  it('states its gate — that it saves nothing until they confirm', () => {
+    expect(d).toMatch(/This saves nothing/);
+    expect(d).toMatch(/until they mark it and confirm/);
+  });
+
+  /**
+   * Plain words, no metaphor (the same ruling). "Lay a whole book out" was the offending phrase:
+   * *"why would Grok or Claude think that a tool about books will help?"* — so the description says
+   * what the tool DOES, and names more than one domain.
+   */
+  it('says what it does in plain words, and names more than one domain', () => {
+    expect(d).toMatch(/^Show the user everything in a named collection/);
+    expect(d).not.toMatch(/lay .* out/i);
+    for (const domain of ['book', 'exam grade', 'grading syllabus', 'reading list', 'poems']) {
+      expect(d, `"${domain}" is missing — the description narrows to one kind of user`).toContain(domain);
+    }
   });
 
   it('teaches every declared parameter with a quoted example', () => {

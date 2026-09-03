@@ -1,3 +1,4 @@
+import { pieceQualifiers } from '@cadence/shared';
 import { normTitle } from './goal-identity.ts';
 
 /* ── Describing a piece instead of naming it ─────────────────────────────────────────────────
@@ -77,12 +78,40 @@ const MIN_OVERALL_COVERAGE = 0.3;
 const isWeakNumber = (word: string): boolean => /^\d{1,2}$/.test(word);
 
 /**
+ * What an item can be identified BY, in the person's own vocabulary: its title, who made it, the
+ * collection it comes from, and — since 2026-09-03 — their own description of which one it is.
+ *
+ * The description is why this exists. "The fast one in G" names a piece perfectly for the person
+ * who wrote that on the row, and matches nothing in its title; the owner added the field precisely
+ * so a request phrased their way lands. Composer and collection ride along for the same reason
+ * ("the Bartok one", "the one from Book 2"), and they were always on the row — they were simply
+ * never read here.
+ */
+function identityTexts(item: IdentifiableItem): string[] {
+  const q = pieceQualifiers(item.meta);
+  return [item.label, q.composer, q.collection, q.description].filter((s): s is string => !!s?.trim());
+}
+
+/** What this module needs off a row: the label, and whatever `meta` says about which one it is. */
+export interface IdentifiableItem {
+  label: string;
+  meta?: Record<string, unknown> | null;
+}
+
+/**
  * Items that a natural description names, judged per text. See the block comment above for why
  * each fence is there.
  */
-export function describedItems<T extends { label: string }>(items: T[], texts: Array<string | null | undefined>): T[] {
+export function describedItems<T extends IdentifiableItem>(items: T[], texts: Array<string | null | undefined>): T[] {
+  // Counted per ITEM, not per occurrence: "how many items on this shelf carry this word" is the
+  // question the distinguishing gate asks, and a word an item repeats in both its label and its
+  // description must not read as two items carrying it.
   const shelfFrequency = new Map<string, number>();
-  for (const i of items) for (const w of contentWords(i.label)) shelfFrequency.set(w, (shelfFrequency.get(w) ?? 0) + 1);
+  for (const i of items) {
+    for (const w of new Set(identityTexts(i).flatMap(contentWords))) {
+      shelfFrequency.set(w, (shelfFrequency.get(w) ?? 0) + 1);
+    }
+  }
 
   const hits = new Set<T>();
   for (const text of texts) {
@@ -90,21 +119,24 @@ export function describedItems<T extends { label: string }>(items: T[], texts: A
     const said = new Set(contentWords(text));
     if (said.size === 0) continue;
     for (const item of items) {
-      const words = contentWords(item.label);
-      if (words.length === 0) continue;
-      // Words no other item carries. An item with none is indistinguishable by words alone — its
-      // full title still matches through the needles, but a description cannot reach it.
-      const own = words.filter((w) => shelfFrequency.get(w) === 1 && !isWeakNumber(w));
-      if (own.length === 0) continue;
-
-      const matchedOwn = own.filter((w) => said.has(w));
-      if (matchedOwn.length / own.length < MIN_DISTINGUISHING_COVERAGE) continue;
-
-      const matchedAll = words.filter((w) => said.has(w));
-      if (matchedAll.length / words.length < MIN_OVERALL_COVERAGE) continue;
-
-      hits.add(item);
+      // Each identity text is scored on its OWN, and any one of them can carry the match. Scored
+      // as one blob instead, a long collection name on every row would dilute the words that
+      // actually name the thing and the overall gate would stop finding anything.
+      if (identityTexts(item).some((phrase) => phraseMatches(phrase, said, shelfFrequency))) hits.add(item);
     }
   }
   return items.filter((i) => hits.has(i));
+}
+
+/** Does one identity phrase pass both coverage gates against what was said? */
+function phraseMatches(phrase: string, said: ReadonlySet<string>, shelfFrequency: Map<string, number>): boolean {
+  const words = contentWords(phrase);
+  if (words.length === 0) return false;
+  // Words no other item carries. A phrase with none is indistinguishable by words alone — the
+  // item's full title still matches through the needles, but a description cannot reach it. This
+  // is what makes a description SHARED by two items decide nothing, exactly as a shared title does.
+  const own = words.filter((w) => shelfFrequency.get(w) === 1 && !isWeakNumber(w));
+  if (own.length === 0) return false;
+  if (own.filter((w) => said.has(w)).length / own.length < MIN_DISTINGUISHING_COVERAGE) return false;
+  return words.filter((w) => said.has(w)).length / words.length >= MIN_OVERALL_COVERAGE;
 }

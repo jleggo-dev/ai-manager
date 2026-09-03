@@ -45,18 +45,18 @@ const { isResolvable } = await import('./repertoire-practice.ts');
 
 /** Suzuki Piano Book 2 as the job should hand it back — twelve rows, three minuets in G. */
 const BOOK2 = [
-  { label: 'Écossaise', composer: 'J.N. Hummel', catalogue: null },
-  { label: 'Long, Long Ago', composer: 'T.H. Bayly', catalogue: null },
-  { label: 'Little Playmates', composer: 'F.X. Chwatal', catalogue: null },
-  { label: 'The Happy Farmer', composer: 'R. Schumann', catalogue: 'Op. 68 No. 10' },
-  { label: 'Minuet in G Major, BWV Anh. 114', composer: 'C. Petzold', catalogue: 'BWV Anh. 114' },
-  { label: 'Minuet in G Minor, BWV Anh. 115', composer: 'C. Petzold', catalogue: 'BWV Anh. 115' },
-  { label: 'Minuet in G Major, BWV Anh. 116', composer: 'C. Petzold', catalogue: 'BWV Anh. 116' },
-  { label: 'Minuet in G Major, BWV 822', composer: 'J.S. Bach', catalogue: 'BWV 822' },
-  { label: 'Cradle Song', composer: 'F. Schubert', catalogue: 'Op. 98 No. 2' },
-  { label: 'Minuet in G Major, WoO 10 No. 2', composer: 'L. van Beethoven', catalogue: 'WoO 10 No. 2' },
-  { label: 'Musette in D Major, BWV Anh. 126', composer: 'Anon.', catalogue: 'BWV Anh. 126' },
-  { label: 'Chanson', composer: 'Anon.', catalogue: null },
+  { label: 'Écossaise', composer: 'J.N. Hummel' },
+  { label: 'Long, Long Ago', composer: 'T.H. Bayly' },
+  { label: 'Little Playmates', composer: 'F.X. Chwatal' },
+  { label: 'The Happy Farmer', composer: 'R. Schumann' },
+  { label: 'Minuet in G Major, BWV Anh. 114', composer: 'C. Petzold' },
+  { label: 'Minuet in G Minor, BWV Anh. 115', composer: 'C. Petzold' },
+  { label: 'Minuet in G Major, BWV Anh. 116', composer: 'C. Petzold' },
+  { label: 'Minuet in G Major, BWV 822', composer: 'J.S. Bach' },
+  { label: 'Cradle Song', composer: 'F. Schubert' },
+  { label: 'Minuet in G Major, WoO 10 No. 2', composer: 'L. van Beethoven' },
+  { label: 'Musette in D Major, BWV Anh. 126', composer: 'Anon.' },
+  { label: 'Chanson', composer: 'Anon.' },
 ].map((p, i) => ({ ...p, collection: 'Suzuki Piano Book 2', rank: i + 1 }));
 
 const answered = (items: unknown[]) => ({ formatted: JSON.stringify({ items }) });
@@ -99,7 +99,6 @@ describe('expandCollection — the twelve rows', () => {
       label: 'Minuet in G Major, BWV Anh. 114',
       composer: 'C. Petzold',
       collection: 'Suzuki Piano Book 2',
-      catalogue: 'BWV Anh. 114',
     });
     expect(runJobBySlug).toHaveBeenCalledWith('u1', 'expand-collection', { collection: 'Suzuki Piano Book 2' });
   });
@@ -268,6 +267,27 @@ describe('confirmSeed — what actually gets written', () => {
     expect(first.label).toBe('Écossaise');
   });
 
+  /**
+   * A collection only groups if it is one group (owner ruling 2026-09-03). Confirming the same book
+   * a second time types its name again, and "suzuki piano book 2" beside "Suzuki Piano Book 2" is
+   * two groups nothing will ever merge — a silent failure, because both look right on the screen.
+   */
+  it('folds a typed collection onto the spelling already on the shelf', async () => {
+    listRepertoire.mockResolvedValue([{ ...row('Écossaise'), meta: { [COLLECTION_KEY]: 'Suzuki Piano Book 2' } }]);
+    await confirmSeed('u1', [{ label: 'Chanson', collection: 'suzuki piano book 2', status: 'queued' as const }]);
+    const [, first] = upsertRepertoireItem.mock.calls[0] as [string, { meta: Record<string, unknown> }];
+    expect(first.meta[COLLECTION_KEY]).toBe('Suzuki Piano Book 2');
+  });
+
+  it('leaves a genuinely new collection as typed — the fold is a spelling guard, not a matcher', async () => {
+    listRepertoire.mockResolvedValue([{ ...row('Écossaise'), meta: { [COLLECTION_KEY]: 'Suzuki Piano Book 2' } }]);
+    await confirmSeed('u1', [
+      { label: 'Heian Shodan', collection: 'Shotokan kata syllabus', status: 'queued' as const },
+    ]);
+    const [, first] = upsertRepertoireItem.mock.calls[0] as [string, { meta: Record<string, unknown> }];
+    expect(first.meta[COLLECTION_KEY]).toBe('Shotokan kata syllabus');
+  });
+
   // The ruling (supervisor, 2026-09-02): the seed applies `update_repertoire`'s own gate. A row
   // whose title two pieces answer to exists and is permanently unfindable — it reads as a record
   // and behaves as a hole — so it is refused and named, never written and never silently dropped.
@@ -307,7 +327,7 @@ describe('confirmSeed — what actually gets written', () => {
     expect(res.refused).toHaveLength(1);
     expect(res.refused[0]!.label).toBe('Minuet in G Major');
     expect(res.refused[0]!.reason).toMatch(/Minuet in G Major, BWV 822/);
-    expect(res.refused[0]!.reason).toMatch(/composer|catalogue/i);
+    expect(res.refused[0]!.reason).toMatch(/who made it|collection|tells them apart/i);
     const written = upsertRepertoireItem.mock.calls.map((c) => (c[1] as { label: string }).label);
     expect(written).toEqual(['Chanson']);
   });

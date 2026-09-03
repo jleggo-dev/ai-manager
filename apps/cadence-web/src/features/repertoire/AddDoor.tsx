@@ -11,6 +11,7 @@
  * second file for one text field. "Add one by hand" and "Just tell me in chat" only ever report
  * the tap; where each leads is ListScreen's job.
  */
+import { COLLECTION_LOOKUP_PLACEHOLDER } from './itemFieldCopy.ts';
 import { useState } from 'react';
 
 export interface AddDoorProps {
@@ -45,13 +46,13 @@ export function AddDoor({ onStartCollection, onAddByHand, onOpenChat, onClose }:
           <div className="sheet-body">
             <div className="ri-field">
               <label className="ri-label" htmlFor="rl-door-collection">
-                Collection
+                Name a collection
               </label>
               <input
                 id="rl-door-collection"
                 className="ri-input"
                 value={collection}
-                placeholder="Suzuki Piano Book 2, ABRSM Grade 3…"
+                placeholder={COLLECTION_LOOKUP_PLACEHOLDER}
                 onChange={(e) => setCollection(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && submitCollection()}
               />
@@ -65,7 +66,7 @@ export function AddDoor({ onStartCollection, onAddByHand, onOpenChat, onClose }:
             <button type="button" className="ld-row" onClick={() => setNaming(true)}>
               <span className="ld-row-t">
                 <b>Start from a collection</b>
-                <span>a book, a syllabus, a grading ladder</span>
+                <span>anything with a fixed list of things to learn</span>
               </span>
               <span className="rl-chevron" aria-hidden="true">
                 ›

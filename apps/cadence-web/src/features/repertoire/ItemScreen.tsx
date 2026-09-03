@@ -24,22 +24,33 @@ export interface ItemScreenProps {
   /** Sessions logged against this item, when the caller has that count; the header caption omits
    *  the segment rather than guessing when it is not supplied. */
   sessionCount?: number;
+  /** The collections already in use on this shelf, for the Collection select. Empty is legitimate
+   *  — a person with none simply gets None and "Add a collection…". */
+  collections?: string[];
   onBack: () => void;
   /** Called once a delete is confirmed by the server. */
   onDeleted?: (itemId: string) => void;
 }
 
 /**
- * The item, opened (P2) — one repertoire item as a full screen: rename it, give it a composer,
- * collection or catalogue number, change its standing, or remove it for good. Nothing done here
- * loses the item's history: identity is the row (`item_id`), never the label.
+ * The item, opened (P2) — one repertoire item as a full screen: rename it, say who made it, put it
+ * in a collection, describe which one it is, keep notes on it, change its standing, or remove it
+ * for good. Nothing done here loses the item's history: identity is the row (`item_id`), never the
+ * label.
  *
  * Deterministic throughout — no coach call, no AI. Every write goes through
  * `lib/api/repertoire-item.ts`'s PATCH/DELETE, and each section keeps its own local state; this
  * component's only job is to hold the current row and re-render the header when a child reports
  * a fresh one back.
  */
-export function ItemScreen({ item: initial, collidesWithLabel, sessionCount, onBack, onDeleted }: ItemScreenProps) {
+export function ItemScreen({
+  item: initial,
+  collidesWithLabel,
+  sessionCount,
+  collections = [],
+  onBack,
+  onDeleted,
+}: ItemScreenProps) {
   const [item, setItem] = useState(initial);
   const q = pieceQualifiers(item.meta);
 
@@ -70,8 +81,9 @@ export function ItemScreen({ item: initial, collidesWithLabel, sessionCount, onB
           initialLabel={item.label}
           initialComposer={q.composer ?? ''}
           initialCollection={q.collection ?? ''}
-          initialCatalogue={q.catalogue ?? ''}
+          initialDescription={q.description ?? ''}
           initialNote={q.note ?? ''}
+          collections={collections}
           onSaved={setItem}
         />
 

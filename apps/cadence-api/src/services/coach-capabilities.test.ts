@@ -60,10 +60,28 @@ describe('coach capability manifest', () => {
    * cost of its omission directly (A19): asked to reshape the page, she answered "that's not
    * something I can control from here" WHILE holding the drawer label for the tool — the
    * manifest's silence outranked the label. The manifest and the drawer must name the same
-   * abilities. Renders at 5513; headroom 47.
+   * abilities.
+   *
+   * ⚠ That row's "renders at 5513; headroom 47" was WRONG on the day it was written, and this is
+   * the correction: main measured 5,549 immediately before the 2026-09-03 change below, with the
+   * same code the row describes. The claim was 36 characters out, which is most of the headroom it
+   * claimed — the same stale-accounting mistake the row above it repays for repertoire, made again
+   * in the act of repaying it. MEASURE, then write the number down.
+   *
+   * 5560 → 5736 (2026-09-03, the collection line). Measured either side of the change with
+   * `renderCapabilities({ healthAvailable: true }).length`:
+   *
+   *   before  5,549
+   *   after   5,676   (+127, the one capability line)
+   *   cap     5,736   (after + 60 headroom)
+   *
+   * What the 127 buys: `offer_repertoire_review` has carried a drawer hook since it shipped, and
+   * the A19 measurement is what this list costs when it is silent — she answered "that's not
+   * something I can control from here" WHILE holding the hook for the tool. A capability the drawer
+   * names and the manifest does not is a capability she talks herself out of.
    */
   it('stays small enough to ride every session open', () => {
-    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5560);
+    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5736);
   });
 
   /**

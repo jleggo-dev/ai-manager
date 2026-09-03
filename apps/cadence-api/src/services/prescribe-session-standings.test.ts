@@ -1,15 +1,16 @@
 /**
- * The practice session names the group each part was drawn from.
+ * The practice session chooses its own material.
  *
- * Design frames 2b/3c: Thursday's practice is the shelf read back, so moving a piece between
- * standings predicts what changes on Thursday. That only holds if the block LABEL says where the
- * part came from ("Warm up — from Keeping up") and if the prompt's rules match what
- * `session-practice-facts.ts` actually hands over. Both live in the config sync-jobs ships, so this
- * pins them there: a prompt edit or a config regeneration that drops a rule, drops a tag, or
- * renames a label fails CI instead of quietly changing what Thursday looks like.
+ * The prompt used to name the picks: `<warmup_pick>` was "the Keeping up item rested longest. Do
+ * not pick a different one", `<next_rested>` was the play-out, `<up_next_top>` a forecast, and each
+ * block had to be labelled with the group it came from. The owner ruled all of it out (2026-09-03)
+ * — *"It's a reasoning model. It can reason and it can discuss the best thing with the user."* —
+ * so one plain line hands her the shelf and asks her to say why she chose what she chose.
  *
- * The four variables are declared but NOT required — they are empty for every goal with no shelf,
- * and an empty tag is ignored by the template.
+ * Pinned against the config sync-jobs ships, because that is what actually reaches the model: a
+ * prompt edit or a config regeneration that puts a pick back fails CI instead of quietly changing
+ * what Thursday looks like. Every row is a near-miss as much as a positive — the old lines all
+ * produced valid sessions, which is exactly why nothing caught them.
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -28,58 +29,74 @@ const job = config.jobs.find((j) => j.slug === 'prescribe-session');
 const template = job?.config.promptTemplate ?? '';
 const variables = job?.config.variables ?? [];
 
-/** The `label` normalizeSession will store for each block. Bounded at 40 chars there. */
-const BLOCK_LABELS = ['Warm up — from Keeping up', 'Learn — from Learning', 'Play out — from Keeping up'];
+/** The four that named a pick. Each was declared, interpolated, and consumed by a rule. */
+const RETIRED_VARIABLES = ['warmup_pick', 'next_rested', 'learning', 'up_next_top'];
 
-const FACT_VARIABLES = ['warmup_pick', 'next_rested', 'learning', 'up_next_top'];
-
-describe('prescribe-session — the practice parts name their standing', () => {
+describe('prescribe-session — she chooses the material, and says why', () => {
   it('exists in the config sync-jobs ships', () => {
     expect(job, 'prescribe-session must exist in the config').toBeDefined();
   });
 
-  it.each(BLOCK_LABELS)('tells the coach to label a block "%s"', (label) => {
-    expect(template).toContain(label);
-    expect(label.length).toBeLessThanOrEqual(40); // normalizeSession slices the label at 40
+  it('says what <repertoire> holds, in facts', () => {
+    expect(template).toContain(
+      '- REPERTOIRE: when <repertoire> is non-empty it lists what they play, with standing, last-practised date, settled tempo, and notes.',
+    );
   });
 
-  it('never offers a label that hides where the part came from', () => {
-    // The near-miss: a bare "Warm up" is the label she wrote before this, and it is exactly what
-    // the suffix exists to replace. Each instruction must carry its group.
-    for (const label of BLOCK_LABELS) expect(template).toContain(`"${label}"`);
+  it('tells her to choose the material herself and to state her reason per item', () => {
+    expect(template).toContain(
+      "Choose warm-up, learning, and play-out material yourself from it, and say in each item's detail why you chose it.",
+    );
   });
 
-  it('draws the warm-up from the given pick, not from her own guess', () => {
-    expect(template).toMatch(/<warmup_pick>[\s\S]*rested longest/);
-    expect(template).toContain('Do not pick a different one');
+  it('still refuses to invent, and still tells a failed read apart from an empty shelf', () => {
+    expect(template).toContain('do not invent what they know');
+    expect(template).toContain('could not be read');
   });
 
-  it('makes Up next a forecast with an ask, never a step', () => {
-    expect(template).toContain('<up_next_top>');
-    expect(template).toMatch(/never a step/i);
-    expect(template).toMatch(/ASK before starting it/);
+  it.each(RETIRED_VARIABLES)('no longer declares or interpolates {{%s}}', (name) => {
+    expect(template).not.toContain(`{{${name}}}`);
+    expect(template).not.toContain(`<${name}>`);
+    expect(variables.find((v) => v.name === name)).toBeUndefined();
   });
 
-  it('never schedules Learned', () => {
-    expect(template).toMatch(/never schedule it/i);
-  });
-
-  it('says the Learning entries carry the practice note and the last words', () => {
-    expect(template).toContain('practice note');
-    expect(template).toContain('last words');
-  });
-
-  it.each(FACT_VARIABLES)('interpolates {{%s}} and declares it', (name) => {
-    expect(template).toContain(`{{${name}}}`);
-    const declared = variables.find((v) => v.name === name);
-    expect(declared, `${name} must be declared in the job's variables`).toBeDefined();
-    // Not required: a gym session sends it empty, and a required-but-empty variable is a job error.
+  it('keeps {{repertoire}}, declared and not required — a gym session sends it empty', () => {
+    expect(template).toContain('{{repertoire}}');
+    const declared = variables.find((v) => v.name === 'repertoire');
+    expect(declared, "repertoire must be declared in the job's variables").toBeDefined();
     expect(declared?.required ?? false).toBe(false);
   });
 
-  it('keeps the standings block short enough to be worth its tokens on every prescribe call', () => {
-    const block = template.split('- PRACTICE SESSIONS DRAW FROM THE STANDINGS')[1]?.split('\n- ')[0] ?? '';
-    expect(block.length).toBeGreaterThan(0);
-    expect(block.length).toBeLessThan(1400);
+  /**
+   * The table of what a picking rule looked like. Each phrase shipped in this template until
+   * 2026-09-03; each one reads as a correct instruction and produces a plausible session, so only
+   * an explicit row can catch its return.
+   */
+  it.each([
+    ['names the warm-up for her', /rested longest/i],
+    ['forbids a different choice', /Do not pick a different one/i],
+    ['ranks by rest', /longest rest/i],
+    ['marks one item', /DUE NEXT/i],
+    ['counts the Learning work for her', /keep it to one or two/i],
+    ['orders the play-out', /finish on one Keeping up item/i],
+    ['makes Up next a forecast slot', /is a FORECAST, never a step/i],
+    ['forbids scheduling Learned', /never schedule it/i],
+    ['dictates the block labels', /Warm up — from Keeping up/],
+  ])('carries no rule that %s', (_what, pattern) => {
+    expect(template).not.toMatch(pattern);
+  });
+
+  it('leaves the rest of the job alone — the other rules are still there', () => {
+    for (const rule of [
+      'CONSTRAINT SAFETY',
+      'EVERY JOURNAL ITEM CARRIES ITS QUESTION',
+      'SESSION LENGTH FITS THE ACTIVITY',
+      'COACHING ARC',
+      'WEATHER',
+      'SET FLOW',
+      'STEER',
+    ]) {
+      expect(template).toContain(rule);
+    }
   });
 });

@@ -71,7 +71,6 @@ export function writableRows(rows: SeedRowState[], hereRank: number | null): See
       label,
       composer: row.composer,
       collection: row.collection,
-      catalogue: row.catalogue,
       rank: row.rank,
       status,
     });
@@ -81,7 +80,9 @@ export function writableRows(rows: SeedRowState[], hereRank: number | null): See
 
 /** The confirm button's own words — the count IS the promise, so it comes from the same list. */
 export function saveLabel(count: number): string {
-  return `Save ${count} ${count === 1 ? 'piece' : 'pieces'}`;
+  // No noun: one list holds pieces, kata, books and verses, so any noun is wrong for three of
+  // the four (owner ruling 2026-09-03), and one reads the same as nine without it.
+  return `Save ${count}`;
 }
 
 /* ── The refusal gate ────────────────────────────────────────────────────────────────────────
@@ -127,10 +128,10 @@ export function blockedRanks(rows: SeedRowState[], hereRank: number | null): Set
 /** Why the button is held, and the one thing that will release it. */
 export function ambiguityNote(count: number): string {
   if (count === 1) {
-    return 'One of these shares its name with a piece you already have. Give it a fuller name — the composer or the catalogue number — and I can save it.';
+    return 'One of these shares its name with something you already have. Give it a fuller name — whoever made it, or whatever tells them apart — and I can save it.';
   }
   if (count === 2) return 'Two of these share a name. Give one a fuller name and I can save them both.';
-  return 'Some of these share a name. Give each a fuller name — the composer or the catalogue number — and I can save them all.';
+  return 'Some of these share a name. Give each a fuller name — whoever made it, or whatever tells them apart — and I can save them all.';
 }
 
 /** What the server refused, said plainly: what landed, and which names still need work. */

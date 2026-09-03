@@ -17,7 +17,6 @@ export interface SeedCandidate {
   label: string;
   composer: string | null;
   collection: string | null;
-  catalogue: string | null;
   /** 1-based position in the collection's own order. */
   rank: number;
   /** The server could not tell this title apart from another one — the row says so. */
@@ -32,7 +31,6 @@ export interface SeedWriteRow {
   label: string;
   composer: string | null;
   collection: string | null;
-  catalogue: string | null;
   rank: number | null;
   status: SeedStatus;
 }

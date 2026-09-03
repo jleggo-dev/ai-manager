@@ -4,7 +4,7 @@ import { matchActivity } from './plan-edit.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
 
 /**
- * `offer_repertoire_review` — she offers to lay a whole collection out; the person ticks it.
+ * `offer_repertoire_review` — she shows them everything in a collection; they mark what they know.
  *
  * The moment this exists for: "started Suzuki Book 2 last autumn — I'm on the Hungarian folk song
  * now, everything before it is fine." Twelve pieces are sitting in that sentence and none of them
@@ -43,21 +43,36 @@ const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.tri
 
 export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
   name: 'offer_repertoire_review',
-  // Bounded at 800 by the action rule (TOOL-HARNESS.md §1). The harness's own audit only reads the
-  // tools declared every turn, so this one is asserted in coach-action-offer-repertoire.test.ts —
-  // same rules, checked where a tail tool can actually be reached.
+  /**
+   * 797 of the 800 the action rule allows (TOOL-HARNESS.md §1). The harness's own audit only reads
+   * the tools declared every turn, so this one is asserted in coach-action-offer-repertoire.test.ts
+   * — same rules, checked where a tail tool can actually be reached.
+   *
+   * PLAIN WORDS, NO METAPHOR (owner ruling 2026-09-03): *"We need to use plain simple and concise
+   * language to explain the capabilities they can find and not insert flowery/poetic language like
+   * 'lay a whole book out'. The user says 'hey, I want to practice my kata at home so I can get
+   * better at karate' — why would Grok or Claude think that a tool about books will help?"* So it
+   * says what the tool DOES ("show the user everything in a named collection"), defines what a
+   * collection is, and names four domains rather than one.
+   *
+   * The closing "say one short line and stop" moved OUT of this string and lives only in what the
+   * tool hands back, where it already was word for word. That is where it belongs (TOOL-HARNESS.md
+   * §4: tell her what to do next, scoped to THIS result), and it is what made the owner's wording
+   * fit — at 901 characters the string as written was over the bound, and trimming the example
+   * alone could not have reached it.
+   */
   description:
-    'Put a whole collection up on their screen as a tickable list — every piece in a named book, method, syllabus, or grade, in its own order. Use it when they say they are partway through a collection, instead of asking them to type the pieces out; use update_repertoire when they name individual pieces rather than a book. This does NOT change anything and does NOT add anything to their list: nothing goes on their file until they tick and confirm on that screen. Pass {"collection": "Suzuki Piano Book 2", "where_you_are": "Hungarian Folk Song", "goal": "Practice piano"} — "where_you_are" is the piece they said they are on, so everything before it starts marked; omit it and nothing starts marked. Omit "goal" if none fits. Then say ONE short line that it is up, and stop.',
+    'Show the user everything in a named collection they are learning from, in its own order, as a checklist on their screen. A collection is anything with a fixed sequence of items to learn: a book, an exam grade, a grading syllabus, a reading list, a set of poems. Use it when they say they are partway through such a collection, instead of asking them to type the items out; use update_repertoire when they name individual items. This saves nothing: no item goes on their list until they mark it and confirm on that screen. Pass {"collection": "Suzuki Piano Book 2", "where_you_are": "Hungarian Folk Song", "goal": "Practice piano"}. "where_you_are" is the item they said they are on; with it, everything before it starts marked as known. Omit it and nothing starts marked. Omit "goal" if none fits.',
   parameters: {
     properties: {
       collection: {
         type: 'string',
-        description: 'The book, method, syllabus, or grade they named, by its own name.',
+        description: 'The book, syllabus, grade, or list they named, by its own name.',
       },
       where_you_are: {
         type: 'string',
         description:
-          'The piece they said they are on, in their words. Omit it and no piece starts marked — they tap it themselves.',
+          'The item they said they are on, in their words. Omit it and nothing starts marked — they tap it themselves.',
       },
       goal: {
         type: 'string',
@@ -69,7 +84,7 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
   async run(userId, params) {
     const collection = text(params.collection, MAX_COLLECTION);
     if (!collection) {
-      return 'No collection was named, so nothing was put up. Ask them which book, method, syllabus, or grade it is — by its name — and call this again with it.';
+      return 'No collection was named, so nothing was put up. Ask them which book, syllabus, grade or list it is — by its name — and call this again with it.';
     }
     const whereYouAre = text(params.where_you_are, MAX_WHERE) || null;
 

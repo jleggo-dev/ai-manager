@@ -88,8 +88,12 @@ const MAX_COLLISION_GROUPS = 3;
  *
  * Costs nothing on a shelf with no collisions, which is nearly all of them.
  */
-export function renderRepertoireForCoach(items: RepertoireItem[], now?: number): string {
-  const body = renderRepertoire(items, now);
+export function renderRepertoireForCoach(
+  items: RepertoireItem[],
+  now?: number,
+  opts: { allLearned?: boolean } = {},
+): string {
+  const body = renderRepertoire(items, now, opts);
   if (!body) return body;
   // Over every standing: a title she cannot resolve is a problem wherever it sits, and a retired
   // piece can collide with a queued one just as easily as two in the rotation can.
@@ -104,9 +108,10 @@ export function renderRepertoireForCoach(items: RepertoireItem[], now?: number):
     lines.push(`  ...and ${collisions.length - MAX_COLLISION_GROUPS} more such groups`);
   }
   lines.push(
-    '  Name one of these in full whenever you write it down or put it in a session - the composer,',
-    '  the catalogue number, or the collection it comes from. A bare shared title cannot be matched',
-    '  to a row, so practice logged against it counts for nothing and its tempo is never kept.',
+    '  Name one of these in full whenever you write it down or put it in a session - who made it,',
+    '  the collection it comes from, or whatever else tells them apart. A bare shared title cannot',
+    '  be matched to a row, so practice logged against it counts for nothing and its tempo is never',
+    '  kept.',
   );
   return `${body}\n${lines.join('\n')}`;
 }

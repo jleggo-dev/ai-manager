@@ -93,6 +93,25 @@ describe('the tool description', () => {
   });
 
   it('says what an omitted status does — the default that keeps a re-mention harmless', () => {
-    expect(description).toMatch(/omitted/i);
+    expect(description).toMatch(/\bomit it\b/i);
+    expect(description).toMatch(/keep an item as it stands/i);
+  });
+
+  /**
+   * The description field (owner ruling 2026-09-03) — the user's own words for which one it is,
+   * and the field that replaced `catalogue`. It has to be TAUGHT here or she never sends it: the
+   * Broker reads this string and never sees the JSON schema (TOOL-HARNESS.md §3), so a declared
+   * parameter absent from the prose is a parameter that is never filled.
+   */
+  it('teaches the description field, with a quoted worked example', () => {
+    expect(description).toContain('"description"');
+    expect(description).toContain('"the fast one in G"');
+    expect(description).toMatch(/a free-text description in their words/i);
+  });
+
+  it('declares exactly the fields it teaches — nothing silently undocumented', () => {
+    const props = (UPDATE_REPERTOIRE.parameters.properties.items as { items: { properties: object } }).items.properties;
+    expect(Object.keys(props).sort()).toEqual(['description', 'kind', 'label', 'status']);
+    for (const key of Object.keys(props)) expect(description).toContain(`"${key}"`);
   });
 });

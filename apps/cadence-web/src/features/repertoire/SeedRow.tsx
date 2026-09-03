@@ -1,5 +1,5 @@
 /**
- * One row of the seed review: the tick, the piece, its composer/catalogue line, and the standing
+ * One row of the seed review: the tick, the item, the line naming who made it, and the standing
  * it will be written with.
  *
  * The title is a BUTTON because tapping it is the screen's main move — "this is where I am" —
@@ -11,7 +11,7 @@ import { STANDING_WORD, type SeedRowState } from './seedRows.ts';
 
 /** Said on a row whose title would name two pieces once saved — the person can fix it here. */
 const AMBIGUOUS_NOTE =
-  'This title names more than one piece. Add the composer or the catalogue number so it names just one.';
+  'This title names more than one thing. Add whoever made it, or whatever tells them apart, so it names just one.';
 
 interface Props {
   row: SeedRowState;
@@ -33,14 +33,14 @@ interface Props {
 }
 
 export function SeedRow({ row, standing, here, blocked, onTick, onHere, onLabel }: Props) {
-  const qualifier = [row.composer, row.catalogue].filter(Boolean).join(' · ');
+  const qualifier = [row.composer, row.collection].filter(Boolean).join(' · ');
   return (
     <div className={`pw-rep-row sr-row${here ? ' sr-row--here' : ''}${blocked ? ' sr-row--blocked' : ''}`}>
       <button
         type="button"
         className="occ-check sr-tick"
         aria-pressed={row.selected}
-        aria-label={`Include ${row.label || 'this piece'}`}
+        aria-label={`Include ${row.label || 'this one'}`}
         onClick={onTick}
       >
         {row.selected ? '✓' : ''}
@@ -50,7 +50,7 @@ export function SeedRow({ row, standing, here, blocked, onTick, onHere, onLabel 
           <input
             className="sr-input"
             value={row.label}
-            placeholder="Name the piece"
+            placeholder="What you call it"
             onChange={(e) => onLabel(e.target.value)}
           />
         ) : (

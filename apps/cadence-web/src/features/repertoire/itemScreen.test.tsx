@@ -87,15 +87,17 @@ describe('rename', () => {
 });
 
 /**
- * The practice note (P8: "the practice note gets a store") — WHERE THE WORK IS, saved through the
- * same "Save the name" action as the other fields, for every kind (not just music).
+ * The practice note (P8: "the practice note gets a store") — how the work is going, saved through
+ * the same "Save the name" action as the other fields, for every kind (not just music). The label
+ * the person reads is "Notes"; the schema key stays `practice_note` (CLAUDE.md's nomenclature
+ * rule), which is why every assertion here names the label and the key separately.
  */
 describe('the practice note', () => {
   it('saves alongside the other fields when filled in', async () => {
     const user = userEvent.setup();
     patchRepertoireItem.mockResolvedValue(item());
     render(<ItemScreen item={item()} onBack={() => {}} />);
-    await user.type(screen.getByLabelText('Where the work is (optional)'), 'bars 9-16');
+    await user.type(screen.getByLabelText('Notes (optional)'), 'bars 9-16');
     await user.click(screen.getByRole('button', { name: 'Save the name' }));
     expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
       label: 'Clair de lune',
@@ -106,7 +108,7 @@ describe('the practice note', () => {
 
   it('starts from what is already on file', () => {
     render(<ItemScreen item={item({ meta: { composer: 'Debussy', practice_note: 'p. 240' } })} onBack={() => {}} />);
-    expect(screen.getByLabelText('Where the work is (optional)')).toHaveDisplayValue('p. 240');
+    expect(screen.getByLabelText('Notes (optional)')).toHaveDisplayValue('p. 240');
   });
 
   it('a blank note is left out of the request rather than sent as "" — same rule as composer', async () => {
@@ -119,9 +121,151 @@ describe('the practice note', () => {
 
   it('is not the tempo field — it stays editable for a piece that already has a settled tempo', () => {
     render(<ItemScreen item={item({ meta: { composer: 'Debussy', tempo_bpm: 60 } })} onBack={() => {}} />);
-    const note = screen.getByLabelText('Where the work is (optional)');
+    const note = screen.getByLabelText('Notes (optional)');
     expect(note).not.toBeDisabled();
     expect(note).toHaveDisplayValue('');
+  });
+});
+
+/**
+ * The Collection control — a select, not a text box (owner ruling 2026-09-03: *"a collection only
+ * works if it's not free-text"*). Typing a name is how groups drift: "Suzuki Book 2", "Suzuki
+ * book 2" and "suzuki bk 2" are three groups where the person meant one, and nothing on any screen
+ * ever shows them that.
+ *
+ * A table, because every case here fails silently — the wrong value saves, the screen looks right,
+ * and the person finds two collections a week later with no way to merge them.
+ */
+describe('the collection select', () => {
+  const withCollections = (collections: string[], over: Partial<RepertoireItem> = {}) =>
+    render(<ItemScreen item={item(over)} collections={collections} onBack={() => {}} />);
+
+  it('offers None, every collection on the shelf, and one way to add a new name', () => {
+    withCollections(['Suzuki Piano Book 2', 'Shotokan kata syllabus']);
+    const options = [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
+    expect(options).toEqual(['None', 'Suzuki Piano Book 2', 'Shotokan kata syllabus', 'Add a collection…']);
+  });
+
+  it('starts on the collection this item already has', () => {
+    withCollections(['Suzuki Piano Book 2'], { meta: { composer: 'Debussy', collection: 'Suzuki Piano Book 2' } });
+    expect(screen.getByLabelText('Collection')).toHaveValue('Suzuki Piano Book 2');
+  });
+
+  /** A goal-scoped read can return a shelf that does not include this item's own collection. The
+   *  select must still show it — silently dropping the value would read as "you never chose one". */
+  it("keeps this item's own collection in the list even when the shelf read did not carry it", () => {
+    withCollections(['Shotokan kata syllabus'], { meta: { composer: 'Debussy', collection: 'A Private Book' } });
+    const options = [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
+    expect(options).toContain('A Private Book');
+    expect(screen.getByLabelText('Collection')).toHaveValue('A Private Book');
+  });
+
+  it('saves the one that was picked', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    withCollections(['Suzuki Piano Book 2', 'Shotokan kata syllabus']);
+    await user.selectOptions(screen.getByLabelText('Collection'), 'Shotokan kata syllabus');
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection: 'Shotokan kata syllabus',
+    });
+  });
+
+  it('reveals a text field for a new name, and saves what was typed', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    withCollections(['Suzuki Piano Book 2']);
+    expect(screen.queryByLabelText('Add a collection…')).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Collection'), 'Add a collection…');
+    await user.type(screen.getByLabelText('Add a collection…'), 'ABRSM Grade 3');
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection: 'ABRSM Grade 3',
+    });
+  });
+
+  it('None sends no collection at all — never an empty string', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    withCollections(['Suzuki Piano Book 2'], { meta: { composer: 'Debussy', collection: 'Suzuki Piano Book 2' } });
+    await user.selectOptions(screen.getByLabelText('Collection'), 'None');
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', { label: 'Clair de lune', composer: 'Debussy' });
+  });
+
+  /**
+   * A name typed in the "add" box that already exists, differently cased, is folded onto the
+   * spelling on file — but SERVER-side (`collapseCollection`), because this control is not the only
+   * writer: the coach and the seed confirm write collections too. What the screen must do is send
+   * exactly what was typed, so the one fold happens in the one place.
+   */
+  it('sends a typed duplicate through as typed — the server owns the fold', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    withCollections(['Suzuki Piano Book 2']);
+    await user.selectOptions(screen.getByLabelText('Collection'), 'Add a collection…');
+    await user.type(screen.getByLabelText('Add a collection…'), '  suzuki piano book 2  ');
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection: 'suzuki piano book 2',
+    });
+  });
+
+  it('an empty shelf still offers None and the way to add one', () => {
+    withCollections([]);
+    const options = [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
+    expect(options).toEqual(['None', 'Add a collection…']);
+  });
+});
+
+/**
+ * The description (owner ruling 2026-09-03) — their own words for which one this is, and the field
+ * that replaced the music-only catalogue number.
+ */
+describe('the description', () => {
+  it('saves alongside the other fields', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    render(<ItemScreen item={item()} onBack={() => {}} />);
+    await user.type(screen.getByLabelText('Description (optional)'), 'the fast one in G');
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      description: 'the fast one in G',
+    });
+  });
+
+  it('starts from what is already on file', () => {
+    render(
+      <ItemScreen item={item({ meta: { composer: 'Debussy', description: 'the moonlight one' } })} onBack={() => {}} />,
+    );
+    expect(screen.getByLabelText('Description (optional)')).toHaveDisplayValue('the moonlight one');
+  });
+
+  it('is left out of the request when blank, the same rule as every other field', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    render(<ItemScreen item={item()} onBack={() => {}} />);
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', { label: 'Clair de lune', composer: 'Debussy' });
+  });
+
+  it('has no catalogue field to type into any more', () => {
+    render(<ItemScreen item={item()} onBack={() => {}} />);
+    expect(screen.queryByLabelText(/catalogue/i)).not.toBeInTheDocument();
+  });
+
+  it('reads the fields top to bottom: Name, By, Collection, Description, Notes', () => {
+    const { container } = render(<ItemScreen item={item()} onBack={() => {}} />);
+    const labels = [...container.querySelectorAll('.ri-label')].map((l) => l.textContent);
+    expect(labels).toEqual(['Name', 'By', 'Collection', 'Description (optional)', 'Notes (optional)']);
   });
 });
 
@@ -152,9 +296,9 @@ describe('standing control', () => {
     const user = userEvent.setup();
     patchRepertoireItem.mockResolvedValue(item({ status: 'retired' }));
     render(<ItemScreen item={item({ status: 'known' })} onBack={() => {}} />);
-    expect(screen.getByText(/in the rotation/i)).toBeInTheDocument();
+    expect(screen.getByText(/learned, and still played/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Learned' }));
-    expect(await screen.findByText(/I won't schedule it again/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Bring it back any time/i)).toBeInTheDocument();
   });
 
   it('reverts to the last-confirmed standing when the write fails, and says so', async () => {
@@ -176,11 +320,13 @@ describe('tempo — read-only', () => {
     // The header caption ALSO carries a compact "♩ = 60" — this checks the full read-only
     // sentence in the TEMPO section specifically, which is unique to it.
     expect(screen.getByText(/settled from your metronome · changes when you play, not here/)).toBeInTheDocument();
-    // The only inputs on the whole screen are the five name/note fields — none of them tempo
-    // (P8 added "Where the work is", the fifth; the tempo stays read-only lower on the screen).
+    // Every control on the screen is one of the name fields — Name, By, Description, Notes as text
+    // boxes and Collection as a select — and none of them is the tempo, which stays read-only lower
+    // down. A tempo input appearing here would let the app overwrite the person's own datum.
     const inputs = screen.getAllByRole('textbox');
-    expect(inputs).toHaveLength(5);
+    expect(inputs).toHaveLength(4);
     for (const el of inputs) expect(el).not.toHaveDisplayValue(/60/);
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 
   it('the tempo section is absent entirely when no tempo is on file', () => {

@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RepertoireItem } from '@cadence/shared';
 import {
-  CATALOGUE_KEY,
+  DESCRIPTION_KEY,
   COLLECTION_KEY,
   COMPOSER_KEY,
   PRACTICE_NOTE_KEY,
@@ -61,9 +61,21 @@ const daysAgo = (n: number, now = new Date('2026-09-02T12:00:00Z')): string =>
 describe('GROUP_LINES', () => {
   it("renders the coach's own line for each standing, verbatim", () => {
     expect(GROUP_LINES.working).toBe("what we're working on now");
-    expect(GROUP_LINES.queued).toBe("your order — I'll suggest the first");
-    expect(GROUP_LINES.known).toBe('in rotation — longest rest first');
-    expect(GROUP_LINES.retired).toBe('finished — counted, never scheduled');
+    expect(GROUP_LINES.queued).toBe('not started yet, in your order');
+    expect(GROUP_LINES.known).toBe('learned and still played');
+    expect(GROUP_LINES.retired).toBe('finished');
+  });
+
+  /**
+   * They are DEFINITIONS now (owner ruling 2026-09-03), matching the four the coach reads. The
+   * three that changed each described machinery the app no longer runs — a rotation ordered by
+   * rest, a first item she would suggest, a group she would never schedule — and copy that
+   * describes a mechanism which has been deleted is a promise the app quietly stops keeping.
+   */
+  it('describes what a standing IS, never a mechanism behind it', () => {
+    for (const line of Object.values(GROUP_LINES)) {
+      expect(line).not.toMatch(/rotation|longest rest|suggest|schedul|counted/i);
+    }
   });
 
   it('never leaks the model-prompt scaffolding — the schema word quoted after "status"', () => {
@@ -137,26 +149,39 @@ describe('buildSecondLine — composer · catalogue · collection · date, only 
     expect(buildSecondLine(item({ meta: { [COMPOSER_KEY]: 'Hummel' }, last_practiced_at: null }), now)).toBe('Hummel');
   });
 
-  it('catalogue alone — the one qualifier that actually tells same-titled pieces apart', () => {
-    const i = item({ meta: { [CATALOGUE_KEY]: 'BWV 822' }, last_practiced_at: null });
-    expect(buildSecondLine(i, now)).toBe('BWV 822');
+  it('collection alone reads as a plain fact', () => {
+    const i = item({ meta: { [COLLECTION_KEY]: 'Anna Magdalena Notebook' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('Anna Magdalena Notebook');
   });
 
-  it('composer and catalogue, catalogue second — ahead of collection, right after composer', () => {
-    const i = item({ meta: { [COMPOSER_KEY]: 'J.S. Bach', [CATALOGUE_KEY]: 'BWV 822' }, last_practiced_at: null });
-    expect(buildSecondLine(i, now)).toBe('J.S. Bach · BWV 822');
-  });
-
-  it('all four segments, in order: composer, catalogue, collection, date', () => {
+  it('all three segments, in order: composer, collection, date', () => {
     const i = item({
       meta: {
         [COMPOSER_KEY]: 'J.S. Bach',
-        [CATALOGUE_KEY]: 'BWV 822',
         [COLLECTION_KEY]: 'Anna Magdalena Notebook',
       },
       last_practiced_at: daysAgo(1, now),
     });
-    expect(buildSecondLine(i, now)).toBe('J.S. Bach · BWV 822 · Anna Magdalena Notebook · yesterday');
+    expect(buildSecondLine(i, now)).toBe('J.S. Bach · Anna Magdalena Notebook · yesterday');
+  });
+
+  /**
+   * Two fields the row deliberately does NOT render, both silent if they came back: `catalogue` is
+   * no longer a field at all (owner ruling 2026-09-03) and a stale one left in an old row's meta
+   * must not reappear on the screen; `description` IS a field, and is up to 240 characters, which
+   * would push everything else off a one-line row. It lives on the item screen, one tap away.
+   */
+  it('never renders a catalogue left on an old row', () => {
+    const i = item({ meta: { catalogue: 'BWV 822', [COMPOSER_KEY]: 'J.S. Bach' }, last_practiced_at: null });
+    expect(buildSecondLine(i, now)).toBe('J.S. Bach');
+  });
+
+  it('never renders the description — a sentence does not fit a row', () => {
+    const i = item({
+      meta: { [DESCRIPTION_KEY]: 'the fast one my teacher set', [COMPOSER_KEY]: 'J.S. Bach' },
+      last_practiced_at: null,
+    });
+    expect(buildSecondLine(i, now)).toBe('J.S. Bach');
   });
 
   it('a retired item with no practice date falls back to when it was learned — "dated" even at rest', () => {
@@ -176,7 +201,7 @@ describe('buildSecondLine — composer · catalogue · collection · date, only 
 
   /**
    * The practice note (P8) — sits after composer/catalogue/collection (the design's own order:
-   * WHICH piece, then WHERE the work is, then WHEN), so a book or a kata (which rarely carries the
+   * WHICH item, then how the work is going, then WHEN), so a book or a kata (which rarely carries the
    * other three) still gets an informative line — the note is simply the first segment present.
    */
   it('a stored note trails the identity qualifiers, ahead of the date', () => {
@@ -228,7 +253,7 @@ describe('orderGroupItems', () => {
     expect(orderGroupItems('queued', items).map((i) => i.label)).toEqual(['ranked', 'no-rank-1', 'no-rank-2']);
   });
 
-  it('known sorts by rest (longest-resting first) — the same order pickDueNext reads', () => {
+  it('unranked known rows sort by rest, least recently practised first', () => {
     const items = [
       item({ status: 'known', label: 'A', last_practiced_at: daysAgo(1) }),
       item({ status: 'known', label: 'B', last_practiced_at: daysAgo(19) }),
@@ -270,20 +295,35 @@ describe('orderGroupItems', () => {
   });
 
   /**
-   * A kata ladder (P8, bug fix) — a shelf reads in rank order instead of the standing's own rule
-   * ONLY when every item is BOTH a `LADDER_KINDS` domain AND ranked. Rank alone is not enough:
-   * P4's book seed writes `rank` on every row it expands, so a fully-seeded Keeping-up group of
-   * ordinary PIECES is fully ranked too, and must keep rotating by rest (`byRest`, the coach's own
-   * `pickDueNext` rule) or the screen and the coach would disagree about the first row. Table:
-   * a ranked `piece` group (rest wins), a ranked `kata` group (rank wins), one ungraded kata
-   * (falls back), and a mixed kata+piece group (falls back) — on every standing this router
-   * handles.
+   * A LADDER IS ANY ORDERED COLLECTION (owner ruling 2026-09-03: *"Kata isn't a special thing — it
+   * was always an example"*). A group where every item carries a rank renders in rank order,
+   * whatever kind the items are and whatever standing they sit under.
+   *
+   * The first row below is the one that FLIPPED: a fully-ranked group of ordinary pieces sorted by
+   * REST until today, because the coach read row position as a rotation and the screen could not be
+   * allowed to disagree with her about which row was due first. She reads no position now — the
+   * marker and `pickDueNext` are both gone — so rank order disagrees with nothing, and what the
+   * person sees is the order they put their own material in.
+   *
+   * Table: a ranked group of pieces (rank now wins), a ranked group of kata (unchanged), one
+   * unranked item (falls back to the standing's rule), a mixed-kind ranked group (rank wins — kind
+   * is not consulted at all any more), and a ranked Learned group (rank beats newest-finished).
    */
-  describe('a full ladder (P8) overrides the standing rule — but only for a ladder DOMAIN', () => {
+  describe('a fully ranked group renders in rank order, whatever it holds', () => {
     const ranked = (rank: number, label: string, status: RepertoireItem['status'] = 'known') =>
       item({ status, label, kind: 'kata', meta: { [RANK_KEY]: rank } });
 
-    it('with ranks AND the kata domain, order is by rank — even for known, where rest order would otherwise win', () => {
+    it('THE FLIP: a fully-ranked group of ordinary PIECES now sorts by rank, not by rest', () => {
+      const items = [
+        item({ status: 'known', label: 'A', kind: 'piece', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(1) }),
+        item({ status: 'known', label: 'B', kind: 'piece', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(9) }),
+        item({ status: 'known', label: 'C', kind: 'piece', meta: { [RANK_KEY]: 3 }, last_practiced_at: daysAgo(19) }),
+      ];
+      // Rest order would read C, B, A — that was the rule while the coach read row position.
+      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['A', 'B', 'C']);
+    });
+
+    it('a ranked kata group still reads by rank — the belt order, unchanged', () => {
       const items = [
         item({
           status: 'known',
@@ -307,23 +347,10 @@ describe('orderGroupItems', () => {
           last_practiced_at: daysAgo(19),
         }),
       ];
-      // Rest order alone would read orange (19d), yellow (9d), brown (1d) — rank order overrides it.
       expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['yellow belt', 'orange belt', 'brown belt']);
     });
 
-    it('THE BUG: a fully-ranked group of ordinary PIECES sorts by rest, never by rank', () => {
-      const items = [
-        item({ status: 'known', label: 'A', kind: 'piece', meta: { [RANK_KEY]: 1 }, last_practiced_at: daysAgo(1) }),
-        item({ status: 'known', label: 'B', kind: 'piece', meta: { [RANK_KEY]: 2 }, last_practiced_at: daysAgo(9) }),
-        item({ status: 'known', label: 'C', kind: 'piece', meta: { [RANK_KEY]: 3 }, last_practiced_at: daysAgo(19) }),
-      ];
-      // Rank order would read A, B, C — that was the bug (P4's book seed writes rank on every row
-      // it expands, so a seeded shelf of pieces is fully ranked too). byRest — the coach's own
-      // pickDueNext rule — must win instead: longest-resting first, C, B, A.
-      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['C', 'B', 'A']);
-    });
-
-    it('remove one rank from a kata group and it falls back to the standing rule (known: rest order)', () => {
+    it('remove one rank and it falls back to the standing rule (known: rest order)', () => {
       const items = [
         item({
           status: 'known',
@@ -341,11 +368,11 @@ describe('orderGroupItems', () => {
           last_practiced_at: daysAgo(9),
         }),
       ];
-      // Falls back to byRest: longest-resting (ungraded, 19 days) first — NOT rank order.
+      // Falls back to byRest: least recently practised (ungraded, 19 days) first — NOT rank order.
       expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['ungraded', 'orange belt', 'yellow belt']);
     });
 
-    it('a mixed kata+piece group falls back too, even with every item ranked', () => {
+    it('a kata and a piece in one ranked group read by rank too — kind is not consulted', () => {
       const items = [
         item({
           status: 'known',
@@ -362,11 +389,10 @@ describe('orderGroupItems', () => {
           last_practiced_at: daysAgo(19),
         }),
       ];
-      // Rank order would read yellow belt, Étude. byRest reads Étude (19d) before yellow belt (1d).
-      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['Étude', 'yellow belt']);
+      expect(orderGroupItems('known', items).map((i) => i.label)).toEqual(['yellow belt', 'Étude']);
     });
 
-    it('a full kata ladder in Learned (retired) still reads by rank, not newest-finished-first', () => {
+    it('a fully ranked Learned group reads by rank, not newest-finished-first', () => {
       const items = [
         item({ status: 'retired', label: 'black belt', kind: 'kata', meta: { [RANK_KEY]: 3 }, learned_at: daysAgo(1) }),
         item({
@@ -391,10 +417,15 @@ describe('orderGroupItems', () => {
       ]);
     });
 
-    it('a single-item kata shelf with a rank is trivially a full ladder', () => {
+    it('a single ranked item is trivially a full ladder', () => {
       expect(orderGroupItems('working', [ranked(1, 'white belt', 'working')]).map((i) => i.label)).toEqual([
         'white belt',
       ]);
+    });
+
+    it('an unranked group is not a ladder at all — Learning keeps server order', () => {
+      const items = [item({ status: 'working', label: 'Z' }), item({ status: 'working', label: 'A' })];
+      expect(orderGroupItems('working', items).map((i) => i.label)).toEqual(['Z', 'A']);
     });
   });
 });
