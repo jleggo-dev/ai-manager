@@ -12,7 +12,7 @@ import {
 import { normTitle } from './goal-identity.ts';
 import { matchActivity } from './plan-edit.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
-import type { RepertoireStatus } from '@cadence/shared';
+import { qualifierMeta, type RepertoireStatus } from '@cadence/shared';
 
 /**
  * `update_repertoire` — write down what they are learning and what they already know.
@@ -70,6 +70,7 @@ interface ItemParam {
   label?: unknown;
   status?: unknown;
   kind?: unknown;
+  description?: unknown;
 }
 
 /*
@@ -88,11 +89,13 @@ interface ItemParam {
 
 export const UPDATE_REPERTOIRE: CoachActionTool = {
   name: 'update_repertoire',
-  // 791 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
-  // where it used to teach four, so the motivation clause ("so it is never asked for twice") and
-  // "of what they know" went: neither can change which verb she picks, and every rule can.
+  // 787 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
+  // and now a sixth field, so the clauses that could not change a choice went: "mean to learn",
+  // "it is their own account", "not revisited", and the per-field "omit if" repeats, which one
+  // closing sentence now covers. The standing words are the four definitions, verbatim from
+  // `STANDING_MEANS` — she reads them in the shelf render too, and two spellings would drift.
   description:
-    'Write down the user\'s repertoire — the pieces, katas, poems, or techniques they are learning, mean to learn, or already know. Use the moment they name such material; get_repertoire reads it back. Takes effect immediately: it is their own account, so your sentence reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise (Hummel)", "status": "known", "kind": "piece"}], "goal": "Practice piano"} — "status" is queued (yet to start), working (learning it now), known (has it, in the rotation), learned (crossed just now — stored as known, celebrated once), or retired (finished, not revisited). Omitted, it keeps an existing item as it stands, and a new item starts working. "kind" is plain words, omit if unclear; "goal" names a goal exactly as listed, omit if none fits.',
+    'Write down the user\'s repertoire — the pieces, katas, poems, or techniques they are learning or already know. Use the moment they name such material; get_repertoire reads it back. Takes effect immediately: your sentence reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise (Hummel)", "status": "known", "kind": "piece", "description": "the fast one in G"}], "goal": "Practice piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands, and a new one starts working. "kind" is plain words; "description" is their own words for which one it is; "goal" is a goal\'s exact title. Omit any that do not fit.',
   parameters: {
     properties: {
       items: {
@@ -106,6 +109,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
             // rejected at the door, and a runnable one she is never offered is dead code.
             status: { type: 'string', enum: STATUS_WORDS },
             kind: { type: 'string' },
+            description: { type: 'string' },
           },
           required: ['label'],
         },
@@ -126,6 +130,9 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
         label: typeof i.label === 'string' ? i.label.trim().slice(0, 120) : '',
         statusWord: typeof i.status === 'string' ? i.status.trim().toLowerCase() : '',
         kind: typeof i.kind === 'string' && i.kind.trim() ? i.kind.trim().slice(0, 40) : null,
+        // Their own words for which one it is. Bounded and trimmed by `qualifierMeta` itself, so
+        // this only decides whether there is one to write at all.
+        description: typeof i.description === 'string' ? i.description.trim() : '',
       }))
       // Dedupe within the call — two entries for one label would race the upsert against itself,
       // and `lower(label)` would not stop them landing as two rows when they differ by an accent.
@@ -179,7 +186,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       );
       rejected.push(
         `${item.label} — already the title of ${clash.map((c) => `"${c.label}"`).join(' and ')}. ` +
-          'Add the composer, the catalogue number, or the collection so it names one piece.',
+          'Add who made it, the collection it comes from, or whatever tells them apart, so the label names one item.',
       );
       return false;
     });
@@ -194,6 +201,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
           markLearned: mapped.markLearned,
           goal_id: goalId,
           kind: item.kind,
+          // Through the one qualifier patch every other writer uses, so it merges into whatever
+          // meta already holds rather than replacing it — a tempo settled last month survives a
+          // description written tonight. An empty string writes nothing at all.
+          meta: item.description ? qualifierMeta({ description: item.description }) : undefined,
         });
         // A real crossing joins the goal's history exactly once — learnedNow is false when the
         // piece was already learned (a re-mention keeps its date and gets no second cheer).

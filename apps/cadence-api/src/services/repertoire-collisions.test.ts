@@ -22,7 +22,7 @@ import {
   renderRepertoireForCoach,
 } from './repertoire-practice.ts';
 import type { RepertoireItem } from '@cadence/shared';
-import { COMPOSER_KEY, CATALOGUE_KEY, COLLECTION_KEY } from '@cadence/shared';
+import { COMPOSER_KEY, COLLECTION_KEY } from '@cadence/shared';
 
 const PIANO = 'goal-piano';
 
@@ -140,7 +140,7 @@ describe('isResolvable — no row that can never be found again', () => {
 
 /**
  * The qualifier does the work the label text used to have to do alone (owner design 2026-09-02,
- * the item screen's COMPOSER/CATALOGUE NO./COLLECTION fields).
+ * the item screen's By and Collection fields).
  *
  * Two BARE labels can never sit on the shelf sharing one needle in the first place — `needles()`
  * only produces two DIFFERENT forms (full vs core) when the label itself carries a parenthetical,
@@ -148,7 +148,7 @@ describe('isResolvable — no row that can never be found again', () => {
  * string, which `samePiece` already excludes as a re-mention of itself (the case just above). So
  * the shape that actually needs a qualifier's help is a SHORT new label meeting an ALREADY-QUALIFIED
  * on-file item whose qualifying fact ALSO rides in `meta` — the item screen's own fields, not a
- * parenthetical typed into the name. `onFile` below keeps its catalogue number in the label (like
+ * parenthetical typed into the name. `onFile` below keeps a number in its label (like
  * the rest of Book 2) purely so it shares a needle with the bare incoming title; the fact doing
  * the actual distinguishing is its `meta.composer`.
  */
@@ -170,13 +170,22 @@ describe('a qualifier resolves a collision the label text alone could not', () =
     expect(isResolvable([onFile], 'Minuet in G Major', { [COMPOSER_KEY]: 'Petzold' })).toBe(false);
   });
 
-  it('a catalogue number distinguishes just as well as a composer', () => {
+  /**
+   * `catalogue` was a third qualifier and distinguished exactly like these two until 2026-09-03,
+   * when the owner removed it as music-specific. Rows in the wild still carry the key, and this is
+   * the row that pins what it now does: NOTHING. A stale key that still resolved a collision would
+   * let two items with different BWV numbers both claim one title — no error, one unfindable row.
+   *
+   * The free-text description is deliberately not a replacement here either: two spellings of the
+   * same item's own words differ constantly, so a "disagreement" between them is not evidence.
+   */
+  it('a catalogue left on an old row decides nothing, in either direction', () => {
     const byCatalogue = {
       label: 'Minuet in G Major, no. 2',
-      meta: { [CATALOGUE_KEY]: 'BWV 822' },
+      meta: { catalogue: 'BWV 822' },
     } as unknown as RepertoireItem;
-    expect(isResolvable([byCatalogue], 'Minuet in G Major', { [CATALOGUE_KEY]: 'BWV Anh. 114' })).toBe(true);
-    expect(isResolvable([byCatalogue], 'Minuet in G Major', { [CATALOGUE_KEY]: 'BWV 822' })).toBe(false);
+    expect(isResolvable([byCatalogue], 'Minuet in G Major', { catalogue: 'BWV Anh. 114' })).toBe(false);
+    expect(isResolvable([byCatalogue], 'Minuet in G Major', { catalogue: 'BWV 822' })).toBe(false);
   });
 
   it('a collection distinguishes too, and a DIFFERENT qualifier key states nothing either way', () => {

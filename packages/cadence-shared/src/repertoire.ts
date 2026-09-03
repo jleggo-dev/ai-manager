@@ -54,42 +54,73 @@ export function tempoMeta(spec: MetronomeSpec): Record<string, unknown> {
 }
 
 /* ── Qualifiers ─────────────────────────────────────────────────────────────────────────────
-   The fields that tell two pieces with one title apart — composer, the collection it comes from,
-   a catalogue number — and, for material that has an order (a book, a grading ladder), its rank.
-   Structured in `meta` so the title can stay short and the qualifier does the work: "Minuet in G
-   Major" is three pieces on one shelf until BWV 822 or the Anna Magdalena notebook is named.
+   The fields that tell two items with one title apart — who wrote it, the collection it comes
+   from, and the person's own description of which one it is — plus, for material that has an
+   order (a book, a grading ladder), its rank. Structured in `meta` so the title can stay short
+   and the qualifier does the work: "Minuet in G Major" is three pieces on one shelf until Bach,
+   the Anna Magdalena notebook, or "the fast one my teacher set" is named.
+
+   A `catalogue` field lived here until 2026-09-03 and was removed on the owner's ruling —
+   *"Catalogue number is very music-specific and adds little; that can go in the title or
+   description. We're overly optimising for one use case."* No migration came with it: a row whose
+   `meta` still holds a `catalogue` key is simply never read, which costs nothing and loses
+   nothing, since the same fact belongs in the label or the description now.
 
    Spelled ONCE here. The seed writes these, the item screen edits them, identity reads them for
    the collision check, and the list renders them on the row's second line — four call sites in
    three packages, which is exactly the hand-copied-key drift the weigh-in regex taught. */
 export const COMPOSER_KEY = 'composer';
 export const COLLECTION_KEY = 'collection';
-export const CATALOGUE_KEY = 'catalogue';
 /** 1-based position in an ordered collection. Present on every item of a goal ⇒ the list is a ladder. */
 export const RANK_KEY = 'rank';
 
 /**
- * WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu". Unlike the
- * three qualifiers above, this says nothing about which piece it is; it says what is on file about
- * how it is being practised. Read by both consumers of "the durable facts on a row" (the coach's
- * own practice-note line in session-practice-facts.ts, and this row's second line on the list
+ * The person's own words for WHICH ONE this is — "the fast one in G", "the one my teacher set",
+ * "the version with the repeat". Free text, and the answer to the same question composer and
+ * collection answer, for the many items that have neither: a kata, a poem, a prayer, a book.
+ *
+ * Added 2026-09-03 on the owner's ruling, together with the removal of `catalogue`: a BWV number
+ * is one domain's way of saying which one, and a sentence is everybody's. The coach may write it
+ * (`update_repertoire`), the item screen edits it, and the matcher reads its words, so "the fast
+ * one in G" resolves against the row that says so.
+ */
+export const DESCRIPTION_KEY = 'description';
+
+/**
+ * The practice note — how it is going, right now: "bars 9-16", "p. 240", "first stanza",
+ * "for 5th kyu". Unlike the qualifiers above it says nothing about WHICH item this is; it is what
+ * is on file about how the work is going. Read by both consumers of "the durable facts on a row"
+ * (the coach's own line in session-practice-facts.ts, and this row's second line on the list
  * screen) so the two never drift into separate vocabularies for the same fact. Folded into the
  * SAME qualifier read/patch below rather than a parallel pair of functions, so the item screen's
- * one PATCH writes the note alongside composer/collection/catalogue/rank in a single merge.
+ * one PATCH writes the note alongside composer/collection/description/rank in a single merge.
+ *
+ * The schema key stays `practice_note`; the person sees "Notes" (CLAUDE.md's nomenclature rule).
  */
 export const PRACTICE_NOTE_KEY = 'practice_note';
 
 export interface PieceQualifiers {
   composer?: string;
   collection?: string;
-  catalogue?: string;
+  /** See `DESCRIPTION_KEY` — their own words for which one it is. Capped at `DESCRIPTION_MAX`. */
+  description?: string;
   rank?: number;
-  /** See `PRACTICE_NOTE_KEY` — WHERE the work is, not WHICH piece this is. */
+  /** See `PRACTICE_NOTE_KEY` — how the work is going, not WHICH item this is. */
   note?: string;
 }
 
-const qualifierString = (v: unknown): string | undefined =>
-  typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : undefined;
+/** A qualifier is a phrase, not a paragraph. */
+const QUALIFIER_MAX = 120;
+
+/** The description gets twice the room: it is a sentence about which one this is, and the fields
+ *  it replaces for non-music domains (a catalogue number, an opus) were terse in a way a sentence
+ *  is not. Still bounded — it rides the coach's context on every practice turn. */
+export const DESCRIPTION_MAX = 240;
+
+const boundedString = (v: unknown, max: number): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
+
+const qualifierString = (v: unknown): string | undefined => boundedString(v, QUALIFIER_MAX);
 
 /** The qualifiers on an item, or nothing where a field is absent or unusable. Never throws. */
 export function pieceQualifiers(meta: Record<string, unknown> | null | undefined): PieceQualifiers {
@@ -97,12 +128,12 @@ export function pieceQualifiers(meta: Record<string, unknown> | null | undefined
   const out: PieceQualifiers = {};
   const composer = qualifierString(meta[COMPOSER_KEY]);
   const collection = qualifierString(meta[COLLECTION_KEY]);
-  const catalogue = qualifierString(meta[CATALOGUE_KEY]);
+  const description = boundedString(meta[DESCRIPTION_KEY], DESCRIPTION_MAX);
   const note = qualifierString(meta[PRACTICE_NOTE_KEY]);
   const rank = meta[RANK_KEY];
   if (composer) out.composer = composer;
   if (collection) out.collection = collection;
-  if (catalogue) out.catalogue = catalogue;
+  if (description) out.description = description;
   if (note) out.note = note;
   if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 1) out.rank = rank;
   return out;
@@ -114,14 +145,52 @@ export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   const composer = qualifierString(q.composer);
   const collection = qualifierString(q.collection);
-  const catalogue = qualifierString(q.catalogue);
+  const description = boundedString(q.description, DESCRIPTION_MAX);
   const note = qualifierString(q.note);
   if (composer) patch[COMPOSER_KEY] = composer;
   if (collection) patch[COLLECTION_KEY] = collection;
-  if (catalogue) patch[CATALOGUE_KEY] = catalogue;
+  if (description) patch[DESCRIPTION_KEY] = description;
   if (note) patch[PRACTICE_NOTE_KEY] = note;
   if (typeof q.rank === 'number' && Number.isInteger(q.rank) && q.rank >= 1) patch[RANK_KEY] = q.rank;
   return patch;
+}
+
+/**
+ * The collections already on this shelf, most-used first, each in the spelling it first appeared in.
+ *
+ * A collection only groups if it is CHOSEN rather than typed (owner ruling 2026-09-03: *"a
+ * collection only works if it's not free-text"*) — "Suzuki Book 2", "Suzuki book 2" and "suzuki
+ * bk 2" are three groups where the person meant one. So the item screen offers this list and the
+ * writers collapse a typed name onto whichever spelling is already here.
+ *
+ * Ordered by how many items carry it, then by name, so the shelf's own vocabulary leads the list
+ * rather than whatever happened to be inserted first; the tie-break keeps it stable.
+ */
+export function collectionsOf(items: Array<{ meta?: Record<string, unknown> | null }>): string[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const item of items) {
+    const name = pieceQualifiers(item.meta).collection;
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const seen = counts.get(key);
+    // First spelling wins: a later "suzuki book 2" must not rename the group the person reads.
+    if (seen) seen.count += 1;
+    else counts.set(key, { name, count: 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : 1)).map((c) => c.name);
+}
+
+/**
+ * A typed collection name, folded onto the spelling already on the shelf when one matches.
+ *
+ * Trim plus lower-case equality, and deliberately nothing else — this is a SPELLING guard, not a
+ * matcher. Anything fuzzier ("Suzuki 2" ≈ "Suzuki Book 2") would silently file an item under a
+ * collection the person did not choose, which is worse than the second group they can see and fix.
+ */
+export function collapseCollection(existing: readonly string[], typed: string): string {
+  const trimmed = typed.trim();
+  const key = trimmed.toLowerCase();
+  return existing.find((name) => name.trim().toLowerCase() === key) ?? trimmed;
 }
 
 /** The practice note on its own, or undefined where there is none (or it is blank) — for a caller
@@ -131,6 +200,13 @@ export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
 export function practiceNoteOf(meta: Record<string, unknown> | null | undefined): string | undefined {
   if (!meta) return undefined;
   return qualifierString(meta[PRACTICE_NOTE_KEY]);
+}
+
+/** The description on its own, for the renders that print it as a fact. Same shape as
+ *  `practiceNoteOf`, at the description's own bound. */
+export function descriptionOf(meta: Record<string, unknown> | null | undefined): string | undefined {
+  if (!meta) return undefined;
+  return boundedString(meta[DESCRIPTION_KEY], DESCRIPTION_MAX);
 }
 
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
@@ -176,13 +252,20 @@ const tempoNote = (i: RepertoireLike): string | null => {
   return t.meter === DEFAULT_METER ? `settled tempo ${t.bpm} bpm` : `settled tempo ${t.bpm} bpm, ${t.meter} to the bar`;
 };
 
-/** "note: bars 9-16" — WHERE the work is on this item, stored by the item screen (P8) and read here
+/** "note: bars 9-16" — how the work on this item is going, stored by the item screen (P8) and read
  *  through the one qualifier reader, never a hand-spelled meta key. Added to this render 2026-09-03:
  *  it was already on the row's second line and in the prescribe facts, and holding it back here left
  *  her reading "worked yesterday" with no way to know what was worked on. */
 const noteMark = (i: RepertoireLike): string | null => {
   const note = practiceNoteOf(i.meta);
   return note ? `note: ${note}` : null;
+};
+
+/** "description: the fast one in G" — the person's own words for which item this is, so a request
+ *  phrased their way ("the fast one") reaches her already resolved. */
+const descriptionMark = (i: RepertoireLike): string | null => {
+  const description = descriptionOf(i.meta);
+  return description ? `description: ${description}` : null;
 };
 
 /**
@@ -328,7 +411,7 @@ export function renderRepertoire(
 ): string {
   if (!items.length) return '';
   const line = (i: RepertoireLike): string => {
-    const marks = [i.kind, practicedNote(i, now), tempoNote(i), noteMark(i)].filter(Boolean);
+    const marks = [i.kind, practicedNote(i, now), tempoNote(i), descriptionMark(i), noteMark(i)].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
   };
   const sections: string[] = [];

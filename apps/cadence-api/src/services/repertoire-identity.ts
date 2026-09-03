@@ -4,15 +4,20 @@ import { pieceQualifiers, type PieceQualifiers } from '@cadence/shared';
 
 /**
  * True when a QUALIFIER stated on BOTH sides disagrees — the one fact that can tell two
- * same-titled pieces apart without a word added to the label itself (owner design 2026-09-02: the
- * item screen's COMPOSER/COLLECTION/CATALOGUE NO. fields). Absence on either side decides
- * nothing — an unqualified item might still be either piece, so only a STATED disagreement counts;
- * this is `isResolvable`'s own asymmetry (a miss self-corrects, a false "these are different"
- * would not) applied to qualifiers instead of needles.
+ * same-titled items apart without a word added to the label itself (the item screen's By and
+ * Collection fields). Absence on either side decides nothing — an unqualified item might still be
+ * either one, so only a STATED disagreement counts; this is `isResolvable`'s own asymmetry (a miss
+ * self-corrects, a false "these are different" would not) applied to qualifiers instead of needles.
+ *
+ * Composer and collection only. A `catalogue` qualifier counted here until 2026-09-03, when the
+ * owner removed the field as music-specific; the free-text description is deliberately NOT a
+ * substitute for it here, because two people's own words for one item ("the fast one", "the quick
+ * one") differ constantly without naming two different items — a disagreement rule needs facts
+ * that are stated the same way twice, and prose is not.
  */
 function qualifiersDiffer(a: PieceQualifiers, b: PieceQualifiers): boolean {
   const disagree = (x?: string, y?: string) => !!x && !!y && x.toLowerCase() !== y.toLowerCase();
-  return disagree(a.composer, b.composer) || disagree(a.catalogue, b.catalogue) || disagree(a.collection, b.collection);
+  return disagree(a.composer, b.composer) || disagree(a.collection, b.collection);
 }
 
 /**
@@ -26,8 +31,8 @@ function qualifiersDiffer(a: PieceQualifiers, b: PieceQualifiers): boolean {
  * A re-mention of an existing piece is an update, not a new row, so that row is excluded from the
  * comparison. A qualified addition is always fine: "Minuet in G Major (Petzold)" keeps a full
  * needle of its own even though its core collides. And the qualifier does not have to live in the
- * label text — two items titled identically-short but carrying DIFFERENT `meta.composer` (or
- * catalogue, or collection) are different pieces too, so a needle they share blocks neither: the
+ * label text — two items titled identically-short but carrying a DIFFERENT `meta.composer` (or
+ * collection) are different pieces too, so a needle they share blocks neither: the
  * title can stay short and the qualifier field does the work instead of a parenthetical.
  */
 export function isResolvable(

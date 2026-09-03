@@ -108,9 +108,10 @@ export function renderRepertoireForCoach(
     lines.push(`  ...and ${collisions.length - MAX_COLLISION_GROUPS} more such groups`);
   }
   lines.push(
-    '  Name one of these in full whenever you write it down or put it in a session - the composer,',
-    '  the catalogue number, or the collection it comes from. A bare shared title cannot be matched',
-    '  to a row, so practice logged against it counts for nothing and its tempo is never kept.',
+    '  Name one of these in full whenever you write it down or put it in a session - who made it,',
+    '  the collection it comes from, or whatever else tells them apart. A bare shared title cannot',
+    '  be matched to a row, so practice logged against it counts for nothing and its tempo is never',
+    '  kept.',
   );
   return `${body}\n${lines.join('\n')}`;
 }

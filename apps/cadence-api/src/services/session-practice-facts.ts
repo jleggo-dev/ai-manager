@@ -83,10 +83,10 @@ function rowDetail(i: RepertoireLike): string {
     );
   }
   const q = pieceQualifiers(i.meta);
+  if (q.description) parts.push(`description: ${q.description}`);
   if (q.note) parts.push(`note: ${q.note}`);
   if (q.composer) parts.push(`composer: ${q.composer}`);
   if (q.collection) parts.push(`collection: ${q.collection}`);
-  if (q.catalogue) parts.push(`catalogue: ${q.catalogue}`);
   if (q.rank !== undefined) parts.push(`rank ${q.rank}`);
   return parts.join(' · ');
 }

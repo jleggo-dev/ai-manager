@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  COLLECTION_KEY,
+  DESCRIPTION_KEY,
+  DESCRIPTION_MAX,
   PRACTICE_NOTE_KEY,
   REPERTOIRE_GROUPS,
   STANDING_MEANS,
   STANDING_NAMES,
   TEMPO_BPM_KEY,
   byRest,
+  collapseCollection,
+  collectionsOf,
+  descriptionOf,
   pieceQualifiers,
   practiceNoteOf,
   qualifierMeta,
@@ -317,7 +323,7 @@ describe('renderRepertoire — Learned is capped at 12, and says how many there 
 
 describe('piece qualifiers', () => {
   it('round-trips through the patch it writes', () => {
-    const q = { composer: 'J.S. Bach', collection: 'Suzuki Book 2', catalogue: 'BWV 822', rank: 4 };
+    const q = { composer: 'J.S. Bach', collection: 'Suzuki Book 2', description: 'the fast one in G', rank: 4 };
     expect(pieceQualifiers(qualifierMeta(q))).toEqual(q);
   });
 
@@ -327,7 +333,7 @@ describe('piece qualifiers', () => {
   });
 
   it('ignores blanks, non-strings, and a rank that is not a positive whole number', () => {
-    expect(pieceQualifiers({ composer: '  ', collection: 7, catalogue: null, rank: 0 })).toEqual({});
+    expect(pieceQualifiers({ composer: '  ', collection: 7, description: null, rank: 0 })).toEqual({});
     expect(pieceQualifiers({ rank: 2.5 })).toEqual({});
     expect(pieceQualifiers({ rank: '3' })).toEqual({});
     expect(qualifierMeta({ composer: '   ', rank: -1 })).toEqual({});
@@ -343,12 +349,75 @@ describe('piece qualifiers', () => {
     expect(settledTempo(meta)).toEqual({ bpm: 72, meter: 3 });
     expect(pieceQualifiers(meta)).toEqual({ composer: 'Hummel' });
   });
+
+  /**
+   * `catalogue` was a qualifier until 2026-09-03 (owner: *"Catalogue number is very music-specific
+   * and adds little... We're overly optimising for one use case"*). No migration ran, so rows in
+   * the wild still carry the key — the read must simply ignore it, and the write must never put it
+   * back. Both are silent failures otherwise: a stale key that still round-tripped would keep the
+   * field alive on every screen that renders whatever `pieceQualifiers` returns.
+   */
+  it('ignores a catalogue left on an old row, rather than reading it back as a field', () => {
+    expect(pieceQualifiers({ catalogue: 'BWV 822' })).toEqual({});
+    expect(pieceQualifiers({ composer: 'J.S. Bach', catalogue: 'BWV 822' })).toEqual({ composer: 'J.S. Bach' });
+  });
+
+  it('never writes a catalogue back, even when one is handed in', () => {
+    expect(qualifierMeta({ composer: 'J.S. Bach', catalogue: 'BWV 822' } as never)).toEqual({
+      composer: 'J.S. Bach',
+    });
+  });
 });
 
 /**
- * The practice note (P8: "the practice note gets a store") — WHERE the work is, not WHICH piece
+ * The description (owner ruling 2026-09-03) — the person's own words for WHICH ONE this is. It
+ * answers the question composer and collection answer, for every item that has neither: a kata, a
+ * prayer, a poem, a book. It replaced `catalogue`, which answered it for exactly one domain.
+ */
+describe('the description', () => {
+  it('round-trips through the patch it writes, alongside the other qualifiers', () => {
+    const q = { composer: 'J.S. Bach', description: 'the one my teacher set' };
+    expect(pieceQualifiers(qualifierMeta(q))).toEqual(q);
+  });
+
+  it('is folded into meta under its own key, not a hand-copied string', () => {
+    expect(qualifierMeta({ description: 'the fast one in G' })).toEqual({ [DESCRIPTION_KEY]: 'the fast one in G' });
+  });
+
+  it('gets more room than a qualifier, because it is a sentence — 240 characters, trimmed', () => {
+    const long = 'x'.repeat(300);
+    expect(pieceQualifiers({ [DESCRIPTION_KEY]: `  ${long}  ` }).description).toBe(long.slice(0, DESCRIPTION_MAX));
+    expect(DESCRIPTION_MAX).toBe(240);
+  });
+
+  it('drops a blank one the way every other qualifier string is dropped', () => {
+    expect(pieceQualifiers({ [DESCRIPTION_KEY]: '   ' })).toEqual({});
+    expect(qualifierMeta({ description: '   ' })).toEqual({});
+  });
+
+  it('is absent, never empty, for an item that has none', () => {
+    expect(pieceQualifiers({ composer: 'Hummel' }).description).toBeUndefined();
+    expect(descriptionOf(null)).toBeUndefined();
+    expect(descriptionOf({ [DESCRIPTION_KEY]: 42 })).toBeUndefined();
+    expect(descriptionOf({ [DESCRIPTION_KEY]: 'the slow one' })).toBe('the slow one');
+  });
+
+  it('reaches the coach on the item line, as a fact', () => {
+    const out = renderRepertoire([
+      item('Minuet in G Major', { kind: 'piece', meta: { [DESCRIPTION_KEY]: 'the fast one my teacher set' } }),
+    ]);
+    expect(out).toContain('description: the fast one my teacher set');
+  });
+
+  it('says nothing at all when there is none — never an empty "description:"', () => {
+    expect(renderRepertoire([item('Minuet')])).not.toContain('description:');
+  });
+});
+
+/**
+ * The practice note (P8: "the practice note gets a store") — how the work is going, not WHICH item
  * this is, so it rides the same qualifier read/patch rather than a parallel pair of functions: one
- * PATCH from the item screen writes composer/collection/catalogue/rank/note together.
+ * PATCH from the item screen writes composer/collection/description/rank/note together.
  */
 describe('the practice note', () => {
   it('round-trips through the patch it writes, alongside the other qualifiers', () => {
@@ -393,6 +462,71 @@ describe('the practice note', () => {
 
     it('ignores a non-string value rather than throwing', () => {
       expect(practiceNoteOf({ [PRACTICE_NOTE_KEY]: 42 })).toBeUndefined();
+    });
+  });
+});
+
+/**
+ * Collections are chosen, not typed (owner ruling 2026-09-03: *"a collection only works if it's
+ * not free-text"*). These two functions are what makes that true — the list the item screen offers,
+ * and the fold that stops a second spelling starting a second group.
+ */
+describe('the collections on a shelf', () => {
+  const inCollection = (label: string, collection?: string) =>
+    item(label, { meta: collection ? { [COLLECTION_KEY]: collection } : {} });
+
+  it('lists each collection once, most-used first', () => {
+    const shelf = [
+      inCollection('a', 'ABRSM Grade 3'),
+      inCollection('b', 'Suzuki Book 2'),
+      inCollection('c', 'Suzuki Book 2'),
+      inCollection('d', 'Suzuki Book 2'),
+      inCollection('e', 'ABRSM Grade 3'),
+      inCollection('f', 'Shotokan kata'),
+    ];
+    expect(collectionsOf(shelf)).toEqual(['Suzuki Book 2', 'ABRSM Grade 3', 'Shotokan kata']);
+  });
+
+  it('keeps the spelling it first saw, whatever later rows type', () => {
+    const shelf = [inCollection('a', 'Suzuki Book 2'), inCollection('b', 'suzuki book 2')];
+    expect(collectionsOf(shelf)).toEqual(['Suzuki Book 2']);
+  });
+
+  it('breaks a tie on count by name, so the list is stable between reads', () => {
+    expect(collectionsOf([inCollection('a', 'Zebra'), inCollection('b', 'Alpha')])).toEqual(['Alpha', 'Zebra']);
+  });
+
+  it('is empty for a shelf where nothing carries one', () => {
+    expect(collectionsOf([inCollection('a'), inCollection('b')])).toEqual([]);
+    expect(collectionsOf([])).toEqual([]);
+  });
+
+  describe('collapseCollection — a spelling guard, never a matcher', () => {
+    const existing = ['Suzuki Book 2', 'Shotokan kata syllabus'];
+
+    it.each([
+      ['suzuki book 2', 'Suzuki Book 2'],
+      ['SUZUKI BOOK 2', 'Suzuki Book 2'],
+      ['  Suzuki Book 2  ', 'Suzuki Book 2'],
+      ['Suzuki Book 2', 'Suzuki Book 2'],
+    ])('folds %s onto the spelling already on the shelf', (typed, expected) => {
+      expect(collapseCollection(existing, typed)).toBe(expected);
+    });
+
+    /** The near-miss half: anything looser would file an item under a group nobody chose. */
+    it.each([['Suzuki 2'], ['Suzuki Book Two'], ['Suzuki  Book  2'], ['Suzuki Book 3'], ['kata']])(
+      'leaves %s alone — it is not the same name, only a similar one',
+      (typed) => {
+        expect(collapseCollection(existing, typed)).toBe(typed.trim());
+      },
+    );
+
+    it('trims a new name rather than storing the whitespace', () => {
+      expect(collapseCollection(existing, '  ABRSM Grade 3 ')).toBe('ABRSM Grade 3');
+    });
+
+    it('has nothing to fold onto when the shelf carries none', () => {
+      expect(collapseCollection([], 'Suzuki Book 2')).toBe('Suzuki Book 2');
     });
   });
 });

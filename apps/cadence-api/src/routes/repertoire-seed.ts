@@ -37,7 +37,6 @@ const seedRowSchema = z.object({
   label: z.string().trim().min(1).max(120),
   composer: z.string().trim().max(120).nullish(),
   collection: z.string().trim().max(120).nullish(),
-  catalogue: z.string().trim().max(120).nullish(),
   rank: z.number().int().min(1).max(MAX_SEED_ITEMS).nullish(),
   status: z.enum(SEED_STATUSES, { message: `status must be one of ${SEED_STATUSES.join(', ')}` }),
 });

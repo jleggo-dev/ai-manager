@@ -51,7 +51,6 @@ const candidate = (label: string, rank: number) => ({
   label,
   composer: null,
   collection: 'Suzuki Piano Book 2',
-  catalogue: null,
   rank,
   ambiguous: false,
 });

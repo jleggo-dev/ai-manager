@@ -17,7 +17,9 @@ import type { RepertoireItem } from '@cadence/shared';
 const renameRepertoireItem = vi.fn();
 const updateRepertoireItem = vi.fn();
 const deleteRepertoireItem = vi.fn();
+const listRepertoire = vi.fn(async (..._a: unknown[]): Promise<unknown[]> => []);
 const invalidateSessionsFor = vi.fn(async (..._a: unknown[]) => {});
+const collidingTitles = vi.fn(() => []);
 
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
@@ -35,9 +37,11 @@ vi.mock('../repos/repertoire.ts', () => ({
   renameRepertoireItem: (...a: unknown[]) => renameRepertoireItem(...a),
   updateRepertoireItem: (...a: unknown[]) => updateRepertoireItem(...a),
   deleteRepertoireItem: (...a: unknown[]) => deleteRepertoireItem(...a),
+  listRepertoire: (...a: unknown[]) => listRepertoire(...a),
 }));
 vi.mock('../services/repertoire-practice.ts', () => ({
   invalidateSessionsFor: (...a: unknown[]) => invalidateSessionsFor(...a),
+  collidingTitles: (...a: unknown[]) => collidingTitles(...(a as [])),
 }));
 
 const { default: progressExtrasRoutes } = await import('./progress-extras.ts');
@@ -48,7 +52,7 @@ interface RouteResponse {
   body: Record<string, unknown>;
 }
 
-async function call(method: 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<RouteResponse> {
+async function call(method: 'GET' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<RouteResponse> {
   const app = express();
   app.use(express.json());
   app.use('/progress', progressExtrasRoutes);
@@ -139,6 +143,93 @@ describe('PATCH /progress/repertoire/:id — validation (near-misses before the 
   });
 });
 
+/**
+ * The collections list, and the fold that keeps it meaning something (owner ruling 2026-09-03: *"a
+ * collection only works if it's not free-text"*). The item screen offers what is already on the
+ * shelf; a name typed anyway is folded onto the spelling that is there.
+ *
+ * Silent failure both ways, which is why both halves are pinned: a fold that is too loose files an
+ * item under a collection nobody chose, and no fold at all leaves "Suzuki Book 2" and "suzuki
+ * book 2" sitting beside each other as two groups that will never merge.
+ */
+describe('GET /progress/repertoire/items — the collections already in use', () => {
+  const withCollection = (id: string, collection: string) =>
+    item({ item_id: id, meta: { collection } as Record<string, unknown> });
+
+  it('lists each one once, most-used first', async () => {
+    listRepertoire.mockResolvedValue([
+      withCollection('a', 'ABRSM Grade 3'),
+      withCollection('b', 'Suzuki Book 2'),
+      withCollection('c', 'Suzuki Book 2'),
+      withCollection('d', 'ABRSM Grade 3'),
+      withCollection('e', 'Suzuki Book 2'),
+      withCollection('f', 'Shotokan kata'),
+    ]);
+    const r = await call('GET', '/progress/repertoire/items');
+    expect(r.status).toBe(200);
+    expect(r.body.collections).toEqual(['Suzuki Book 2', 'ABRSM Grade 3', 'Shotokan kata']);
+  });
+
+  it('is an empty list when nothing carries one — never absent', async () => {
+    listRepertoire.mockResolvedValue([item()]);
+    const r = await call('GET', '/progress/repertoire/items');
+    expect(r.body.collections).toEqual([]);
+  });
+
+  /** Scoped reads narrow the ITEMS, never the collections: a book kept under another goal is still
+   *  a group this person uses, and the screen must be able to offer it. */
+  it('reads collections off the whole shelf even when the items are scoped to one goal', async () => {
+    listRepertoire.mockResolvedValue([
+      item({ item_id: 'a', goal_id: 'g-piano', meta: { collection: 'Suzuki Book 2' } as Record<string, unknown> }),
+      item({ item_id: 'b', goal_id: 'g-karate', meta: { collection: 'Shotokan kata' } as Record<string, unknown> }),
+    ]);
+    const r = await call('GET', '/progress/repertoire/items?goal_id=g-piano');
+    expect((r.body.items as unknown[]).length).toBe(1);
+    expect(r.body.collections).toEqual(['Shotokan kata', 'Suzuki Book 2']);
+  });
+});
+
+describe('PATCH /progress/repertoire/:id — a typed collection folds onto the one on file', () => {
+  beforeEach(() => {
+    listRepertoire.mockResolvedValue([item({ meta: { collection: 'Suzuki Book 2' } as Record<string, unknown> })]);
+    updateRepertoireItem.mockResolvedValue(item());
+  });
+
+  it.each([['suzuki book 2'], ['SUZUKI BOOK 2'], ['  Suzuki Book 2  ']])(
+    'saves %j as the spelling already on the shelf',
+    async (typed) => {
+      await call('PATCH', '/progress/repertoire/it-1', { collection: typed });
+      expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+        status: undefined,
+        meta: { collection: 'Suzuki Book 2' },
+      });
+    },
+  );
+
+  it('a genuinely new name is stored as typed — the fold is a spelling guard, not a matcher', async () => {
+    await call('PATCH', '/progress/repertoire/it-1', { collection: 'ABRSM Grade 3' });
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: undefined,
+      meta: { collection: 'ABRSM Grade 3' },
+    });
+  });
+
+  it('a shelf it could not read stores the name as typed rather than dropping the edit', async () => {
+    listRepertoire.mockRejectedValue(new Error('db down'));
+    const r = await call('PATCH', '/progress/repertoire/it-1', { collection: 'suzuki book 2' });
+    expect(r.status).toBe(200);
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: undefined,
+      meta: { collection: 'suzuki book 2' },
+    });
+  });
+
+  it('reads the shelf only when a collection is actually being written', async () => {
+    await call('PATCH', '/progress/repertoire/it-1', { note: 'bars 9-16' });
+    expect(listRepertoire).not.toHaveBeenCalled();
+  });
+});
+
 describe('PATCH /progress/repertoire/:id — rename', () => {
   it('renames and returns the fresh row, preserving the id', async () => {
     renameRepertoireItem.mockResolvedValue(item({ label: 'Clair de lune (easier arrangement)' }));
@@ -162,18 +253,59 @@ describe('PATCH /progress/repertoire/:id — rename', () => {
     expect(r.status).toBe(404);
   });
 
-  it('sends composer/collection/catalogue as one merged meta patch alongside a status change', async () => {
+  it('sends composer/collection/description as one merged meta patch alongside a status change', async () => {
     updateRepertoireItem.mockResolvedValue(item());
     const r = await call('PATCH', '/progress/repertoire/it-1', {
       composer: 'Debussy',
       collection: 'Suite bergamasque',
+      description: 'the moonlight one',
       status: 'retired',
     });
     expect(r.status).toBe(200);
     expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
       status: 'retired',
-      meta: { composer: 'Debussy', collection: 'Suite bergamasque' },
+      meta: { composer: 'Debussy', collection: 'Suite bergamasque', description: 'the moonlight one' },
     });
+  });
+
+  /**
+   * The description (owner ruling 2026-09-03) — their own words for which one it is, and the field
+   * that replaced `catalogue`. It gets 240 characters rather than the qualifiers' 120 because it is
+   * a sentence; the near-misses are the two a text field actually produces.
+   */
+  it('accepts a description-only body', async () => {
+    updateRepertoireItem.mockResolvedValue(item());
+    const r = await call('PATCH', '/progress/repertoire/it-1', { description: 'the fast one in G' });
+    expect(r.status).toBe(200);
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: undefined,
+      meta: { description: 'the fast one in G' },
+    });
+  });
+
+  it('rejects a blank description rather than storing an empty one', async () => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', { description: '   ' });
+    expect(r.status).toBe(400);
+    expect(updateRepertoireItem).not.toHaveBeenCalled();
+  });
+
+  it('rejects a description past its own 240-character bound, and accepts one at it', async () => {
+    const over = await call('PATCH', '/progress/repertoire/it-1', { description: 'x'.repeat(241) });
+    expect(over.status).toBe(400);
+    expect(over.body.error).toMatch(/240 characters/);
+
+    updateRepertoireItem.mockResolvedValue(item());
+    const at = await call('PATCH', '/progress/repertoire/it-1', { description: 'x'.repeat(240) });
+    expect(at.status).toBe(200);
+  });
+
+  /** `catalogue` was a field here until 2026-09-03. A body carrying only it now has nothing to
+   *  write, and must say so rather than silently succeeding with an empty patch. */
+  it('treats a catalogue-only body as nothing to update — the field is gone', async () => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', { catalogue: 'BWV 822' });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/nothing to update/i);
+    expect(updateRepertoireItem).not.toHaveBeenCalled();
   });
 
   it('accepts a rank-only body — reordering Up next needs no other field', async () => {

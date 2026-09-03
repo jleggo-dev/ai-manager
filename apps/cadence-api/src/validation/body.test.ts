@@ -141,7 +141,7 @@ describe('parseBody / plan review progress schemas', () => {
 /**
  * `rank` on the repertoire item PATCH (P6 "the room": the Up next group is drag-ordered, and a
  * reorder writes each moved row's new 1-based rank). The rest of this schema — status/label/
- * composer/collection/catalogue — is covered at the route level in
+ * composer/collection/description — is covered at the route level in
  * progress-extras-repertoire.test.ts; this pins the schema's OWN rule for the one field this
  * parcel added, table-style: a real rank, and the near-misses a drag interaction could produce.
  */
