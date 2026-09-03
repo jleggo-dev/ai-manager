@@ -141,3 +141,98 @@ export async function clearPendingSessionsForGoal(userId: string, goalId: string
     returning o.occurrence_id`;
   return rows.length;
 }
+
+/* ── The item screen (P2: the item, opened) ───────────────────────────────────────────────────
+   Rename, edit the qualifiers, flip the standing, or remove the row for good — the four writes
+   the opened item makes. Kept as three separate functions rather than one big "patch" so the
+   screen's own two independent actions ("Save the name" vs the standing control, which acts on
+   its own) map onto two independent calls; the route decides which to run. */
+
+/** Refused rename: another row already claims this exact `lower(label)` — the table's own unique
+ *  key (`repertoire_user_label_uidx`). Carries the OTHER row's own label so the caller can say
+ *  which piece it collided with, never a bare "conflict". */
+export class RepertoireRenameConflictError extends Error {
+  constructor(public readonly otherLabel: string) {
+    super(`"${otherLabel}" already has this name`);
+    this.name = 'RepertoireRenameConflictError';
+  }
+}
+
+/**
+ * Rename in place. The row (`item_id`) is the identity, never the label, so this is the one write
+ * that changes NOTHING but the words — sessions, `meta` (settled tempo + qualifiers), `learned_at`
+ * and `last_practiced_at` all ride the same row, untouched. NFC-normalized like every other write
+ * to this column (`upsertRepertoireItem`'s `nfc()`, same reasoning: an NFD "École" from iOS must
+ * land on the same key as its NFC spelling).
+ *
+ * A rename that would collide with another row's `lower(label)` is refused outright
+ * (`RepertoireRenameConflictError`, naming the other piece) rather than merged into it or
+ * silently suffixed — that row is a DIFFERENT piece with its own history, and nothing here is
+ * allowed to guess otherwise. Scoped by user_id: an item_id from a request is not proof of
+ * ownership. Returns null (not a throw) when no row matches this user + item_id.
+ */
+export async function renameRepertoireItem(
+  userId: string,
+  itemId: string,
+  label: string,
+): Promise<RepertoireItem | null> {
+  const nextLabel = nfc(label);
+  try {
+    const [row] = await sql<RepertoireItem[]>`
+      update cadence.repertoire set label = ${nextLabel}, updated_at = now()
+      where user_id = ${userId} and item_id = ${itemId}
+      returning ${cols()}`;
+    return row ?? null;
+  } catch (err) {
+    if (err instanceof sql.PostgresError && err.code === '23505') {
+      const [clash] = await sql<{ label: string }[]>`
+        select label from cadence.repertoire
+        where user_id = ${userId} and lower(label) = lower(${nextLabel}) and item_id != ${itemId}
+        limit 1`;
+      throw new RepertoireRenameConflictError(clash?.label ?? nextLabel);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Standing + qualifiers, in one write. `meta` is MERGED with `||`, exactly as `setSettledTempo`
+ * does — a tempo settled last night, or a composer typed in last week, must survive a standing
+ * flip made today. `status` never writes `learned_at`: crossing into Keeping up "in front of us"
+ * is the coach's `learned` verb alone (`upsertRepertoireItem`'s `markLearned`), so a standing
+ * chosen from this screen is silent, the same as every other status change here (retiring,
+ * re-queueing, backfilling known).
+ *
+ * Scoped by user_id. Returns null when no row matches — a wrong id is not nothing to report, but
+ * it is nothing THIS caller may change.
+ */
+export async function updateRepertoireItem(
+  userId: string,
+  itemId: string,
+  patch: { status?: RepertoireStatus; meta?: Record<string, unknown> | null },
+): Promise<RepertoireItem | null> {
+  const [row] = await sql<RepertoireItem[]>`
+    update cadence.repertoire
+    set status = coalesce(${patch.status ?? null}::text, status),
+        meta = coalesce(meta, '{}'::jsonb) || coalesce(${patch.meta ? json(patch.meta) : null}::jsonb, '{}'::jsonb),
+        updated_at = now()
+    where user_id = ${userId} and item_id = ${itemId}
+    returning ${cols()}`;
+  return row ?? null;
+}
+
+/**
+ * A real delete — distinct from retiring: the row is gone, not kept as "Learned". Sessions and
+ * logs that named it keep their own text; only this link disappears, so nothing else needs to
+ * change. Scoped by user_id; returns the deleted row's `goal_id` (so a caller can invalidate that
+ * goal's cached sessions) or null when there was no such row for this user to delete.
+ */
+export async function deleteRepertoireItem(
+  userId: string,
+  itemId: string,
+): Promise<{ item_id: string; goal_id: string | null } | null> {
+  const [row] = await sql<{ item_id: string; goal_id: string | null }[]>`
+    delete from cadence.repertoire where user_id = ${userId} and item_id = ${itemId}
+    returning item_id, goal_id`;
+  return row ?? null;
+}

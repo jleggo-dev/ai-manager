@@ -5,7 +5,8 @@
  * (a WidgetOmission) when nothing binds — guards report evidence, never a throw or silent null.
  */
 import { Router, type Request, type Response } from 'express';
-import type { ProgressWindow, SessionFeedbackKind } from '@cadence/shared';
+import type { ProgressWindow, RepertoireItem, RepertoireStatus, SessionFeedbackKind } from '@cadence/shared';
+import { qualifierMeta } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { isMeal } from '../services/nutrition-parse.ts';
 import { getShelf } from '../services/progress-nontemporal-shelf.ts';
@@ -17,6 +18,14 @@ import { getRepertoireCard } from '../services/progress-nontemporal-repertoire.t
 import { getFeltWeeks } from '../services/progress-felt-weeks.ts';
 import { getThenNow } from '../services/progress-then-now.ts';
 import { resolveWindowRange } from '../services/window-range.ts';
+import {
+  deleteRepertoireItem,
+  renameRepertoireItem,
+  RepertoireRenameConflictError,
+  updateRepertoireItem,
+} from '../repos/repertoire.ts';
+import { invalidateSessionsFor } from '../services/repertoire-practice.ts';
+import { parseBody, patchRepertoireItemBodySchema, BodyValidationError } from '../validation/body.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -168,6 +177,71 @@ router.get('/count', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /progress/count]', err);
     res.status(500).json({ error: 'failed to load count' });
+  }
+});
+
+/*
+ * PATCH/DELETE /progress/repertoire/:id — the item screen (P2: the item, opened). Deterministic
+ * throughout: no coach call, no AI. Two repo writes because the screen itself makes two
+ * independent choices (label/qualifiers commit together on "Save the name"; the standing control
+ * acts on its own), but the route accepts either or both in one call since the API contract is
+ * "any of label, composer, collection, catalogue, status".
+ */
+
+/** PATCH /progress/repertoire/:id — rename, edit the qualifiers, and/or flip the standing. */
+router.patch('/repertoire/:id', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const itemId = req.params.id as string;
+  try {
+    const body = parseBody(patchRepertoireItemBodySchema, req.body);
+    let row: RepertoireItem | null = null;
+
+    if (body.label !== undefined) {
+      try {
+        row = await renameRepertoireItem(userId, itemId, body.label);
+      } catch (err) {
+        if (err instanceof RepertoireRenameConflictError) {
+          return void res.status(409).json({ error: err.message });
+        }
+        throw err;
+      }
+      if (!row) return void res.status(404).json({ error: 'repertoire item not found' });
+    }
+
+    const meta = qualifierMeta({ composer: body.composer, collection: body.collection, catalogue: body.catalogue });
+    const status = body.status as RepertoireStatus | undefined;
+    if (status !== undefined || Object.keys(meta).length > 0) {
+      row = await updateRepertoireItem(userId, itemId, { status, meta: Object.keys(meta).length ? meta : undefined });
+      if (!row) return void res.status(404).json({ error: 'repertoire item not found' });
+    }
+    if (!row) return void res.status(404).json({ error: 'repertoire item not found' });
+
+    // A rename desyncs a cached prescription's text (it no longer matches the piece's new
+    // spelling); a standing leaving 'known' should stop being offered as due — same invalidation
+    // the coach's own write path runs after every repertoire change (repertoire-practice.ts).
+    if (row.goal_id) await invalidateSessionsFor(userId, [row]).catch(() => undefined);
+
+    res.json(row);
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[PATCH /progress/repertoire/:id]', err);
+    res.status(500).json({ error: 'failed to update repertoire item' });
+  }
+});
+
+/** DELETE /progress/repertoire/:id — a real delete, distinct from retiring: the row is gone, its
+ *  sessions and logs keep their own text, only the link disappears. */
+router.delete('/repertoire/:id', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  const itemId = req.params.id as string;
+  try {
+    const deleted = await deleteRepertoireItem(userId, itemId);
+    if (!deleted) return void res.status(404).json({ error: 'repertoire item not found' });
+    if (deleted.goal_id) await invalidateSessionsFor(userId, [deleted]).catch(() => undefined);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DELETE /progress/repertoire/:id]', err);
+    res.status(500).json({ error: 'failed to delete repertoire item' });
   }
 });
 

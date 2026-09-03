@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ambiguousNeedles,
+  canonicalLabel,
   collidingTitles,
   findItemForTitle,
   isResolvable,
@@ -21,6 +22,7 @@ import {
   renderRepertoireForCoach,
 } from './repertoire-practice.ts';
 import type { RepertoireItem } from '@cadence/shared';
+import { COMPOSER_KEY, CATALOGUE_KEY, COLLECTION_KEY } from '@cadence/shared';
 
 const PIANO = 'goal-piano';
 
@@ -133,6 +135,79 @@ describe('isResolvable — no row that can never be found again', () => {
 
   it('allows an ordinary new piece', () => {
     expect(isResolvable(shelf, 'Für Elise, WoO 59')).toBe(true);
+  });
+});
+
+/**
+ * The qualifier does the work the label text used to have to do alone (owner design 2026-09-02,
+ * the item screen's COMPOSER/CATALOGUE NO./COLLECTION fields).
+ *
+ * Two BARE labels can never sit on the shelf sharing one needle in the first place — `needles()`
+ * only produces two DIFFERENT forms (full vs core) when the label itself carries a parenthetical,
+ * a comma clause, or a "by …"; two plain strings share a needle only by being the very same
+ * string, which `samePiece` already excludes as a re-mention of itself (the case just above). So
+ * the shape that actually needs a qualifier's help is a SHORT new label meeting an ALREADY-QUALIFIED
+ * on-file item whose qualifying fact ALSO rides in `meta` — the item screen's own fields, not a
+ * parenthetical typed into the name. `onFile` below keeps its catalogue number in the label (like
+ * the rest of Book 2) purely so it shares a needle with the bare incoming title; the fact doing
+ * the actual distinguishing is its `meta.composer`.
+ */
+describe('a qualifier resolves a collision the label text alone could not', () => {
+  const onFile = {
+    label: 'Minuet in G Major, no. 2',
+    meta: { [COMPOSER_KEY]: 'Petzold' },
+  } as unknown as RepertoireItem;
+
+  it('is resolvable when the new short title states a composer the on-file item disagrees with', () => {
+    expect(isResolvable([onFile], 'Minuet in G Major', { [COMPOSER_KEY]: 'Bach' })).toBe(true);
+  });
+
+  it('is NOT resolvable when the new title states no qualifier at all — a bare mention decides nothing', () => {
+    expect(isResolvable([onFile], 'Minuet in G Major')).toBe(false);
+  });
+
+  it('is NOT resolvable when the stated composer AGREES — agreement is evidence they are the same piece', () => {
+    expect(isResolvable([onFile], 'Minuet in G Major', { [COMPOSER_KEY]: 'Petzold' })).toBe(false);
+  });
+
+  it('a catalogue number distinguishes just as well as a composer', () => {
+    const byCatalogue = {
+      label: 'Minuet in G Major, no. 2',
+      meta: { [CATALOGUE_KEY]: 'BWV 822' },
+    } as unknown as RepertoireItem;
+    expect(isResolvable([byCatalogue], 'Minuet in G Major', { [CATALOGUE_KEY]: 'BWV Anh. 114' })).toBe(true);
+    expect(isResolvable([byCatalogue], 'Minuet in G Major', { [CATALOGUE_KEY]: 'BWV 822' })).toBe(false);
+  });
+
+  it('a collection distinguishes too, and a DIFFERENT qualifier key states nothing either way', () => {
+    const byCollection = {
+      label: 'Minuet in G Major, no. 2',
+      meta: { [COLLECTION_KEY]: 'Notebook for Anna Magdalena Bach' },
+    } as unknown as RepertoireItem;
+    expect(isResolvable([byCollection], 'Minuet in G Major', { [COLLECTION_KEY]: 'Suzuki Book 2' })).toBe(true);
+    // Stating a composer says nothing about the collection the on-file item claims — no field is
+    // even compared, so this reads as unqualified: the needle is still shared by something that
+    // cannot be told apart from it.
+    expect(isResolvable([byCollection], 'Minuet in G Major', { [COMPOSER_KEY]: 'Bach' })).toBe(false);
+  });
+
+  it('still refuses a bare title that collides on the plain Book 2 shelf, unqualified', () => {
+    // Sanity check against the real fixture above: nothing here weakens the ordinary case where
+    // no meta is in play at all.
+    expect(isResolvable(shelf, 'Minuet in G Major')).toBe(false);
+  });
+
+  it('canonicalLabel keeps an incoming spelling apart from a samePiece match once a qualifier disagrees', () => {
+    const onFile = [{ label: 'Étude', meta: { [COMPOSER_KEY]: 'Debussy' } } as unknown as RepertoireItem];
+    // Same normalized text (accent-folded), but a stated, disagreeing composer — this is a
+    // different piece, so the incoming (unaccented) spelling must stand on its own.
+    expect(canonicalLabel(onFile, 'Etude', { [COMPOSER_KEY]: 'Chopin' })).toBe('Etude');
+  });
+
+  it('canonicalLabel still folds the accent-variant spelling when nothing disagrees', () => {
+    const onFile = [{ label: 'Étude', meta: { [COMPOSER_KEY]: 'Debussy' } } as unknown as RepertoireItem];
+    expect(canonicalLabel(onFile, 'Etude', { [COMPOSER_KEY]: 'Debussy' })).toBe('Étude');
+    expect(canonicalLabel(onFile, 'Etude')).toBe('Étude');
   });
 });
 

@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import type { RepertoireStatus } from '@cadence/shared';
 
 export class BodyValidationError extends Error {
   constructor(message: string) {
@@ -297,6 +298,65 @@ export const settledTempoBodySchema = z.object({
   bpm: z.number().finite({ message: 'bpm must be a number' }),
   meter: z.number().finite().optional(),
 });
+
+/** The four standings a PATCH may set — `satisfies` fails to compile the day RepertoireStatus
+ *  gains or drops a member this array does not match, so the schema can never quietly drift from
+ *  the type the rest of the app writes (CLAUDE.md: derive unions from arrays, never hand-copy). */
+const REPERTOIRE_STANDINGS = ['queued', 'working', 'known', 'retired'] as const satisfies readonly RepertoireStatus[];
+
+/**
+ * `PATCH /progress/repertoire/:id` — the item screen's save path for the name fields and the
+ * qualifiers, and the standing control's own immediate write (each of the four fields, and
+ * `status`, may arrive alone or together). At least one field is required — an empty body is
+ * never a legitimate call.
+ *
+ * `status` rejects "learned" and "parked" BY NAME rather than folding them into one generic enum
+ * error, because they are the two words someone reaching for a standing here is likeliest to
+ * type, and each is wrong for a different reason. "learned" is the COACH's verb for a piece
+ * crossing into Keeping up just now — it stamps `learned_at` and writes a goal event, so writing
+ * it from this screen would claim a celebration that never happened; "known" is the standing to
+ * set instead, silently. "parked" was retired outright with the old three-state scheme (migration
+ * 0054) — there is no "set aside" any more, a paused piece is simply `queued` and keeps its dates.
+ */
+export const patchRepertoireItemBodySchema = z
+  .object({
+    label: z.string().trim().min(1, { message: 'label, when given, must not be blank' }).max(120).optional(),
+    composer: z.string().trim().min(1, { message: 'composer, when given, must not be blank' }).max(120).optional(),
+    collection: z.string().trim().min(1, { message: 'collection, when given, must not be blank' }).max(120).optional(),
+    catalogue: z.string().trim().min(1, { message: 'catalogue, when given, must not be blank' }).max(120).optional(),
+    status: z.string().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.status === 'learned') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message:
+          '"learned" is the coach\'s word for a piece crossing into Keeping up just now, not a standing set here — choose "known" and it keeps its dates quietly.',
+      });
+    } else if (val.status === 'parked') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: '"parked" is gone — pause a piece by setting it back to "queued"; either way it keeps its history.',
+      });
+    } else if (val.status !== undefined && !(REPERTOIRE_STANDINGS as readonly string[]).includes(val.status)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: `status must be one of: ${REPERTOIRE_STANDINGS.join(', ')}`,
+      });
+    }
+    if (
+      val.label === undefined &&
+      val.composer === undefined &&
+      val.collection === undefined &&
+      val.catalogue === undefined &&
+      val.status === undefined
+    ) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'nothing to update' });
+    }
+  });
 
 export const episodeEnterBodySchema = z.object({
   type: z.enum(['travel', 'illness', 'injury', 'recovery', 'custom'], {
