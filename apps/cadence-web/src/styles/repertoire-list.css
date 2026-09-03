@@ -1,0 +1,268 @@
+/* ── "What I'm learning" — the list screen (.rl-*, P6 "the room") ────────────────────────────
+ * Placement around families that already exist rather than a new grammar: the screen shell is
+ * `.js`/`.js-bar`/`.jw-back`/`.screen-title`/`.scrollbody` (repertoire-item.css's own precedent),
+ * the header count line is `.pw-head-tag` (seed-review.css's own precedent), the collision card is
+ * `.ri-collision` reused whole (repertoire-item.css), the doors are `.sheet-*`/`.ld-row` and the
+ * goal chips are `.detour-chip` (styles.css). This file holds only what none of those cover: the
+ * four group headers, the row's own mark/standing/menu, and the empty state's layout.
+ *
+ * Tones: Learning wears `--sun`, Up next wears `--dusk` (both brand-canonical, styles.css). Keeping
+ * up wears the "practice" family's plum, `oklch(48% 0.06 320)` — the SAME value the repertoire
+ * card's own learned-mark already uses (progress-widgets.css `.pw-rep-mark--learned`), not a new
+ * plum invented for this screen. Learned wears `--text-mute` — "grey, dated, quiet" by design.
+ */
+
+.rl-add-btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rl-goalname {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+  margin: 4px 0 2px;
+}
+
+.rl-counts {
+  margin-bottom: 14px;
+}
+
+/* ── Groups ──────────────────────────────────────────────────────────────────────────────── */
+.rl-group {
+  margin-bottom: 22px;
+}
+.rl-group-head {
+  margin-bottom: 8px;
+}
+.rl-group-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.rl-group-count {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-mute);
+  margin-left: 4px;
+}
+.rl-group-instruction {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-mute);
+  margin-top: 2px;
+}
+.rl-group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rl-row-slot {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A hairline label for material this group holds that is not tied to any goal — same visual
+   grammar as a group name, quieter, and never its own group. */
+.rl-hairline {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  margin: 10px 0 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.rl-group-unattached {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── One row ─────────────────────────────────────────────────────────────────────────────── */
+.rl-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rl-group-rows > .rl-row-slot:last-child > .rl-row,
+.rl-group-unattached > .rl-row-slot:last-child > .rl-row {
+  border-bottom: none;
+}
+.rl-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 2px 0;
+}
+.rl-mark {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.rl-mark--working {
+  background: var(--sun);
+}
+.rl-mark--queued {
+  background: var(--dusk);
+}
+.rl-mark--known {
+  background: oklch(48% 0.06 320);
+}
+.rl-mark--retired {
+  background: var(--text-mute);
+}
+.rl-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rl-row-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rl-row-sub {
+  font-size: 11.5px;
+  color: var(--text-mute);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rl-row-standing {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-mute);
+  padding-left: 6px;
+}
+
+/* ── The ⋯ menu: standing change always, Up next reorder when the caller wires it in ───────── */
+.rl-row-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.rl-row-more {
+  background: none;
+  border: none;
+  color: var(--text-mute);
+  font-size: 16px;
+  padding: 4px 6px;
+  line-height: 1;
+}
+.rl-row-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  min-width: 168px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px -8px rgba(44, 40, 32, 0.3);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.rl-row-menu-item {
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+.rl-row-menu-item:disabled {
+  opacity: 0.4;
+}
+.rl-row-menu-item:not(:disabled):hover {
+  background: var(--ink-2);
+}
+.rl-row-menu-sep {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 4px 2px;
+}
+
+/* ── The collision card — `.ri-collision`'s butter styling, plus only what differs here ────── */
+.rl-collision {
+  margin: 2px 0 8px;
+}
+.rl-collision-cta {
+  display: block;
+  margin-top: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: oklch(38% 0.07 70);
+  text-decoration: underline;
+}
+
+/* ── The doors' plain chevron (navigational rows, never an "add" glyph) ────────────────────── */
+.rl-chevron {
+  flex: 0 0 auto;
+  color: var(--text-mute);
+  font-size: 18px;
+}
+
+/* ── Empty state (design frame 1d) ──────────────────────────────────────────────────────────── */
+.rl-empty {
+  padding-top: 8px;
+}
+.rl-empty-headline {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.3;
+  margin-bottom: 18px;
+}
+.rl-empty-field {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.rl-empty-input {
+  font-size: 16px;
+  padding: 11px 13px;
+}
+.rl-empty-promise {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-mute);
+  margin: 8px 0 12px;
+}
+.rl-empty-goals {
+  margin-top: 18px;
+}
