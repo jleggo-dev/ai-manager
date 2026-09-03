@@ -20,6 +20,7 @@ const deleteRepertoireItem = vi.fn();
 const listRepertoire = vi.fn(async (..._a: unknown[]): Promise<unknown[]> => []);
 const invalidateSessionsFor = vi.fn(async (..._a: unknown[]) => {});
 const collidingTitles = vi.fn(() => []);
+const listCollections = vi.fn(async (..._a: unknown[]): Promise<unknown[]> => []);
 
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
@@ -38,6 +39,9 @@ vi.mock('../repos/repertoire.ts', () => ({
   updateRepertoireItem: (...a: unknown[]) => updateRepertoireItem(...a),
   deleteRepertoireItem: (...a: unknown[]) => deleteRepertoireItem(...a),
   listRepertoire: (...a: unknown[]) => listRepertoire(...a),
+}));
+vi.mock('../repos/repertoire-collections.ts', () => ({
+  listCollections: (...a: unknown[]) => listCollections(...a),
 }));
 vi.mock('../services/repertoire-practice.ts', () => ({
   invalidateSessionsFor: (...a: unknown[]) => invalidateSessionsFor(...a),
@@ -78,6 +82,8 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
     status: 'known',
     kind: 'piece',
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-01-01T00:00:00Z',
     learned_at: null,
     last_practiced_at: null,
@@ -87,6 +93,7 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listCollections.mockResolvedValue([]);
 });
 
 describe('PATCH /progress/repertoire/:id — validation (near-misses before the repo is ever called)', () => {
@@ -144,88 +151,89 @@ describe('PATCH /progress/repertoire/:id — validation (near-misses before the 
 });
 
 /**
- * The collections list, and the fold that keeps it meaning something (owner ruling 2026-09-03: *"a
- * collection only works if it's not free-text"*). The item screen offers what is already on the
- * shelf; a name typed anyway is folded onto the spelling that is there.
+ * The collection, by id (P11, migration 0056). It stopped being a NAME on the item: the item
+ * carries `collection_id` and reads `collection_name` back, so renaming a collection renames it
+ * everywhere at once and two spellings cannot become two groups.
  *
- * Silent failure both ways, which is why both halves are pinned: a fold that is too loose files an
- * item under a collection nobody chose, and no fold at all leaves "Suzuki Book 2" and "suzuki
- * book 2" sitting beside each other as two groups that will never merge.
+ * Three cases, and all three fail silently if the route gets them wrong — the wrong value saves,
+ * the screen looks right, and the person finds the item in the wrong place (or in none) later:
+ * omitted leaves the item where it is, a uuid files it, and an explicit null takes it out.
  */
-describe('GET /progress/repertoire/items — the collections already in use', () => {
-  const withCollection = (id: string, collection: string) =>
-    item({ item_id: id, meta: { collection } as Record<string, unknown> });
-
-  it('lists each one once, most-used first', async () => {
-    listRepertoire.mockResolvedValue([
-      withCollection('a', 'ABRSM Grade 3'),
-      withCollection('b', 'Suzuki Book 2'),
-      withCollection('c', 'Suzuki Book 2'),
-      withCollection('d', 'ABRSM Grade 3'),
-      withCollection('e', 'Suzuki Book 2'),
-      withCollection('f', 'Shotokan kata'),
-    ]);
-    const r = await call('GET', '/progress/repertoire/items');
-    expect(r.status).toBe(200);
-    expect(r.body.collections).toEqual(['Suzuki Book 2', 'ABRSM Grade 3', 'Shotokan kata']);
-  });
-
-  it('is an empty list when nothing carries one — never absent', async () => {
-    listRepertoire.mockResolvedValue([item()]);
-    const r = await call('GET', '/progress/repertoire/items');
-    expect(r.body.collections).toEqual([]);
-  });
-
-  /** Scoped reads narrow the ITEMS, never the collections: a book kept under another goal is still
-   *  a group this person uses, and the screen must be able to offer it. */
-  it('reads collections off the whole shelf even when the items are scoped to one goal', async () => {
-    listRepertoire.mockResolvedValue([
-      item({ item_id: 'a', goal_id: 'g-piano', meta: { collection: 'Suzuki Book 2' } as Record<string, unknown> }),
-      item({ item_id: 'b', goal_id: 'g-karate', meta: { collection: 'Shotokan kata' } as Record<string, unknown> }),
-    ]);
-    const r = await call('GET', '/progress/repertoire/items?goal_id=g-piano');
-    expect((r.body.items as unknown[]).length).toBe(1);
-    expect(r.body.collections).toEqual(['Shotokan kata', 'Suzuki Book 2']);
-  });
-});
-
-describe('PATCH /progress/repertoire/:id — a typed collection folds onto the one on file', () => {
+describe('PATCH /progress/repertoire/:id — the collection', () => {
   beforeEach(() => {
-    listRepertoire.mockResolvedValue([item({ meta: { collection: 'Suzuki Book 2' } as Record<string, unknown> })]);
     updateRepertoireItem.mockResolvedValue(item());
   });
 
-  it.each([['suzuki book 2'], ['SUZUKI BOOK 2'], ['  Suzuki Book 2  ']])(
-    'saves %j as the spelling already on the shelf',
-    async (typed) => {
-      await call('PATCH', '/progress/repertoire/it-1', { collection: typed });
-      expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
-        status: undefined,
-        meta: { collection: 'Suzuki Book 2' },
-      });
-    },
-  );
-
-  it('a genuinely new name is stored as typed — the fold is a spelling guard, not a matcher', async () => {
-    await call('PATCH', '/progress/repertoire/it-1', { collection: 'ABRSM Grade 3' });
-    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
-      status: undefined,
-      meta: { collection: 'ABRSM Grade 3' },
+  it('files the item into the collection whose id was sent', async () => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', {
+      collection_id: '11111111-1111-4111-8111-111111111111',
     });
-  });
-
-  it('a shelf it could not read stores the name as typed rather than dropping the edit', async () => {
-    listRepertoire.mockRejectedValue(new Error('db down'));
-    const r = await call('PATCH', '/progress/repertoire/it-1', { collection: 'suzuki book 2' });
     expect(r.status).toBe(200);
     expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
       status: undefined,
-      meta: { collection: 'suzuki book 2' },
+      meta: undefined,
+      collection_id: '11111111-1111-4111-8111-111111111111',
     });
   });
 
-  it('reads the shelf only when a collection is actually being written', async () => {
+  /** "None" on the item screen. `null` has to reach the repo as null, not as "leave it alone" —
+   *  otherwise nothing can ever be taken out of a collection again. */
+  it('an explicit null takes it out of every collection', async () => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', { collection_id: null });
+    expect(r.status).toBe(200);
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: undefined,
+      meta: undefined,
+      collection_id: null,
+    });
+  });
+
+  it('omitting it leaves the row where it is — the field is not sent at all', async () => {
     await call('PATCH', '/progress/repertoire/it-1', { note: 'bars 9-16' });
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: undefined,
+      meta: { practice_note: 'bars 9-16' },
+    });
+  });
+
+  it('rides alongside a standing change and the qualifiers in one write', async () => {
+    await call('PATCH', '/progress/repertoire/it-1', {
+      status: 'known',
+      composer: 'Hummel',
+      collection_id: '22222222-2222-4222-8222-222222222222',
+    });
+    expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
+      status: 'known',
+      meta: { composer: 'Hummel' },
+      collection_id: '22222222-2222-4222-8222-222222222222',
+    });
+  });
+
+  /** The near-misses a client can actually produce: a name where an id belongs, a blank, and the
+   *  old field. Each must be refused rather than half-written — a name silently ignored would look
+   *  like the collection saved and quietly leave the item ungrouped. */
+  it.each([
+    ['Suzuki Book 2', 'a name where an id belongs'],
+    ['', 'a blank'],
+    ['not-a-uuid', 'a wrong-shaped id'],
+  ])('rejects collection_id %j (%s)', async (collection_id: string, _why: string) => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', { collection_id });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/collection_id must be a uuid/);
+    expect(updateRepertoireItem).not.toHaveBeenCalled();
+  });
+
+  it('treats a collection-by-name body as nothing to update — the field is gone', async () => {
+    const r = await call('PATCH', '/progress/repertoire/it-1', { collection: 'Suzuki Book 2' });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/nothing to update/i);
+    expect(updateRepertoireItem).not.toHaveBeenCalled();
+  });
+
+  it('never reads the shelf to work a collection out any more', async () => {
+    await call('PATCH', '/progress/repertoire/it-1', {
+      collection_id: '11111111-1111-4111-8111-111111111111',
+    });
     expect(listRepertoire).not.toHaveBeenCalled();
   });
 });
@@ -253,18 +261,18 @@ describe('PATCH /progress/repertoire/:id — rename', () => {
     expect(r.status).toBe(404);
   });
 
-  it('sends composer/collection/description as one merged meta patch alongside a status change', async () => {
+  it('sends composer/description/note as one merged meta patch alongside a status change', async () => {
     updateRepertoireItem.mockResolvedValue(item());
     const r = await call('PATCH', '/progress/repertoire/it-1', {
       composer: 'Debussy',
-      collection: 'Suite bergamasque',
       description: 'the moonlight one',
+      note: 'the middle section',
       status: 'retired',
     });
     expect(r.status).toBe(200);
     expect(updateRepertoireItem).toHaveBeenCalledWith('u1', 'it-1', {
       status: 'retired',
-      meta: { composer: 'Debussy', collection: 'Suite bergamasque', description: 'the moonlight one' },
+      meta: { composer: 'Debussy', description: 'the moonlight one', practice_note: 'the middle section' },
     });
   });
 

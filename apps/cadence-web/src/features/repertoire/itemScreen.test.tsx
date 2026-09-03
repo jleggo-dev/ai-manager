@@ -9,15 +9,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { RepertoireItem } from '@cadence/shared';
+import type { RepertoireCollection, RepertoireItem } from '@cadence/shared';
 import { ItemScreen, COLLISION_NOTICE } from './ItemScreen.tsx';
 import { REMOVE_CONSEQUENCE } from './ItemRemove.tsx';
+import { FIELD_HINTS } from './itemFieldCopy.ts';
+import { COLLECTION_NAME_HINT, MANAGE_COLLECTIONS } from './collectionsCopy.ts';
 
 const patchRepertoireItem = vi.hoisted(() => vi.fn());
 const deleteRepertoireItem = vi.hoisted(() => vi.fn());
+const addCollection = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/api/repertoire-item.ts', () => ({
   patchRepertoireItem: (...a: unknown[]) => patchRepertoireItem(...a),
   deleteRepertoireItem: (...a: unknown[]) => deleteRepertoireItem(...a),
+}));
+vi.mock('../../lib/api/repertoire-collections.ts', () => ({
+  addCollection: (...a: unknown[]) => addCollection(...a),
 }));
 
 function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
@@ -29,6 +35,8 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
     status: 'known',
     kind: 'piece',
     meta: { composer: 'Debussy' },
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-01-05T09:00:00Z',
     learned_at: '2026-03-14T09:00:00Z',
     last_practiced_at: '2026-08-29T18:00:00Z',
@@ -39,6 +47,7 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
 beforeEach(() => {
   patchRepertoireItem.mockReset();
   deleteRepertoireItem.mockReset();
+  addCollection.mockReset();
   vi.restoreAllMocks();
 });
 
@@ -57,6 +66,7 @@ describe('rename', () => {
     expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
       label: 'Clair de lune (easier arrangement)',
       composer: 'Debussy',
+      collection_id: null,
     });
     expect(await screen.findByText('Clair de lune (easier arrangement)')).toBeInTheDocument();
   });
@@ -102,6 +112,7 @@ describe('the practice note', () => {
     expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
       label: 'Clair de lune',
       composer: 'Debussy',
+      collection_id: null,
       note: 'bars 9-16',
     });
   });
@@ -116,7 +127,11 @@ describe('the practice note', () => {
     patchRepertoireItem.mockResolvedValue(item());
     render(<ItemScreen item={item()} onBack={() => {}} />);
     await user.click(screen.getByRole('button', { name: 'Save the name' }));
-    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', { label: 'Clair de lune', composer: 'Debussy' });
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection_id: null,
+    });
   });
 
   it('is not the tempo field — it stays editable for a piece that already has a settled tempo', () => {
@@ -128,99 +143,174 @@ describe('the practice note', () => {
 });
 
 /**
- * The Collection control — a select, not a text box (owner ruling 2026-09-03: *"a collection only
- * works if it's not free-text"*). Typing a name is how groups drift: "Suzuki Book 2", "Suzuki
- * book 2" and "suzuki bk 2" are three groups where the person meant one, and nothing on any screen
- * ever shows them that.
+ * The Collection control — a picker over the person's collections, and it picks an ID (P11,
+ * migration 0056). Never a text box (owner ruling 2026-09-03: *"a collection only works if it's not
+ * free-text"*): typing a name is how groups drift — "Suzuki Book 2", "Suzuki book 2" and "suzuki bk
+ * 2" are three groups where the person meant one, and nothing on any screen ever shows them that.
  *
  * A table, because every case here fails silently — the wrong value saves, the screen looks right,
- * and the person finds two collections a week later with no way to merge them.
+ * and the person finds the item in the wrong collection (or in none) a week later.
  */
-describe('the collection select', () => {
-  const withCollections = (collections: string[], over: Partial<RepertoireItem> = {}) =>
+describe('the collection picker', () => {
+  const BOOK2 = { collection_id: 'c-1', name: 'Suzuki Piano Book 2', item_count: 12 };
+  const KATA = { collection_id: 'c-2', name: 'Shotokan kata syllabus', item_count: 27 };
+
+  const withCollections = (collections: RepertoireCollection[], over: Partial<RepertoireItem> = {}) =>
     render(<ItemScreen item={item(over)} collections={collections} onBack={() => {}} />);
 
-  it('offers None, every collection on the shelf, and one way to add a new name', () => {
-    withCollections(['Suzuki Piano Book 2', 'Shotokan kata syllabus']);
-    const options = [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
-    expect(options).toEqual(['None', 'Suzuki Piano Book 2', 'Shotokan kata syllabus', 'Add a collection…']);
+  const optionTexts = () =>
+    [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
+
+  it('offers None, every collection they have, and one way to add a new name', () => {
+    withCollections([BOOK2, KATA]);
+    expect(optionTexts()).toEqual(['None', 'Suzuki Piano Book 2', 'Shotokan kata syllabus', 'Add a collection…']);
   });
 
-  it('starts on the collection this item already has', () => {
-    withCollections(['Suzuki Piano Book 2'], { meta: { composer: 'Debussy', collection: 'Suzuki Piano Book 2' } });
-    expect(screen.getByLabelText('Collection')).toHaveValue('Suzuki Piano Book 2');
+  it('offers "Manage collections…" only when there is a screen to open', () => {
+    const { unmount } = withCollections([BOOK2]);
+    expect(screen.queryByRole('option', { name: MANAGE_COLLECTIONS })).not.toBeInTheDocument();
+    unmount();
+    render(<ItemScreen item={item()} collections={[BOOK2]} onManageCollections={() => {}} onBack={() => {}} />);
+    expect(screen.getByRole('option', { name: MANAGE_COLLECTIONS })).toBeInTheDocument();
   });
 
-  /** A goal-scoped read can return a shelf that does not include this item's own collection. The
-   *  select must still show it — silently dropping the value would read as "you never chose one". */
-  it("keeps this item's own collection in the list even when the shelf read did not carry it", () => {
-    withCollections(['Shotokan kata syllabus'], { meta: { composer: 'Debussy', collection: 'A Private Book' } });
-    const options = [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
-    expect(options).toContain('A Private Book');
-    expect(screen.getByLabelText('Collection')).toHaveValue('A Private Book');
+  it('choosing "Manage collections…" opens the screen and never becomes the collection', async () => {
+    const user = userEvent.setup();
+    const onManageCollections = vi.fn();
+    patchRepertoireItem.mockResolvedValue(item());
+    render(
+      <ItemScreen
+        item={item({ collection_id: 'c-1', collection_name: 'Suzuki Piano Book 2' })}
+        collections={[BOOK2]}
+        onManageCollections={onManageCollections}
+        onBack={() => {}}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText('Collection'), MANAGE_COLLECTIONS);
+    expect(onManageCollections).toHaveBeenCalled();
+    expect(screen.getByLabelText('Collection')).toHaveValue('c-1');
   });
 
-  it('saves the one that was picked', async () => {
+  it('starts on the collection this item is already in', () => {
+    withCollections([BOOK2], { collection_id: 'c-1', collection_name: 'Suzuki Piano Book 2' });
+    expect(screen.getByLabelText('Collection')).toHaveValue('c-1');
+  });
+
+  /** A stale list read can come back without this item's own collection. The picker must still show
+   *  it — silently dropping the value would read as "you never chose one". */
+  it("keeps this item's own collection in the list even when the read did not carry it", () => {
+    withCollections([KATA], { collection_id: 'c-9', collection_name: 'A Private Book' });
+    expect(optionTexts()).toContain('A Private Book');
+    expect(screen.getByLabelText('Collection')).toHaveValue('c-9');
+  });
+
+  it('saves the id of the one that was picked, never its name', async () => {
     const user = userEvent.setup();
     patchRepertoireItem.mockResolvedValue(item());
-    withCollections(['Suzuki Piano Book 2', 'Shotokan kata syllabus']);
-    await user.selectOptions(screen.getByLabelText('Collection'), 'Shotokan kata syllabus');
+    withCollections([BOOK2, KATA]);
+    await user.selectOptions(screen.getByLabelText('Collection'), 'c-2');
     await user.click(screen.getByRole('button', { name: 'Save the name' }));
     expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
       label: 'Clair de lune',
       composer: 'Debussy',
-      collection: 'Shotokan kata syllabus',
+      collection_id: 'c-2',
     });
   });
 
-  it('reveals a text field for a new name, and saves what was typed', async () => {
+  /** None is a real state, not an absent field: `collection_id: null` is what takes an item out of
+   *  a collection, and omitting it would make that impossible to say. */
+  it('None saves collection_id null, so an item can leave a collection', async () => {
     const user = userEvent.setup();
     patchRepertoireItem.mockResolvedValue(item());
-    withCollections(['Suzuki Piano Book 2']);
-    expect(screen.queryByLabelText('Add a collection…')).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Collection'), 'Add a collection…');
-    await user.type(screen.getByLabelText('Add a collection…'), 'ABRSM Grade 3');
-    await user.click(screen.getByRole('button', { name: 'Save the name' }));
-    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
-      label: 'Clair de lune',
-      composer: 'Debussy',
-      collection: 'ABRSM Grade 3',
-    });
-  });
-
-  it('None sends no collection at all — never an empty string', async () => {
-    const user = userEvent.setup();
-    patchRepertoireItem.mockResolvedValue(item());
-    withCollections(['Suzuki Piano Book 2'], { meta: { composer: 'Debussy', collection: 'Suzuki Piano Book 2' } });
+    withCollections([BOOK2], { collection_id: 'c-1', collection_name: 'Suzuki Piano Book 2' });
     await user.selectOptions(screen.getByLabelText('Collection'), 'None');
     await user.click(screen.getByRole('button', { name: 'Save the name' }));
-    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', { label: 'Clair de lune', composer: 'Debussy' });
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection_id: null,
+    });
+  });
+
+  it('an item in none saves null without being touched', async () => {
+    const user = userEvent.setup();
+    patchRepertoireItem.mockResolvedValue(item());
+    withCollections([BOOK2]);
+    await user.click(screen.getByRole('button', { name: 'Save the name' }));
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection_id: null,
+    });
   });
 
   /**
-   * A name typed in the "add" box that already exists, differently cased, is folded onto the
-   * spelling on file — but SERVER-side (`collapseCollection`), because this control is not the only
-   * writer: the coach and the seed confirm write collections too. What the screen must do is send
-   * exactly what was typed, so the one fold happens in the one place.
+   * "Add a collection…" makes the collection through the API BEFORE the item is saved, then selects
+   * it. Carrying a typed name until the item's own save would need a second way for a collection to
+   * come into existence, and would surface a duplicate as a failure to save the item.
    */
-  it('sends a typed duplicate through as typed — the server owns the fold', async () => {
+  it('adds a new collection through the API and selects it', async () => {
     const user = userEvent.setup();
+    addCollection.mockResolvedValue({
+      ok: true,
+      collection: { collection_id: 'c-new', name: 'ABRSM Grade 3', item_count: 0 },
+    });
     patchRepertoireItem.mockResolvedValue(item());
-    withCollections(['Suzuki Piano Book 2']);
+    withCollections([BOOK2]);
+    expect(screen.queryByLabelText('Collection name')).not.toBeInTheDocument();
+
     await user.selectOptions(screen.getByLabelText('Collection'), 'Add a collection…');
-    await user.type(screen.getByLabelText('Add a collection…'), '  suzuki piano book 2  ');
+    await user.type(screen.getByLabelText('Collection name'), 'ABRSM Grade 3');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(addCollection).toHaveBeenCalledWith('ABRSM Grade 3');
+    expect(await screen.findByRole('option', { name: 'ABRSM Grade 3' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Collection')).toHaveValue('c-new');
+
     await user.click(screen.getByRole('button', { name: 'Save the name' }));
     expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
       label: 'Clair de lune',
       composer: 'Debussy',
-      collection: 'suzuki piano book 2',
+      collection_id: 'c-new',
     });
   });
 
-  it('an empty shelf still offers None and the way to add one', () => {
+  it('the Add button stays disabled until something is typed', async () => {
+    const user = userEvent.setup();
+    withCollections([BOOK2]);
+    await user.selectOptions(screen.getByLabelText('Collection'), 'Add a collection…');
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Collection name'), '   ');
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(addCollection).not.toHaveBeenCalled();
+  });
+
+  /** A name they already have is refused by the server, which names the spelling on file — the
+   *  screen shows that sentence rather than a generic failure, because it is the only one that
+   *  knows which collection they collided with. */
+  it("shows the server's own sentence when the name is already theirs, and adds nothing", async () => {
+    const user = userEvent.setup();
+    addCollection.mockResolvedValue({
+      ok: false,
+      fault: 'You already have a collection called "Suzuki Piano Book 2".',
+    });
+    withCollections([BOOK2]);
+    await user.selectOptions(screen.getByLabelText('Collection'), 'Add a collection…');
+    await user.type(screen.getByLabelText('Collection name'), 'suzuki piano book 2');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('You already have a collection called "Suzuki Piano Book 2".')).toBeInTheDocument();
+    expect(screen.getByLabelText('Collection')).toHaveValue('Add a collection…');
+  });
+
+  it('a person with none still gets None and the way to add one', () => {
     withCollections([]);
-    const options = [...screen.getByLabelText('Collection').querySelectorAll('option')].map((o) => o.textContent);
-    expect(options).toEqual(['None', 'Add a collection…']);
+    expect(optionTexts()).toEqual(['None', 'Add a collection…']);
+  });
+
+  it("states what the field is for, in the owner's words", () => {
+    withCollections([BOOK2]);
+    expect(screen.getByText(FIELD_HINTS.collection)).toBeInTheDocument();
+    expect(screen.queryByText(COLLECTION_NAME_HINT)).not.toBeInTheDocument();
   });
 });
 
@@ -238,6 +328,7 @@ describe('the description', () => {
     expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
       label: 'Clair de lune',
       composer: 'Debussy',
+      collection_id: null,
       description: 'the fast one in G',
     });
   });
@@ -254,7 +345,11 @@ describe('the description', () => {
     patchRepertoireItem.mockResolvedValue(item());
     render(<ItemScreen item={item()} onBack={() => {}} />);
     await user.click(screen.getByRole('button', { name: 'Save the name' }));
-    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', { label: 'Clair de lune', composer: 'Debussy' });
+    expect(patchRepertoireItem).toHaveBeenCalledWith('it-1', {
+      label: 'Clair de lune',
+      composer: 'Debussy',
+      collection_id: null,
+    });
   });
 
   it('has no catalogue field to type into any more', () => {

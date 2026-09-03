@@ -10,7 +10,7 @@
  * can never disagree about what a group holds or what order it reads in.
  */
 import { useCallback, useEffect, useState } from 'react';
-import type { RepertoireItem, RepertoirePayload, RepertoireStatus } from '@cadence/shared';
+import type { RepertoireCollection, RepertoireItem, RepertoirePayload, RepertoireStatus } from '@cadence/shared';
 import { REPERTOIRE_GROUPS } from '@cadence/shared';
 import { useProgressRepertoire } from '../../lib/query/index.ts';
 import { getRepertoireListItems, type RepertoireCollisionGroup } from '../../lib/api/repertoire-list.ts';
@@ -22,6 +22,7 @@ import { AddDoor } from './AddDoor.tsx';
 import { HandAddSheet } from './HandAddSheet.tsx';
 import { ItemScreen } from './ItemScreen.tsx';
 import { SeedReview } from './SeedReview.tsx';
+import { CollectionsScreen } from './CollectionsScreen.tsx';
 
 type Load = { kind: 'loading' } | { kind: 'fault'; fault: string } | { kind: 'ready' };
 
@@ -44,13 +45,14 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [items, setItems] = useState<RepertoireItem[]>([]);
   const [collisions, setCollisions] = useState<RepertoireCollisionGroup[]>([]);
-  // The collections already in use, for the item screen's Collection select. Read here rather than
-  // there because this screen already holds the list read that carries them.
-  const [collections, setCollections] = useState<string[]>([]);
+  // Every collection this person has, for the item screen's Collection picker. Read here rather
+  // than there because this screen already holds the list read that carries them.
+  const [collections, setCollections] = useState<RepertoireCollection[]>([]);
   const [actionError, setActionError] = useState('');
   const [openItem, setOpenItem] = useState<{ item: RepertoireItem; collidesWithLabel: string | null } | null>(null);
   const [seedCollection, setSeedCollection] = useState<string | null>(null);
   const [addDoorOpen, setAddDoorOpen] = useState(false);
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [handAddOpen, setHandAddOpen] = useState(false);
   const [pendingGoalId, setPendingGoalId] = useState<string | null>(null);
   const { data: card } = useProgressRepertoire(goalId ?? undefined);
@@ -101,12 +103,28 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
 
   const chatNote = onOpenChat && (() => onOpenChat(CHAT_NOTE));
 
+  // FIRST, ahead of the item screen: "Manage collections…" is reached from inside the item, so a
+  // check after that one would never be read. Back from here lands on whatever was open before —
+  // the item, if that is where they came from — because that state is untouched.
+  if (collectionsOpen) {
+    return (
+      <CollectionsScreen
+        onBack={() => {
+          setCollectionsOpen(false);
+          void refresh();
+        }}
+        onChanged={() => void refresh()}
+      />
+    );
+  }
+
   if (openItem) {
     return (
       <ItemScreen
         item={openItem.item}
         collidesWithLabel={openItem.collidesWithLabel}
         collections={collections}
+        onManageCollections={() => setCollectionsOpen(true)}
         onBack={() => {
           setOpenItem(null);
           void refresh();
@@ -210,6 +228,10 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
           onOpenChat={() => {
             setAddDoorOpen(false);
             chatNote?.();
+          }}
+          onOpenCollections={() => {
+            setAddDoorOpen(false);
+            setCollectionsOpen(true);
           }}
         />
       )}

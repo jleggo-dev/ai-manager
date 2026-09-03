@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { RepertoireItem } from '@cadence/shared';
+import type { RepertoireCollection, RepertoireItem } from '@cadence/shared';
 import { pieceQualifiers } from '@cadence/shared';
 import { buildCaption } from './repertoireItemCopy.ts';
 import { ItemNameFields } from './ItemNameFields.tsx';
@@ -24,9 +24,12 @@ export interface ItemScreenProps {
   /** Sessions logged against this item, when the caller has that count; the header caption omits
    *  the segment rather than guessing when it is not supplied. */
   sessionCount?: number;
-  /** The collections already in use on this shelf, for the Collection select. Empty is legitimate
-   *  — a person with none simply gets None and "Add a collection…". */
-  collections?: string[];
+  /** Every collection this person has, for the Collection picker. Empty is legitimate — a person
+   *  with none simply gets None and "Add a collection…". */
+  collections?: RepertoireCollection[];
+  /** Opens the collections screen from the picker's "Manage collections…" entry. Omitted, that
+   *  entry is not offered — there is nowhere for it to go. */
+  onManageCollections?: () => void;
   onBack: () => void;
   /** Called once a delete is confirmed by the server. */
   onDeleted?: (itemId: string) => void;
@@ -48,6 +51,7 @@ export function ItemScreen({
   collidesWithLabel,
   sessionCount,
   collections = [],
+  onManageCollections,
   onBack,
   onDeleted,
 }: ItemScreenProps) {
@@ -80,10 +84,12 @@ export function ItemScreen({
           itemId={item.item_id}
           initialLabel={item.label}
           initialComposer={q.composer ?? ''}
-          initialCollection={q.collection ?? ''}
+          initialCollectionId={item.collection_id}
+          initialCollectionName={item.collection_name}
           initialDescription={q.description ?? ''}
           initialNote={q.note ?? ''}
           collections={collections}
+          onManageCollections={onManageCollections}
           onSaved={setItem}
         />
 

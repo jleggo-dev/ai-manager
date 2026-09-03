@@ -4,16 +4,18 @@
  * owned by other parcels, and a shared test file is exactly the kind of single-file collision a
  * parallel wave should avoid.
  *
- * `listRepertoire` is mocked — this pins the ROUTE's own scoping and its use of `collidingTitles`,
- * not the SQL (no live-DB test anywhere in this codebase touches repo internals directly).
- * `collidingTitles` itself is NOT mocked: it is the real function from repertoire-match.ts, so this
- * test also proves the route asks it the right question rather than re-implementing the rule.
+ * `listRepertoire` and `listCollections` are mocked — this pins the ROUTE's own scoping and its use
+ * of `collidingTitles`, not the SQL (no live-DB test anywhere in this codebase touches repo
+ * internals directly). `collidingTitles` itself is NOT mocked: it is the real function from
+ * repertoire-match.ts, so this test also proves the route asks it the right question rather than
+ * re-implementing the rule.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import type { RepertoireItem } from '@cadence/shared';
 
 const listRepertoire = vi.fn();
+const listCollections = vi.fn(async (..._a: unknown[]): Promise<unknown[]> => []);
 
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
@@ -24,6 +26,9 @@ vi.mock('../auth/middleware.ts', () => ({
 
 vi.mock('../repos/repertoire.ts', () => ({
   listRepertoire: (...a: unknown[]) => listRepertoire(...a),
+}));
+vi.mock('../repos/repertoire-collections.ts', () => ({
+  listCollections: (...a: unknown[]) => listCollections(...a),
 }));
 
 const { default: progressExtrasRoutes } = await import('./progress-extras.ts');
@@ -56,6 +61,8 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
     status: 'known',
     kind: 'piece',
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-01-01T00:00:00Z',
     learned_at: null,
     last_practiced_at: null,
@@ -65,6 +72,7 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listCollections.mockResolvedValue([]);
 });
 
 describe('GET /progress/repertoire/items — scoping', () => {
@@ -143,9 +151,69 @@ describe('GET /progress/repertoire/items — collisions', () => {
   });
 });
 
+/**
+ * The collections the route hands back (P11, migration 0056). They are ROWS now — a collection has
+ * an id, a name and a count of its own — so the screen can rename one, remove one, or offer one
+ * that has no items in it yet. Read off the person's own table rather than derived from the items,
+ * which is what makes an empty collection possible at all.
+ */
+describe('GET /progress/repertoire/items — the collections', () => {
+  const shelf = [{ collection_id: 'c-1', name: 'Suzuki Book 2', item_count: 3 }];
+
+  it('returns the full rows, not just names — id and count included', async () => {
+    listRepertoire.mockResolvedValue([item()]);
+    listCollections.mockResolvedValue(shelf);
+    const r = await call('/progress/repertoire/items');
+    expect(r.status).toBe(200);
+    expect(r.body.collections).toEqual([{ collection_id: 'c-1', name: 'Suzuki Book 2', item_count: 3 }]);
+  });
+
+  it('is an empty list when they have none — never absent', async () => {
+    listRepertoire.mockResolvedValue([item()]);
+    const r = await call('/progress/repertoire/items');
+    expect(r.body.collections).toEqual([]);
+  });
+
+  /** Scoping narrows the ITEMS, never the collections: a book kept under another goal is still one
+   *  of this person's groups, and the item screen must be able to offer it. */
+  it('reads collections for the whole person even when the items are scoped to one goal', async () => {
+    listRepertoire.mockResolvedValue([item({ item_id: 'a', goal_id: 'g-piano' })]);
+    listCollections.mockResolvedValue(shelf);
+    const r = await call('/progress/repertoire/items?goal_id=g-piano');
+    expect(listCollections).toHaveBeenCalledWith('u1');
+    expect(r.body.collections).toEqual(shelf);
+  });
+
+  /** A collection nothing points at yet is a real thing since it became a row — it exists because
+   *  they made it. Derived from the items, as it was until 2026-09-03, it could not exist at all. */
+  it('carries a collection with no items in it', async () => {
+    listRepertoire.mockResolvedValue([item()]);
+    listCollections.mockResolvedValue([{ collection_id: 'c-2', name: 'Someday', item_count: 0 }]);
+    const r = await call('/progress/repertoire/items');
+    expect(r.body.collections).toEqual([{ collection_id: 'c-2', name: 'Someday', item_count: 0 }]);
+  });
+
+  it('carries each item its collection id and the joined name', async () => {
+    listRepertoire.mockResolvedValue([item({ collection_id: 'c-1', collection_name: 'Suzuki Book 2' })]);
+    listCollections.mockResolvedValue(shelf);
+    const r = await call('/progress/repertoire/items');
+    expect((r.body.items as RepertoireItem[])[0]).toMatchObject({
+      collection_id: 'c-1',
+      collection_name: 'Suzuki Book 2',
+    });
+  });
+});
+
 describe('GET /progress/repertoire/items — failure', () => {
   it('a repo failure is a 500, never an empty list read as "nothing on file"', async () => {
     listRepertoire.mockRejectedValue(new Error('db down'));
+    const r = await call('/progress/repertoire/items');
+    expect(r.status).toBe(500);
+  });
+
+  it('a collections failure is a 500 too — a half-answer would read as "you have no collections"', async () => {
+    listRepertoire.mockResolvedValue([item()]);
+    listCollections.mockRejectedValue(new Error('db down'));
     const r = await call('/progress/repertoire/items');
     expect(r.status).toBe(500);
   });

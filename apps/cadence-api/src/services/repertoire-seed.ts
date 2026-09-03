@@ -26,17 +26,11 @@
  *    than a looser one: a row nothing can resolve reads as a record and behaves as a hole, and the
  *    only useful answer is to say which label needs a fuller name.
  */
-import {
-  MAX_SEED_ITEMS,
-  collapseCollection,
-  collectionsOf,
-  isSeedStatus,
-  qualifierMeta,
-  type SeedStatus,
-} from '@cadence/shared';
+import { MAX_SEED_ITEMS, isSeedStatus, qualifierMeta, type SeedStatus } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { compactTitle, normTitle } from './goal-identity.ts';
 import { listRepertoire, upsertRepertoireItem } from '../repos/repertoire.ts';
+import { collectionKey, resolveCollectionByName } from '../repos/repertoire-collections.ts';
 import {
   canonicalLabel,
   invalidateSessionsFor,
@@ -83,8 +77,23 @@ export interface RefusedSeedRow {
   reason: string;
 }
 
+/** The collection the confirm filed its rows into, by id and by the name it ended up with — null
+ *  when the rows named none. The screen refreshes its list off this rather than guessing which of
+ *  the person's collections the confirm just made. */
+export interface SeedCollectionRef {
+  collection_id: string;
+  name: string;
+}
+
 export type ConfirmSeedResult =
-  { ok: true; written: number; labels: string[]; refused: RefusedSeedRow[] } | { ok: false; fault: string };
+  | {
+      ok: true;
+      written: number;
+      labels: string[];
+      refused: RefusedSeedRow[];
+      collection: SeedCollectionRef | null;
+    }
+  | { ok: false; fault: string };
 
 /* ── Faults ──────────────────────────────────────────────────────────────────────────────────
    tool-response.ts's stance, in words meant for a person rather than for the coach: say it was
@@ -94,6 +103,11 @@ const EXPAND_FAULT =
   'I could not look that up just now — a fault on our side, not an empty book. Nothing was saved. Try again in a moment.';
 const CONFIRM_FAULT =
   'I could not read what is already on your shelf just now — a fault on our side, not an empty record. Nothing was saved. Try again in a moment.';
+/** A collection that could not be made or found ABORTS the write rather than saving sixty rows
+ *  ungrouped. Filing them is the whole point of laying a collection out, and a silent half-save is
+ *  the one outcome nothing downstream can tell from a deliberate choice. */
+const COLLECTION_FAULT =
+  'I could not put that collection on your list just now — a fault on our side. Nothing was saved. Try again in a moment.';
 
 /** Longest any one field may be. Matches `qualifierString`'s own bound in @cadence/shared. */
 const MAX_TEXT = 120;
@@ -313,6 +327,35 @@ export async function expandCollection(
 const WRITE_CONCURRENCY = 8;
 
 /**
+ * Every collection this batch names, as `trimmed lower-cased name → collection_id`.
+ *
+ * Resolved before the first write and SEQUENTIALLY, one distinct name at a time: two concurrent
+ * resolves of one name would race each other to create it, and the loser reading the winner back
+ * is a recovery, not a plan. There is normally one name here — the collection that was expanded —
+ * so the sequential loop costs one round trip.
+ *
+ * Throws on a database failure; the caller turns that into a fault and writes nothing.
+ */
+async function resolveSeedCollections(
+  userId: string,
+  rows: Array<{ collection: string | null }>,
+): Promise<Map<string, SeedCollectionRef>> {
+  const names = new Map<string, string>();
+  // First spelling wins, the same rule the item labels follow: a later "suzuki book 2" in one
+  // batch must not decide what a brand-new collection is called.
+  for (const r of rows) {
+    const key = r.collection ? collectionKey(r.collection) : '';
+    if (key && !names.has(key)) names.set(key, r.collection!);
+  }
+  const out = new Map<string, SeedCollectionRef>();
+  for (const [key, name] of names) {
+    const { collection_id, name: stored } = await resolveCollectionByName(userId, name);
+    out.set(key, { collection_id, name: stored });
+  }
+  return out;
+}
+
+/**
  * Write the rows the person confirmed — minus any the shelf could never tell apart.
  *
  * The shelf is read once for the whole batch, for the reason `update_repertoire` reads it: each
@@ -339,14 +382,24 @@ export async function confirmSeed(
     }))
     // The three standings and no others, checked here rather than trusted from the wire.
     .filter((r) => r.label.length > 0 && isSeedStatus(r.status));
-  if (!wanted.length) return { ok: true, written: 0, labels: [], refused: [] };
+  if (!wanted.length) return { ok: true, written: 0, labels: [], refused: [], collection: null };
 
   const shelf = await listRepertoire(userId).catch((e): null => {
     console.error('[seed] pre-write shelf read failed:', e);
     return null;
   });
   if (shelf === null) return { ok: false, fault: CONFIRM_FAULT };
-  const known = collectionsOf(shelf);
+
+  // The collection each row names, resolved to a ROW once for the whole batch (migration 0056).
+  // Resolve-or-create, keyed on the trimmed lower-cased name, so confirming "suzuki book 2" a
+  // second time files into the collection the person already has rather than starting a near-twin
+  // beside it. Ordinarily this is exactly one collection — the one that was expanded — but the map
+  // means a batch naming two costs one resolve each rather than being silently collapsed into one.
+  const collections = await resolveSeedCollections(userId, wanted).catch((e): null => {
+    console.error('[seed] collection resolve failed:', e);
+    return null;
+  });
+  if (collections === null) return { ok: false, fault: COLLECTION_FAULT };
 
   // Judged against the WHOLE batch, never against the survivors: refusing the first of two twins
   // must not make the second one look unique.
@@ -365,14 +418,8 @@ export async function confirmSeed(
           label: canonicalLabel(shelf, r.label),
           status: r.status,
           goal_id: goalId,
-          meta: qualifierMeta({
-            composer: r.composer ?? undefined,
-            // Folded onto a spelling already on the shelf, so confirming "suzuki book 2" a second
-            // time joins the group the person already has rather than starting a near-twin beside
-            // it (owner ruling 2026-09-03). Same rule, same helper, as the item screen's PATCH.
-            collection: r.collection ? collapseCollection(known, r.collection) : undefined,
-            rank: r.rank,
-          }),
+          collection_id: r.collection ? (collections.get(collectionKey(r.collection))?.collection_id ?? null) : null,
+          meta: qualifierMeta({ composer: r.composer ?? undefined, rank: r.rank }),
           // Never. A seed is a backfill, and only a crossing we watched happen is stamped.
           markLearned: false,
         });
@@ -385,5 +432,11 @@ export async function confirmSeed(
   // The rotation reads cached prescriptions; a shelf this size makes every one of them stale.
   await invalidateSessionsFor(userId, written).catch(() => undefined);
 
-  return { ok: true, written: written.length, labels: written.map((w) => w.label), refused };
+  return {
+    ok: true,
+    written: written.length,
+    labels: written.map((w) => w.label),
+    refused,
+    collection: collections.size ? [...collections.values()][0]! : null,
+  };
 }

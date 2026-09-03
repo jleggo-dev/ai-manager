@@ -13,7 +13,10 @@ import { BASE, headers } from './http.ts';
 export interface RepertoireItemPatch {
   label?: string;
   composer?: string;
-  collection?: string;
+  /** The collection to file it in, by id — a collection is its own row since migration 0056. Three
+   *  cases and they differ: omitted leaves the item where it is, an id files it there, and an
+   *  explicit `null` takes it out of every collection ("None" on the item screen). */
+  collection_id?: string | null;
   /** Their own words for WHICH ONE this is. Replaced the music-only `catalogue` field (owner
    *  ruling 2026-09-03); bounded server-side at `DESCRIPTION_MAX`, twice a qualifier's 120. */
   description?: string;

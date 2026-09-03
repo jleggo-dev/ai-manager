@@ -126,6 +126,19 @@ describe('practiceFacts — the facts on one line', () => {
     expect(lineFor(text(), FOLK_SONG)).toContain('rank 9');
   });
 
+  /** The collection's NAME comes off the joined column (migration 0056), not `meta` — so the line
+   *  prints what the collection is called right now rather than a spelling copied onto the item
+   *  when it was filed. The stale-meta row is the near-miss: nothing reads that key any more. */
+  it('names the collection from the joined name, and never from the old meta key', () => {
+    const joined = practiceVariables([item('Study', 'working', { collection_name: 'Suzuki Book 2' })], []).repertoire;
+    expect(joined).toContain('collection: Suzuki Book 2');
+    const stale = practiceVariables(
+      [item('Study', 'working', { meta: { collection: 'Suzuki Book 2' } })],
+      [],
+    ).repertoire;
+    expect(stale).not.toContain('collection:');
+  });
+
   it('leaves out every segment there is no fact for — never an empty label', () => {
     const bare = practiceVariables([item('Arietta', 'known')], []).repertoire;
     expect(lineFor(bare, 'Arietta')).toBe('- Arietta · Keeping up · last practised never');

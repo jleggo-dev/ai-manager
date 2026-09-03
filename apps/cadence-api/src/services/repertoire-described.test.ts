@@ -170,6 +170,25 @@ describe('the description resolves what the title cannot', () => {
     expect(describedItems(items, ['played the Bartok']).map((i) => i.label)).toEqual(['Hungarian Folk Song']);
   });
 
+  /** The collection is matched on its WORDS, exactly as it was when the name lived in `meta` — so
+   *  "the one from Book 2" still lands. Read off the joined `collection_name` since migration 0056;
+   *  a name left in the old meta key reaches nothing, because nothing reads it. */
+  it('the collection reaches it too — "the one from Book 2"', () => {
+    const items = [
+      { label: 'Chanson', status: 'known', goal_id: PIANO, meta: null, collection_name: 'Suzuki Piano Book 2' },
+      { label: 'Heian Shodan', status: 'known', goal_id: PIANO, meta: null, collection_name: 'Shotokan kata syllabus' },
+    ];
+    expect(describedItems(items, ['ran through the suzuki piano book']).map((i) => i.label)).toEqual(['Chanson']);
+  });
+
+  it('a collection left in the old meta key reaches nothing', () => {
+    const items = [
+      withMeta('Chanson', { collection: 'Suzuki Piano Book 2' }),
+      withMeta('Heian Shodan', { collection: 'Shotokan kata syllabus' }),
+    ];
+    expect(describedItems(items, ['ran through the suzuki piano book'])).toEqual([]);
+  });
+
   it('a row with no description behaves exactly as it did before the field existed', () => {
     expect(described('played the minuet from the Anna Magdalena notebook')).toEqual([
       'Minuet in G Major (from Notebook for Anna Magdalena Bach)',

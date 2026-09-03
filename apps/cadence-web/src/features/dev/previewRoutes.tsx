@@ -17,6 +17,7 @@ import { WidgetsPreview } from './WidgetsPreview.tsx';
 import { ItemScreenPreview } from '../repertoire/ItemScreenPreview.tsx';
 import { SeedReviewPreview } from '../repertoire/SeedReviewPreview.tsx';
 import { ListScreenPreview } from '../repertoire/ListScreenPreview.tsx';
+import { CollectionsScreenPreview } from '../repertoire/CollectionsScreenPreview.tsx';
 
 /**
  * `?preview=<tool>` — render ONE component against fixture data, short-circuiting auth and the
@@ -42,6 +43,7 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   item: () => <ItemScreenPreview />,
   seed: () => <SeedReviewPreview />,
   repertoire: () => <ListScreenPreview />,
+  collections: () => <CollectionsScreenPreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {

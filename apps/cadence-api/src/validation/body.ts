@@ -305,15 +305,34 @@ export const settledTempoBodySchema = z.object({
 const REPERTOIRE_STANDINGS = ['queued', 'working', 'known', 'retired'] as const satisfies readonly RepertoireStatus[];
 
 /**
- * `PATCH /progress/repertoire/:id` — the item screen's save path for the name fields and the
- * qualifiers (composer, collection, description, rank, and the practice note — P8), and the
+ * `POST /progress/repertoire/collections` and `PATCH /progress/repertoire/collections/:id` — one
+ * schema for both, because both take exactly one thing: the name. The 1..120 bound restates the
+ * table's own check constraint (migration 0056), so a name too long is refused with words instead
+ * of reaching Postgres. Uniqueness is NOT checked here — it is the database's unique index on
+ * (user_id, lower(name)), and the repo turns that into a 409 naming the spelling already on file.
+ */
+export const repertoireCollectionBodySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, { message: 'name is required' })
+    .max(120, { message: 'name must be 120 characters or fewer' }),
+});
+
+/**
+ * `PATCH /progress/repertoire/:id` — the item screen's save path for the name fields, the
+ * qualifiers (composer, description, rank, and the practice note — P8) and the collection, and the
  * standing control's own immediate write (any of them, and `status`, may arrive alone or
  * together). At least one field is required — an empty body is never a legitimate call.
  *
- * `catalogue` was a field here until 2026-09-03 and is not one now (owner: *"very music-specific
- * and adds little"*). A body carrying only `catalogue` is therefore "nothing to update" — zod
- * strips the unknown key and the emptiness check sees an empty object, which is the honest answer:
- * there is no longer anything for that key to write.
+ * TWO FIELDS WERE HERE AND ARE NOT NOW. A body carrying only one of them is therefore "nothing to
+ * update" — zod strips the unknown key and the emptiness check sees an empty object, which is the
+ * honest answer: there is no longer anything for that key to write.
+ *
+ *  - `catalogue`, 2026-09-03 (owner: *"very music-specific and adds little"*).
+ *  - `collection`, a NAME, 2026-09-03 — a collection is a row now (migration 0056), so this route
+ *    takes `collection_id` instead. A name would have to be matched by spelling, which is the
+ *    thing the row exists to stop.
  *
  * `status` rejects "learned" and "parked" BY NAME rather than folding them into one generic enum
  * error, because they are the two words someone reaching for a standing here is likeliest to
@@ -327,7 +346,14 @@ export const patchRepertoireItemBodySchema = z
   .object({
     label: z.string().trim().min(1, { message: 'label, when given, must not be blank' }).max(120).optional(),
     composer: z.string().trim().min(1, { message: 'composer, when given, must not be blank' }).max(120).optional(),
-    collection: z.string().trim().min(1, { message: 'collection, when given, must not be blank' }).max(120).optional(),
+    // The collection this item is in, by id. `null` is a real value here — it means "in none", the
+    // item screen's None — so this is nullable AND optional, and the two mean different things:
+    // omitted leaves the row's collection alone, null takes it out of every collection.
+    collection_id: z
+      .string()
+      .uuid({ message: 'collection_id must be a uuid, or null to remove it from its collection' })
+      .nullable()
+      .optional(),
     // Their own words for WHICH ONE this is — "the fast one in G", "the one my teacher set". Twice
     // the room of the other qualifiers (`DESCRIPTION_MAX`), because it is a sentence rather than a
     // name, and read from the one place that bound is defined.
@@ -375,7 +401,7 @@ export const patchRepertoireItemBodySchema = z
     if (
       val.label === undefined &&
       val.composer === undefined &&
-      val.collection === undefined &&
+      val.collection_id === undefined &&
       val.description === undefined &&
       val.note === undefined &&
       val.status === undefined &&

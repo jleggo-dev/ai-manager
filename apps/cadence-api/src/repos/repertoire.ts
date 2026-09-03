@@ -5,8 +5,16 @@ import { type MetronomeSpec, type RepertoireItem, type RepertoireStatus, tempoMe
 // shared type, the rotation math and every renderer expect ISO strings. A FUNCTION, not a
 // module-level fragment: suites that mock db/sql import this module transitively, and a fragment
 // built at import time calls the mock before it is callable (plan-fanout.test.ts found this).
+//
+// `collection_name` is a correlated sub-select rather than a join so this ONE fragment serves the
+// list read and all three `returning` clauses — a second column list for the writes is exactly the
+// drift that makes a field silently absent from a PATCH's answer. The item carries the id
+// (migration 0056); the name is read back from the collection's own row, so a rename shows up on
+// every item at once.
 const cols = () => sql`
-  item_id, user_id, goal_id, label, status, kind, meta,
+  item_id, user_id, goal_id, label, status, kind, meta, collection_id,
+  (select rc.name from cadence.repertoire_collections rc
+     where rc.collection_id = cadence.repertoire.collection_id) as collection_name,
   started_at::text as started_at, learned_at::text as learned_at,
   last_practiced_at::text as last_practiced_at`;
 
@@ -66,20 +74,24 @@ export async function upsertRepertoireItem(
     goal_id?: string | null;
     kind?: string | null;
     meta?: Record<string, unknown> | null;
+    /** The collection to file it in. Omitted (or null) keeps whatever the row already points at —
+     *  a bare re-mention must not lift a piece out of the book someone put it in. */
+    collection_id?: string | null;
     markLearned?: boolean;
   },
 ): Promise<{ item: RepertoireItem; learnedNow: boolean }> {
   const learnedAt = item.markLearned ? new Date().toISOString() : null;
   const [row] = await sql<(RepertoireItem & { learned_now: boolean | null })[]>`
-    insert into cadence.repertoire (user_id, goal_id, label, status, kind, meta, learned_at)
+    insert into cadence.repertoire (user_id, goal_id, label, status, kind, meta, collection_id, learned_at)
     values (
       ${userId}, ${item.goal_id ?? null}, ${nfc(item.label)}, ${item.status ?? 'working'},
-      ${item.kind ?? null}, ${item.meta ? json(item.meta) : null}, ${learnedAt}
+      ${item.kind ?? null}, ${item.meta ? json(item.meta) : null}, ${item.collection_id ?? null}, ${learnedAt}
     )
     on conflict (user_id, lower(label)) do update set
       status = coalesce(${item.status ?? null}::text, cadence.repertoire.status),
       goal_id = coalesce(excluded.goal_id, cadence.repertoire.goal_id),
       kind = coalesce(excluded.kind, cadence.repertoire.kind),
+      collection_id = coalesce(excluded.collection_id, cadence.repertoire.collection_id),
       -- MERGE, never replace. meta is shared room (composer, book, settled tempo) written by
       -- different paths at different times; a plain coalesce made the last writer win and
       -- silently drop everything the others had put there.
@@ -196,12 +208,18 @@ export async function renameRepertoireItem(
 }
 
 /**
- * Standing + qualifiers, in one write. `meta` is MERGED with `||`, exactly as `setSettledTempo`
- * does — a tempo settled last night, or a composer typed in last week, must survive a standing
- * flip made today. `status` never writes `learned_at`: crossing into Keeping up "in front of us"
- * is the coach's `learned` verb alone (`upsertRepertoireItem`'s `markLearned`), so a standing
- * chosen from this screen is silent, the same as every other status change here (retiring,
- * re-queueing, backfilling known).
+ * Standing, qualifiers and the collection, in one write. `meta` is MERGED with `||`, exactly as
+ * `setSettledTempo` does — a tempo settled last night, or a composer typed in last week, must
+ * survive a standing flip made today. `status` never writes `learned_at`: crossing into Keeping up
+ * "in front of us" is the coach's `learned` verb alone (`upsertRepertoireItem`'s `markLearned`), so
+ * a standing chosen from this screen is silent, the same as every other status change here
+ * (retiring, re-queueing, backfilling known).
+ *
+ * `collection_id` is the one field here that can be CLEARED, and the three-way distinction is
+ * load-bearing: omitted leaves the row's collection alone, a uuid files it there, and an explicit
+ * `null` takes it out of every collection ("None" on the item screen). A plain coalesce would make
+ * un-grouping impossible, which is the same trap `meta` has by nature — jsonb `||` can overwrite a
+ * key and never remove one.
  *
  * Scoped by user_id. Returns null when no row matches — a wrong id is not nothing to report, but
  * it is nothing THIS caller may change.
@@ -209,12 +227,16 @@ export async function renameRepertoireItem(
 export async function updateRepertoireItem(
   userId: string,
   itemId: string,
-  patch: { status?: RepertoireStatus; meta?: Record<string, unknown> | null },
+  patch: { status?: RepertoireStatus; meta?: Record<string, unknown> | null; collection_id?: string | null },
 ): Promise<RepertoireItem | null> {
+  const setsCollection = patch.collection_id !== undefined;
   const [row] = await sql<RepertoireItem[]>`
     update cadence.repertoire
     set status = coalesce(${patch.status ?? null}::text, status),
         meta = coalesce(meta, '{}'::jsonb) || coalesce(${patch.meta ? json(patch.meta) : null}::jsonb, '{}'::jsonb),
+        collection_id = case when ${setsCollection}
+                          then ${patch.collection_id ?? null}::uuid
+                          else collection_id end,
         updated_at = now()
     where user_id = ${userId} and item_id = ${itemId}
     returning ${cols()}`;

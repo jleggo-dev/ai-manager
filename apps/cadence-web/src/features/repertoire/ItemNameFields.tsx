@@ -1,23 +1,29 @@
 import { useState } from 'react';
-import type { RepertoireItem } from '@cadence/shared';
+import type { RepertoireCollection, RepertoireItem } from '@cadence/shared';
 import { DESCRIPTION_MAX } from '@cadence/shared';
 import { patchRepertoireItem, type RepertoireItemPatch } from '../../lib/api/repertoire-item.ts';
-import { ADD_A_COLLECTION, FIELD_HINTS, NO_COLLECTION } from './itemFieldCopy.ts';
+import { FIELD_HINTS } from './itemFieldCopy.ts';
+import { CollectionPicker } from './CollectionPicker.tsx';
 
 export interface ItemNameFieldsProps {
   itemId: string;
   initialLabel: string;
   initialComposer: string;
-  initialCollection: string;
+  /** The collection this item is in, by id (migration 0056), or null for none. */
+  initialCollectionId: string | null;
+  /** Its name — used only to keep it in the picker when a stale read did not carry the row. */
+  initialCollectionName: string | null;
   /** Their own words for WHICH ONE this is — free text, and the field that replaced the
    *  music-only catalogue number (owner ruling 2026-09-03). */
   initialDescription: string;
   /** How the work is going — editable for every kind, unlike the tempo line, which stays read-only
    *  music-only history. */
   initialNote: string;
-  /** Collections already in use on this person's shelf, most-used first, from the list read. The
-   *  field offers these rather than a free-text box: a collection only groups if it is one group. */
-  collections: string[];
+  /** Every collection this person has, most-used first, from the list read. The field offers these
+   *  rather than a free-text box: a collection only groups if it is one group. */
+  collections: RepertoireCollection[];
+  /** Opens the collections screen from the picker's "Manage collections…" entry. */
+  onManageCollections?: () => void;
   /** Called with the fresh row once the server confirms the save. */
   onSaved: (item: RepertoireItem) => void;
 }
@@ -29,9 +35,11 @@ export interface ItemNameFieldsProps {
  * nothing typed here can lose a session, a settled tempo, or a date — the sentence under the fields
  * says so in the coach's own words.
  *
- * Every field is set-only, never cleared back to blank: the repo merges `meta` with jsonb `||`
+ * Every TEXT field is set-only, never cleared back to blank: the repo merges `meta` with jsonb `||`
  * (`updateRepertoireItem`), which has no way to remove a key — only overwrite it. A blank field is
- * therefore left out of the request rather than sent as "".
+ * therefore left out of the request rather than sent as "". The Collection is the exception, and
+ * for a reason that is not an inconsistency: it is a COLUMN, not a meta key, so it can be cleared,
+ * and "in no collection" is a state the person can choose.
  *
  * TWO OWNER RULINGS SHAPE THIS SCREEN (2026-09-03):
  *
@@ -40,19 +48,21 @@ export interface ItemNameFieldsProps {
  *    narrowing the focus."* So each hint says what the field is FOR, in plain words, and lists no
  *    examples. The strings live in `itemFieldCopy.ts` so the screen and its tests read one copy.
  *  - **A collection is chosen, not typed.** *"A collection only works if it's not free-text"* —
- *    grouping by a typed string drifts, so this is a select over what is already on the shelf, with
- *    one option to add a new name. A name typed anyway is folded onto an existing spelling by the
- *    server (`collapseCollection`), which is the guard for the case this control cannot cover: the
- *    coach and the seed write collections too.
+ *    grouping by a typed string drifts, so the control is a picker over the collections this person
+ *    has, and it picks an id (`CollectionPicker.tsx`, migration 0056). The spelling guard that used
+ *    to hold this together is gone with the free text: a name is unique per person in the database
+ *    now, so two spellings cannot become two groups however they are written.
  */
 export function ItemNameFields({
   itemId,
   initialLabel,
   initialComposer,
-  initialCollection,
+  initialCollectionId,
+  initialCollectionName,
   initialDescription,
   initialNote,
   collections,
+  onManageCollections,
   onSaved,
 }: ItemNameFieldsProps) {
   const [label, setLabel] = useState(initialLabel);
@@ -62,15 +72,7 @@ export function ItemNameFields({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // The item's own collection always appears in the list, even when it is the only row carrying it
-  // and a goal-scoped read did not return it — a select that silently drops the value it was given
-  // would look like the person had never chosen one.
-  const options =
-    collections.includes(initialCollection) || !initialCollection ? collections : [initialCollection, ...collections];
-  const [choice, setChoice] = useState(initialCollection || NO_COLLECTION);
-  const [typed, setTyped] = useState('');
-  const adding = choice === ADD_A_COLLECTION;
-  const collection = adding ? typed : choice === NO_COLLECTION ? '' : choice;
+  const [collectionId, setCollectionId] = useState<string | null>(initialCollectionId);
 
   const canSave = label.trim().length > 0 && !saving;
 
@@ -78,9 +80,12 @@ export function ItemNameFields({
     if (!canSave) return;
     setSaving(true);
     setError('');
-    const patch: RepertoireItemPatch = { label: label.trim() };
+    // `collection_id` is sent EVERY time, unlike the text fields: null is a real value here — it
+    // means "in no collection" — so leaving it out would make None unsavable. jsonb `||` cannot
+    // remove a key, which is why the text fields have to be omitted instead of blanked; a column
+    // has no such problem.
+    const patch: RepertoireItemPatch = { label: label.trim(), collection_id: collectionId };
     if (composer.trim()) patch.composer = composer.trim();
-    if (collection.trim()) patch.collection = collection.trim();
     if (description.trim()) patch.description = description.trim();
     if (note.trim()) patch.note = note.trim();
     try {
@@ -123,31 +128,13 @@ export function ItemNameFields({
         />
         <p className="ri-hint">{FIELD_HINTS.composer}</p>
       </div>
-      <div className="ri-field">
-        <label className="ri-label" htmlFor="ri-collection">
-          Collection
-        </label>
-        <select id="ri-collection" className="ri-input" value={choice} onChange={(e) => setChoice(e.target.value)}>
-          <option value={NO_COLLECTION}>{NO_COLLECTION}</option>
-          {options.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-          <option value={ADD_A_COLLECTION}>{ADD_A_COLLECTION}</option>
-        </select>
-        {adding && (
-          <input
-            id="ri-collection-new"
-            className="ri-input"
-            aria-label={ADD_A_COLLECTION}
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            maxLength={120}
-          />
-        )}
-        <p className="ri-hint">{FIELD_HINTS.collection}</p>
-      </div>
+      <CollectionPicker
+        collections={collections}
+        value={collectionId}
+        valueName={initialCollectionName}
+        onChange={setCollectionId}
+        onManage={onManageCollections}
+      />
       <div className="ri-field">
         <label className="ri-label" htmlFor="ri-description">
           Description (optional)

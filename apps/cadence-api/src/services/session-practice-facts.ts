@@ -88,7 +88,11 @@ function rowDetail(i: RepertoireLike): string {
   if (q.description) parts.push(`description: ${q.description}`);
   if (q.note) parts.push(`note: ${q.note}`);
   if (q.composer) parts.push(`composer: ${q.composer}`);
-  if (q.collection) parts.push(`collection: ${q.collection}`);
+  // Read off the joined name, not `meta` — a collection is its own row since migration 0056, so
+  // this prints whatever the collection is called right now rather than the spelling that was
+  // copied onto the item when it was filed.
+  const collection = i.collection_name?.trim();
+  if (collection) parts.push(`collection: ${collection}`);
   if (q.rank !== undefined) parts.push(`rank ${q.rank}`);
   return parts.join(' · ');
 }

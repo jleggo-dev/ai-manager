@@ -21,6 +21,8 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
     status: 'known',
     kind: 'piece',
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-01-01T00:00:00Z',
     learned_at: null,
     last_practiced_at: null,

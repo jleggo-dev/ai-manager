@@ -19,8 +19,10 @@ export const FIELD_HINTS = {
   note: 'Any notes for yourself or Cadence to refer to',
 } as const;
 
-/** The Collection select's two synthetic options, either side of the real names. Values as well as
- *  labels, so the control has no separate sentinel to keep in step with what it renders. */
+/** The Collection select's synthetic options, either side of the real collections. Values as well
+ *  as labels, so the control has no separate sentinel to keep in step with what it renders — and
+ *  neither is a uuid, so neither can ever collide with a real collection's id. The third,
+ *  `MANAGE_COLLECTIONS`, lives in collectionsCopy.ts beside the screen it opens. */
 export const NO_COLLECTION = 'None';
 export const ADD_A_COLLECTION = 'Add a collection…';
 

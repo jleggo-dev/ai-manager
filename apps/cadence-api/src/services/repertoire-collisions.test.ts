@@ -22,7 +22,7 @@ import {
   renderRepertoireForCoach,
 } from './repertoire-practice.ts';
 import type { RepertoireItem } from '@cadence/shared';
-import { COMPOSER_KEY, COLLECTION_KEY } from '@cadence/shared';
+import { COMPOSER_KEY } from '@cadence/shared';
 
 const PIANO = 'goal-piano';
 
@@ -159,7 +159,7 @@ describe('a qualifier resolves a collision the label text alone could not', () =
   } as unknown as RepertoireItem;
 
   it('is resolvable when the new short title states a composer the on-file item disagrees with', () => {
-    expect(isResolvable([onFile], 'Minuet in G Major', { [COMPOSER_KEY]: 'Bach' })).toBe(true);
+    expect(isResolvable([onFile], 'Minuet in G Major', { meta: { [COMPOSER_KEY]: 'Bach' } })).toBe(true);
   });
 
   it('is NOT resolvable when the new title states no qualifier at all — a bare mention decides nothing', () => {
@@ -167,7 +167,7 @@ describe('a qualifier resolves a collision the label text alone could not', () =
   });
 
   it('is NOT resolvable when the stated composer AGREES — agreement is evidence they are the same piece', () => {
-    expect(isResolvable([onFile], 'Minuet in G Major', { [COMPOSER_KEY]: 'Petzold' })).toBe(false);
+    expect(isResolvable([onFile], 'Minuet in G Major', { meta: { [COMPOSER_KEY]: 'Petzold' } })).toBe(false);
   });
 
   /**
@@ -184,20 +184,38 @@ describe('a qualifier resolves a collision the label text alone could not', () =
       label: 'Minuet in G Major, no. 2',
       meta: { catalogue: 'BWV 822' },
     } as unknown as RepertoireItem;
-    expect(isResolvable([byCatalogue], 'Minuet in G Major', { catalogue: 'BWV Anh. 114' })).toBe(false);
-    expect(isResolvable([byCatalogue], 'Minuet in G Major', { catalogue: 'BWV 822' })).toBe(false);
+    expect(isResolvable([byCatalogue], 'Minuet in G Major', { meta: { catalogue: 'BWV Anh. 114' } })).toBe(false);
+    expect(isResolvable([byCatalogue], 'Minuet in G Major', { meta: { catalogue: 'BWV 822' } })).toBe(false);
   });
 
-  it('a collection distinguishes too, and a DIFFERENT qualifier key states nothing either way', () => {
+  /**
+   * The collection distinguishes exactly as the composer does — and since 2026-09-03 it is read off
+   * the row's joined `collection_name` (migration 0056), never `meta`. Both halves are pinned: a
+   * stated disagreement resolves the collision, and a name left in the old `meta` key resolves
+   * nothing, because nothing reads it any more.
+   */
+  it('a collection distinguishes too, from the joined name and not from meta', () => {
     const byCollection = {
       label: 'Minuet in G Major, no. 2',
-      meta: { [COLLECTION_KEY]: 'Notebook for Anna Magdalena Bach' },
+      collection_name: 'Notebook for Anna Magdalena Bach',
     } as unknown as RepertoireItem;
-    expect(isResolvable([byCollection], 'Minuet in G Major', { [COLLECTION_KEY]: 'Suzuki Book 2' })).toBe(true);
+    expect(isResolvable([byCollection], 'Minuet in G Major', { collection_name: 'Suzuki Book 2' })).toBe(true);
+    expect(
+      isResolvable([byCollection], 'Minuet in G Major', { collection_name: 'notebook for anna magdalena bach' }),
+    ).toBe(false);
     // Stating a composer says nothing about the collection the on-file item claims — no field is
     // even compared, so this reads as unqualified: the needle is still shared by something that
     // cannot be told apart from it.
-    expect(isResolvable([byCollection], 'Minuet in G Major', { [COMPOSER_KEY]: 'Bach' })).toBe(false);
+    expect(isResolvable([byCollection], 'Minuet in G Major', { meta: { [COMPOSER_KEY]: 'Bach' } })).toBe(false);
+  });
+
+  it('a collection left in the old meta key decides nothing, in either direction', () => {
+    const stale = {
+      label: 'Minuet in G Major, no. 2',
+      meta: { collection: 'Notebook for Anna Magdalena Bach' },
+    } as unknown as RepertoireItem;
+    expect(isResolvable([stale], 'Minuet in G Major', { meta: { collection: 'Suzuki Book 2' } })).toBe(false);
+    expect(isResolvable([stale], 'Minuet in G Major', { collection_name: 'Suzuki Book 2' })).toBe(false);
   });
 
   it('still refuses a bare title that collides on the plain Book 2 shelf, unqualified', () => {
@@ -210,12 +228,12 @@ describe('a qualifier resolves a collision the label text alone could not', () =
     const onFile = [{ label: 'Étude', meta: { [COMPOSER_KEY]: 'Debussy' } } as unknown as RepertoireItem];
     // Same normalized text (accent-folded), but a stated, disagreeing composer — this is a
     // different piece, so the incoming (unaccented) spelling must stand on its own.
-    expect(canonicalLabel(onFile, 'Etude', { [COMPOSER_KEY]: 'Chopin' })).toBe('Etude');
+    expect(canonicalLabel(onFile, 'Etude', { meta: { [COMPOSER_KEY]: 'Chopin' } })).toBe('Etude');
   });
 
   it('canonicalLabel still folds the accent-variant spelling when nothing disagrees', () => {
     const onFile = [{ label: 'Étude', meta: { [COMPOSER_KEY]: 'Debussy' } } as unknown as RepertoireItem];
-    expect(canonicalLabel(onFile, 'Etude', { [COMPOSER_KEY]: 'Debussy' })).toBe('Étude');
+    expect(canonicalLabel(onFile, 'Etude', { meta: { [COMPOSER_KEY]: 'Debussy' } })).toBe('Étude');
     expect(canonicalLabel(onFile, 'Etude')).toBe('Étude');
   });
 });

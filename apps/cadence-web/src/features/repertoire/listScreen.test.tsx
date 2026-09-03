@@ -2,7 +2,7 @@
  * "What I'm learning" (P6 "the room") — every button and every router on the list screen: the
  * four groups render in order with the right headers; Keeping up reads longest-rest-first and Up
  * next reads rank order; a collision card appears only for a real collision, and its verb opens
- * the right item; the ＋ door's three rows go where they say; the empty state shows only when the
+ * the right item; the ＋ door's four rows go where they say; the empty state shows only when the
  * payload is empty; a ⋯ move posts the right status; a ⋯ reorder posts ranks.
  *
  * P2's `ItemScreen` and P4's `SeedReview` are mocked to thin stand-ins that expose their props —
@@ -15,13 +15,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { RepertoireItem } from '@cadence/shared';
-import { COLLECTION_KEY, COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY } from '@cadence/shared';
+import { COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY } from '@cadence/shared';
+import { COLLECTIONS_TITLE } from './collectionsCopy.ts';
 
 const getRepertoireListItems = vi.hoisted(() => vi.fn());
 const useProgressRepertoire = vi.hoisted(() => vi.fn());
 const patchRepertoireItem = vi.hoisted(() => vi.fn());
 const confirmSeed = vi.hoisted(() => vi.fn());
 const getReview = vi.hoisted(() => vi.fn());
+const getCollections = vi.hoisted(() => vi.fn());
+const renameCollection = vi.hoisted(() => vi.fn());
+const removeCollection = vi.hoisted(() => vi.fn());
 
 vi.mock('../../lib/api/repertoire-list.ts', () => ({
   getRepertoireListItems: (...a: unknown[]) => getRepertoireListItems(...a),
@@ -37,6 +41,13 @@ vi.mock('../../lib/api/repertoire-seed.ts', () => ({
 }));
 vi.mock('../../lib/api/review.ts', () => ({
   getReview: (...a: unknown[]) => getReview(...a),
+}));
+// The collections screen (P11) is NOT mocked — the ＋ door's fourth row has to open the real one,
+// which is the routing this file exists to pin. Its client is.
+vi.mock('../../lib/api/repertoire-collections.ts', () => ({
+  getCollections: (...a: unknown[]) => getCollections(...a),
+  renameCollection: (...a: unknown[]) => renameCollection(...a),
+  removeCollection: (...a: unknown[]) => removeCollection(...a),
 }));
 vi.mock('./ItemScreen.tsx', () => ({
   ItemScreen: ({
@@ -80,6 +91,8 @@ function item(over: Partial<RepertoireItem> = {}): RepertoireItem {
     status: 'known',
     kind: 'piece',
     meta: null,
+    collection_id: null,
+    collection_name: null,
     started_at: '2026-01-01T00:00:00Z',
     learned_at: null,
     last_practiced_at: null,
@@ -98,11 +111,19 @@ const BASE_ITEMS: RepertoireItem[] = [
   item({ item_id: 'cradle', label: 'Cradle Song', status: 'retired', learned_at: daysAgo(200) }),
 ];
 
-function mount(over: { items?: RepertoireItem[]; collisions?: unknown[]; goalId?: string | null } = {}) {
+function mount(
+  over: {
+    items?: RepertoireItem[];
+    collisions?: unknown[];
+    collections?: unknown[];
+    goalId?: string | null;
+  } = {},
+) {
   getRepertoireListItems.mockResolvedValue({
     ok: true,
     items: over.items ?? BASE_ITEMS,
     collisions: over.collisions ?? [],
+    collections: over.collections ?? [],
   });
   useProgressRepertoire.mockReturnValue({ data: CARD });
   getReview.mockResolvedValue({ goals: [] });
@@ -114,6 +135,7 @@ function mount(over: { items?: RepertoireItem[]; collisions?: unknown[]; goalId?
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getCollections.mockResolvedValue({ ok: true, collections: [] });
 });
 
 /** The group header's own name word (`.rl-group-name-word`) — scoped so it is never confused with
@@ -335,6 +357,42 @@ describe('the ＋ door', () => {
     expect(onOpenChat.mock.calls[0]?.[0]).toMatch(/what they play or are working on/);
     expect(screen.queryByText('Add something')).not.toBeInTheDocument();
   });
+
+  /**
+   * The fourth row (P11) — the only one that adds nothing to the list; it opens the one place a
+   * collection can be renamed or removed. It is last for that reason, and the order is asserted
+   * because a row that moves is a row someone taps by accident.
+   */
+  it('offers four rows, "Your collections" last', async () => {
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+    const rows = [...document.querySelectorAll('.ld-row .ld-row-t b')].map((b) => b.textContent);
+    expect(rows).toEqual(['Start from a collection', 'Add one by hand', 'Just tell me in chat', COLLECTIONS_TITLE]);
+  });
+
+  it('"Your collections" closes the door and opens the collections screen', async () => {
+    const user = userEvent.setup();
+    getCollections.mockResolvedValue({ ok: true, collections: [] });
+    mount();
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+    await user.click(await screen.findByText(COLLECTIONS_TITLE));
+    expect(screen.queryByText('Add something')).not.toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: COLLECTIONS_TITLE })).toBeInTheDocument();
+  });
+
+  it('back from the collections screen returns to the list and refreshes it', async () => {
+    const user = userEvent.setup();
+    getCollections.mockResolvedValue({ ok: true, collections: [] });
+    mount();
+    await user.click(await screen.findByRole('button', { name: 'Add' }));
+    await user.click(await screen.findByText(COLLECTIONS_TITLE));
+    await screen.findByRole('dialog', { name: COLLECTIONS_TITLE });
+    getRepertoireListItems.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Melody')).toBeInTheDocument();
+    expect(getRepertoireListItems).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('empty state', () => {
@@ -349,7 +407,7 @@ describe('empty state', () => {
     expect(screen.queryByText("Tell me what you already know, and I'll stop asking.")).not.toBeInTheDocument();
   });
 
-  it("the empty state's three doors are the same three the ＋ menu offers", async () => {
+  it("the empty state's three doors are the three the ＋ menu offers for ADDING material", async () => {
     mount({ items: [] });
     await screen.findByText("Tell me what you already know, and I'll stop asking.");
     expect(screen.getByLabelText('Name a collection')).toBeInTheDocument();
@@ -412,7 +470,8 @@ describe('scoping', () => {
           item_id: 'debussy1',
           label: 'Clair de lune',
           status: 'known',
-          meta: { [COMPOSER_KEY]: 'Debussy', [COLLECTION_KEY]: 'Suite bergamasque' },
+          meta: { [COMPOSER_KEY]: 'Debussy' },
+          collection_name: 'Suite bergamasque',
         }),
       ],
     });
