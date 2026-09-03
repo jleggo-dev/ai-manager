@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   TEMPO_BPM_KEY,
   pickDueNext,
+  pieceQualifiers,
+  qualifierMeta,
   renderRepertoire,
   settledTempo,
   tempoMeta,
@@ -170,6 +172,36 @@ describe('renderRepertoire', () => {
 
   it('renders empty for an empty list, so callers can omit the section cleanly', () => {
     expect(renderRepertoire([])).toBe('');
+  });
+});
+
+describe('piece qualifiers', () => {
+  it('round-trips through the patch it writes', () => {
+    const q = { composer: 'J.S. Bach', collection: 'Suzuki Book 2', catalogue: 'BWV 822', rank: 4 };
+    expect(pieceQualifiers(qualifierMeta(q))).toEqual(q);
+  });
+
+  it('writes only the fields given, so a partial edit never blanks the others', () => {
+    expect(qualifierMeta({ composer: 'Weber' })).toEqual({ composer: 'Weber' });
+    expect(Object.keys(qualifierMeta({}))).toEqual([]);
+  });
+
+  it('ignores blanks, non-strings, and a rank that is not a positive whole number', () => {
+    expect(pieceQualifiers({ composer: '  ', collection: 7, catalogue: null, rank: 0 })).toEqual({});
+    expect(pieceQualifiers({ rank: 2.5 })).toEqual({});
+    expect(pieceQualifiers({ rank: '3' })).toEqual({});
+    expect(qualifierMeta({ composer: '   ', rank: -1 })).toEqual({});
+  });
+
+  it('is empty for an item with no meta at all', () => {
+    expect(pieceQualifiers(null)).toEqual({});
+    expect(pieceQualifiers(undefined)).toEqual({});
+  });
+
+  it('coexists with the settled tempo in the same meta', () => {
+    const meta = { ...tempoMeta({ bpm: 72, meter: 3 }), ...qualifierMeta({ composer: 'Hummel' }) };
+    expect(settledTempo(meta)).toEqual({ bpm: 72, meter: 3 });
+    expect(pieceQualifiers(meta)).toEqual({ composer: 'Hummel' });
   });
 });
 

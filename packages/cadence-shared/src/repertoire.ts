@@ -49,6 +49,60 @@ export function tempoMeta(spec: MetronomeSpec): Record<string, unknown> {
   return { [TEMPO_BPM_KEY]: spec.bpm, [TEMPO_METER_KEY]: spec.meter };
 }
 
+/* ── Qualifiers ─────────────────────────────────────────────────────────────────────────────
+   The fields that tell two pieces with one title apart — composer, the collection it comes from,
+   a catalogue number — and, for material that has an order (a book, a grading ladder), its rank.
+   Structured in `meta` so the title can stay short and the qualifier does the work: "Minuet in G
+   Major" is three pieces on one shelf until BWV 822 or the Anna Magdalena notebook is named.
+
+   Spelled ONCE here. The seed writes these, the item screen edits them, identity reads them for
+   the collision check, and the list renders them on the row's second line — four call sites in
+   three packages, which is exactly the hand-copied-key drift the weigh-in regex taught. */
+export const COMPOSER_KEY = 'composer';
+export const COLLECTION_KEY = 'collection';
+export const CATALOGUE_KEY = 'catalogue';
+/** 1-based position in an ordered collection. Present on every item of a goal ⇒ the list is a ladder. */
+export const RANK_KEY = 'rank';
+
+export interface PieceQualifiers {
+  composer?: string;
+  collection?: string;
+  catalogue?: string;
+  rank?: number;
+}
+
+const qualifierString = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : undefined;
+
+/** The qualifiers on an item, or nothing where a field is absent or unusable. Never throws. */
+export function pieceQualifiers(meta: Record<string, unknown> | null | undefined): PieceQualifiers {
+  if (!meta) return {};
+  const out: PieceQualifiers = {};
+  const composer = qualifierString(meta[COMPOSER_KEY]);
+  const collection = qualifierString(meta[COLLECTION_KEY]);
+  const catalogue = qualifierString(meta[CATALOGUE_KEY]);
+  const rank = meta[RANK_KEY];
+  if (composer) out.composer = composer;
+  if (collection) out.collection = collection;
+  if (catalogue) out.catalogue = catalogue;
+  if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 1) out.rank = rank;
+  return out;
+}
+
+/** The meta PATCH for a set of qualifiers — only the fields given, so a partial edit never blanks
+ *  the others. Merged into meta by the repo, never written whole. */
+export function qualifierMeta(q: PieceQualifiers): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  const composer = qualifierString(q.composer);
+  const collection = qualifierString(q.collection);
+  const catalogue = qualifierString(q.catalogue);
+  if (composer) patch[COMPOSER_KEY] = composer;
+  if (collection) patch[COLLECTION_KEY] = collection;
+  if (catalogue) patch[CATALOGUE_KEY] = catalogue;
+  if (typeof q.rank === 'number' && Number.isInteger(q.rank) && q.rank >= 1) patch[RANK_KEY] = q.rank;
+  return patch;
+}
+
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
 
 /** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
