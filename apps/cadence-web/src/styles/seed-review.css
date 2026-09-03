@@ -38,6 +38,13 @@
   color: var(--dawn-4);
 }
 
+/* A row whose name cannot be saved as it stands. It carries the field and the note; the ruling is
+   that the seed refuses such a row rather than writing an unfindable one, so this is a row asking
+   for one edit — not a warning to read past. */
+.sr-row--blocked .sr-input {
+  border-color: var(--dawn-3);
+}
+
 .sr-tick {
   width: 22px;
   height: 22px;
@@ -132,6 +139,14 @@
 .sr-savefault {
   margin: 12px 0 0;
   color: var(--danger);
+}
+
+/* Why the confirm is held — sits under the button it explains. Not danger red: nothing has gone
+   wrong, there is one edit left to make. */
+.sr-hold {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--text-mute);
 }
 
 .sr-save {

@@ -62,7 +62,7 @@ function open(onDone = vi.fn()) {
 beforeEach(() => {
   vi.clearAllMocks();
   expandCollection.mockResolvedValue({ ok: true, collection: 'Suzuki Piano Book 2', candidates: candidates() });
-  confirmSeed.mockResolvedValue({ ok: true, written: 3, labels: ['a'] });
+  confirmSeed.mockResolvedValue({ ok: true, written: 3, labels: ['a'], refused: [] });
   getReview.mockResolvedValue({
     goals: [
       { goal_id: 'g-piano', title: 'Practice piano' },
@@ -299,8 +299,96 @@ describe('a title that names more than one piece', () => {
       candidates: candidates([{ ambiguous: true }]),
     });
     const { container } = open();
-    await screen.findByText('Écossaise');
+    await screen.findByText('Chanson');
     expect(screen.getByText(/names more than one piece/)).toBeInTheDocument();
     expect(container.querySelectorAll('.pw-rep-note')).toHaveLength(1);
+    // And it shows its name as a field, because renaming it is the only way out.
+    expect(screen.getByDisplayValue('Écossaise')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Écossaise' })).not.toBeInTheDocument();
+  });
+
+  /* The ruling (supervisor, 2026-09-02): the seed refuses such a row rather than writing it, the
+     same gate `update_repertoire` applies. The server is the authority and reports what it
+     refused; these are the screen's half of it — hold the button, say why, and let a rename
+     clear it. */
+
+  const twins = () => ({
+    ok: true,
+    collection: 'Suzuki Piano Book 2',
+    candidates: [
+      { label: 'Gavotte', composer: null, collection: 'X', catalogue: null, rank: 1, ambiguous: false },
+      { label: 'Gavotte', composer: null, collection: 'X', catalogue: null, rank: 2, ambiguous: false },
+      { label: 'Chanson', composer: null, collection: 'X', catalogue: null, rank: 3, ambiguous: false },
+    ],
+  });
+
+  it('holds the confirm while two ticked rows share a name, and says what to do', async () => {
+    expandCollection.mockResolvedValue(twins());
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chanson' }));
+
+    expect(saveButton()).toBeDisabled();
+    expect(saveButton()).toHaveTextContent('Save 3 pieces');
+    expect(
+      screen.getByText('Two of these share a name. Give one a fuller name and I can save them both.'),
+    ).toBeInTheDocument();
+    // Both marked rows come back as a field to correct — that is the way out.
+    expect(screen.getAllByDisplayValue('Gavotte')).toHaveLength(2);
+  });
+
+  it('a rename clears it and the confirm comes back', async () => {
+    expandCollection.mockResolvedValue(twins());
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chanson' }));
+    fireEvent.change(screen.getAllByDisplayValue('Gavotte')[0]!, { target: { value: 'Gavotte (Gossec)' } });
+
+    expect(screen.queryByText(/share a name/)).not.toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Gavotte (Gossec)' })).toBeInTheDocument();
+  });
+
+  it('never lets a shared name reach the server: confirm does nothing while it is held', async () => {
+    expandCollection.mockResolvedValue(twins());
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chanson' }));
+    fireEvent.click(saveButton());
+    expect(confirmSeed).not.toHaveBeenCalled();
+  });
+
+  it('a server-marked row holds the button too, and a rename releases it', async () => {
+    expandCollection.mockResolvedValue({
+      ok: true,
+      collection: 'Suzuki Piano Book 2',
+      candidates: candidates([{ ambiguous: true }]),
+    });
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Long, Long Ago' }));
+
+    expect(saveButton()).toBeDisabled();
+    expect(screen.getByText(/One of these shares its name with a piece you already have/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue('Écossaise'), { target: { value: 'Écossaise (Hummel)' } });
+    expect(saveButton()).toBeEnabled();
+    expect(saveButton()).toHaveTextContent('Save 2 pieces');
+  });
+
+  it('a server refusal names what it would not write, and never reports it as done', async () => {
+    confirmSeed.mockResolvedValue({
+      ok: true,
+      written: 1,
+      labels: ['Long, Long Ago'],
+      refused: [{ label: 'Écossaise', reason: 'already the title of "Écossaise (Hummel)"' }],
+    });
+    const { onDone } = open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Long, Long Ago' }));
+    fireEvent.click(saveButton());
+
+    expect(
+      await screen.findByText('Saved 1. This one needs a fuller name before I can save it: "Écossaise".'),
+    ).toBeInTheDocument();
+    expect(onDone).not.toHaveBeenCalled();
+    // The refused row comes back as a field to correct, and holds the button until it is.
+    expect(screen.getByDisplayValue('Écossaise')).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
   });
 });

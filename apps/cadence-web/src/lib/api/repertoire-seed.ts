@@ -37,7 +37,14 @@ export interface SeedWriteRow {
 export type SeedExpansion =
   { ok: true; collection: string; candidates: SeedCandidate[] } | { ok: false; fault: string };
 
-export type SeedConfirmation = { ok: true; written: number; labels: string[] } | { ok: false; fault: string };
+/** A row the server would not write, with the words that say what to change about it. */
+export interface RefusedSeedRow {
+  label: string;
+  reason: string;
+}
+
+export type SeedConfirmation =
+  { ok: true; written: number; labels: string[]; refused: RefusedSeedRow[] } | { ok: false; fault: string };
 
 const EXPAND_FAULT =
   'I could not look that up just now — a fault on our side, not an empty book. Nothing was saved. Try again in a moment.';
@@ -82,7 +89,18 @@ export async function confirmSeed(rows: SeedWriteRow[], goalId: string | null): 
     signal: timeoutSignal(30_000),
   }).catch(() => null);
   if (!res) return { ok: false, fault: CONFIRM_FAULT };
-  const body = (await res.json().catch(() => null)) as { written?: unknown; labels?: unknown } | null;
+  const body = (await res.json().catch(() => null)) as {
+    written?: unknown;
+    labels?: unknown;
+    refused?: unknown;
+  } | null;
   if (!res.ok || typeof body?.written !== 'number') return { ok: false, fault: faultText(body, CONFIRM_FAULT) };
-  return { ok: true, written: body.written, labels: Array.isArray(body.labels) ? (body.labels as string[]) : [] };
+  return {
+    ok: true,
+    written: body.written,
+    labels: Array.isArray(body.labels) ? (body.labels as string[]) : [],
+    // A refusal that arrived as something other than a list must not read as "nothing refused" —
+    // but the server always sends one, so an absent field is a shape change, not a silent zero.
+    refused: Array.isArray(body.refused) ? (body.refused as RefusedSeedRow[]) : [],
+  };
 }

@@ -83,3 +83,60 @@ export function writableRows(rows: SeedRowState[], hereRank: number | null): See
 export function saveLabel(count: number): string {
   return `Save ${count} ${count === 1 ? 'piece' : 'pieces'}`;
 }
+
+/* ── The refusal gate ────────────────────────────────────────────────────────────────────────
+   A row whose title two pieces answer to exists and is permanently unfindable — it reads as a
+   record and behaves as a hole. `update_repertoire` refuses such a row; the seed's confirm refuses
+   it too (supervisor ruling 2026-09-02), and the SERVER is the authority: it applies the full
+   needle rule against the person's whole shelf and reports back every label it would not write.
+
+   What follows is the screen's half — hold the button before the round trip, and say why. It
+   deliberately does NOT re-implement the needle rule (that lives once, server-side, in
+   repertoire-match.ts; a second spelling of it here is exactly the drift CLAUDE.md bans). It knows
+   two things instead: the mark the server already put on a candidate, and whether two rows in this
+   list carry one name. Anything subtler — an accent-variant twin, a collision with a piece on the
+   shelf the screen never saw — is caught by the server's refusal and named back to the person. */
+
+/** What two labels must differ in to be two rows: the unique index is `lower(label)`. */
+const labelKey = (label: string): string => label.trim().toLowerCase();
+
+/**
+ * The rows whose label cannot be saved as it stands, by rank. Independent of ticking, because the
+ * mark is a fact about the NAME: the row shows its note and becomes editable either way.
+ */
+export function markedRanks(rows: SeedRowState[]): Set<number> {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const key = labelKey(r.label);
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const marked = new Set<number>();
+  for (const r of rows) {
+    const key = labelKey(r.label);
+    if (key && (r.ambiguous || (counts.get(key) ?? 0) > 1)) marked.add(r.rank);
+  }
+  return marked;
+}
+
+/** The marked rows that would actually be written — the ones that hold the confirm button. */
+export function blockedRanks(rows: SeedRowState[], hereRank: number | null): Set<number> {
+  const marked = markedRanks(rows);
+  return new Set(rows.filter((r) => marked.has(r.rank) && rowStanding(r, hereRank) !== null).map((r) => r.rank));
+}
+
+/** Why the button is held, and the one thing that will release it. */
+export function ambiguityNote(count: number): string {
+  if (count === 1) {
+    return 'One of these shares its name with a piece you already have. Give it a fuller name — the composer or the catalogue number — and I can save it.';
+  }
+  if (count === 2) return 'Two of these share a name. Give one a fuller name and I can save them both.';
+  return 'Some of these share a name. Give each a fuller name — the composer or the catalogue number — and I can save them all.';
+}
+
+/** What the server refused, said plainly: what landed, and which names still need work. */
+export function refusedNote(written: number, labels: string[]): string {
+  const names = labels.map((l) => `"${l}"`).join(', ');
+  const head = written > 0 ? `Saved ${written}. ` : '';
+  const one = labels.length === 1;
+  return `${head}${one ? 'This one needs' : 'These need'} a fuller name before I can save ${one ? 'it' : 'them'}: ${names}.`;
+}

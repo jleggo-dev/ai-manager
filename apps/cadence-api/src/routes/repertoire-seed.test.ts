@@ -63,7 +63,7 @@ beforeEach(() => {
     collection: 'Suzuki Piano Book 2',
     candidates: [candidate('Écossaise', 1), candidate('Chanson', 2)],
   });
-  confirmSeed.mockResolvedValue({ ok: true, written: 2, labels: ['Écossaise', 'Chanson'] });
+  confirmSeed.mockResolvedValue({ ok: true, written: 2, labels: ['Écossaise', 'Chanson'], refused: [] });
 });
 
 describe('POST /progress/repertoire/seed', () => {
@@ -114,7 +114,7 @@ describe('POST /progress/repertoire/seed/confirm', () => {
       rows,
     });
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ written: 2, labels: ['Écossaise', 'Chanson'] });
+    expect(r.body).toEqual({ written: 2, labels: ['Écossaise', 'Chanson'], refused: [] });
     expect(confirmSeed).toHaveBeenCalledWith('u1', expect.any(Array), '11111111-1111-4111-8111-111111111111');
   });
 
@@ -161,6 +161,24 @@ describe('POST /progress/repertoire/seed/confirm', () => {
     const r = await call('/progress/repertoire/seed/confirm', { goal_id: 'piano', rows });
     expect(r.status).toBe(400);
     expect(confirmSeed).not.toHaveBeenCalled();
+  });
+
+  // The refused rows are the whole point of reporting rather than dropping: the screen has to be
+  // able to say WHICH name needs qualifying.
+  it('carries the refused rows through with their labels and reasons', async () => {
+    confirmSeed.mockResolvedValue({
+      ok: true,
+      written: 1,
+      labels: ['Chanson'],
+      refused: [{ label: 'Gavotte', reason: 'two of these carry the same name' }],
+    });
+    const r = await call('/progress/repertoire/seed/confirm', { rows });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({
+      written: 1,
+      labels: ['Chanson'],
+      refused: [{ label: 'Gavotte', reason: 'two of these carry the same name' }],
+    });
   });
 
   it('a fault answers 502, so "nothing saved" is never read as "nothing to save"', async () => {

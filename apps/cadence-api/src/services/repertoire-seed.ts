@@ -18,17 +18,25 @@
  *  2. **A seed writes `known`, `working` or `queued` and nothing else** (SEED_STATUSES). `retired`
  *    would file pieces as finished that nobody finished; the `learned` verb would stamp sixty
  *    crossings with today's date and hand the recap "you learned sixty pieces this week".
- *  3. **A candidate that cannot be found again is worse than no candidate.** Classical repertoire
- *    collides by design — Suzuki Book 2 alone prints three minuets in G — so every candidate is
- *    checked with `isResolvable` against the person's shelf AND the rest of the batch. An
- *    unresolvable one is kept and marked, never silently dropped and never silently written: the
- *    screen shows the note and the person can qualify it.
+ *  3. **A row that cannot be found again is worse than no row.** Classical repertoire collides by
+ *    design — Suzuki Book 2 alone prints three minuets in G — so every label is checked with
+ *    `isResolvable` against the person's shelf AND the rest of the batch. `expandCollection` MARKS
+ *    such a candidate so the screen can say so; `confirmSeed` REFUSES it and names it back
+ *    (supervisor ruling 2026-09-02). That is `update_repertoire`'s own gate, applied here rather
+ *    than a looser one: a row nothing can resolve reads as a record and behaves as a hole, and the
+ *    only useful answer is to say which label needs a fuller name.
  */
 import { MAX_SEED_ITEMS, isSeedStatus, qualifierMeta, type SeedStatus } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { listRepertoire, upsertRepertoireItem } from '../repos/repertoire.ts';
-import { canonicalLabel, invalidateSessionsFor, isResolvable, samePiece } from './repertoire-practice.ts';
-import { normTitle } from './goal-identity.ts';
+import {
+  canonicalLabel,
+  invalidateSessionsFor,
+  isResolvable,
+  itemNamedIn,
+  matchHay,
+  samePiece,
+} from './repertoire-practice.ts';
 
 /** One piece the job proposed, after the app has normalized it. Nothing here is stored yet. */
 export interface SeedCandidate {
@@ -55,7 +63,14 @@ export interface SeedRowInput {
   status: SeedStatus;
 }
 
-export type ConfirmSeedResult = { ok: true; written: number; labels: string[] } | { ok: false; fault: string };
+/** A row the seed would not write, and the words that say what to do about it. */
+export interface RefusedSeedRow {
+  label: string;
+  reason: string;
+}
+
+export type ConfirmSeedResult =
+  { ok: true; written: number; labels: string[]; refused: RefusedSeedRow[] } | { ok: false; fault: string };
 
 /* ── Faults ──────────────────────────────────────────────────────────────────────────────────
    tool-response.ts's stance, in words meant for a person rather than for the coach: say it was
@@ -130,23 +145,53 @@ function normalizeItems(raw: unknown[]): Omit<SeedCandidate, 'ambiguous'>[] {
     .map((c, i) => ({ ...c, rank: i + 1 }));
 }
 
+/* ── One collision rule, used twice ──────────────────────────────────────────────────────────
+   `expandCollection` marks with it and `confirmSeed` refuses with it, so the note the screen shows
+   and the row the server rejects can never disagree about which label is the problem. */
+
+/** Everything the row at `index` has to be tellable apart FROM: the shelf, plus its own batch. */
+const rivals = (shelf: Array<{ label: string }>, rows: Array<{ label: string }>, index: number) => [
+  ...shelf,
+  ...rows.filter((_, j) => j !== index).map((o) => ({ label: o.label })),
+];
+
 /**
- * Mark the candidates that could never be found again.
+ * Would this row be impossible to find again once it is saved?
  *
  * Two shapes, and `isResolvable` only catches the first:
  *
  *  - A label whose every needle is shared with something else ("Minuet in G Major" beside "Minuet
  *    in G Major, BWV 822"). That row would exist and match nothing.
- *  - Two candidates carrying the SAME label. `isResolvable` reads a same-piece label as an update
- *    of that row, which is right for a re-mention and wrong here: the two would land as one row
- *    on `lower(label)` and the second would overwrite the first's qualifiers.
+ *  - Two rows in one batch carrying the SAME label. `isResolvable` reads a same-piece label as an
+ *    update of that row, which is right for a re-mention and wrong here: the two would land as one
+ *    row on `lower(label)` and the second would overwrite the first's qualifiers.
  */
+function collides(shelf: Array<{ label: string }>, rows: Array<{ label: string }>, index: number): boolean {
+  const label = rows[index]!.label;
+  return twinInBatch(rows, index) || !isResolvable(rivals(shelf, rows, index), label);
+}
+
+const twinInBatch = (rows: Array<{ label: string }>, index: number): boolean =>
+  rows.some((o, j) => j !== index && samePiece(o.label, rows[index]!.label));
+
+/**
+ * Why a row was refused, in words that say what to change — `update_repertoire`'s own shape:
+ * name the pieces it collides with, because "add a qualifier" is only actionable once you know
+ * which piece you are being told apart from.
+ */
+function refusalReason(shelf: Array<{ label: string }>, rows: Array<{ label: string }>, index: number): string {
+  const label = rows[index]!.label;
+  if (twinInBatch(rows, index)) {
+    return 'two of these carry the same name — give one of them the composer or the catalogue number so each names one piece';
+  }
+  const clash = shelf.filter((i) => !samePiece(i.label, label) && itemNamedIn(i.label, matchHay([label])));
+  const named = clash.length ? clash.map((c) => `"${c.label}"`).join(' and ') : 'a piece you already have';
+  return `already the title of ${named} — add the composer, the catalogue number, or the collection so it names one piece`;
+}
+
+/** The candidates the screen must warn about. Same rule the confirm refuses on. */
 function markAmbiguity(shelf: Array<{ label: string }>, rows: Omit<SeedCandidate, 'ambiguous'>[]): SeedCandidate[] {
-  return rows.map((r, i) => {
-    const others = [...shelf, ...rows.filter((_, j) => j !== i).map((o) => ({ label: o.label }))];
-    const twin = rows.some((o, j) => j !== i && samePiece(o.label, r.label));
-    return { ...r, ambiguous: twin || !isResolvable(others, r.label) };
-  });
+  return rows.map((r, i) => ({ ...r, ambiguous: collides(shelf, rows, i) }));
 }
 
 function parseJson(text: string): Record<string, unknown> | null {
@@ -193,19 +238,22 @@ export async function expandCollection(userId: string, text: string): Promise<Ex
 const WRITE_CONCURRENCY = 8;
 
 /**
- * Write the rows the person confirmed, and nothing else.
+ * Write the rows the person confirmed — minus any the shelf could never tell apart.
  *
  * The shelf is read once for the whole batch, for the reason `update_repertoire` reads it: each
  * label resolves onto the row that already answers to it, so an accent-variant spelling updates
  * that piece instead of starting a second one beside it. A failed read aborts rather than writing
  * blind — a duplicate row splits a piece's practice history and its settled tempo, permanently.
+ *
+ * Refusals are REPORTED, not dropped. Every refused row comes back with its label and the reason,
+ * so the screen can say which name needs qualifying instead of the person finding out later that
+ * two of their pieces became one.
  */
 export async function confirmSeed(
   userId: string,
   rows: SeedRowInput[],
   goalId: string | null = null,
 ): Promise<ConfirmSeedResult> {
-  const seen = new Set<string>();
   const wanted = rows
     .map((r) => ({
       label: scrub(r.label),
@@ -216,16 +264,8 @@ export async function confirmSeed(
       status: r.status,
     }))
     // The three standings and no others, checked here rather than trusted from the wire.
-    .filter((r) => r.label.length > 0 && isSeedStatus(r.status))
-    // One row per piece: two entries for one label would race the upsert against itself, and
-    // `lower(label)` does not fold accents, so they could land as two rows for one piece.
-    .filter((r) => {
-      const key = normTitle(r.label);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  if (!wanted.length) return { ok: true, written: 0, labels: [] };
+    .filter((r) => r.label.length > 0 && isSeedStatus(r.status));
+  if (!wanted.length) return { ok: true, written: 0, labels: [], refused: [] };
 
   const shelf = await listRepertoire(userId).catch((e): null => {
     console.error('[seed] pre-write shelf read failed:', e);
@@ -233,10 +273,19 @@ export async function confirmSeed(
   });
   if (shelf === null) return { ok: false, fault: CONFIRM_FAULT };
 
+  // Judged against the WHOLE batch, never against the survivors: refusing the first of two twins
+  // must not make the second one look unique.
+  const refused: RefusedSeedRow[] = [];
+  const writable = wanted.filter((r, i) => {
+    if (!collides(shelf, wanted, i)) return true;
+    refused.push({ label: r.label, reason: refusalReason(shelf, wanted, i) });
+    return false;
+  });
+
   const written: Array<{ label: string; goal_id: string | null }> = [];
-  for (let i = 0; i < wanted.length; i += WRITE_CONCURRENCY) {
+  for (let i = 0; i < writable.length; i += WRITE_CONCURRENCY) {
     const batch = await Promise.all(
-      wanted.slice(i, i + WRITE_CONCURRENCY).map(async (r) => {
+      writable.slice(i, i + WRITE_CONCURRENCY).map(async (r) => {
         const { item } = await upsertRepertoireItem(userId, {
           label: canonicalLabel(shelf, r.label),
           status: r.status,
@@ -259,5 +308,5 @@ export async function confirmSeed(
   // The rotation reads cached prescriptions; a shelf this size makes every one of them stale.
   await invalidateSessionsFor(userId, written).catch(() => undefined);
 
-  return { ok: true, written: written.length, labels: written.map((w) => w.label) };
+  return { ok: true, written: written.length, labels: written.map((w) => w.label), refused };
 }

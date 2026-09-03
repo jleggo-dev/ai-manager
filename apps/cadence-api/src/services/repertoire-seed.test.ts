@@ -229,6 +229,7 @@ describe('confirmSeed — what actually gets written', () => {
       ok: true,
       written: 3,
       labels: ['Écossaise', 'Long, Long Ago', 'Chanson'],
+      refused: [],
     });
     expect(upsertRepertoireItem).toHaveBeenCalledTimes(3);
     const [, first] = upsertRepertoireItem.mock.calls[0] as [string, Record<string, unknown>];
@@ -265,13 +266,59 @@ describe('confirmSeed — what actually gets written', () => {
     expect(first.label).toBe('Écossaise');
   });
 
-  it('drops a duplicate of a row already in the same confirm rather than racing the upsert', async () => {
+  // The ruling (supervisor, 2026-09-02): the seed applies `update_repertoire`'s own gate. A row
+  // whose title two pieces answer to exists and is permanently unfindable — it reads as a record
+  // and behaves as a hole — so it is refused and named, never written and never silently dropped.
+  it('refuses BOTH rows that carry one name, names them, and writes the rest', async () => {
     const res = await confirmSeed('u1', [
       { label: 'Gavotte', status: 'known' },
       { label: 'gavotte', status: 'queued' },
+      { label: 'Chanson', status: 'queued' },
     ]);
-    expect(res).toMatchObject({ written: 1 });
+    expect(res).toMatchObject({ ok: true, written: 1, labels: ['Chanson'] });
+    if (!res.ok) return;
+    expect(res.refused.map((r) => r.label)).toEqual(['Gavotte', 'gavotte']);
+    for (const r of res.refused) expect(r.reason).toMatch(/same name/i);
     expect(upsertRepertoireItem).toHaveBeenCalledTimes(1);
+    expect((upsertRepertoireItem.mock.calls[0]![1] as { label: string }).label).toBe('Chanson');
+  });
+
+  it('refuses an accent-variant duplicate too — lower(label) would not have caught it', async () => {
+    const res = await confirmSeed('u1', [
+      { label: 'Écossaise', status: 'known' },
+      { label: 'Ecossaise', status: 'queued' },
+    ]);
+    expect(res).toMatchObject({ ok: true, written: 0 });
+    if (!res.ok) return;
+    expect(res.refused.map((r) => r.label)).toEqual(['Écossaise', 'Ecossaise']);
+    expect(upsertRepertoireItem).not.toHaveBeenCalled();
+  });
+
+  it('refuses a title the shelf already makes unfindable, names what it collides with, writes the rest', async () => {
+    listRepertoire.mockResolvedValue([row('Minuet in G Major, BWV 822'), row('Minuet in G Major (Petzold)')]);
+    const res = await confirmSeed('u1', [
+      { label: 'Minuet in G Major', status: 'working' },
+      { label: 'Chanson', status: 'queued' },
+    ]);
+    expect(res).toMatchObject({ ok: true, written: 1, labels: ['Chanson'] });
+    if (!res.ok) return;
+    expect(res.refused).toHaveLength(1);
+    expect(res.refused[0]!.label).toBe('Minuet in G Major');
+    expect(res.refused[0]!.reason).toMatch(/Minuet in G Major, BWV 822/);
+    expect(res.refused[0]!.reason).toMatch(/composer|catalogue/i);
+    const written = upsertRepertoireItem.mock.calls.map((c) => (c[1] as { label: string }).label);
+    expect(written).toEqual(['Chanson']);
+  });
+
+  it('a batch that is entirely refused writes nothing and reports every label', async () => {
+    const res = await confirmSeed('u1', [
+      { label: 'Gavotte', status: 'known' },
+      { label: 'Gavotte', status: 'queued' },
+    ]);
+    expect(res).toMatchObject({ ok: true, written: 0, labels: [] });
+    if (!res.ok) return;
+    expect(res.refused).toHaveLength(2);
+    expect(upsertRepertoireItem).not.toHaveBeenCalled();
   });
 
   it('takes no goal at all — a piece someone just wants kept', async () => {
@@ -296,7 +343,7 @@ describe('confirmSeed — what actually gets written', () => {
 
   it('an empty confirm writes nothing and reports zero', async () => {
     const res = await confirmSeed('u1', [], 'g1');
-    expect(res).toEqual({ ok: true, written: 0, labels: [] });
+    expect(res).toEqual({ ok: true, written: 0, labels: [], refused: [] });
     expect(upsertRepertoireItem).not.toHaveBeenCalled();
   });
 });

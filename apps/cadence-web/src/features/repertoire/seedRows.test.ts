@@ -11,7 +11,11 @@ import { describe, it, expect } from 'vitest';
 import { SEED_STATUSES } from '@cadence/shared';
 import {
   STANDING_WORD,
+  ambiguityNote,
   applyHere,
+  blockedRanks,
+  markedRanks,
+  refusedNote,
   rowStanding,
   saveLabel,
   standingFor,
@@ -191,5 +195,75 @@ describe('saveLabel — the button says what it will do', () => {
     expect(saveLabel(9)).toBe('Save 9 pieces');
     expect(saveLabel(1)).toBe('Save 1 piece');
     expect(saveLabel(0)).toBe('Save 0 pieces');
+  });
+});
+
+/* ── The refusal gate (supervisor ruling 2026-09-02) ─────────────────────────────────────────
+   The seed applies `update_repertoire`'s own rule: a title two pieces answer to is refused, never
+   written. The server is the authority — it refuses and names what it refused — and these are the
+   screen's half: mark the row, and hold the button while a marked row would be written. */
+
+const named = (labels: string[]): SeedRowState[] => labels.map((label, i) => ({ ...rows(1)[0]!, label, rank: i + 1 }));
+
+describe('markedRanks — the labels the screen will not let through as they are', () => {
+  it('marks a row the server already judged unresolvable', () => {
+    const state = named(['Écossaise', 'Chanson']).map((r, i) => (i === 0 ? { ...r, ambiguous: true } : r));
+    expect([...markedRanks(state)]).toEqual([1]);
+  });
+
+  it('marks BOTH rows that carry one name — neither can be told from the other', () => {
+    expect([...markedRanks(named(['Gavotte', 'Gavotte', 'Chanson']))]).toEqual([1, 2]);
+  });
+
+  it('folds case and surrounding space, because the unique index is lower(label)', () => {
+    expect([...markedRanks(named(['Gavotte', '  gavotte ']))]).toEqual([1, 2]);
+  });
+
+  it('never marks a blank row — an unfilled hand-added row is not a duplicate of another one', () => {
+    expect([...markedRanks(named(['', '', 'Chanson']))]).toEqual([]);
+  });
+
+  it('marks nothing when every name is its own', () => {
+    expect([...markedRanks(named(['Écossaise', 'Chanson', 'Gavotte']))]).toEqual([]);
+  });
+});
+
+describe('blockedRanks — the marked rows that would actually be written', () => {
+  const twins = () => named(['Gavotte', 'Gavotte', 'Chanson']);
+
+  it('blocks nothing before they have said where they are — nothing is going to be written', () => {
+    expect([...blockedRanks(twins(), null)]).toEqual([]);
+  });
+
+  it('blocks a marked row that is ticked', () => {
+    expect([...blockedRanks(applyHere(twins(), 3), 3)]).toEqual([1, 2]);
+  });
+
+  it('does not block a marked row nobody ticked', () => {
+    expect([...blockedRanks(applyHere(twins(), 1), 1)]).toEqual([1]);
+    expect([...blockedRanks(toggleRow(applyHere(twins(), 1), 0), 1)]).toEqual([]);
+  });
+});
+
+describe('ambiguityNote — why the button is held, and what to do about it', () => {
+  it('names the count and asks for a fuller name', () => {
+    expect(ambiguityNote(1)).toBe(
+      'One of these shares its name with a piece you already have. Give it a fuller name — the composer or the catalogue number — and I can save it.',
+    );
+    expect(ambiguityNote(2)).toBe('Two of these share a name. Give one a fuller name and I can save them both.');
+    expect(ambiguityNote(5)).toBe(
+      'Some of these share a name. Give each a fuller name — the composer or the catalogue number — and I can save them all.',
+    );
+  });
+});
+
+describe('refusedNote — what the server would not write', () => {
+  it('counts what landed and names what did not', () => {
+    expect(refusedNote(9, ['Minuet in G Major'])).toBe(
+      'Saved 9. This one needs a fuller name before I can save it: "Minuet in G Major".',
+    );
+    expect(refusedNote(0, ['Gavotte', 'gavotte'])).toBe(
+      'These need a fuller name before I can save them: "Gavotte", "gavotte".',
+    );
   });
 });

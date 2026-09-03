@@ -21,7 +21,18 @@ import { confirmSeed, expandCollection } from '../../lib/api/repertoire-seed.ts'
 import { getReview } from '../../lib/api/review.ts';
 import { SeedGoalChips, type SeedGoal } from './SeedGoalChips.tsx';
 import { SeedRow } from './SeedRow.tsx';
-import { applyHere, rowStanding, saveLabel, toggleRow, writableRows, type SeedRowState } from './seedRows.ts';
+import {
+  ambiguityNote,
+  applyHere,
+  blockedRanks,
+  markedRanks,
+  refusedNote,
+  rowStanding,
+  saveLabel,
+  toggleRow,
+  writableRows,
+  type SeedRowState,
+} from './seedRows.ts';
 import '../../styles/seed-review.css';
 
 const COACH_LINE =
@@ -86,6 +97,10 @@ export function SeedReview({ collection, onDone }: Props) {
   }, []);
 
   const toWrite = useMemo(() => writableRows(rows, hereRank), [rows, hereRank]);
+  // `marked` is a fact about the NAME (the row becomes a field to correct); `blocked` is the
+  // subset that would actually be written, and it is what holds the button.
+  const marked = useMemo(() => markedRanks(rows), [rows]);
+  const blocked = useMemo(() => blockedRanks(rows, hereRank), [rows, hereRank]);
 
   function tapHere(rank: number) {
     setHereRank(rank);
@@ -109,11 +124,24 @@ export function SeedReview({ collection, onDone }: Props) {
   }
 
   async function save() {
+    // The button is already disabled here; this is the second lock, so a name the seed would be
+    // refused for cannot reach the server by any route the screen offers.
+    if (blocked.size > 0) return;
     setSaving(true);
     setSaveFault(null);
     const res = await confirmSeed(toWrite, goalId);
     setSaving(false);
     if (!res.ok) return setSaveFault(res.fault);
+
+    // The server applies the full rule against the whole shelf, so it can refuse a name this
+    // screen had no way to judge. Mark those rows so they come back as fields, say what landed,
+    // and do NOT report done — there is still something for the person to do here.
+    if (res.refused.length > 0) {
+      const refusedLabels = new Set(res.refused.map((r) => r.label));
+      setRows((rs) => rs.map((r) => (refusedLabels.has(r.label) ? { ...r, ambiguous: true } : r)));
+      setSaveFault(refusedNote(res.written, [...refusedLabels]));
+      return;
+    }
     onDone(res.written);
   }
 
@@ -150,9 +178,15 @@ export function SeedReview({ collection, onDone }: Props) {
                     row={row}
                     standing={rowStanding(row, hereRank)}
                     here={row.rank === hereRank}
+                    blocked={marked.has(row.rank)}
                     onTick={() => setRows((rs) => toggleRow(rs, i))}
                     onHere={() => tapHere(row.rank)}
-                    onLabel={(value) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, label: value } : r)))}
+                    // A rename clears the server's mark: the label it judged is gone. If the new
+                    // one is still no good, the server refuses again and says so — it is the
+                    // authority, and this screen does not re-run its rule.
+                    onLabel={(value) =>
+                      setRows((rs) => rs.map((r, j) => (j === i ? { ...r, label: value, ambiguous: false } : r)))
+                    }
                   />
                 ))}
               </div>
@@ -165,10 +199,16 @@ export function SeedReview({ collection, onDone }: Props) {
 
           <SeedGoalChips goals={goals} goalId={goalId} onPick={setGoalId} />
 
-          {saveFault ? <p className="sr-fault-t sr-savefault">{saveFault}</p> : null}
-          <button type="button" className="cta sr-save" disabled={toWrite.length === 0 || saving} onClick={save}>
+          <button
+            type="button"
+            className="cta sr-save"
+            disabled={toWrite.length === 0 || saving || blocked.size > 0}
+            onClick={save}
+          >
             {saveLabel(toWrite.length)}
           </button>
+          {blocked.size > 0 ? <p className="sr-fault-t sr-hold">{ambiguityNote(blocked.size)}</p> : null}
+          {saveFault ? <p className="sr-fault-t sr-savefault">{saveFault}</p> : null}
         </>
       ) : null}
     </div>

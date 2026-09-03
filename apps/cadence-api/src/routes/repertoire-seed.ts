@@ -64,7 +64,7 @@ router.post('/repertoire/seed/confirm', async (req: Request, res: Response) => {
     const { goal_id, rows } = parseBody(confirmBodySchema, req.body);
     const result = await confirmSeed(userId, rows, goal_id ?? null);
     if (!result.ok) return void res.status(502).json({ error: result.fault });
-    res.json({ written: result.written, labels: result.labels });
+    res.json({ written: result.written, labels: result.labels, refused: result.refused });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /progress/repertoire/seed/confirm]', err);

@@ -19,15 +19,23 @@ interface Props {
   standing: SeedStatus | null;
   /** True when this is the piece they said they are on. */
   here: boolean;
+  /**
+   * True when this row's name cannot be saved as it stands. The row then shows its name as a
+   * FIELD rather than a title, because renaming it is the only thing that moves the screen
+   * forward — and once it is renamed the mark clears and the title comes back. Tapping "I am
+   * here" is unavailable while that is true, which is the state resolving itself: fix the name,
+   * get the row back.
+   */
+  blocked: boolean;
   onTick: () => void;
   onHere: () => void;
   onLabel: (value: string) => void;
 }
 
-export function SeedRow({ row, standing, here, onTick, onHere, onLabel }: Props) {
+export function SeedRow({ row, standing, here, blocked, onTick, onHere, onLabel }: Props) {
   const qualifier = [row.composer, row.catalogue].filter(Boolean).join(' · ');
   return (
-    <div className={`pw-rep-row sr-row${here ? ' sr-row--here' : ''}`}>
+    <div className={`pw-rep-row sr-row${here ? ' sr-row--here' : ''}${blocked ? ' sr-row--blocked' : ''}`}>
       <button
         type="button"
         className="occ-check sr-tick"
@@ -38,7 +46,7 @@ export function SeedRow({ row, standing, here, onTick, onHere, onLabel }: Props)
         {row.selected ? '✓' : ''}
       </button>
       <div className="occ-body sr-body">
-        {row.added ? (
+        {row.added || blocked ? (
           <input
             className="sr-input"
             value={row.label}
@@ -51,7 +59,7 @@ export function SeedRow({ row, standing, here, onTick, onHere, onLabel }: Props)
           </button>
         )}
         {qualifier ? <div className="sr-sub">{qualifier}</div> : null}
-        {row.ambiguous ? <div className="pw-rep-note sr-note">{AMBIGUOUS_NOTE}</div> : null}
+        {blocked ? <div className="pw-rep-note sr-note">{AMBIGUOUS_NOTE}</div> : null}
       </div>
       <span className="pw-rep-standing sr-standing">{standing ? STANDING_WORD[standing] : '—'}</span>
     </div>
