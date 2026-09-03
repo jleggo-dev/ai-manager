@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { RepertoireItem } from '@cadence/shared';
-import { COMPOSER_KEY, RANK_KEY } from '@cadence/shared';
+import { CATALOGUE_KEY, COMPOSER_KEY, RANK_KEY } from '@cadence/shared';
 
 const getRepertoireListItems = vi.hoisted(() => vi.fn());
 const useProgressRepertoire = vi.hoisted(() => vi.fn());
@@ -132,35 +132,25 @@ describe('groups — order, header, and count', () => {
     expect(names).toEqual(['Learning', 'Up next', 'Keeping up', 'Learned']);
   });
 
-  it('quotes the four instruction sentences verbatim from @cadence/shared, count included', async () => {
+  it("quotes the four GROUP_LINES verbatim — the coach's own words, not @cadence/shared's prompt text", async () => {
     const { container } = mount();
     await screen.findByText('Melody');
 
     const learning = groupSection(container, 'Learning');
     expect(within(learning).getByText('1')).toBeInTheDocument();
-    expect(
-      within(learning).getByText('work these in the learn part of each session; keep it to one or two'),
-    ).toBeInTheDocument();
+    expect(within(learning).getByText("what we're working on now")).toBeInTheDocument();
 
     const upNext = groupSection(container, 'Up next');
     expect(within(upNext).getByText('2')).toBeInTheDocument();
-    expect(
-      within(upNext).getByText(
-        "not started yet, in the user's order. Propose the top one when something is learned; never start one unasked",
-      ),
-    ).toBeInTheDocument();
+    expect(within(upNext).getByText("your order — I'll suggest the first")).toBeInTheDocument();
 
     const keepingUp = groupSection(container, 'Keeping up');
     expect(within(keepingUp).getByText('2')).toBeInTheDocument();
-    expect(
-      within(keepingUp).getByText(
-        'learned and in the rotation. Draw warm-up and play-out material from here, longest rest first',
-      ),
-    ).toBeInTheDocument();
+    expect(within(keepingUp).getByText('in rotation — longest rest first')).toBeInTheDocument();
 
     const learned = groupSection(container, 'Learned');
     expect(within(learned).getByText('1')).toBeInTheDocument();
-    expect(within(learned).getByText('finished. Count these; never schedule them')).toBeInTheDocument();
+    expect(within(learned).getByText('finished — counted, never scheduled')).toBeInTheDocument();
   });
 
   it('renders the header count line from the payload, never recomputed', async () => {
@@ -319,8 +309,10 @@ describe('the ＋ door', () => {
     await user.type(await screen.findByLabelText('Name'), 'A New Piece');
     getRepertoireListItems.mockClear();
     await user.click(screen.getByText('Save'));
+    // rank: null, never a fabricated 1 — this piece has no real order (it wasn't placed against a
+    // book), and a fake rank would sort it first the moment it ever moved into Up next.
     expect(confirmSeed).toHaveBeenCalledWith(
-      [{ label: 'A New Piece', composer: null, collection: null, catalogue: null, rank: 1, status: 'working' }],
+      [{ label: 'A New Piece', composer: null, collection: null, catalogue: null, rank: null, status: 'working' }],
       'g-piano',
     );
     expect(await screen.findByText('Melody')).toBeInTheDocument(); // sheet closed, list refreshed
@@ -409,13 +401,18 @@ describe('scoping', () => {
     expect(getRepertoireListItems).toHaveBeenCalledWith(null);
   });
 
-  it("composer, when on file, shows on the row's second line", async () => {
+  it("composer and catalogue, when on file, show on the row's second line", async () => {
     mount({
       items: [
-        item({ item_id: 'debussy1', label: 'Clair de lune', status: 'known', meta: { [COMPOSER_KEY]: 'Debussy' } }),
+        item({
+          item_id: 'debussy1',
+          label: 'Clair de lune',
+          status: 'known',
+          meta: { [COMPOSER_KEY]: 'Debussy', [CATALOGUE_KEY]: 'L. 75' },
+        }),
       ],
     });
     await screen.findByText('Clair de lune');
-    expect(screen.getByText('Debussy')).toBeInTheDocument();
+    expect(screen.getByText('Debussy · L. 75')).toBeInTheDocument();
   });
 });
