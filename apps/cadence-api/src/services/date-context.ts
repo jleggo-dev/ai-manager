@@ -78,7 +78,10 @@ export async function ensureDateStamped(userId: string, sessionId: string): Prom
   } else if (user?.home_location) {
     parts.push('Weather unavailable right now — do not invent conditions.');
   } else {
-    parts.push('Home location not set yet — ask once, warmly, if outdoor plans come up.');
+    parts.push(
+      'Home location is not set, so no weather is available and outdoor conditions cannot be checked. ' +
+        'set_home_location records one when they give it.',
+    );
   }
 
   const checkin = await checkinStateLine(userId).catch(() => '');
