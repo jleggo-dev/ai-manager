@@ -18,6 +18,8 @@ export interface RepertoireItemPatch {
   status?: RepertoireStatus;
   /** 1-based position for a drag-ordered standing (the Up next group, P6 "the room"). */
   rank?: number;
+  /** WHERE THE WORK IS, right now — "bars 9-16", "p. 240", "first stanza", "for 5th kyu" (P8). */
+  note?: string;
 }
 
 async function readError(res: Response, fallback: string): Promise<Error> {

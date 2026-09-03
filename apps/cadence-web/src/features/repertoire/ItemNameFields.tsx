@@ -2,16 +2,6 @@ import { useState } from 'react';
 import type { RepertoireItem } from '@cadence/shared';
 import { patchRepertoireItem, type RepertoireItemPatch } from '../../lib/api/repertoire-item.ts';
 
-/**
- * `RepertoireItemPatch` (lib/api/repertoire-item.ts) has no `note` field yet — that module is
- * owned by a different parcel this wave (P7) and could not be touched without risking a merge
- * conflict there. This local extension is a strict superset (every `RepertoireItemPatch` is still
- * a valid `SaveNamePatch`), so it type-checks straight through `patchRepertoireItem`'s existing
- * signature and the note rides in the same JSON body untouched. Fold `note?: string` into
- * `RepertoireItemPatch` itself once this lands and the parallel-edit risk is gone.
- */
-type SaveNamePatch = RepertoireItemPatch & { note?: string };
-
 export interface ItemNameFieldsProps {
   itemId: string;
   initialLabel: string;
@@ -64,7 +54,7 @@ export function ItemNameFields({
     if (!canSave) return;
     setSaving(true);
     setError('');
-    const patch: SaveNamePatch = { label: label.trim() };
+    const patch: RepertoireItemPatch = { label: label.trim() };
     if (composer.trim()) patch.composer = composer.trim();
     if (collection.trim()) patch.collection = collection.trim();
     if (catalogue.trim()) patch.catalogue = catalogue.trim();
