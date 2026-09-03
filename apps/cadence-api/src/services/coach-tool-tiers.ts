@@ -240,6 +240,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
   get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
+  offer_repertoire_review: 'ACTION: put a whole book or syllabus up to tick — adds nothing to their list',
   get_user_built_activities: 'activities the user built themselves — steps, runs, and plan placement',
   get_journal: 'recent journal entries, verbatim; entries marked private are never included',
   get_goal_progress: 'per-goal progress numbers computed from what they logged',
@@ -322,7 +323,10 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     label: 'what they practice and already know',
     // `get_practice_totals` moved here from `training` when the category was born (2026-08-30):
     // piano minutes and prayer streaks were always a strained fit under "training".
-    members: ['get_repertoire', 'get_practice_totals'],
+    // `offer_repertoire_review` is this category's first ACTION (2026-09-02): the door for a whole
+    // collection, when the person names a book she has no way to type out. It is filed beside the
+    // read it feeds, so drilling in shows the pair — what they know, and how a book gets onto it.
+    members: ['get_repertoire', 'get_practice_totals', 'offer_repertoire_review'],
   },
   {
     key: 'body',

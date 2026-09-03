@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 54 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 56 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -433,6 +433,30 @@ const ACTIONS: EvalCase[] = [
       'be proportional to the size of the ask" — the incident was a small edit routed into a full ' +
       're-synthesis, so start_replan ships with the small ask asserted AGAINST it from day one.',
   },
+  {
+    id: 'A24',
+    kind: 'action',
+    turn:
+      "started suzuki book 2 last autumn — i'm on the hungarian folk song now, everything before it is " +
+      'fine',
+    expect: ['offer_repertoire_review'],
+    allow: [...DOSSIER_READS, 'get_repertoire', 'update_repertoire'],
+    args: {
+      tool: 'offer_repertoire_review',
+      check: (a) => {
+        if (!/suzuki/.test(str(a.collection))) return `collection was "${String(a.collection)}", not the book named`;
+        // The prefill is half the value: without it the person taps through a list she could have
+        // pre-marked from a sentence they already said.
+        return /hungarian|folk/.test(str(a.where_you_are))
+          ? null
+          : `where_you_are was "${String(a.where_you_are)}" — they said which piece they are on`;
+      },
+    },
+    from:
+      'Design frame 1e (repertoire build, P7) — the sentence the door exists for. Twelve pieces sit in it ' +
+      'and none are named, so update_repertoire can only write titles she guessed; the book goes up instead ' +
+      'and the person ticks it.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -789,6 +813,20 @@ const SILENCE: EvalCase[] = [
       'session could hold is not a decision to rebuild it: "can you add chest and abs" decides, "should it ' +
       'have hills" asks. Takes-effect-immediately makes the over-trigger cost real here.',
   },
+  {
+    id: 'C19',
+    kind: 'silence',
+    turn: 'picked up a second-hand abrsm grade 3 book at a charity shop the other day, it is sitting on the piano',
+    expect: [],
+    allow: [...DOSSIER_READS, 'get_repertoire'],
+    // A24's near-miss: naming a book they OWN is not saying where in it they are, and putting
+    // twelve rows on someone's screen because they mentioned a purchase is the over-trigger this
+    // door must never have. Writing pieces here would be worse still — nothing was learned.
+    forbid: ['offer_repertoire_review', 'update_repertoire'],
+    from:
+      'Design frame 1e (repertoire build, P7) — the forbidden half of the offer. The ruling is that she may ' +
+      'offer when they say they are PARTWAY THROUGH something; owning a copy of it is not a standing.',
+  },
 ];
 
 /* ══ D · CANARIES — the grader on trial before the model is ══════════════════════════════════ */
@@ -865,6 +903,9 @@ export const ACTION_TOOLS = new Set([
   'update_repertoire',
   'revise_session',
   'start_replan',
+  // A tail action all the same, and the one whose miss is least visible: when she does not call
+  // it she asks the person to type their book out, which reads as helpfulness rather than a gap.
+  'offer_repertoire_review',
 ]);
 
 /**
