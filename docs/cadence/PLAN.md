@@ -602,27 +602,25 @@ occurrences with `skipped`/`missed`; the coach names no crisis phone number.
 
 ### Backlog — detailed
 
-**Food screen consolidation — what the July panel deletion dropped (opened 2026-08-31, OWNER TO RULE)**
+**Food screen consolidation — the dropped Kitchen capabilities, RULED AND RESTORED (2026-09-02)**
 
-The Day tab's pills and doors now open the Kitchen tab's sections, and the 2026-07-25 panel stack
-(`MealPlansPanel`/`RecipesPanel` + `WeekMenuSheet`/`ShopSheet`) is deleted. Fridge-from-photo and
-recipe discovery were ported into the Kitchen (`KitchenIntake` + doors on the cookbook view);
-paste, the planner, the derived shopping list and log-a-saved-recipe (Log screen / cook task) all
-already existed. Three things did NOT survive, each needing a ruling or a shrug:
+The owner's ruling: the full Kitchen experience was never meant to shrink — the meal-logging work
+was about the Log popup. All three drops came back as Kitchen capabilities:
 
-- **AI-drafted week** ("Plan this week" → `generateMealPlan` + confirm-save). Dropped on the view
-  that coach-authored weeks (#325) are the generation path now and the Kitchen composes by hand.
-  If a one-tap draft belongs in the Kitchen, it should be designed for it, not resurrected.
-- **Past meal plans list** (`listMealPlans` browsing of earlier weeks). The Kitchen only knows the
-  current week. Nobody has asked for the history view; the data is still stored.
-- **Persistent shopping-list ticks.** The old shop PATCHed `checked` onto the saved plan, so a
-  basket survived an app kill mid-shop; the Kitchen's list is derived-never-kept by its own ruling
-  and its ticks are component state — they now also die on a tab switch or webview reclaim. If a
-  shop should survive a phone lock, the ticks need a home that isn't the derived list.
+- **AI-drafted week — RESTORED** (`KitchenDraftWeek.tsx`): a "Draft this week" door on the
+  Kitchen's week view — note in, draft out, nothing sticks until "Keep this week" (the upsert
+  replaces the week, and the card says so). ⚠️ Open server defect: the `generate-meal-plan` job
+  hangs — it rides the conversational COACH profile instead of a gpt-class job profile (the
+  schema-jobs rule); task filed to repoint + model-verify + sync. The door's error path holds
+  until then.
+- **Past weeks — RESTORED**: ‹ › paging on the week view; past weeks read back with every editing
+  door stowed; "Back to this week" returns.
+- **Basket ticks — KEPT, PERSISTED**: the LIST stays derived (never stale); the TICKS write to
+  the plan row on every toggle and re-seed by item name — a basket now survives a phone lock, a
+  tab switch, and an app kill. A new week is a new plan row, so the basket empties itself.
 
-The client wrappers backing the dropped surfaces (`generateMealPlan`, `listMealPlans`,
-`mealPlanDayLabel`, `shoppingListSummary` in `lib/api/meal-plans.ts` + barrel) are now uncalled —
-prune once the rulings above land, in case one of them brings a surface back.
+The once-dead client wrappers (`generateMealPlan`, `mealPlanDayLabel`, `shoppingListSummary`)
+are live again; `listMealPlans` remains uncalled (paging fetches by week) — prune it or leave it.
 
 **A0. Anonymous onboarding — abuse, cleanup, and the RLS audit (opened 2026-08-09, NOT BUILT)**
 

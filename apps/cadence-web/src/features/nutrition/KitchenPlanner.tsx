@@ -44,6 +44,7 @@ export function KitchenPlanner({
   busy,
   pending,
   targetKcal,
+  readOnly = false,
   onCommit,
   onPendingDone,
 }: {
@@ -51,6 +52,8 @@ export function KitchenPlanner({
   days: MealPlanDay[];
   recipes: Recipe[];
   busy: boolean;
+  /** A past week reads back but takes no edits — every fill/remove door stays home. */
+  readOnly?: boolean;
   /** The day's kcal target, when one exists. null until the coach proposes targets (slice 5) —
    *  and every number here degrades to a bare total rather than inventing a denominator. */
   targetKcal: number | null;
@@ -203,10 +206,18 @@ export function KitchenPlanner({
               {meal ? (
                 <>
                   <span className="kt-slotrow-n">{mealPlanLabel(meal)}</span>
-                  <button className="kt-off" disabled={busy} onClick={() => onCommit(removeMeal(days, openDay, slot))}>
-                    Take it off
-                  </button>
+                  {!readOnly && (
+                    <button
+                      className="kt-off"
+                      disabled={busy}
+                      onClick={() => onCommit(removeMeal(days, openDay, slot))}
+                    >
+                      Take it off
+                    </button>
+                  )}
                 </>
+              ) : readOnly ? (
+                <span className="kt-slotrow-n">—</span>
               ) : (
                 <span className="kt-fill-pair">
                   <button className="kt-fill" disabled={busy} onClick={() => setPicking({ day: openDay, slot })}>
@@ -228,7 +239,7 @@ export function KitchenPlanner({
   const avg = weekAverage(days);
   return (
     <div className="kt-plan" role="region" aria-label="Plan the week">
-      <p className="kt-lede">Set as much or as little as you like — empty days stay empty.</p>
+      {!readOnly && <p className="kt-lede">Set as much or as little as you like — empty days stay empty.</p>}
 
       {/* Frame 10b's header. Only once something is planned: an average of nothing is not a number,
           and printing "0 kcal a day" over an empty week would read as a verdict. */}
@@ -267,9 +278,11 @@ export function KitchenPlanner({
         );
       })}
 
-      <button type="button" className="kt-add" disabled={busy} onClick={() => setComposing({})}>
-        ＋ Define a meal
-      </button>
+      {!readOnly && (
+        <button type="button" className="kt-add" disabled={busy} onClick={() => setComposing({})}>
+          ＋ Define a meal
+        </button>
+      )}
     </div>
   );
 }

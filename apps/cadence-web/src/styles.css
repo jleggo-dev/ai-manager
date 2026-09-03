@@ -7583,6 +7583,53 @@ html[data-native] .sheet-body {
   color: oklch(38% 0.06 152);
   cursor: pointer;
 }
+.kt-weeknav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.kt-weeknav b {
+  font-size: 13px;
+  font-weight: 800;
+  color: oklch(30% 0.04 120);
+}
+.kt-weeknav button {
+  border: 1px solid oklch(88% 0.02 85);
+  background: #fff;
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  color: oklch(38% 0.06 152);
+  cursor: pointer;
+}
+.kt-weeknav button:disabled {
+  color: oklch(80% 0.015 90);
+  cursor: default;
+}
+.kt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: stretch;
+}
+.kt-field span {
+  font-size: 12px;
+  font-weight: 700;
+  color: oklch(45% 0.03 120);
+}
+.kt-field-in {
+  border: 1px solid oklch(88% 0.02 85);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  background: #fff;
+  resize: vertical;
+}
 .kt-linkback {
   align-self: flex-start;
   border: none;

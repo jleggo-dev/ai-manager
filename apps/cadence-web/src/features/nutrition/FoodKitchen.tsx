@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Recipe } from '@cadence/shared';
+import { KitchenDraftWeek } from './KitchenDraftWeek.tsx';
 import { KitchenIntake, type KitchenIntakeSource } from './KitchenIntake.tsx';
 import { KitchenPlanner } from './KitchenPlanner.tsx';
 import { KitchenRecipes } from './KitchenRecipes.tsx';
@@ -10,7 +11,17 @@ import { useKitchen } from './useKitchen.ts';
 /** The Kitchen's three standing sections — what the Day tab's pills and doors navigate to. */
 export type KitchenView = 'recipes' | 'week' | 'shop';
 
-type KitchenScreen = KitchenView | KitchenIntakeSource;
+type KitchenScreen = KitchenView | KitchenIntakeSource | 'draft';
+
+/** "Week of 31 Aug" — the paging header's own words. */
+function weekLabel(weekOf: string): string {
+  const [y, m, d] = weekOf.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12)).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
 
 /**
  * The Kitchen (Food Journey 10) — the third tab of the Food screen, and the prep surface.
@@ -34,6 +45,20 @@ export function FoodKitchen({
 
   const days = kitchen.plan?.days ?? [];
   const planned = plannedCount(days);
+
+  if (view === 'draft') {
+    return (
+      <div className="kt">
+        <KitchenDraftWeek
+          weekOf={kitchen.weekOf}
+          hasPlan={!!kitchen.plan}
+          busy={kitchen.busy}
+          onKeep={(draft) => void kitchen.saveDraft(draft).then((ok) => ok && setView('week'))}
+          onCancel={() => setView('week')}
+        />
+      </div>
+    );
+  }
 
   if (view === 'paste' || view === 'snap' || view === 'discover') {
     return (
@@ -111,10 +136,36 @@ export function FoodKitchen({
 
       {view === 'week' && (
         <>
+          {/* Week paging (owner ruling 2026-09-02): ‹ walks into past weeks, read-only; › comes
+              back, never past the running week — planning lives there. */}
+          <div className="kt-weeknav">
+            <button aria-label="Earlier week" onClick={() => kitchen.goWeek(-1)}>
+              ‹
+            </button>
+            <b>Week of {weekLabel(kitchen.weekOf)}</b>
+            <button aria-label="Later week" disabled={kitchen.isCurrentWeek} onClick={() => kitchen.goWeek(1)}>
+              ›
+            </button>
+          </div>
+          {kitchen.isCurrentWeek ? (
+            <button className="kt-row" onClick={() => setView('draft')}>
+              <span className="kt-row-t">
+                <b>Draft this week</b>
+                <span>A week of dinners you&apos;d like — nothing sticks until you keep it</span>
+              </span>
+              <i aria-hidden>›</i>
+            </button>
+          ) : (
+            <button className="kt-inline" onClick={kitchen.goToCurrentWeek}>
+              Back to this week
+            </button>
+          )}
           <div className="kt-count">
             {planned === 0
-              ? 'Nothing planned this week yet.'
-              : `${planned} meal${planned === 1 ? '' : 's'} planned this week.`}
+              ? kitchen.isCurrentWeek
+                ? 'Nothing planned this week yet.'
+                : 'Nothing was planned that week.'
+              : `${planned} meal${planned === 1 ? '' : 's'} planned ${kitchen.isCurrentWeek ? 'this' : 'that'} week.`}
           </div>
           <KitchenPlanner
             targetKcal={targetKcal}
@@ -123,13 +174,22 @@ export function FoodKitchen({
             recipes={kitchen.recipes}
             busy={kitchen.busy}
             pending={pending}
+            readOnly={!kitchen.isCurrentWeek}
             onCommit={(next) => void kitchen.commitDays(next)}
             onPendingDone={() => setPending(null)}
           />
         </>
       )}
 
-      {view === 'shop' && <KitchenShopList days={days} byId={kitchen.byId} onPlanWeek={() => setView('week')} />}
+      {view === 'shop' && (
+        <KitchenShopList
+          days={days}
+          byId={kitchen.byId}
+          savedTicks={kitchen.plan?.shopping_list ?? []}
+          onSaveTicks={(list) => void kitchen.saveTicks(list)}
+          onPlanWeek={() => setView('week')}
+        />
+      )}
 
       <p className="kt-foot">Planning something doesn&apos;t count it — log it when you eat it.</p>
     </div>

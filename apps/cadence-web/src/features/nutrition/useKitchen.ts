@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { mealPlanItems, type MealPlanDay, type Recipe } from '@cadence/shared';
+import { mealPlanItems, type MealPlanDay, type Recipe, type ShoppingListItem } from '@cadence/shared';
 import {
   deleteMealPlan,
   getCurrentMealPlan,
@@ -8,6 +8,7 @@ import {
   probeRecipeDiscovery,
   saveMealPlan,
   weekOfMonday,
+  type MealPlanDraft,
   type MealPlanRecord,
 } from '../../lib/api.ts';
 import { toDraftRecipe } from './kitchenPlan.ts';
@@ -19,6 +20,8 @@ export interface KitchenData {
   byId: Map<string, Recipe>;
   plan: MealPlanRecord | null;
   weekOf: string;
+  /** True while the tab is on the running week — past weeks are read-only. */
+  isCurrentWeek: boolean;
   status: KitchenStatus;
   /** Whether the recipe-discovery endpoint is live — gates the "Find a real recipe" door. */
   discoveryLive: boolean;
@@ -26,8 +29,15 @@ export interface KitchenData {
   note: string;
   setNote: (note: string) => void;
   reload: () => void;
+  /** Page the week: -1 back, +1 forward (never past the current week). */
+  goWeek: (delta: number) => void;
+  goToCurrentWeek: () => void;
   /** Write the week's days — creating, patching or clearing the plan as the edit requires. */
   commitDays: (days: MealPlanDay[]) => Promise<void>;
+  /** Keep an AI-drafted week — the upsert replaces whatever the week held. */
+  saveDraft: (draft: MealPlanDraft) => Promise<boolean>;
+  /** Persist the basket: the derived list with its checked flags, written to the plan row. */
+  saveTicks: (list: ShoppingListItem[]) => Promise<void>;
 }
 
 /**
@@ -38,12 +48,23 @@ export interface KitchenData {
  * emptied week is a delete (the API cannot store a week with no meals in it). The caller composes
  * a `MealPlanDay[]` with the pure helpers and hands it over.
  *
- * The shopping list is never written from here. The Kitchen derives its list from what is planned,
- * every time it is opened — so a plan edit can never leave a stale list behind, and a list the meal
- * planner generated is left exactly as it found it.
+ * The shopping LIST stays derived from what is planned, every time it opens — a plan edit can
+ * never leave a stale list behind. The TICKS are kept (owner ruling, 2026-09-02: a basket must
+ * survive a phone lock in the dairy aisle): `saveTicks` writes the derived list with its checked
+ * flags onto the plan row, and the next derive re-reads only the checkmarks by item name. A new
+ * week is a new plan row, so the basket empties itself when the week turns.
  */
+/** Monday of the week `delta` weeks away from the given Monday. */
+export function weekShift(weekOf: string, delta: number): string {
+  const [y, m, d] = weekOf.split('-').map(Number);
+  const dt = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12));
+  dt.setUTCDate(dt.getUTCDate() + delta * 7);
+  return dt.toISOString().slice(0, 10);
+}
+
 export function useKitchen(): KitchenData {
-  const [weekOf] = useState(() => weekOfMonday());
+  const thisWeek = useState(() => weekOfMonday())[0];
+  const [weekOf, setWeekOf] = useState(thisWeek);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [plan, setPlan] = useState<MealPlanRecord | null>(null);
   const [status, setStatus] = useState<KitchenStatus>('loading');
@@ -53,6 +74,17 @@ export function useKitchen(): KitchenData {
   const [nonce, setNonce] = useState(0);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
+
+  /** Page the week — back freely, forward never past the running week (planning lives there). */
+  const goWeek = useCallback(
+    (delta: number) =>
+      setWeekOf((w) => {
+        const next = weekShift(w, delta);
+        return next > thisWeek ? thisWeek : next;
+      }),
+    [thisWeek],
+  );
+  const goToCurrentWeek = useCallback(() => setWeekOf(thisWeek), [thisWeek]);
 
   useEffect(() => {
     let alive = true;
@@ -154,17 +186,62 @@ export function useKitchen(): KitchenData {
     [busy, plan, recipes, weekOf],
   );
 
+  /**
+   * Keep an AI-drafted week. The server upserts per (user, week): keeping a draft over an
+   * existing week REPLACES it — the review card says so before this ever runs.
+   */
+  const saveDraft = useCallback(
+    async (draft: MealPlanDraft): Promise<boolean> => {
+      if (busy) return false;
+      setBusy(true);
+      setNote('');
+      try {
+        const r = await saveMealPlan(draft);
+        if (r.status !== 'ok') {
+          setNote(r.message);
+          return false;
+        }
+        setPlan(r.plan);
+        reload();
+        return true;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, reload],
+  );
+
+  /**
+   * Persist the basket. Optimistic — a tick in a supermarket aisle must move NOW — and quiet on
+   * failure: the derived list still shows the local tick, and the next toggle retries the write.
+   */
+  const saveTicks = useCallback(
+    async (list: ShoppingListItem[]): Promise<void> => {
+      const planId = plan?.meal_plan_id;
+      if (!planId) return;
+      setPlan((p) => (p ? { ...p, shopping_list: list } : p));
+      const r = await patchMealPlan(planId, { shopping_list: list }).catch(() => null);
+      if (r?.status === 'ok') setPlan(r.plan);
+    },
+    [plan?.meal_plan_id],
+  );
+
   return {
     recipes,
     byId: new Map(recipes.map((r) => [r.recipe_id, r])),
     plan,
     weekOf,
+    isCurrentWeek: weekOf === thisWeek,
     status,
     discoveryLive,
     busy,
     note,
     setNote,
     reload,
+    goWeek,
+    goToCurrentWeek,
     commitDays,
+    saveDraft,
+    saveTicks,
   };
 }
