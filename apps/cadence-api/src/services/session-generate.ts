@@ -31,7 +31,7 @@ import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/oc
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listEquipment } from '../repos/equipment.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
-import { findItemForTitle, renderRepertoireForCoach } from './repertoire-practice.ts';
+import { findItemForTitle } from './repertoire-practice.ts';
 import { practiceVariables } from './session-practice-facts.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
@@ -152,22 +152,20 @@ async function generateSession(
     baseline: JSON.stringify(user?.baseline ?? {}),
     equipment: JSON.stringify(equipment.map((e) => ({ name: e.name, category: e.category }))),
     recent_logs: renderLogLines(history),
-    // What they are learning / already know FOR THIS SESSION'S GOAL, with the rotation's DUE
-    // NEXT computed over that scope — the prescribe coach names ONE piece for a review slot
-    // instead of inventing material or freezing a title into plan text (the 2026-08-29 piano
-    // failure). Scoped because the prompt promises "for this practice": a karate kata must not
-    // come up DUE NEXT in a piano session, and the piano book must not ride every run's prompt.
-    // Unlinked items reach practice-area goals only. A failed read says so — never "empty".
+    // What they play FOR THIS SESSION'S GOAL: every item with its standing, when it was last
+    // practised, the tempo they settled on, the note saying where the work is, and their own words
+    // from the most recent session naming it. ONE variable since 2026-09-03 — `warmup_pick`,
+    // `next_rested`, `learning` and `up_next_top` each named a pick, and the owner ruled that
+    // nothing we hand her may tell her which item to reach for. Scoped because the prompt promises
+    // "for this practice": the piano book must not ride every run's prompt, and a karate kata must
+    // not turn up in a piano session. Unlinked items reach practice-area goals only.
+    //
+    // A failed read says so IN PLACE of the list — never an empty string, which she would read as
+    // "they know nothing" (TOOL-HARNESS.md: an error must never look like an empty result).
     repertoire:
       shelf === null
         ? 'Could not be read just now — a fault on our side, NOT an empty record. Do not assume they know nothing, and do not invent items.'
-        : renderRepertoireForCoach(shelf),
-    // The parts of a practice session, drawn from the standings: which Keeping up item is due for
-    // the warm-up, what a swap offers instead, the Learning pieces with their practice note and the
-    // last words logged about each, and the top of Up next as a forecast. All four are empty for a
-    // goal with no shelf and for a shelf that could not be read — the template ignores an empty tag.
-    // The code says what is due; she still composes the session.
-    ...practiceVariables(shelf, history),
+        : practiceVariables(shelf, history).repertoire,
     phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,

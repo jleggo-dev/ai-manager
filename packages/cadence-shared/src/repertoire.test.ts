@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   PRACTICE_NOTE_KEY,
   REPERTOIRE_GROUPS,
+  STANDING_MEANS,
+  STANDING_NAMES,
   TEMPO_BPM_KEY,
   byRest,
-  pickDueNext,
   pieceQualifiers,
   practiceNoteOf,
   qualifierMeta,
@@ -22,14 +23,25 @@ const item = (label: string, over: Partial<RepertoireLike> = {}): RepertoireLike
 
 const daysAgo = (n: number): string => new Date(Date.now() - n * 86_400_000).toISOString();
 
-describe('pickDueNext', () => {
-  it('picks the known item resting longest', () => {
+/**
+ * `byRest` is now the whole of the rest ordering — `pickDueNext` is gone (owner ruling 2026-09-03:
+ * nothing in what the coach reads may tell her which item to choose). The comparator survives as a
+ * DISPLAY fact: the list screen orders an unranked Keeping-up group oldest-practised first, and the
+ * date is on every row, so the order states something the person can check rather than a pick.
+ *
+ * The three rows below are `pickDueNext`'s own ordering rows, moved onto the comparator that still
+ * has the behaviour: longest rest first, never-practised ahead of practised, ties broken stably.
+ * The fourth — "only known items rotate" — is deliberately NOT replaced: no code filters by
+ * standing for a pick any more, because no code makes a pick.
+ */
+describe('byRest', () => {
+  it('orders the item resting longest first', () => {
     const items = [
       item('A Short Story', { last_practiced_at: daysAgo(1) }),
       item('Écossaise', { last_practiced_at: daysAgo(19) }),
       item('Minuet in G', { last_practiced_at: daysAgo(9) }),
     ];
-    expect(pickDueNext(items)?.label).toBe('Écossaise');
+    expect([...items].sort(byRest).map((i) => i.label)).toEqual(['Écossaise', 'Minuet in G', 'A Short Story']);
   });
 
   it('a never-practiced item rests longer than any practiced one', () => {
@@ -37,16 +49,7 @@ describe('pickDueNext', () => {
       item('Écossaise', { last_practiced_at: '2020-01-01T00:00:00Z' }),
       item('Arietta', { last_practiced_at: null }),
     ];
-    expect(pickDueNext(items)?.label).toBe('Arietta');
-  });
-
-  it('only known items rotate — working, queued and retired are never due', () => {
-    const items = [
-      item('Melody', { status: 'working' }),
-      item('Frankie and Johnnie', { status: 'queued' }),
-      item('Cradle Song', { status: 'retired' }),
-    ];
-    expect(pickDueNext(items)).toBeNull();
+    expect([...items].sort(byRest)[0]?.label).toBe('Arietta');
   });
 
   it('ties break stably (started_at, then label), not by row order', () => {
@@ -55,21 +58,26 @@ describe('pickDueNext', () => {
       item('A piece', { last_practiced_at: null, started_at: '2026-08-02T00:00:00Z' }),
       item('C piece', { last_practiced_at: null, started_at: '2026-08-01T00:00:00Z' }),
     ];
-    expect(pickDueNext(items)?.label).toBe('C piece');
-    expect(pickDueNext([...items].reverse())?.label).toBe('C piece');
+    expect([...items].sort(byRest)[0]?.label).toBe('C piece');
+    expect([...items].reverse().sort(byRest)[0]?.label).toBe('C piece');
   });
 });
 
 /**
- * The four standings (owner design 2026-09-02: "a standing is an instruction to the coach, not a
- * label"). Each group header has to carry BOTH halves or the render misleads her:
+ * The four standings, as DEFINITIONS (owner ruling 2026-09-03: "we don't need to give the coach any
+ * direction on how to pick"). Each group header carries two things and no third:
  *
- *  - the standing's own instruction, so she knows what the group is for without inferring it;
+ *  - what the standing MEANS, so she knows what the group is without inferring it — never what to
+ *    do with it, and never which of its items to reach for;
  *  - the status word she must write back, because the user-facing label and the schema word are
  *    deliberately different — and one pair actively collides. "Learned" is the group name for
  *    `retired`, while `learned` is the verb that means the opposite thing ("crossed into Keeping
  *    up just now"). A header naming only the label would have her write status "learned" to move
  *    something into the group called Learned, and land it in Keeping up with a celebration.
+ *
+ * The one imperative left is on `queued` — "Never start one unless they ask" — and it stays because
+ * it is a consent boundary, not a picking rule: it says what she may not do to their material
+ * without being asked, never which of the four groups today's work comes from.
  */
 describe('renderRepertoire — the four standings', () => {
   const oneOfEach = (now: number) => [
@@ -83,18 +91,39 @@ describe('renderRepertoire — the four standings', () => {
     item('Cradle Song', { status: 'retired', kind: 'piece' }),
   ];
 
-  it('renders every standing under a header naming it, its status word, and what to do with it', () => {
+  it('renders every standing under a header naming it, its status word, and what it MEANS', () => {
     const now = Date.now();
     const text = renderRepertoire(oneOfEach(now), now);
-    const headers: Array<[string, RegExp]> = [
-      ['Learning (status "working")', /learn part of each session/i],
-      ['Up next (status "queued")', /never start one unasked/i],
-      ['Keeping up (status "known")', /longest rest first/i],
-      ['Learned (status "retired")', /never schedule/i],
+    const headers: string[] = [
+      'Learning (status "working") — being worked on now:',
+      'Up next (status "queued") — not started, in the user\'s own order. Never start one unless they ask:',
+      'Keeping up (status "known") — learned and still played:',
+      'Learned (status "retired") — finished; not played any more:',
     ];
-    for (const [label, instruction] of headers) {
-      expect(text).toContain(label);
-      expect(text).toMatch(instruction);
+    for (const header of headers) expect(text).toContain(header);
+  });
+
+  /**
+   * The near-miss for the ruling, and the reason it is a table of words rather than one assertion:
+   * every phrase below shipped in a header or an item line until 2026-09-03, and each one is a
+   * silent failure — a render carrying "longest rest first" still looks like a correct list, and
+   * nothing throws. What they have in common is that they rank the shelf FOR her.
+   */
+  it('ranks nothing — no marker, no order word, no count of how many to take', () => {
+    const now = Date.now();
+    const text = renderRepertoire(oneOfEach(now), now);
+    for (const banned of [
+      /DUE NEXT/i,
+      /longest rest/i,
+      /rotation/i,
+      /draw warm-?up/i,
+      /play-?out/i,
+      /keep it to one/i,
+      /propose the top/i,
+      /never schedule/i,
+      /count these/i,
+    ]) {
+      expect(text, `"${banned}" tells her which item to reach for`).not.toMatch(banned);
     }
   });
 
@@ -149,29 +178,41 @@ describe('REPERTOIRE_GROUPS (exported for the list screen)', () => {
     expect(REPERTOIRE_GROUPS.map((g) => g.status)).toEqual(['working', 'queued', 'known', 'retired']);
   });
 
-  it('every header still carries its name, its status word, and an instruction clause', () => {
+  it('every header still carries its name, its status word, and a definition clause', () => {
     for (const { status, header } of REPERTOIRE_GROUPS) {
       expect(header).toContain(`(status "${status}")`);
       expect(header).toMatch(/ — .+:$/);
     }
   });
-});
 
-describe('byRest (exported for the list screen)', () => {
-  it('orders the same way pickDueNext picks — its first pick sorts first', () => {
-    const items = [
-      item('A Short Story', { last_practiced_at: daysAgo(1) }),
-      item('Écossaise', { last_practiced_at: daysAgo(19) }),
-      item('Minuet in G', { last_practiced_at: daysAgo(9) }),
-    ];
-    const sorted = [...items].sort(byRest);
-    expect(sorted[0]?.label).toBe(pickDueNext(items)?.label);
-    expect(sorted.map((i) => i.label)).toEqual(['Écossaise', 'Minuet in G', 'A Short Story']);
+  /**
+   * The header is BUILT from the two records, so the name and the definition exist once each: the
+   * API's per-item line (session-practice-facts.ts) names a standing from `STANDING_NAMES` and
+   * states the definitions from `STANDING_MEANS`, and a header typed out whole would be a second
+   * copy of both, free to drift.
+   */
+  it('is assembled from STANDING_NAMES and STANDING_MEANS — no header is typed out twice', () => {
+    for (const { status, header } of REPERTOIRE_GROUPS) {
+      expect(header).toBe(`${STANDING_NAMES[status]} (status "${status}") — ${STANDING_MEANS[status]}:`);
+    }
+  });
+
+  it('names and definitions cover all four standings and nothing else', () => {
+    const four = REPERTOIRE_GROUPS.map((g) => g.status).sort();
+    expect(Object.keys(STANDING_NAMES).sort()).toEqual(four);
+    expect(Object.keys(STANDING_MEANS).sort()).toEqual(four);
+  });
+
+  it('keeps the one consent boundary on Up next, and no picking rule anywhere', () => {
+    expect(STANDING_MEANS.queued).toContain('Never start one unless they ask');
+    for (const means of Object.values(STANDING_MEANS)) {
+      expect(means).not.toMatch(/longest rest|warm-?up|play-?out|keep it to one|propose the top|never schedule/i);
+    }
   });
 });
 
 describe('renderRepertoire', () => {
-  it('groups by status, marks the due item, and dates by relative day-count', () => {
+  it('groups by status and dates by relative day-count', () => {
     // One clock for the fixtures AND the render. The file's `daysAgo` calls Date.now() itself, a
     // few instructions after `now` is captured — same millisecond on a fast machine, but any
     // ≥1ms hiccup between the two reads makes floor(20d − ε) land on 19 and this test fail. It
@@ -190,20 +231,25 @@ describe('renderRepertoire', () => {
     expect(text).toContain('Learning (status "working")');
     expect(text).toContain('- Melody (piece; worked yesterday)');
     expect(text).toContain('Keeping up (status "known")');
-    expect(text).toContain('- Écossaise (piece; worked 20 days ago; DUE NEXT by rotation)');
+    expect(text).toContain('- Écossaise (piece; worked 20 days ago)');
     expect(text).toContain('- A Short Story (piece; worked today)');
     expect(text).toContain('- Cradle Song (not worked yet while on file)');
   });
 
-  it('orders the known pool longest-rest first and a cut never drops the due item', () => {
+  /**
+   * The cut is still least-recently-worked-last, and that is arithmetic rather than advice: a group
+   * over the cap has to drop SOMETHING, and dropping the items she was told about most recently
+   * would hide the ones she has least evidence about. The order is not stated in the text and no
+   * line is marked, so nothing here tells her which to pick — the row above pins that.
+   */
+  it('a cut keeps the longest-rested lines and says how many it dropped', () => {
     const many = Array.from({ length: 20 }, (_, i) =>
       item(`Piece ${String(i).padStart(2, '0')}`, { last_practiced_at: daysAgo(i) }),
     );
     const text = renderRepertoire(many);
-    // Piece 19 rests longest → due, and must lead the list despite 20 > cap.
     const lines = text.split('\n');
-    expect(lines[1]).toContain('Piece 19');
-    expect(lines[1]).toContain('DUE NEXT by rotation');
+    expect(lines[1]).toContain('Piece 19'); // rested longest — kept, not marked
+    expect(text).not.toContain('Piece 00'); // worked today — the one a cut of 5 drops
     expect(text).toContain('…and 5 more on file'); // 20 known, cap 15 — the cut says so
   });
 
@@ -344,9 +390,43 @@ describe('renderRepertoire tells the coach the tempo', () => {
     expect(renderRepertoire([item('Minuet')])).not.toContain('settled tempo');
   });
 
-  it('keeps the rotation mark alongside the tempo', () => {
-    const out = renderRepertoire([item('Solo', { meta: { tempo_bpm: 66 } })]);
-    expect(out).toContain('settled tempo 66 bpm');
-    expect(out).toContain('DUE NEXT by rotation');
+  it('keeps the tempo alongside the other facts on the line', () => {
+    const out = renderRepertoire([item('Solo', { kind: 'piece', meta: { tempo_bpm: 66 } })]);
+    expect(out).toContain('- Solo (piece; not worked yet while on file; settled tempo 66 bpm)');
+  });
+});
+
+/**
+ * The practice note on the coach's own line (owner ruling 2026-09-03). It was already stored (P8)
+ * and already on the row's second line on the screen and in the prescribe facts — this render was
+ * the one place holding it back, so she could read "Hungarian Folk Song, worked yesterday" without
+ * the "bars 9-16" that says what worked on it means. A fact she has is a fact she can reason from;
+ * the alternative was her guessing where in a piece the work is.
+ */
+describe('renderRepertoire carries the practice note', () => {
+  it('names the note on the item line, after the facts already there', () => {
+    const out = renderRepertoire([
+      item('Hungarian Folk Song', {
+        kind: 'piece',
+        meta: { tempo_bpm: 66, [PRACTICE_NOTE_KEY]: 'bars 9-16' },
+      }),
+    ]);
+    expect(out).toContain('settled tempo 66 bpm; note: bars 9-16)');
+  });
+
+  it('carries a note on a row that holds nothing else — a kata or a verse rarely has a tempo', () => {
+    const out = renderRepertoire([
+      item('Heian Shodan', { kind: 'kata', meta: { [PRACTICE_NOTE_KEY]: 'for 5th kyu' } }),
+    ]);
+    expect(out).toContain('- Heian Shodan (kata; not worked yet while on file; note: for 5th kyu)');
+  });
+
+  it('says nothing at all when there is no note on file — never an empty "note:"', () => {
+    expect(renderRepertoire([item('Minuet', { meta: { tempo_bpm: 66 } })])).not.toContain('note:');
+    expect(renderRepertoire([item('Minuet')])).not.toContain('note:');
+  });
+
+  it('drops a blank note the way every other qualifier string is dropped', () => {
+    expect(renderRepertoire([item('Minuet', { meta: { [PRACTICE_NOTE_KEY]: '   ' } })])).not.toContain('note:');
   });
 });

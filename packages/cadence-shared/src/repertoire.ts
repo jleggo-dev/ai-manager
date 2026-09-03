@@ -1,12 +1,16 @@
 /**
- * Repertoire rotation + rendering — pure functions, shared so the API's prescribe path and any
- * future UI agree on what "due next" means.
+ * Repertoire rendering — pure functions, shared so the API's prescribe path and the list screen
+ * read one set of facts about a shelf.
  *
- * The rule is deliberately boring: among 'known' items, the one resting LONGEST is due, and an
- * item never practiced rests longer than any that has. Boring is the point — a rotation the user
- * can predict ("it cycles") is one they can trust, and the coach may still override it for a
- * stated reason (the tool hands her the facts plus the computed pick; she adjudicates —
- * TOOL-HARNESS.md's inversion, applied here).
+ * FACTS ONLY (owner ruling 2026-09-03). What the coach reads here says what is on file — the
+ * standing, when each item was last worked, its settled tempo, its practice note — and what a
+ * standing MEANS. It never says which item to choose, how many to take, or which order to prefer
+ * them in. She is a reasoning model with the whole shelf in front of her and the person to talk to;
+ * a computed "due next" pick used to ride these lines, and biasing her that way made the app read
+ * as a program running her rather than a coach thinking. `pickDueNext` was deleted with it.
+ *
+ * `byRest` survives as a DISPLAY comparator only — the list screen orders an unranked Keeping-up
+ * group by it and prints each row's date, so the order states a fact the person can check.
  */
 import type { RepertoireStatus } from './types/repertoire.ts';
 import { type MetronomeSpec, DEFAULT_METER, normalizeMetronome } from './metronome.ts';
@@ -132,13 +136,15 @@ export function practiceNoteOf(meta: Record<string, unknown> | null | undefined)
 const time = (iso?: string | null): number => (iso ? new Date(iso).getTime() : Number.NaN);
 
 /** Longest-rest-first: never-practiced beats practiced; ties break by started_at (oldest first),
- *  then by codepoint label order — locale-independent, so the pick is identical on a dev laptop
+ *  then by codepoint label order — locale-independent, so the order is identical on a dev laptop
  *  and a UTC server rather than dependent on ICU data or row order.
  *
- *  Exported (2026-09-02, P6 "the room"): the list screen sorts the WHOLE Keeping-up group by this
- *  same comparator, not just the one due pick `pickDueNext` returns — so the coach and the screen
- *  read one rest-order, never a second spelling of "longest rest" drifting from this one
- *  (CLAUDE.md: a comparator that decides behaviour lives in `@cadence/shared` once). */
+ *  A DISPLAY order, and since 2026-09-03 nothing but that: the list screen sorts an unranked
+ *  Keeping-up group by it and shows each row's date, so the order only restates a fact already on
+ *  the row. It no longer feeds anything the coach reads — `pickDueNext`, which returned the first
+ *  of this order and rode the prompt as "DUE NEXT", was deleted under the facts-not-picks ruling.
+ *  Lives in `@cadence/shared` because a comparator that decides what a person sees belongs in one
+ *  place (CLAUDE.md), never hand-copied per call site. */
 export function byRest(a: RepertoireLike, b: RepertoireLike): number {
   const at = time(a.last_practiced_at);
   const bt = time(b.last_practiced_at);
@@ -150,12 +156,6 @@ export function byRest(a: RepertoireLike, b: RepertoireLike): number {
   const bs = time(b.started_at);
   if (!Number.isNaN(as) && !Number.isNaN(bs) && as !== bs) return as - bs;
   return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
-}
-
-/** The 'known' item resting longest — null when nothing is in the rotation pool. */
-export function pickDueNext(items: RepertoireLike[]): RepertoireLike | null {
-  const sorted = [...items.filter((i) => i.status === 'known')].sort(byRest);
-  return sorted[0] ?? null;
 }
 
 /** "worked today" / "worked 3 days ago" — relative day-counts, never calendar dates: the server
@@ -176,73 +176,105 @@ const tempoNote = (i: RepertoireLike): string | null => {
   return t.meter === DEFAULT_METER ? `settled tempo ${t.bpm} bpm` : `settled tempo ${t.bpm} bpm, ${t.meter} to the bar`;
 };
 
+/** "note: bars 9-16" — WHERE the work is on this item, stored by the item screen (P8) and read here
+ *  through the one qualifier reader, never a hand-spelled meta key. Added to this render 2026-09-03:
+ *  it was already on the row's second line and in the prescribe facts, and holding it back here left
+ *  her reading "worked yesterday" with no way to know what was worked on. */
+const noteMark = (i: RepertoireLike): string | null => {
+  const note = practiceNoteOf(i.meta);
+  return note ? `note: ${note}` : null;
+};
+
 /** How many items a group may render before it cuts and says so — a two-year repertoire must not
  *  become a 200-line block in every prescribe prompt and context pack. */
 const GROUP_CAP = 15;
 
 /**
- * The four groups, in the order she reads them, each header carrying the standing's instruction.
+ * The four groups, in the order she reads them, each header DEFINING its standing.
  *
  * Two things every header must do, because this text is read by a MODEL (tool-catalog.ts, "HOW TO
  * WRITE THE STRINGS IN THIS FILE"):
  *
- *  1. **State what to DO with the group**, not what it is. "Keeping up" alone makes her infer a
- *     rule; "draw warm-up and play-out material from here, longest rest first" is one.
+ *  1. **State what the group MEANS, and stop there.** Until 2026-09-03 these headers gave orders —
+ *     "draw warm-up and play-out material from here, longest rest first", "keep it to one or two",
+ *     "propose the top one". The owner ruled all of it out: *"We don't need to give the coach ANY
+ *     direction on how to pick... We continue to try to influence or bias the LLM's natural
+ *     reasoning, but we shouldn't. That will make our application seem unnatural."* She has the
+ *     whole shelf and the person in front of her; a definition is what she is missing, not a rule.
  *  2. **Name the status word she writes back.** The user-facing label and the schema word differ
  *     on purpose, and one pair collides outright: the group called "Learned" is `retired`, while
  *     `learned` is the verb for the opposite move (crossed into Keeping up just now, celebrated
  *     once). Without the word in the header she would write status "learned" to file something
- *     under Learned and land it in the rotation with a cheer attached.
+ *     under Learned and land it back among what they still play, with a cheer attached.
+ *
+ * The one imperative left is `queued`'s "Never start one unless they ask". It is a consent
+ * boundary, not a picking rule — it says what she may not do to their material unasked, and says
+ * nothing about which item today's work comes from. (The same distinction keeps "nothing is saved
+ * until they confirm" in the tool descriptions.)
  *
  * Exported (2026-09-02, P6 "the room") for the GROUP ORDER only: the list screen renders its four
  * sections in exactly this array's order (`working, queued, known, retired`), read off here so the
  * screen and the coach can never disagree about which standing comes first. The HEADER TEXT below
- * is not for the screen — it is imperative, third-person, and names the schema word by design,
- * because it is a prompt string a MODEL reads (see the two rules above), and putting it in front of
- * a person would break the warm-UI/boring-prompt split CLAUDE.md's nomenclature rule draws. The
- * screen carries its own short, warm line per standing instead (`GROUP_LINES` in
- * `repertoireListCopy.ts`, web package) — a first attempt at reusing this text verbatim for the UI
- * was wrong and was reverted (owner review, 2026-09-02).
+ * is not for the screen — it is third-person and names the schema word by design, because it is a
+ * prompt string a MODEL reads, and putting it in front of a person would break the
+ * warm-UI/boring-prompt split CLAUDE.md's nomenclature rule draws. The screen carries its own
+ * short, warm line per standing instead (`GROUP_LINES` in `repertoireListCopy.ts`, web package) —
+ * a first attempt at reusing this text verbatim for the UI was wrong and was reverted (owner
+ * review, 2026-09-02).
  */
-export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = [
-  {
-    status: 'working',
-    header: 'Learning (status "working") — work these in the learn part of each session; keep it to one or two:',
-  },
-  {
-    status: 'queued',
-    header:
-      'Up next (status "queued") — not started yet, in the user\'s order. Propose the top one when something is learned; never start one unasked:',
-  },
-  {
-    status: 'known',
-    header:
-      'Keeping up (status "known") — learned and in the rotation. Draw warm-up and play-out material from here, longest rest first:',
-  },
-  {
-    status: 'retired',
-    header: 'Learned (status "retired") — finished. Count these; never schedule them:',
-  },
-];
+/**
+ * Schema word → the standing's name. The web's own `STANDING_WORDS` (repertoireItemCopy.ts) is the
+ * same four words for the SCREEN, where they are button labels; these are the ones the coach reads,
+ * and they live here because the header above and the API's per-item line (session-practice-facts)
+ * both need them and a third hand-typed copy is how a name drifts.
+ */
+export const STANDING_NAMES: Record<RepertoireStatus, string> = {
+  working: 'Learning',
+  queued: 'Up next',
+  known: 'Keeping up',
+  retired: 'Learned',
+};
+
+/**
+ * What each standing MEANS — the definition half of what she is handed, spelled once.
+ *
+ * `queued`'s second sentence is a consent boundary, not a picking rule: it says what she may not do
+ * to their material unasked. The facts-not-picks ruling removed the rules ("draw warm-up material
+ * from here", "keep it to one or two") and kept this, because the two are different things — one
+ * biases her reasoning, the other protects the person's material from being started for them.
+ */
+export const STANDING_MEANS: Record<RepertoireStatus, string> = {
+  working: 'being worked on now',
+  queued: "not started, in the user's own order. Never start one unless they ask",
+  known: 'learned and still played',
+  retired: 'finished; not played any more',
+};
+
+export const REPERTOIRE_GROUPS: Array<{ status: RepertoireStatus; header: string }> = (
+  ['working', 'queued', 'known', 'retired'] as const
+).map((status) => ({
+  status,
+  header: `${STANDING_NAMES[status]} (status "${status}") — ${STANDING_MEANS[status]}:`,
+}));
 
 /**
  * The compact text both consumers inject — get_repertoire's render and prescribe-session's
  * {{repertoire}} variable. One renderer so the coach in chat and the coach programming a session
- * read the same facts in the same words. Empty string when there is nothing on file. The known
- * group is ordered longest-rest first, so a cut can never drop the DUE NEXT item, and a cut
- * always says how much it dropped (a silent truncation is a quiet lie about completeness).
+ * read the same facts in the same words. Empty string when there is nothing on file.
+ *
+ * Every line is a FACT about one item — its kind, when it was last worked, its settled tempo, its
+ * practice note — and nothing on it ranks one item against another. No item is marked, and no
+ * header says which group today's work comes from.
+ *
+ * The `known` group is still sorted longest-rest-first, but only so a group over the cap drops the
+ * items she has the most recent evidence about rather than the least; the order is not stated and
+ * a cut always says how much it dropped (a silent truncation is a quiet lie about completeness).
  * `now` is injectable for tests; callers omit it.
  */
 export function renderRepertoire(items: RepertoireLike[], now = Date.now()): string {
   if (!items.length) return '';
-  const due = pickDueNext(items);
   const line = (i: RepertoireLike): string => {
-    const marks = [
-      i.kind,
-      practicedNote(i, now),
-      tempoNote(i),
-      due && i === due ? 'DUE NEXT by rotation' : null,
-    ].filter(Boolean);
+    const marks = [i.kind, practicedNote(i, now), tempoNote(i), noteMark(i)].filter(Boolean);
     return `  - ${i.label} (${marks.join('; ')})`;
   };
   const capped = (group: RepertoireLike[]): string[] => {
@@ -253,8 +285,8 @@ export function renderRepertoire(items: RepertoireLike[], now = Date.now()): str
   const sections: string[] = [];
   for (const spec of REPERTOIRE_GROUPS) {
     const members = items.filter((i) => i.status === spec.status);
-    // Only 'known' rotates, so only 'known' is ordered by rest — that ordering is what makes a cut
-    // safe there (the DUE NEXT item can never be the one dropped).
+    // Ordered by rest so that a CUT keeps the longest-rested lines — the ones the last-practised
+    // date has least to say about. Nothing in the text claims this order means anything.
     const ordered = spec.status === 'known' ? [...members].sort(byRest) : members;
     if (ordered.length) sections.push(`${spec.header}\n${capped(ordered).join('\n')}`);
   }

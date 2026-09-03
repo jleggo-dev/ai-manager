@@ -1,20 +1,33 @@
 /**
- * The deterministic facts a practice session is built from — the standings, read back.
+ * The facts a practice session is built from — the whole shelf, read back.
  *
- * A practice session IS the shape of the shelf: the warm-up comes from Keeping up (the item rested
- * longest), the learn part from Learning, the play-out from Keeping up again, Up next is named only
- * as a forecast, and Learned is never scheduled. Move a piece between standings and Thursday
- * changes in a way the person can predict.
+ * FACTS, NOT PICKS (owner ruling 2026-09-03). This module used to make the session's choices: it
+ * computed the warm-up (the Keeping up item resting longest), the swap behind it, a capped Learning
+ * list and the top of Up next, and the prompt told her to use exactly those. The owner ruled it out
+ * — *"We don't need to give the coach ANY direction on how to pick warm-up pieces. It's a reasoning
+ * model. It can reason and it can discuss the best thing with the user. We continue to try to
+ * influence or bias the LLM's natural reasoning, but we shouldn't. That will make our application
+ * seem unnatural."*
  *
- * This module answers WHICH items those are, and nothing else. It does not assemble a session, pick
- * block labels, or decide how long anything takes — the coach does all of that with these facts in
- * front of her (TOOL-HARNESS.md: deterministic code is a tool she calls, never a pipeline that
- * calls her). Every rule here is one she may overrule for a reason she states.
+ * So it now answers one question — WHAT IS ON THE SHELF — and hands every item over with the same
+ * facts: its standing, when it was last practised, the tempo they settled on, the note saying where
+ * the work is, its place in a collection, and the person's own words from the most recent session
+ * that named it. It states what the four standings mean and stops there. Nothing marks an item,
+ * nothing orders them, nothing counts how many to take. She reads the shelf and decides with the
+ * person in front of her (TOOL-HARNESS.md: deterministic code is a tool she calls).
  *
  * Pure: no DB, no clock. The caller hands it the goal-scoped shelf and the recent logs it already
  * read for the prescribe prompt.
  */
-import { DEFAULT_METER, pickDueNext, pieceQualifiers, settledTempo, type RepertoireLike } from '@cadence/shared';
+import {
+  DEFAULT_METER,
+  REPERTOIRE_GROUPS,
+  STANDING_MEANS,
+  STANDING_NAMES,
+  pieceQualifiers,
+  settledTempo,
+  type RepertoireLike,
+} from '@cadence/shared';
 import { ambiguousNeedles, itemNamedIn, matchHay } from './repertoire-match.ts';
 
 /** One row of `listRecentLogsByTitle`, structurally — the same shape the prescribe prompt renders. */
@@ -29,41 +42,40 @@ export interface LastWords {
   words: string;
 }
 
-export interface LearningFact {
+/** One item on the shelf, with everything on file about it. No item carries a rank against the
+ *  others — `rank` is its printed position in a collection, a fact about the book, not a priority. */
+export interface ItemFact {
   label: string;
-  /** What the row durably holds about how this piece is practised. '' when it holds nothing. */
-  practice_note: string;
+  status: RepertoireLike['status'];
+  /** ISO date of the last practice, or null where there has never been one. */
+  last_practiced_on: string | null;
+  /** The durable facts on the row — tempo, note, position — as one phrase. '' when it holds none. */
+  detail: string;
   last_words: LastWords | null;
 }
 
 export interface PracticeFacts {
-  /** The Keeping up item resting longest — the warm-up. Null when nothing is in the rotation. */
-  warmup_pick: RepertoireLike | null;
-  /** The next-rested Keeping up item — what a swap offers. Null when the rotation holds one item. */
-  next_rested: RepertoireLike | null;
-  learning: LearningFact[];
-  /** The first item of Up next, as a forecast. Never a step in the session. */
-  up_next_top: RepertoireLike | null;
+  items: ItemFact[];
 }
 
-/** Enough Learning items to program from; more than this and the session is not the problem. */
-const LEARNING_CAP = 4;
+/** How many item lines the variable may carry before it cuts and says so. A two-year repertoire
+ *  must not become a 200-line block in every prescribe prompt; a cut that does not declare itself
+ *  is a quiet lie about completeness (TOOL-HARNESS.md §4). */
+const ITEM_CAP = 40;
 
 /** A quoted log is one line in a prompt, not a transcript. */
 const WORDS_CAP = 200;
 
 /**
- * The durable facts on a row, as one line: the tempo they actually play it at, and the qualifiers
- * that tell it from another piece with the same title. Same words as the shelf render's own tempo
- * line, deliberately — the coach reads both in one prompt and one vocabulary is the point.
+ * The durable facts on a row, as one phrase: the tempo they actually play it at, where the work is,
+ * and the position the collection prints. Same words as the shelf render's own tempo line,
+ * deliberately — the coach reads both in one prompt and one vocabulary is the point.
  *
- * The stored practice note (P8: "the practice note gets a store" — `bars 9-16`, `p. 240`, `first
- * stanza`, `for 5th kyu`) LEADS the line when present, ahead of the identity qualifiers: it says
- * where the work is right now, which matters more to a session being programmed than which piece
- * this is. The row's own second line leads with it too (repertoireListCopy.ts's buildSecondLine)
- * — one vocabulary, one lead position, for both the coach and the screen.
+ * The stored practice note (P8 — `bars 9-16`, `p. 240`, `first stanza`, `for 5th kyu`) is a fact
+ * about how the item is being worked, and rides here beside the tempo rather than in front of it:
+ * with no pick to justify any more, no fact on this line outranks another.
  */
-function practiceNote(i: RepertoireLike): string {
+function rowDetail(i: RepertoireLike): string {
   const parts: string[] = [];
   const tempo = settledTempo(i.meta);
   if (tempo) {
@@ -74,12 +86,12 @@ function practiceNote(i: RepertoireLike): string {
     );
   }
   const q = pieceQualifiers(i.meta);
+  if (q.note) parts.push(`note: ${q.note}`);
   if (q.composer) parts.push(`composer: ${q.composer}`);
   if (q.collection) parts.push(`collection: ${q.collection}`);
   if (q.catalogue) parts.push(`catalogue: ${q.catalogue}`);
-  if (q.rank !== undefined) parts.push(`rank: ${q.rank}`);
-  const rest = parts.join('; ');
-  return q.note ? (rest ? `${q.note} · ${rest}` : q.note) : rest;
+  if (q.rank !== undefined) parts.push(`rank ${q.rank}`);
+  return parts.join(' · ');
 }
 
 /** The words of the most recent log that NAMES this piece, or null. Never a guess: the shelf-wide
@@ -105,78 +117,70 @@ function lastWordsFor(item: RepertoireLike, logs: PracticeLogRow[], ambiguous: R
 }
 
 /**
- * Up next in the user's order: a ranked ladder first (rank 1 is next), then anything unranked in
- * the order it arrived — which is the order `listRepertoire` returns and the order the shelf render
- * prints. A stable sort, so an unranked shelf is left exactly as the person arranged it.
- */
-function firstQueued(items: RepertoireLike[]): RepertoireLike | null {
-  const queued = items.filter((i) => i.status === 'queued');
-  const ranked = queued
-    .map((i, at) => ({ i, at, rank: pieceQualifiers(i.meta).rank ?? Number.POSITIVE_INFINITY }))
-    .sort((a, b) => a.rank - b.rank || a.at - b.at);
-  return ranked[0]?.i ?? null;
-}
-
-/**
- * The four facts. `items` is the shelf already scoped to this session's goal; `recentLogs` are the
- * same-title logs the prescribe prompt already carries (newest first).
+ * Every item on the shelf, in the order the shelf came in. `items` is already scoped to this
+ * session's goal; `recentLogs` are the same-title logs the prescribe prompt already carries (newest
+ * first). The order is left exactly as `listRepertoire` returned it — a re-sort here would be an
+ * ordering she could read as a ranking, which is the thing this file no longer does.
  */
 export function practiceFacts(items: RepertoireLike[], recentLogs: PracticeLogRow[]): PracticeFacts {
-  // Only 'known' rotates — pickDueNext enforces that, and the swap reuses it rather than spelling
-  // the ordering a second time. Two spellings of "rested longest" would not throw; they would just
-  // disagree, and the swap would offer a piece the warm-up already used.
-  const warmup = pickDueNext(items);
-  const next = warmup ? pickDueNext(items.filter((i) => i !== warmup)) : null;
   const ambiguous = ambiguousNeedles(items);
-  const learning = items
-    .filter((i) => i.status === 'working')
-    .slice(0, LEARNING_CAP)
-    .map((i) => ({
+  return {
+    items: items.map((i) => ({
       label: i.label,
-      practice_note: practiceNote(i),
+      status: i.status,
+      last_practiced_on: i.last_practiced_at ? i.last_practiced_at.slice(0, 10) : null,
+      detail: rowDetail(i),
       last_words: lastWordsFor(i, recentLogs, ambiguous),
-    }));
-  return { warmup_pick: warmup, next_rested: next, learning, up_next_top: firstQueued(items) };
+    })),
+  };
 }
 
-/** "Arietta — settled tempo 72 bpm" — the label, plus what the row holds about it. */
-const pieceLine = (i: RepertoireLike): string => {
-  const note = practiceNote(i);
-  return note ? `${i.label} — ${note}` : i.label;
-};
-
-function renderLearning(facts: PracticeFacts, working: number): string {
-  const lines: string[] = [];
-  for (const l of facts.learning) {
-    lines.push(`- ${l.label}`);
-    if (l.practice_note) lines.push(`  practice note: ${l.practice_note}`);
-    lines.push(
-      l.last_words
-        ? `  last words ${l.last_words.date}: ${l.last_words.words}`
-        : '  no words logged about this piece in the recent sessions',
-    );
-  }
-  // Never a silent cut: a truncation nobody declares is a lie about how much is being learned.
-  if (working > facts.learning.length) lines.push(`…and ${working - facts.learning.length} more in Learning`);
-  return lines.join('\n');
+/** "Arietta · Keeping up · last practised 2026-08-20 · settled tempo 72 bpm" — every segment a fact,
+ *  and only the ones the row actually holds. The last-practised segment is the exception: it always
+ *  prints, because "never" is itself the fact, and an absent segment would read as an oversight. */
+function itemLine(f: ItemFact): string {
+  const segments = [
+    f.label,
+    STANDING_NAMES[f.status],
+    `last practised ${f.last_practiced_on ?? 'never'}`,
+    f.detail,
+    f.last_words ? `last words ${f.last_words.date}: ${f.last_words.words}` : '',
+  ].filter(Boolean);
+  return `- ${segments.join(' · ')}`;
 }
 
 /**
- * The four prompt variables, as text. Empty strings mean "say nothing about this" — for a goal with
- * no shelf, and for a shelf that could not be READ (`items` null), where the prescribe prompt's
- * {{repertoire}} already says so. An empty tag is ignored by the template, so a non-practice session
- * is byte-identical to what it was before these existed.
+ * What each standing means, in one line, assembled from `@cadence/shared`'s own words so the
+ * prescribe prompt and the chat render can never define a standing two different ways.
+ *
+ * It is here because the flat list names a standing per line and a definition has to come from
+ * somewhere; the grouped render (`renderRepertoire`) carries the same four sentences as its group
+ * headers. `Up next`'s "Never start one unless they ask" rides along, which is the point — it is a
+ * consent boundary, not a picking rule, and the ruling kept it.
+ */
+function standingsLine(): string {
+  const defs = REPERTOIRE_GROUPS.map(({ status }) => `${STANDING_NAMES[status]} — ${STANDING_MEANS[status]}`);
+  return `Standings: ${defs.join('. ')}.`;
+}
+
+/**
+ * The ONE prompt variable, as text: what they play, with the standings defined above it.
+ *
+ * An empty string means "say nothing about this" — for a goal with no shelf, and for a shelf that
+ * could not be READ (`items` null), where `session-generate.ts` substitutes its own fault text so a
+ * failed read can never be mistaken for an empty record. An empty tag is ignored by the template.
+ *
+ * Four variables became one here (2026-09-03): `warmup_pick`, `next_rested`, `learning` and
+ * `up_next_top` each existed to tell her which item went where, and the prompt lines that consumed
+ * them went with them.
  */
 export function practiceVariables(
   items: RepertoireLike[] | null,
   recentLogs: PracticeLogRow[],
-): { warmup_pick: string; next_rested: string; learning: string; up_next_top: string } {
-  if (!items?.length) return { warmup_pick: '', next_rested: '', learning: '', up_next_top: '' };
+): { repertoire: string } {
+  if (!items?.length) return { repertoire: '' };
   const facts = practiceFacts(items, recentLogs);
-  return {
-    warmup_pick: facts.warmup_pick ? pieceLine(facts.warmup_pick) : '',
-    next_rested: facts.next_rested ? pieceLine(facts.next_rested) : '',
-    learning: renderLearning(facts, items.filter((i) => i.status === 'working').length),
-    up_next_top: facts.up_next_top ? pieceLine(facts.up_next_top) : '',
-  };
+  const shown = facts.items.slice(0, ITEM_CAP).map(itemLine);
+  if (facts.items.length > ITEM_CAP) shown.push(`…and ${facts.items.length - ITEM_CAP} more on file`);
+  return { repertoire: [standingsLine(), ...shown].join('\n') };
 }

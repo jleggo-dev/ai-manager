@@ -1,14 +1,16 @@
 /**
- * The practice session reads the standings.
+ * The practice session reads the shelf — and nothing here ranks it.
  *
- * Thursday's practice is the shelf's shape read back: the warm-up comes from Keeping up (rested
- * longest), the learn part from Learning, the play-out from Keeping up, Up next appears only as a
- * forecast, and Learned is never scheduled. Code decides WHICH items those are; the coach still
- * writes the session.
+ * Until 2026-09-03 this module made the session's choices: it computed the warm-up (the Keeping up
+ * item rested longest), the swap, a capped Learning list, and the top of Up next, and the prompt
+ * told her to use exactly those. The owner ruled that out — *"We don't need to give the coach ANY
+ * direction on how to pick... We continue to try to influence or bias the LLM's natural reasoning,
+ * but we shouldn't."* So it now hands over the whole shelf as facts and she chooses.
  *
- * Every rule below is a silent failure if it breaks — a wrong warm-up is a valid session that is
- * simply not the one the standings called for, and nothing throws. So each has a positive case and
- * a near-miss, on the real Suzuki Book 2 shelf (the one that actually collides).
+ * That makes the load-bearing assertion in this file a NEGATIVE one: no line and no word ranks one
+ * item above another. It is a silent failure otherwise — a variable that quietly says "start here"
+ * still renders a plausible session, and nothing throws. The rest is the line's own shape, on the
+ * real Suzuki Book 2 shelf (the one that actually collides).
  */
 import { describe, expect, it } from 'vitest';
 import { PRACTICE_NOTE_KEY, RANK_KEY, TEMPO_BPM_KEY, TEMPO_METER_KEY, type RepertoireLike } from '@cadence/shared';
@@ -37,13 +39,13 @@ const SONATINA = 'Sonatina in G Major, Anh. 5 (Moderato, Romance)';
 const CRADLE_SONG = 'Cradle Song, Op. 13, No. 2';
 
 /**
- * Book 2 under the four standings. The rests are deliberately ordered so that the item resting
- * longest OVERALL is retired and the second-longest is queued — if either group were eligible, the
- * warm-up would come back wrong rather than empty.
+ * Book 2 under the four standings. The rests are deliberately uneven — one never worked, one worked
+ * weeks ago, one worked days ago — because the old code turned exactly that into a pick, and the
+ * negative assertions below have to be able to see a pick if one comes back.
  */
 const SHELF: RepertoireLike[] = [
-  // Keeping up (known) — the rotation pool.
-  item(ECOSSAISE, 'known', { last_practiced_at: null }), // never worked ⇒ rests longest of the known
+  // Keeping up (known).
+  item(ECOSSAISE, 'known', { last_practiced_at: null }),
   item(ARIETTA, 'known', { last_practiced_at: '2026-08-20T18:00:00.000Z' }),
   item(SHORT_STORY, 'known', { last_practiced_at: '2026-08-25T18:00:00.000Z' }),
   item(HAPPY_FARMER, 'known', { last_practiced_at: '2026-08-30T18:00:00.000Z' }),
@@ -55,7 +57,7 @@ const SHELF: RepertoireLike[] = [
   // Up next (queued), in the user's ladder order.
   item(MELODY, 'queued', { meta: { [RANK_KEY]: 10 } }),
   item(SONATINA, 'queued', { meta: { [RANK_KEY]: 11 } }),
-  // Learned (retired) — never worked, so it would win any rotation that let it in.
+  // Learned (retired).
   item(CRADLE_SONG, 'retired', { last_practiced_at: null, started_at: '2026-01-01T00:00:00.000Z' }),
 ];
 
@@ -78,95 +80,94 @@ const LOGS: PracticeLogRow[] = [
   },
 ];
 
-describe('practiceFacts — the warm-up is the rotation, not a guess', () => {
-  it('picks the Keeping up item resting longest', () => {
-    expect(practiceFacts(SHELF, []).warmup_pick?.label).toBe(ECOSSAISE);
-  });
+const lineFor = (text: string, label: string): string => text.split('\n').find((l) => l.startsWith(`- ${label}`)) ?? '';
 
-  it('offers the NEXT-rested for a swap, not any other item', () => {
-    expect(practiceFacts(SHELF, []).next_rested?.label).toBe(ARIETTA);
-  });
-
-  it('never promotes from Up next when Keeping up is empty', () => {
-    const noKnown = SHELF.filter((i) => i.status !== 'known');
-    const facts = practiceFacts(noKnown, []);
-    expect(facts.warmup_pick).toBeNull();
-    expect(facts.next_rested).toBeNull();
-  });
-
-  it('never takes the warm-up from Learned, even when it has rested longest of all', () => {
-    // Cradle Song is retired and has never been worked; only 'known' may be picked.
-    expect(practiceFacts(SHELF, []).warmup_pick?.label).not.toBe(CRADLE_SONG);
-    expect(practiceFacts(SHELF, []).next_rested?.label).not.toBe(CRADLE_SONG);
-  });
-
-  it('never takes the warm-up from Learning', () => {
+describe('practiceFacts — the whole shelf, one line per item', () => {
+  it('lists every item on the shelf, whatever its standing', () => {
     const facts = practiceFacts(SHELF, []);
-    expect(facts.warmup_pick?.label).not.toBe(FOLK_SONG);
-    expect(facts.next_rested?.label).not.toBe(FOLK_SONG);
+    expect(facts.items).toHaveLength(SHELF.length);
+    expect(facts.items.map((i) => i.label).sort()).toEqual(SHELF.map((i) => i.label).sort());
   });
 
-  it('offers no swap when the rotation holds exactly one item', () => {
-    const one = [item(ARIETTA, 'known'), item(FOLK_SONG, 'working'), item(CRADLE_SONG, 'retired')];
-    const facts = practiceFacts(one, []);
-    expect(facts.warmup_pick?.label).toBe(ARIETTA);
-    expect(facts.next_rested).toBeNull();
+  it("keeps the shelf's own order — it never re-sorts into an order that reads as a ranking", () => {
+    expect(practiceFacts(SHELF, []).items.map((i) => i.label)).toEqual(SHELF.map((i) => i.label));
   });
 
   it('gives nothing at all for an empty shelf', () => {
-    const facts = practiceFacts([], []);
-    expect(facts.warmup_pick).toBeNull();
-    expect(facts.next_rested).toBeNull();
-    expect(facts.learning).toEqual([]);
-    expect(facts.up_next_top).toBeNull();
+    expect(practiceFacts([], []).items).toEqual([]);
   });
 });
 
-describe('practiceFacts — Learning carries the note and the last words', () => {
-  it('lists only the working items', () => {
-    expect(practiceFacts(SHELF, LOGS).learning.map((l) => l.label)).toEqual([FOLK_SONG]);
+describe('practiceFacts — the facts on one line', () => {
+  const text = (): string => practiceVariables(SHELF, LOGS).repertoire;
+
+  it('names the standing by the word the person sees on their own screen', () => {
+    expect(lineFor(text(), FOLK_SONG)).toContain('Learning');
+    expect(lineFor(text(), ARIETTA)).toContain('Keeping up');
+    expect(lineFor(text(), MELODY)).toContain('Up next');
+    expect(lineFor(text(), CRADLE_SONG)).toContain('Learned');
   });
 
-  it("renders the piece's own practice note from what the row holds", () => {
-    const [learning] = practiceFacts(SHELF, LOGS).learning;
-    expect(learning?.practice_note).toContain('settled tempo 66 bpm');
-    expect(learning?.practice_note).toContain('3 to the bar');
+  it('dates the last practice, and says "never" rather than leaving the segment off', () => {
+    expect(lineFor(text(), ARIETTA)).toContain('last practised 2026-08-20');
+    expect(lineFor(text(), ECOSSAISE)).toContain('last practised never');
   });
 
-  it('leaves the practice note empty when the row holds nothing to say', () => {
-    const bare = [item('Arietta', 'working')];
-    expect(practiceFacts(bare, []).learning[0]?.practice_note).toBe('');
+  it('carries the settled tempo, with the meter only when it is not the common 4', () => {
+    expect(lineFor(text(), FOLK_SONG)).toContain('settled tempo 66 bpm, 3 to the bar');
+    expect(lineFor(text(), ARIETTA)).not.toContain('settled tempo');
+    const common = practiceVariables([item('Study', 'working', { meta: { [TEMPO_BPM_KEY]: 90 } })], []).repertoire;
+    expect(common).toContain('settled tempo 90 bpm');
+    expect(common).not.toContain('to the bar');
   });
 
-  it('a stored practice note (P8) leads the line, ahead of the settled tempo and the rank', () => {
-    const [learning] = practiceFacts(SHELF, LOGS).learning;
-    expect(learning?.practice_note).toBe('bars 9–16 · settled tempo 66 bpm, 3 to the bar; rank: 9');
+  it('carries the stored practice note and the position in a collection', () => {
+    expect(lineFor(text(), FOLK_SONG)).toContain('note: bars 9–16');
+    expect(lineFor(text(), FOLK_SONG)).toContain('rank 9');
   });
 
-  it('a note with nothing else on the row is the whole practice note, with no dangling separator', () => {
-    const notedOnly = [item('Arietta', 'working', { meta: { [PRACTICE_NOTE_KEY]: 'first stanza' } })];
-    expect(practiceFacts(notedOnly, []).learning[0]?.practice_note).toBe('first stanza');
+  it('leaves out every segment there is no fact for — never an empty label', () => {
+    const bare = practiceVariables([item('Arietta', 'known')], []).repertoire;
+    expect(lineFor(bare, 'Arietta')).toBe('- Arietta · Keeping up · last practised never');
   });
 
-  it('quotes the most recent log that names the piece, with its date', () => {
-    const [learning] = practiceFacts(SHELF, LOGS).learning;
-    expect(learning?.last_words?.date).toBe('2026-08-31');
-    expect(learning?.last_words?.words).toContain('left hand still stumbles at bar 13');
+  it('states what the four standings mean, including the one boundary that is not a picking rule', () => {
+    const out = text();
+    expect(out).toContain('Never start one unless they ask');
+    for (const meaning of ['being worked on now', 'learned and still played', 'finished; not played any more']) {
+      expect(out).toContain(meaning);
+    }
+  });
+});
+
+/**
+ * The person's own words are a FACT about the item, so they survived the ruling — and they now
+ * reach every item rather than only the ones code had picked as "Learning". The shelf-wide
+ * shared-needle rule still applies: a mention that could be either of two pieces decides neither.
+ */
+describe('practiceFacts — the words of the most recent log that names a piece', () => {
+  it('quotes the newest log naming the piece, with its date', () => {
+    const line = lineFor(practiceVariables(SHELF, LOGS).repertoire, FOLK_SONG);
+    expect(line).toContain('last words 2026-08-31');
+    expect(line).toContain('left hand still stumbles at bar 13');
   });
 
   it('carries how it felt when a logged item names the piece', () => {
-    expect(practiceFacts(SHELF, LOGS).learning[0]?.last_words?.words).toContain('hard');
+    expect(lineFor(practiceVariables(SHELF, LOGS).repertoire, FOLK_SONG)).toContain('hard');
+  });
+
+  it('reaches a Keeping up item too — the words are no longer only for what code called Learning', () => {
+    expect(lineFor(practiceVariables(SHELF, LOGS).repertoire, HAPPY_FARMER)).toContain('last words 2026-08-28');
   });
 
   it('says nothing rather than the wrong thing when no log names the piece', () => {
     const other: PracticeLogRow[] = [
       { date: '2026-08-31', log: { summary: 'scales and arpeggios', raw_text: 'scales only today', items: [] } },
     ];
-    expect(practiceFacts(SHELF, other).learning[0]?.last_words).toBeNull();
+    expect(practiceVariables(SHELF, other).repertoire).not.toContain('last words');
   });
 
   it('refuses a log whose title names two pieces on this shelf', () => {
-    // The core needle of both minuets is the same; a bare mention decides nothing.
     const minuets = [
       item('Minuet in G Major, BWV 822', 'working'),
       item('Minuet in G Major (from Notebook for Anna Magdalena Bach)', 'working'),
@@ -174,76 +175,70 @@ describe('practiceFacts — Learning carries the note and the last words', () =>
     const logs: PracticeLogRow[] = [
       { date: '2026-08-31', log: { summary: 'worked the Minuet in G Major', raw_text: '', items: [] } },
     ];
-    expect(practiceFacts(minuets, logs).learning.every((l) => l.last_words === null)).toBe(true);
+    expect(practiceVariables(minuets, logs).repertoire).not.toContain('last words');
   });
 });
 
-describe('practiceFacts — Up next is a forecast only', () => {
-  it('names the lowest-rank queued item', () => {
-    expect(practiceFacts(SHELF, []).up_next_top?.label).toBe(MELODY);
-  });
+/**
+ * THE RULING, as a table (owner 2026-09-03). Each row is a phrase that shipped in this variable or
+ * the prompt reading it, and each one told her which item to reach for. A near-miss matters here
+ * more than a positive: the facts can all be correct and the variable still be a set of orders.
+ */
+describe('practiceVariables — no line and no word ranks one item above another', () => {
+  const RANKING_WORDS = [
+    /due next/i,
+    /longest rest/i,
+    /rested longest/i,
+    /rotation/i,
+    /warm-?up/i,
+    /play-?out/i,
+    /start (?:here|with)/i,
+    /propose the top/i,
+    /keep it to one/i,
+    /never schedule/i,
+    /\bfirst\b/i,
+    /\bpick\b/i,
+    /\bchoose\b/i,
+  ];
 
-  it('never names an item from another standing', () => {
-    const top = practiceFacts(SHELF, []).up_next_top;
-    expect(top?.status).toBe('queued');
-  });
-
-  it("keeps the user's own order when the shelf carries no ranks", () => {
-    const unranked = [item(SONATINA, 'queued'), item(MELODY, 'queued')];
-    expect(practiceFacts(unranked, []).up_next_top?.label).toBe(SONATINA);
-  });
-
-  it('puts a ranked item ahead of an unranked one', () => {
-    const mixed = [item(SONATINA, 'queued'), item(MELODY, 'queued', { meta: { [RANK_KEY]: 10 } })];
-    expect(practiceFacts(mixed, []).up_next_top?.label).toBe(MELODY);
-  });
-
-  it('is null when nothing is queued', () => {
-    expect(
-      practiceFacts(
-        SHELF.filter((i) => i.status !== 'queued'),
-        [],
-      ).up_next_top,
-    ).toBeNull();
-  });
-});
-
-describe('practiceVariables — what the prompt is handed', () => {
-  it('names each pick and lists Learning with its note and last words', () => {
-    const vars = practiceVariables(SHELF, LOGS);
-    expect(vars.warmup_pick).toContain(ECOSSAISE);
-    expect(vars.next_rested).toContain(ARIETTA);
-    expect(vars.up_next_top).toContain(MELODY);
-    expect(vars.learning).toContain(FOLK_SONG);
-    expect(vars.learning).toContain('settled tempo 66 bpm');
-    expect(vars.learning).toContain('left hand still stumbles at bar 13');
-  });
-
-  it('never leaks Learned or Up next into a part of the session', () => {
-    const vars = practiceVariables(SHELF, LOGS);
-    for (const v of [vars.warmup_pick, vars.next_rested, vars.learning]) {
-      expect(v).not.toContain(CRADLE_SONG);
-      expect(v).not.toContain(MELODY);
-      expect(v).not.toContain(SONATINA);
+  it('carries none of the words the old variables used to rank the shelf', () => {
+    const out = practiceVariables(SHELF, LOGS).repertoire;
+    for (const re of RANKING_WORDS) {
+      expect(out, `"${re}" ranks the shelf for her`).not.toMatch(re);
     }
   });
 
-  it('says plainly that nothing has been logged about a piece yet', () => {
-    const vars = practiceVariables([item(FOLK_SONG, 'working')], []);
-    expect(vars.learning).toContain('no words logged');
+  it('marks no item — every line has the same shape as every other', () => {
+    const lines = practiceVariables(SHELF, LOGS)
+      .repertoire.split('\n')
+      .filter((l) => l.startsWith('- '));
+    expect(lines).toHaveLength(SHELF.length);
+    for (const line of lines) expect(line).toMatch(/^- .+ · (Learning|Up next|Keeping up|Learned) · last practised /);
   });
 
+  it('hands back ONE variable — the four that named picks are gone', () => {
+    expect(Object.keys(practiceVariables(SHELF, LOGS))).toEqual(['repertoire']);
+  });
+});
+
+describe('practiceVariables — the bounds', () => {
   it('is empty for a goal with no repertoire — the template ignores an empty tag', () => {
-    expect(practiceVariables([], [])).toEqual({ warmup_pick: '', next_rested: '', learning: '', up_next_top: '' });
+    expect(practiceVariables([], [])).toEqual({ repertoire: '' });
   });
 
   it('is empty when the shelf could not be read — never a claim that there is nothing', () => {
-    expect(practiceVariables(null, LOGS)).toEqual({ warmup_pick: '', next_rested: '', learning: '', up_next_top: '' });
+    expect(practiceVariables(null, LOGS)).toEqual({ repertoire: '' });
   });
 
-  it('says how many Learning items it left out rather than truncating in silence', () => {
-    const many = Array.from({ length: 6 }, (_, n) => item(`Study ${n + 1}`, 'working'));
-    const vars = practiceVariables(many, []);
-    expect(vars.learning).toContain('2 more in Learning');
+  it('caps the list at 40 items and says how many it left out, rather than truncating in silence', () => {
+    const many = Array.from({ length: 46 }, (_, n) => item(`Study ${n + 1}`, 'known'));
+    const out = practiceVariables(many, []).repertoire;
+    expect(out.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(40);
+    expect(out).toContain('…and 6 more');
+  });
+
+  it('says nothing about a cut when the shelf fits exactly', () => {
+    const many = Array.from({ length: 40 }, (_, n) => item(`Study ${n + 1}`, 'known'));
+    expect(practiceVariables(many, []).repertoire).not.toContain('…and');
   });
 });
