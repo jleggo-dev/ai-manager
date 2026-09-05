@@ -5,7 +5,13 @@
 
 export interface StructuredIngredient {
   name: string;
-  qty: number;
+  /**
+   * How much, or `null` when the amount was never stated ("some onion"). The job used to invent a
+   * plausible number here; it now says it does not know, and `null` travels all the way to the
+   * person as an empty amount to fill in. Never coerce it to 0 or to 1 — a made-up amount is
+   * indistinguishable from a real one once it is a number.
+   */
+  qty: number | null;
   unit?: string;
 }
 
@@ -31,12 +37,18 @@ function asPositiveNumber(v: unknown): number | null {
   return null;
 }
 
+/**
+ * One ingredient row. An unusable qty is NOT a reason to drop the ingredient any more — the food
+ * was named, only the amount is missing, and dropping the row loses the food too. Anything that
+ * is not a positive number (null, absent, "", "some", 0, -3, NaN) becomes `qty: null`, which the
+ * app renders as an amount to fill in rather than pricing.
+ */
 function parseIngredient(raw: unknown): StructuredIngredient | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const name = asTrimmedString(o.name);
+  if (!name) return null;
   const qty = asPositiveNumber(o.qty);
-  if (!name || qty === null) return null;
   const unit = asTrimmedString(o.unit) ?? undefined;
   return unit ? { name, qty, unit } : { name, qty };
 }

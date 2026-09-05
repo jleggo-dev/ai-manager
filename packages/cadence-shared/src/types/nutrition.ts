@@ -30,6 +30,17 @@ export interface Macros {
   potassium_mg?: number;
   vitamin_b12_ug?: number;
   source?: MacrosSource;
+  /**
+   * Set on a recipe DRAFT's per-serving macros when at least one ingredient's amount is unstated
+   * (see `Recipe.ingredients[].amount_unstated`). The total is then a floor, not the dish: it is
+   * missing whatever that ingredient contributes. Without this the number reads as complete and
+   * merely low, which is the failure FOOD-ENGINE.md §2.1 names — not knowing shown as a plausible
+   * number instead of as a question.
+   *
+   * Draft-only and never stored: a save is rejected while any amount is unstated, and the save
+   * path recomputes `macros_per_serving` from scratch anyway.
+   */
+  has_unstated_amounts?: true;
 }
 
 /**
@@ -253,21 +264,41 @@ export interface Recipe {
    * `unresolved: true` means the opposite — no `est` was possible — and `reason` says why, so a
    * recipe total can be honest about what it could not count instead of quietly under-summing with
    * no trace. Set by `recipe.ts` and carried verbatim into the saved row (`stripRuntimeFields`).
+   *
+   * `amount_unstated` is a third, different thing again: the ingredient is real and may well be
+   * identified, but nobody said HOW MUCH ("some onion"). `qty` is then `null` — not 0, not a
+   * plausible invented number — the line is not priced, and the draft's `macros_per_serving`
+   * carries `has_unstated_amounts`. It only ever exists on an unsaved draft: a save is rejected
+   * while any amount is unstated, so a stored recipe always has a real `qty`.
    */
   ingredients: {
     food_id?: string;
     name: string;
-    qty: number | string;
+    qty: number | string | null;
     unit?: string;
     est?: Macros;
     unresolved?: true;
     reason?: string;
+    amount_unstated?: true;
   }[];
   steps: string[];
   /** Computed by the app: Σ(ingredient macros) ÷ servings — never free-guessed for the dish. */
   macros_per_serving: Macros;
   tags: string[];
   saved: boolean;
+}
+
+/**
+ * True when an ingredient names a food but no amount — the API's `qty: null` /
+ * `amount_unstated: true` pair (see `Recipe.ingredients[]`).
+ *
+ * One definition, used by the resolver, the save guard and the review screen alike. Three
+ * hand-written versions of "is the amount missing?" would disagree the first time one of them
+ * learned about a new empty value, and the disagreement would show up as a recipe saved with a
+ * null amount — exactly what the guard exists to stop.
+ */
+export function isAmountUnstated(ing: { qty?: number | string | null; amount_unstated?: boolean }): boolean {
+  return ing.amount_unstated === true || ing.qty === null || ing.qty === undefined;
 }
 
 /** Grocery aisle bucket for shopping-list grouping (UI may localize labels). */

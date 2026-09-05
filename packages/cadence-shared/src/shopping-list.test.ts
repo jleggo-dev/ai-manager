@@ -55,4 +55,26 @@ describe('deriveShoppingList', () => {
   it('is empty when nothing is planned — the list has no life of its own', () => {
     expect(deriveShoppingList([])).toEqual([]);
   });
+
+  /**
+   * An amount nobody stated stays unstated here too. The list still says buy the thing — that part
+   * is known — but it does not print a number the person never gave.
+   */
+  it('lists an ingredient with no stated amount, with no invented number', () => {
+    const list = deriveShoppingList([{ ingredients: [{ name: 'onion', qty: null, unit: 'item' }] }]);
+    expect(list[0]).toMatchObject({ name: 'onion', qty: 'item' });
+  });
+
+  it('prints nothing at all for the amount when there is not even a unit', () => {
+    const list = deriveShoppingList([{ ingredients: [{ name: 'onion', qty: null }] }]);
+    expect(list[0]?.qty).toBe('');
+  });
+
+  it('takes the amount from whichever recipe named one', () => {
+    const list = deriveShoppingList([
+      { ingredients: [{ name: 'onion', qty: null, unit: 'item' }] },
+      { ingredients: [{ name: 'onion', qty: 2, unit: 'item' }] },
+    ]);
+    expect(list[0]?.qty).toBe('2 item');
+  });
 });

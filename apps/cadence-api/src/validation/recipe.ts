@@ -33,7 +33,13 @@ const macrosSchema = z
 const ingredientSchema = z.object({
   food_id: z.string().uuid({ message: 'food_id must be a uuid' }).optional(),
   name: z.string().trim().min(1, { message: 'ingredient name required' }),
-  qty: z.union([z.number().positive(), z.string().trim().min(1)]),
+  /**
+   * `null` is a real answer here, not a malformed one: the amount was never stated. It is accepted
+   * at the boundary so the service can reject the save with a message that NAMES the ingredient
+   * ("I need an amount for onion…") instead of Zod's shape complaint, and so an untouched draft
+   * round-trips rather than 400-ing on a field this API itself produced.
+   */
+  qty: z.union([z.number().positive(), z.string().trim().min(1)]).nullable(),
   unit: z.string().trim().min(1).optional(),
   est: macrosSchema.optional(),
   /**
@@ -43,6 +49,8 @@ const ingredientSchema = z.object({
    */
   unresolved: z.literal(true).optional(),
   reason: z.string().trim().max(300).optional(),
+  /** Round-tripped from the draft: the food was named, the amount was not (see `qty` above). */
+  amount_unstated: z.literal(true).optional(),
 });
 
 export const recipeSourceSchema = z.enum(['user', 'ai', 'ai_from_fridge_photo', 'ai_from_chat'], {

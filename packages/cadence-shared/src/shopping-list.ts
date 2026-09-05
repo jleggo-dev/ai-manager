@@ -13,10 +13,18 @@ import type { ShoppingListCategory, ShoppingListItem } from './types/nutrition.t
  * Nothing here judges food. An aisle is a walking order in a shop, not a food group.
  */
 
-/** An ingredient row as either side has it — the API's parsed qty is a number, a saved Recipe's may be a string. */
+/**
+ * An ingredient row as either side has it — the API's parsed qty is a number, a saved Recipe's may
+ * be a string, and the type allows `null` because `Recipe.ingredients[]` does.
+ *
+ * In practice a saved recipe never carries one: a recipe with an unstated amount is refused at
+ * save (`recipe.ts`), so `null` only exists on an unsaved draft, and drafts are not shopped from.
+ * If one ever arrives, `toQty` treats it exactly like an amount it cannot read ("to taste") — the
+ * line still says buy the thing, which is what a shopping list is for. It is never a macro.
+ */
 export interface ShoppingIngredient {
   name: string;
-  qty: number | string;
+  qty: number | string | null;
   unit?: string;
 }
 
@@ -25,7 +33,9 @@ export interface OnHandItem {
   name: string;
 }
 
-function toQty(qty: number | string): number {
+/** `null` = the amount was never stated; the caller must not turn that into a number. */
+function toQty(qty: number | string | null): number | null {
+  if (qty === null) return null;
   if (typeof qty === 'number') return Number.isFinite(qty) ? qty : 1;
   const n = Number.parseFloat(qty);
   return Number.isFinite(n) && n > 0 ? n : 1;
@@ -54,6 +64,12 @@ export function categorizeGrocery(name: string): ShoppingListCategory {
   return 'other';
 }
 
+/** The quantity as the list prints it — the unit alone, or nothing, when the amount is unknown. */
+function shopQty(qty: number | null, unit?: string): string {
+  if (qty === null) return unit ?? '';
+  return unit ? `${roundQty(qty)} ${unit}` : String(roundQty(qty));
+}
+
 /**
  * Derive a shopping list from planned recipe ingredients, subtracting anything already on hand.
  *
@@ -61,13 +77,17 @@ export function categorizeGrocery(name: string): ShoppingListCategory {
  * "1 bag" is "2 bag", and a bag plus 200g keeps the first unit — because a list you read while
  * standing in a shop is better slightly loose than absent, and no unit conversion table survives
  * contact with real recipes.
+ *
+ * An ingredient whose amount was never stated (`qty: null`) goes on the list with no number at
+ * all. "Onion" is a true line; "1 onion" is a number nobody gave. If another recipe names an
+ * amount for the same thing, that amount is what the line carries.
  */
 export function deriveShoppingList(
   recipes: Array<{ ingredients: ShoppingIngredient[] }>,
   onHand: OnHandItem[] = [],
 ): ShoppingListItem[] {
   const have = new Set(onHand.map((f) => f.name.trim().toLowerCase()).filter(Boolean));
-  const merged = new Map<string, { name: string; qty: number; unit?: string }>();
+  const merged = new Map<string, { name: string; qty: number | null; unit?: string }>();
 
   for (const recipe of recipes) {
     for (const ing of recipe.ingredients ?? []) {
@@ -79,14 +99,15 @@ export function deriveShoppingList(
         merged.set(key, { name: ing.name.trim(), qty, unit: ing.unit });
         continue;
       }
-      prev.qty += qty;
+      if (qty === null) continue;
+      prev.qty = prev.qty === null ? qty : prev.qty + qty;
     }
   }
 
   return [...merged.values()]
     .map((row) => ({
       name: row.name.slice(0, 80),
-      qty: row.unit ? `${roundQty(row.qty)} ${row.unit}` : String(roundQty(row.qty)),
+      qty: shopQty(row.qty, row.unit),
       category: categorizeGrocery(row.name),
       checked: false,
     }))

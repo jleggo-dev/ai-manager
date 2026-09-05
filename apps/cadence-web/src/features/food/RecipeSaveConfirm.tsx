@@ -2,8 +2,9 @@
  * Confirm-first save for a from-chat recipe draft. Nothing is saved until Confirm.
  */
 import { useState } from 'react';
-import { assessDietarySafety, type DietaryProfile, type Recipe } from '@cadence/shared';
-import { recipeMacroHint, saveRecipe, type RecipeDraft } from '../../lib/api.ts';
+import { assessDietarySafety, isAmountUnstated, type DietaryProfile, type Recipe } from '@cadence/shared';
+import { recipeMacroHint, saveRecipe, type RecipeDraft, type RecipeIngredientRow } from '../../lib/api.ts';
+import { RecipeDraftIngredients } from './RecipeDraftIngredients.tsx';
 
 export function RecipeSaveConfirm({
   draft: initial,
@@ -18,12 +19,16 @@ export function RecipeSaveConfirm({
 }) {
   const [name, setName] = useState(initial.name);
   const [servings, setServings] = useState(initial.servings);
+  const [ingredients, setIngredients] = useState<RecipeIngredientRow[]>(initial.ingredients);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [allergyOverride, setAllergyOverride] = useState(false);
 
+  // An amount the person was never asked for is the one thing that holds the save. Everything else
+  // on this screen is optional to touch.
+  const unfilled = ingredients.filter(isAmountUnstated);
   const preview = recipeMacroHint(initial.macros_per_serving);
-  const safetyTerms = [name, ...initial.ingredients.map((i) => i.name), ...initial.tags];
+  const safetyTerms = [name, ...ingredients.map((i) => i.name), ...initial.tags];
   const safety = dietary ? assessDietarySafety(dietary, safetyTerms) : { safe: true, flags: [] };
   const allergyFlags = safety.flags.filter((f) => f.severity === 'allergy');
 
@@ -46,6 +51,7 @@ export function RecipeSaveConfirm({
         ...initial,
         name: name.trim(),
         servings: Math.max(1, Math.round(servings)),
+        ingredients,
         saved: true,
       });
       if (result.status !== 'ok') {
@@ -87,24 +93,16 @@ export function RecipeSaveConfirm({
         />
       </label>
 
-      {initial.ingredients.length > 0 && (
-        <div className="food-recipe-ings" aria-label="Ingredients">
-          <div className="food-panel-t" style={{ fontSize: 13.5 }}>
-            Ingredients
-          </div>
-          <ul className="food-recipe-ing-list">
-            {initial.ingredients.map((ing, i) => (
-              <li key={`${ing.name}-${i}`}>
-                {ing.qty}
-                {ing.unit ? ` ${ing.unit}` : ''} {ing.name}
-                {!ing.food_id ? ' · estimated' : ''}
-              </li>
-            ))}
-          </ul>
+      <RecipeDraftIngredients ingredients={ingredients} disabled={busy} onChange={setIngredients} />
+
+      {(preview || unfilled.length > 0) && (
+        <div className="food-macro-preview">
+          {preview ? `Per serving: ${preview}` : 'Per serving: not counted yet'}
+          {unfilled.length > 0 && (
+            <span className="food-macro-incomplete">incomplete until every amount is filled</span>
+          )}
         </div>
       )}
-
-      {preview && <div className="food-macro-preview">Per serving: {preview}</div>}
       {allergyFlags.length > 0 && (
         <div className="food-allergy-warn" role="alert">
           This may conflict with your allergies ({allergyFlags.map((f) => f.term).join(', ')}). I won&apos;t save it
@@ -114,14 +112,14 @@ export function RecipeSaveConfirm({
       {err && <div className="food-empty">{err}</div>}
 
       <div className="food-confirm-actions">
-        <button type="button" className="lockbtn" disabled={busy} onClick={() => void confirm()}>
+        <button type="button" className="lockbtn" disabled={busy || unfilled.length > 0} onClick={() => void confirm()}>
           {busy ? 'Saving…' : 'Looks right — save recipe'}
         </button>
         {allergyFlags.length > 0 && (
           <button
             type="button"
             className="lockbtn ghost"
-            disabled={busy}
+            disabled={busy || unfilled.length > 0}
             onClick={() => {
               setAllergyOverride(true);
               void confirm({ ignoreAllergy: true });

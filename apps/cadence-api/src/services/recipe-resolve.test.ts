@@ -209,3 +209,105 @@ describe('buildDraftFromStructured — resolution orchestration', () => {
     expect(ing?.reason).toBeTruthy();
   });
 });
+
+/**
+ * An unstated amount ("some onion"): the food is real, the amount is not known, and the draft has
+ * to say so instead of pricing a number nobody gave. What these pin:
+ *   • the line is NOT priced — no `est`, and the per-serving total excludes it entirely;
+ *   • the total says it is incomplete (`has_unstated_amounts`), so it reads as missing something
+ *     rather than as a small dish;
+ *   • `qty` stays null — not 0, not 1;
+ *   • estimate_food is never called, because there is no amount to estimate against;
+ *   • the food is still identified, so filling the amount in prices straight off the ledger.
+ */
+describe('buildDraftFromStructured — an amount nobody stated', () => {
+  const FOOD: Food = {
+    food_id: 'food-onion',
+    owner_user_id: USER,
+    visibility: 'private',
+    name: 'Onion, raw',
+    brand: null,
+    source: 'llm',
+    off_id: null,
+    fdc_id: null,
+    base_unit: 'g',
+    macros_per_base: { kcal: 40 },
+    servings: [{ label: '100 g', unit: 'g', amount_g: 100 }],
+    default_serving: 0,
+    confidence: 0.7,
+    photo_ref: null,
+  };
+
+  /** One priced ingredient plus one whose amount was never given. */
+  function mixedRecipe(): StructuredRecipe {
+    return {
+      name: 'Beef chili',
+      servings: 2,
+      ingredients: [
+        { name: 'ground beef', qty: 500, unit: 'g' },
+        { name: 'onion', qty: null, unit: 'item' },
+      ],
+      steps: [],
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(loadResolveShared).mockReset().mockResolvedValue(SHARED);
+    vi.mocked(resolveFoods).mockReset().mockResolvedValue({ candidates: [], preselected: null });
+    vi.mocked(getFood).mockReset().mockResolvedValue(FOOD);
+    vi.mocked(insertFood).mockReset();
+    vi.mocked(findOwnDuplicate).mockReset().mockResolvedValue(null);
+    vi.mocked(estimateFood).mockReset().mockRejectedValue(new Error('estimate must not run for an unstated amount'));
+  });
+
+  it('keeps the ingredient, prices nothing for it, and leaves qty null', async () => {
+    vi.mocked(resolveFoods).mockResolvedValue({
+      candidates: [{ kind: 'food', food_id: FOOD.food_id }],
+      preselected: null,
+    } as unknown as Awaited<ReturnType<typeof resolveFoods>>);
+
+    const structured: StructuredRecipe = {
+      name: 'Chili',
+      servings: 2,
+      ingredients: [{ name: 'onion', qty: null, unit: 'item' }],
+      steps: [],
+    };
+    const draft = await buildDraftFromStructured(USER, structured, 'ai_from_chat');
+    const ing = draft.ingredients[0];
+
+    expect(ing?.qty).toBeNull();
+    expect(ing?.amount_unstated).toBe(true);
+    expect(ing?.est).toBeUndefined();
+    expect(ing?.estimated).toBeUndefined();
+    // Identified anyway, so filling the amount in later is a straight price off the ledger.
+    expect(ing?.food_id).toBe(FOOD.food_id);
+    expect(estimateFood).not.toHaveBeenCalled();
+  });
+
+  it('marks the per-serving total incomplete rather than quietly counting the line as zero', async () => {
+    const draft = await buildDraftFromStructured(USER, mixedRecipe(), 'ai_from_chat');
+    expect(draft.macros_per_serving.has_unstated_amounts).toBe(true);
+  });
+
+  it('leaves a total with every amount stated unflagged', async () => {
+    const structured: StructuredRecipe = {
+      name: 'Chili',
+      servings: 2,
+      ingredients: [{ name: 'ground beef', qty: 500, unit: 'g' }],
+      steps: [],
+    };
+    const draft = await buildDraftFromStructured(USER, structured, 'ai_from_chat');
+    expect(draft.macros_per_serving.has_unstated_amounts).toBeUndefined();
+  });
+
+  it('still reports the ingredient even when nothing on file matches it', async () => {
+    const structured: StructuredRecipe = {
+      name: 'Chili',
+      servings: 2,
+      ingredients: [{ name: 'a thing nobody holds', qty: null }],
+      steps: [],
+    };
+    const draft = await buildDraftFromStructured(USER, structured, 'ai_from_chat');
+    expect(draft.ingredients[0]).toEqual({ name: 'a thing nobody holds', qty: null, amount_unstated: true });
+  });
+});

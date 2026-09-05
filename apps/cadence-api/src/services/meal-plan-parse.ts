@@ -16,7 +16,17 @@ const CATEGORIES = new Set<ShoppingListCategory>([
   'other',
 ]);
 
+/**
+ * generate_meal_plan's own ingredient row. `structure-recipe` may report an amount it was never
+ * given (`qty: null` — the person said "some onion"); a planned week is generated, not dictated,
+ * so its parser drops a row it cannot read an amount from and every row that survives has one.
+ * Narrowed here so the shopping list and the plan draft, which both need a real number, do not
+ * each have to re-prove it.
+ */
+export type MealPlanIngredient = StructuredIngredient & { qty: number };
+
 export interface MealPlanStructuredRecipe extends StructuredRecipe {
+  ingredients: MealPlanIngredient[];
   tags: string[];
   /** When set, prefer linking an existing saved recipe on confirm. */
   reuse_recipe_id: string | null;
@@ -57,7 +67,7 @@ function isIsoDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-function parseIngredient(raw: unknown): StructuredIngredient | null {
+function parseIngredient(raw: unknown): MealPlanIngredient | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const name = asTrimmedString(o.name);
@@ -92,7 +102,7 @@ function parseRecipe(raw: unknown): MealPlanStructuredRecipe | null {
   const servings = servingsRaw !== null ? Math.max(1, Math.round(servingsRaw)) : 1;
   const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : [])
     .map(parseIngredient)
-    .filter((i): i is StructuredIngredient => i !== null)
+    .filter((i): i is MealPlanIngredient => i !== null)
     .slice(0, 40);
   if (ingredients.length === 0) return null;
   const steps = Array.isArray(o.steps)
