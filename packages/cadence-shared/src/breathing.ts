@@ -80,7 +80,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
     id: 'box',
     how: 'Equal counts all the way round: in for four, hold for four, out for four, hold for four. The holds are the point — they stop you rushing into the next breath.',
     name: 'Box',
-    summary: 'even four counts all the way round — steadying, and the safest default',
+    summary: 'even four counts all the way round — in, hold, out, hold',
     phases: [
       { label: 'In', seconds: 4 },
       { label: 'Hold', seconds: 4 },
@@ -92,7 +92,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
     id: 'wind_down',
     how: 'In for four, hold for seven, out for eight. The long hold and the longer exhale are what do the work: a slow out-breath is how the body is told the day is finished.',
     name: 'Wind-down',
-    summary: 'a long hold and a longer exhale — for the end of the day, or sleep',
+    summary: 'a long hold and a longer exhale — in for four, hold seven, out eight',
     phases: [
       { label: 'In', seconds: 4 },
       { label: 'Hold', seconds: 7 },
@@ -103,7 +103,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
     id: 'coherent',
     how: 'In and out for about five and a half seconds each, with no holds. Slower than you would breathe on your own, and even. This is the one worth building a daily practice on.',
     name: 'Coherent',
-    summary: 'equal in and out, slow — the one to build a daily practice on',
+    summary: 'equal in and out, about five and a half seconds each, no holds',
     phases: [
       { label: 'In', seconds: 5.5 },
       { label: 'Out', seconds: 5.5 },
@@ -113,7 +113,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
     id: 'extended_exhale',
     how: 'In for four, out for six — only the out-breath is stretched. The fastest way to settle when you do not want a pattern to remember.',
     name: 'Longer out',
-    summary: 'the fastest way to settle — the out-breath does the work',
+    summary: 'in for four, out for six — only the out-breath is stretched',
     phases: [
       { label: 'In', seconds: 4 },
       { label: 'Out', seconds: 6 },
@@ -123,7 +123,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
     id: 'physiological_sigh',
     how: 'Two breaths in — a full one, then a short top-up on top of it — then one long release. The second inhale reopens the bottom of the lungs. Three or four rounds is usually plenty.',
     name: 'Double breath',
-    summary: 'two breaths in, one long release — for settling quickly, three or four is plenty',
+    summary: 'two breaths in — a full one, then a short top-up — then one long release',
     phases: [
       { label: 'In', seconds: 3 },
       { label: 'In again', seconds: 1, cue: 'a short top-up, on top of the first' },
@@ -145,7 +145,7 @@ export const BREATH_PATTERNS: readonly BreathPattern[] = [
     id: 'equal',
     how: 'In for four, out for four. Nothing to remember and nothing to hold. Start here if none of this is familiar.',
     name: 'Even',
-    summary: 'in and out, same count — the place to start if none of this is familiar',
+    summary: 'in and out, same count, no holds',
     phases: [
       { label: 'In', seconds: 4 },
       { label: 'Out', seconds: 4 },

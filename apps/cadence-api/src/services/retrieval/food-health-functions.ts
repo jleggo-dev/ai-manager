@@ -242,7 +242,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_recipes: {
     name: 'get_recipes',
     description:
-      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving calories. Use when they ask what they can make, refer to a saved dish ("that chilli"), or before inventing a new recipe when something in their book would do. For nutrition facts on a single ingredient, use lookup_food. Pass {"query": "chilli"} to search by name; with no query it returns their saved dishes (up to 15).',
+      'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving calories. Use when they ask what they can make, refer to a saved dish ("that chilli"). For nutrition facts on a single ingredient, use lookup_food. Pass {"query": "chilli"} to search by name; with no query it returns their saved dishes (up to 15).',
     domains: ['nutrition', 'recipes'],
     async run(userId, params) {
       const q = String(params?.query ?? '').trim();
@@ -266,7 +266,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_macro_targets: {
     name: 'get_macro_targets',
     description:
-      "The user's daily nutrition targets, how today is tracking against them, and — when they weigh in — whether the scale says those targets are working. Use before any conversation about what they should be eating, before proposing a change to their targets, and whenever they ask how they are doing on food. If they have no targets yet, this says so, which is your cue to work some out with them rather than guessing at portions.",
+      "The user's daily nutrition targets, how today is tracking against them, and — when they weigh in — whether the scale says those targets are working. Use before any conversation about what they should be eating, before proposing a change to their targets, and whenever they ask how they are doing on food. If they have no targets set, this says so; set_macro_targets writes them.",
     domains: ['nutrition', 'progress'],
     async run(userId) {
       const [user, day, series] = await Promise.all([

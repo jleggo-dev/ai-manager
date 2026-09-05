@@ -27,8 +27,8 @@
  * the model infer a rule instead of reading one. The rules:
  *
  *   1. **Name categories; do not illustrate them.** "a click on a plank, a run or a sit is an
- *      intrusion" made the model work out which step kinds that image covered. "DO NOT SET IT for:
- *      strength, cardio, stretching, mobility, meditation, breathing, or journaling" does not.
+ *      intrusion" made the model work out which step kinds that image covered. "work that alternates
+ *      with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval" does not.
  *   2. **State rules, not frequencies or sentiments.** "omitting it is the right answer almost
  *      every time" is a statistic about past sessions; "omit it and the step has no metronome" is
  *      an instruction.
@@ -60,7 +60,13 @@ import {
   MIN_WORK_SEC,
   setShorthand,
 } from './interval.ts';
-import { DEFAULT_SIT_MINUTES, MAX_SIT_MINUTES, MEDITATE_BELL_KINDS } from './meditate.ts';
+import {
+  DEFAULT_INTERVAL_MINUTES,
+  DEFAULT_SIT_MINUTES,
+  MAX_SIT_MINUTES,
+  MEDITATE_BELL_KINDS,
+  MIN_INTERVAL_MINUTES,
+} from './meditate.ts';
 import { DEFAULT_METER, MAX_BPM, MAX_METER, MIN_BPM, MIN_METER } from './metronome.ts';
 import { GROUNDING_GAMES, GROUNDING_NAMES } from './grounding.ts';
 import { JOURNAL_BANKS, bankFamily, type JournalFamily } from './journal.ts';
@@ -132,7 +138,7 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     // runs 2026-08-04) instead of the grounding flow that IS the practice.
     summary: 'one physical effort held or sustained for a set time — a 1-min plank, a 20-min zone-2 run, a wall sit',
     notWhen:
-      'do NOT pick timer just because a step has a duration: "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch — work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval. A MIND practice with a duration is almost never a timer: silent sitting is meditate; a noticing or attention practice ("notice five things", a noticing walk, being more present) is grounding',
+      'do NOT pick timer just because a step has a duration: "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch — work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval. A duration alone does not pick the tool: meditate runs silence with bells, grounding runs a noticing game, and timer runs a plain clock',
     reads: ['duration_min'],
     example: { name: 'Forearm plank', tool: 'timer', duration_min: 1 },
   },
@@ -141,7 +147,7 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     summary:
       'work and rest alternating for a number of rounds, run hands-free by the app — sprints, a HIIT finisher, EMOM, Tabata, hill repeats, a rowing pyramid. Set interval_work_sec and interval_rounds; add interval_recover_sec for rest between rounds (omit it for EMOM, where the rest is the remainder of the minute)',
     notWhen:
-      'ONE effort with no repeat is a timer, not an interval. Different MOVEMENTS each round (burpees, then squats, then a plank) is a circuit block — interval rounds repeat the SAME work. Do NOT also send duration_min: the length is computed from the numbers you set, and a second figure contradicts it. Warm-up and cool-down are optional and sit OUTSIDE the rounds; omit them when the session already has its own warm-up block',
+      'ONE effort with no repeat is a timer, not an interval. Different MOVEMENTS each round (burpees, then squats, then a plank) is a circuit block — interval rounds repeat the SAME work. Do NOT also send duration_min: the length is computed from the numbers you set, and a second figure contradicts it. Warm-up and cool-down are optional and sit OUTSIDE the rounds',
     reads: [
       'interval_work_sec',
       'interval_recover_sec',
@@ -196,9 +202,8 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   feeling_log: {
     class: 'capture',
     summary:
-      "a 20-second check-in — ONE word for how they're doing and how much room it's taking, plus an optional line. Use it while you are still learning someone's patterns, or when a check-in would help",
-    notWhen:
-      'a word and a size, never sentences — writing meant to be reread is journal. Do NOT schedule it every day indefinitely: ask while you are learning their patterns, then stop. Never place two capture steps in a row',
+      "a 20-second check-in — ONE word for how they're doing and how much room it's taking, plus an optional line",
+    notWhen: 'a word and a size, never sentences — writing meant to be reread is journal',
     reads: ['detail'],
     example: { name: 'How are you doing?', tool: 'feeling_log' },
   },
@@ -211,16 +216,16 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   photo: {
     class: 'capture',
     summary:
-      "they photograph something — their form on a lift, a progress shot, a plate. For meals, prefer the day's own meal-log tasks; a photo step here is for when THIS session is the thing being photographed",
+      "they photograph something — their form on a lift, a progress shot, a plate. A photo sent through the day's meal tasks is read into foods and priced for macros; a photo step here is stored with the session and not read",
     reads: ['detail'],
     example: { name: 'Check your setup', tool: 'photo', detail: 'Snap your squat setup from the side' },
   },
   journal: {
     class: 'capture',
     summary:
-      "real WRITING, kept where they can reread it — use it for any writing practice, not only reflection: free-writing a scene, a first-thing morning brain-dump, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — your own sentence always wins, and for craft work it usually should. Add duration_min for a TIMED free-write",
+      "real WRITING, kept where they can reread it — use it for any writing practice, not only reflection: free-writing a scene, a first-thing morning brain-dump, a studio log, a language learner's paragraph, lectio divina, working a problem out on the page. Name a question bank with journal_bank (the app supplies a fresh phrasing) or write your own prompt in detail — when you set both, the detail prompt is the one they see. Add duration_min for a TIMED free-write",
     notWhen:
-      'sentences, never a yes/no, a number, or a single mood word — one word about how they are doing is feeling_log. Never promise to analyse what they write. Treat the banks as a fallback: match the bank FAMILY to the practice (a novelist gets craft, never gratitude), and write your own prompt whenever you can fit it better to this person and this week',
+      'sentences, never a yes/no, a number, or a single mood word — one word about how they are doing is feeling_log. Never promise to analyse what they write. The banks are grouped by family — reflection, craft, study, devotion — and any bank is valid on any journal item; write your own prompt whenever you can fit it better to this person and this week',
     reads: ['journal_bank', 'detail', 'duration_min'],
     example: { name: 'Three good things', tool: 'journal', journal_bank: 'three_good_things' },
   },
@@ -313,8 +318,7 @@ export function renderCoachToolCatalog(): string {
   lines.push(
     '',
     'JOURNAL BANKS — the only values "journal_bank" accepts, grouped by the practice they serve.',
-    'Pick from the family that matches what this person actually does; a prompt you write yourself',
-    'in "detail" beats any of them when you know enough to fit it to them.',
+    'Grouped by family. A prompt you write in "detail" replaces the bank\'s question when both are set.',
   );
   for (const fam of ['reflection', 'craft', 'study', 'devotion'] as JournalFamily[]) {
     const inFamily = JOURNAL_BANKS.filter((b) => bankFamily(b) === fam);
@@ -339,10 +343,8 @@ export function renderCoachToolCatalog(): string {
     'METRONOME — an option on a step, not a tool. It adds a click track; the step keeps its own tool.',
     `  "metronome_bpm" (${MIN_BPM}-${MAX_BPM}) turns it on. Omit it and the step has no metronome.`,
     `  "metronome_meter" is beats per bar, ${MIN_METER}-${MAX_METER} (default ${DEFAULT_METER}). Omit if unknown.`,
-    '  SET IT for: playing an instrument, scales, sight-reading, or drills done at a fixed tempo.',
-    '  DO NOT SET IT for: strength, cardio, stretching, mobility, meditation, breathing, or journaling.',
-    '  Choose a tempo the person can play accurately. For a piece they are still learning, set it below',
-    '  the tempo marked on the score.',
+    '  It works on any step, whatever its tool — an instrument drill, a run or row cadence, a lifting tempo.',
+    '  Where someone has settled on a tempo for a piece, get_repertoire has it on that item.',
     '  e.g. {"name": "Hanon no. 1", "tool": "timer", "duration_min": 10, "metronome_bpm": 72}',
   );
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
@@ -351,8 +353,9 @@ export function renderCoachToolCatalog(): string {
   lines.push(
     '',
     `SITTING — "meditate" reads duration_min (1-${MAX_SIT_MINUTES} min, default ${DEFAULT_SIT_MINUTES}) and`,
-    `"meditate_bells": ${MEDITATE_BELL_KINDS.join(' | ')}. Use "interval" only for longer sits, with`,
-    '"meditate_interval_min" for the spacing. Anything else is replaced with start_end.',
+    `"meditate_bells": ${MEDITATE_BELL_KINDS.join(' | ')}. Use "interval" to add a bell every`,
+    `"meditate_interval_min" minutes between the start and end bells (${MIN_INTERVAL_MINUTES} minute or more,`,
+    `never longer than the sit; ${DEFAULT_INTERVAL_MINUTES} when omitted). Anything else is replaced with start_end.`,
   );
   lines.push(
     '',
@@ -363,7 +366,7 @@ export function renderCoachToolCatalog(): string {
   for (const p of BREATH_PATTERNS) {
     const counts = patternCounts(p);
     lines.push(`  • ${p.id} (${p.name}, ${counts}) — ${p.summary}`);
-    if (p.caution) lines.push(`      caution: ${p.caution} Keep it brief and only before effort.`);
+    if (p.caution) lines.push(`      caution: ${p.caution}`);
   }
   return lines.join('\n');
 }
