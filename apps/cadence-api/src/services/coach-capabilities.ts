@@ -46,7 +46,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       // an equipment write that did not exist and told the owner a correction was made when
       // nothing could make it.
       'fix your gear on file the moment you tell me — rename, add, or drop it',
-      'pressure-test a goal against where you actually are, and right-size it with stepping-stones',
+      'talk a goal through against where you actually are, and set milestones along the way if you want them',
     ],
   },
   {
@@ -147,8 +147,8 @@ export function renderCapabilities(opts: { healthAvailable?: boolean; healthAnsw
     'DO THESE, DO NOT DESCRIBE THEM: when they ask for something above, call the tool in that same ' +
       'reply. Explaining the mechanism ("I put up a card, you tap it") is not doing it and reads as ' +
       'a no. Never make them repeat a change they already named — propose it, and let the card be ' +
-      'what they correct. Say at most ONE short line before a tool call; your real answer comes ' +
-      'after the result, and a full answer written first gets repeated.',
+      'what they correct. Your real answer comes after the tool result, and a full answer written ' +
+      'before the call gets repeated.',
   );
   /**
    * The hierarchy that makes the demotion safe.

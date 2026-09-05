@@ -24,10 +24,17 @@ describe('renderPickProtocol', () => {
     expect(renderPickProtocol({ intent: 'onboarding' })).toContain(OPENING_QUESTION);
   });
 
-  it('tells the coach to default to picks rather than treating them as optional', () => {
+  /**
+   * Picks are an affordance she can reach for on any turn, stated as what the block costs and what
+   * it saves — not a default she has to justify leaving off (owner ruling 2026-09-03, PP-8/PP-9).
+   */
+  it('states what a picks block costs and saves, without making it a default she must justify', () => {
     const out = renderPickProtocol({ intent: 'onboarding' });
-    expect(out).toContain('DEFAULT TO PICKS');
-    expect(out).toContain('A NARROWING FOLLOW-UP ALWAYS GETS PICKS');
+    expect(out).toContain('PICKS ATTACH TO ANY TURN, IN ANY CONVERSATION');
+    expect(out).toContain('With no block, the only way to answer is to type.');
+    expect(out).not.toContain('DEFAULT TO PICKS');
+    expect(out).not.toContain('Leaving the block off is the exception you justify');
+    expect(out).not.toContain('A NARROWING FOLLOW-UP ALWAYS GETS PICKS');
   });
 
   /**
@@ -51,13 +58,19 @@ describe('renderPickProtocol', () => {
   });
 
   /**
-   * Owner ruling 2026-08-10: "how many days a week" is a fitness-app question, and Cadence is not
-   * one — nobody eats well three days a week. Capacity is asked as where the room in the DAY is
-   * and how long they have, so the plan can point at every day rather than three of them.
+   * Owner ruling 2026-09-03 supersedes the 2026-08-10 one. Frequency is the most load-bearing
+   * number in a training plan and forbidding the question was a steer justified by a claim about
+   * everybody ("nobody eats well three days a week"). She gets the fact instead: a commitment
+   * carries its own repeat days, and get_active_plan lists them.
    */
-  it('never asks for a weekly day count, and asks about the day instead', () => {
+  it('states where the repeat days live rather than forbidding the frequency question', () => {
     const out = renderPickProtocol({ intent: 'onboarding' });
-    expect(out).toContain('NEVER ask how many days a week');
+    expect(out).toContain('A commitment carries the days it repeats on, and get_active_plan lists them.');
+    expect(out).toContain('If they volunteer a number of days, keep it.');
+    expect(out).not.toContain('NEVER ask how many days a week');
+    expect(out).not.toMatch(/nobody eats well three days a week/);
+    expect(out).not.toMatch(/just never ask for one/);
+    // The plain-language question wording survives; it was never the steer.
     expect(out).toMatch(/What does your day usually look like\?/);
     expect(out).toMatch(/time do we have to work with/i);
     // The old tiles exemplar was the day-count question; it must not survive as an example either.
@@ -72,8 +85,15 @@ describe('renderPickProtocol', () => {
     expect(renderPickProtocol({ intent: 'onboarding' })).toContain('SAY IT LIKE A PERSON');
   });
 
-  it('bounds the narrowing so intake cannot turn into an interrogation', () => {
-    expect(renderPickProtocol({ intent: 'onboarding' })).toMatch(/One or two narrowing turns per goal/);
+  /**
+   * The narrowing BUDGET was a steer (PP-2); the distinction it introduced — depth is not
+   * repetition — is a fact about intake and stays.
+   */
+  it('keeps the depth-is-not-repetition point without budgeting her turns', () => {
+    const out = renderPickProtocol({ intent: 'onboarding' });
+    expect(out).not.toMatch(/One or two narrowing turns per goal/);
+    expect(out).not.toMatch(/stop refining the what/);
+    expect(out).toMatch(/What turns intake into a form is REPETITION/);
   });
 
   it('adds the first-conversation script only for onboarding', () => {
@@ -113,15 +133,18 @@ describe('renderPickProtocol', () => {
   });
 
   /**
-   * Reported the same day: asked what they were working around, the coach offered "an injury" to
-   * someone whose goal was writing a novel. Wrists are a real constraint for a writer — an injury
-   * as the OPENING example is a fitness app that did not listen.
+   * The 2026-08-12 fix told her which examples to raise, in which order, per area — a steer. The
+   * fact underneath is that `constraints` is ONE field spanning the physical and the
+   * circumstantial, and the examples now sit in one undifferentiated list (PP-5; the same edit
+   * lands in the persona seed as SY-7).
    */
-  it('fits the constraints question to the goal instead of leading with an injury', () => {
+  it('states constraints as one field spanning body and life, without ordering the examples', () => {
     const out = renderPickProtocol({ intent: 'onboarding' });
-    expect(out).toContain('THE QUESTION IS THE SAME; THE EXAMPLES ARE NOT');
-    expect(out).toMatch(/writing a novel/);
-    expect(out).toMatch(/hands and wrists/);
+    expect(out).toContain('constraints is one field and holds anything the plan has to work around');
+    expect(out).toMatch(/wrists for a writer, a back for anyone who sits/);
+    expect(out).not.toContain('THE QUESTION IS THE SAME; THE EXAMPLES ARE NOT');
+    expect(out).not.toMatch(/Do NOT open that one with an injury/);
+    expect(out).not.toMatch(/so put it last and in those words/);
   });
 });
 
@@ -150,6 +173,74 @@ describe('the protocol stays honest about what she is holding', () => {
 });
 
 /**
+ * Owner ruling 2026-09-03, "facts, not picks": this block hands the coach what is true about the
+ * app — what a commitment carries, which field holds what, what a tool does — and never what to
+ * prefer, how many questions to ask, how long to speak, or the words to say. Each row below is one
+ * steer the audit removed, pinned so a hand-restore of the old wording fails CI.
+ */
+describe('the pick protocol carries facts, not picks', () => {
+  const onboarding = renderPickProtocol({ intent: 'onboarding' });
+
+  /** [id, the steer that must never come back, the fact that replaced it] */
+  const rows: Array<[string, string, string]> = [
+    [
+      'PP-1 — a vague goal is not accepted',
+      'A goal you cannot put on a calendar is not captured yet',
+      'A plan is built from commitments, and a commitment carries a day, a time and a length.',
+    ],
+    [
+      'PP-3 — the time-of-day answer set',
+      'offer morning / midday / evening / flexible (one answer)',
+      'availability records every window they name',
+    ],
+    [
+      'PP-4 — the session-length answer set',
+      'offering 10 / 20 / 30 / 45+ as the labels',
+      'session_minutes records how long ONE session can run door to door',
+    ],
+    [
+      'PP-6 — extra habits are routines, not goals',
+      'Each yes becomes a small anchored routine in the plan, not a new goal',
+      'Anything they name here can be stored either as a commitment on their plan or as a goal of its own.',
+    ],
+    [
+      'PP-12 — the question budget before a whole-week reshape',
+      'in at most a couple of questions',
+      'settle WHAT should change with the user, then make ONE call carrying the full edit slate',
+    ],
+  ];
+
+  it.each(rows)('%s', (_id, steer, fact) => {
+    expect(onboarding).not.toContain(steer);
+    expect(onboarding).toContain(fact);
+  });
+
+  /** PP-7 and PP-11: two more copies of the one-question rule, and a required cadence of buttons. */
+  it.each([
+    ['PP-7 — one question per turn, two or three sentences', 'Ask ONE question per turn.'],
+    ['PP-7 — the sentence budget before a block', 'Two or three sentences at most before the block'],
+    ['PP-11 — never two open questions in a row', 'Never ask two open, pick-less questions in a row'],
+  ])('%s is gone', (_id, steer) => {
+    expect(onboarding).not.toContain(steer);
+  });
+
+  /**
+   * PP-13. The cap is genuine contract — the parser silently drops the tail — but the prompt said
+   * six and the code enforces eight, so she was told to leave two usable buttons on the table. The
+   * enforced number is derived here rather than written down twice: change MAX_OPTIONS in
+   * `packages/cadence-shared/src/coach-picks.ts` and this fails until the prompt says the same.
+   */
+  it('states the cap the parser actually enforces', () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ label: `o${i}`, say: `o${i}` }));
+    const block = ['```' + COACH_PICKS_FENCE, JSON.stringify({ options: many }), '```'].join('\n');
+    const enforced = parseCoachTurn(block).picks?.options.length;
+    expect(enforced).toBe(8);
+    expect(onboarding).toContain(`At most ${enforced} options; the app drops the rest.`);
+    expect(onboarding).not.toContain('Never offer more than six options');
+  });
+});
+
+/**
  * DESIGN-check-in.md: "a check-in must never be a thing you can be late for" — and its own open
  * question, the empty week, flagged as "most likely to hurt someone if we get it wrong." Neither
  * case is intake or onboarding, so unlike the first-conversation script these rules render for
@@ -168,16 +259,26 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
     expect(out).toMatch(/NEVER SAY "OVERDUE"/);
     expect(out).toMatch(/NEVER COUNT THE DAYS OUT LOUD/);
     expect(out).toMatch(/never apologize on their behalf/i);
+    // PP-18: the no-shame boundary is carried by the two sentences above; the reply LENGTH was ours.
+    expect(out).not.toMatch(/A short, warm acknowledgment is the whole response lateness gets/);
   });
 
-  it("teaches the two-pick late shape with the mockup's model line, verbatim", () => {
+  /**
+   * PP-14. The late arrival used to be scripted end to end — one warm line, no asking what
+   * happened, exactly two picks, and her sentence written out. What she gets now is the boundary
+   * (a check-in is not a thing you can be late for) and both tools, open.
+   */
+  it('names both tools for a late arrival instead of scripting the turn', () => {
     const out = renderPickProtocol();
     expect(out).toContain('THE LATE ARRIVAL');
     expect(out).toContain('their plan week ended more than 7 days ago');
-    expect(out).toContain('"Run through last week"');
-    expect(out).toContain('"Just build this week"');
-    expect(out).toContain('say: "Just build my week — I\'m good"');
-    expect(out).toContain(
+    expect(out).toContain('A check-in is not a thing they can be late for. Both tools are open');
+    expect(out).toMatch(/build_next_week rolls their rhythm forward unchanged/);
+    expect(out).not.toMatch(/Acknowledge it in ONE warm line/);
+    expect(out).not.toMatch(/do not ask what happened or dwell on the gap/);
+    expect(out).not.toMatch(/Then offer exactly two picks/);
+    expect(out).not.toContain('say: "Just build my week — I\'m good"');
+    expect(out).not.toContain(
       'No problem at all. Want to run through last week now, or should I just build this week and we move on?',
     );
   });
@@ -194,29 +295,39 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
     expect(out).toMatch(/an edited say-text still means the same choice/);
   });
 
-  it('never opens the review for an empty week, and puts the empty case ahead of the late offer', () => {
+  /**
+   * PP-15. The no-shame boundary survives as a boundary ("an empty week is never presented as a
+   * failure"); what went is the ban on LOOKING — she may open the review if the conversation wants
+   * it, and get_consistency is offered as the cheaper read, not as the only permitted one.
+   */
+  it('keeps the no-shame boundary for an empty week without forbidding the look', () => {
     const out = renderPickProtocol();
     expect(out).toContain('THE EMPTY WEEK COMES FIRST, EVEN OVER THE LATE OFFER');
-    expect(out).toMatch(/do NOT offer "Run through last week" and do NOT call open_week_review/);
-    expect(out).toMatch(/a card full of zeroes is exactly the shame this product forbids/);
-    // The deterministic facts she is told to trust instead of looking.
-    expect(out).toMatch(/get_consistency/);
+    expect(out).toMatch(/get_consistency confirms it more cheaply than opening a card/);
+    expect(out).toMatch(/an empty week is never presented as a failure/);
+    expect(out).not.toMatch(/do NOT offer "Run through last week" and do NOT call open_week_review/);
+    expect(out).not.toMatch(/a card full of zeroes is exactly the shame this product forbids/);
+    expect(out).not.toMatch(/reaching for open_week_review to FIND OUT is the one thing to never do here/);
   });
 
-  it('asks the one empty-week question with its exact three picks', () => {
+  /** PP-16: her sentence and its three possible answers were ours to write; the record is not. */
+  it('states what the app does and does not hold for an unlogged week, and scripts nothing', () => {
     const out = renderPickProtocol();
     expect(out).toContain(
+      'Nothing was logged last week, so the app has no record of what happened — get_workout_history has any sessions their device recorded, and beyond that only they can say.',
+    );
+    expect(out).not.toContain('ASK ONE QUESTION INSTEAD OF REVIEWING ZEROES');
+    expect(out).not.toContain(
       "Before I build next week — I don't have much logged from last week, so I'd rather ask than guess. How did it actually go?",
     );
-    expect(out).toContain('"Fine — I just didn\'t log"');
-    expect(out).toContain('"Rough, honestly"');
-    expect(out).toContain('"Life got busy"');
   });
 
-  it('sends each of the three answers down a different route', () => {
+  /** PP-17: the routes are facts about what each tool does; the DIRECTION of the change was not. */
+  it('routes each answer without naming the direction the change should take', () => {
     const out = renderPickProtocol();
     expect(out).toMatch(/their word stands in for the missing log — call build_next_week/);
     expect(out).toMatch(/use propose_plan_change to put it up rather than building the identical week again/);
     expect(out).toMatch(/offer the existing detour, or a lighter build/);
+    expect(out).not.toContain('(lighter, shorter, fewer days)');
   });
 });
