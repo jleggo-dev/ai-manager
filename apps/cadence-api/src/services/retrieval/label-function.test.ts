@@ -241,9 +241,10 @@ describe('read_label — render(): error, empty, and usage are three different t
     expect(out).toContain('Not saved yet');
   });
 
-  it('names the label as the most authoritative source, right in what she reads (MP15)', () => {
+  it("names the label as the maker's own printed figures, right in what she reads (MP15)", () => {
     const out = READ_LABEL.render({ mode: 'nutrition_label', nutrition: mushroomCapture() });
-    expect(out).toMatch(/most authoritative/);
+    expect(out).toMatch(/maker's own printed figures/);
+    expect(out).not.toMatch(/most authoritative|prefer it over/);
   });
 
   it('identify mode with nothing legible points back at the panel instead of guessing', () => {
