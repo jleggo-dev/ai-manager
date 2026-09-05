@@ -226,11 +226,22 @@ export const ALWAYS_ACTIONS = [
  * is ~30 tokens on every message forever. Trim the longest hooks, or consolidate a category the
  * way `get_nutrition` already fronts the food reads — the index is meant to stay a label she can
  * scan, and a tail that cannot be indexed in 3,000 characters is a tail worth consolidating.
+ *
+ * HIT AGAIN ON 2026-09-03, AND TRIMMED RATHER THAN RAISED — the answer this comment asks for. The
+ * tail reached 23 (set_home_location and pause_week landed the same day, in parallel branches, the
+ * #342 shape exactly) and the label reached 3,032. Six of the longest hooks lost their fat with no
+ * signal given up — "everything about what they eat" → "everything they eat", "propose a redesign
+ * of what their Progress page watches" → "redesign what their Progress page watches" — for 2,982.
+ *
+ * That leaves 18 characters, which is not headroom: the next tail tool costs ~113. So the budget is
+ * spent, and tool 24 cannot be trimmed into it. An OWNER RULING IS OWED on which way out — a
+ * category consolidated the way get_nutrition already fronts the food reads, or the cap raised with
+ * the arithmetic stated. Do not let the next parcel decide it by being the one that failed CI.
  */
 export const DRAWER_LABEL_MAX = 3000;
 
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
-  get_nutrition: 'everything about what they eat — log, recipes, targets, trends; name the view you need',
+  get_nutrition: 'everything they eat — log, recipes, targets, trends; name the view you need',
   preview_meal: 'parse-and-price a described meal WITHOUT logging it',
   check_food_sources: 'ask every food database at once about one food, disagreements included',
   resolve_portion: 'what a household measure of a saved food weighs in grams',
@@ -240,15 +251,16 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
   get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
-  offer_repertoire_review: 'ACTION: show a named collection (music book, kata syllabus, reading list) as a checklist',
-  get_user_built_activities: 'activities the user built themselves — steps, runs, and plan placement',
-  get_journal: 'recent journal entries, verbatim; entries marked private are never included',
+  offer_repertoire_review: 'ACTION: show a collection (music book, kata syllabus, reading list) as a checklist',
+  get_user_built_activities: 'activities they built themselves — steps, runs, and plan placement',
+  get_journal: 'recent journal entries, verbatim; private ones are never included',
   get_goal_progress: 'per-goal progress numbers computed from what they logged',
-  propose_progress_layout: 'propose a redesign of what their Progress page watches — they confirm a card first',
+  propose_progress_layout: 'redesign what their Progress page watches — they confirm a card first',
   get_recent_logs: 'their session notes from recent days: what they did and how it felt',
   get_equipment: 'training equipment they own, with usage wear for tracked items',
   update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
   extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
+  pause_week: 'ACTION: pause every session between two dates; nothing deleted, resumes after',
   revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
   start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
   set_home_location: 'ACTION: record where they live, so weather and daylight can be read for outdoor sessions',
@@ -377,7 +389,10 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `get_user_built_activities` (Activity Builder wave 3): the user's OWN routines — session-
     // shaped and schedulable, so they live beside the plan surgery. Rides the ongoing context
     // pack too (renders '' when none exist); this filing is for the turns where she goes looking.
-    members: ['extend_horizon', 'revise_session', 'start_replan', 'get_user_built_activities'],
+    // `pause_week` (2026-09-03): the other end of extend_horizon — clearing a stretch rather than
+    // running one longer, so the ladder this category shows reads whole: one session, the week's
+    // shape, the week rebuilt, the week emptied.
+    members: ['extend_horizon', 'pause_week', 'revise_session', 'start_replan', 'get_user_built_activities'],
   },
   {
     key: 'progress',

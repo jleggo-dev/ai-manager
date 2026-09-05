@@ -57,6 +57,15 @@ export interface EnterEpisodeInput {
   tone?: DisruptedEpisode['tone'];
   available_equipment?: Partial<Equipment>[];
   constraints?: Record<string, unknown>;
+  /**
+   * Enter with NO temporary activities at all — the `disrupted_plan` job is not run.
+   *
+   * A pause is a detour with nothing overlaid (`coach-action-pause-week.ts`): the person asked for
+   * an empty stretch, so drafting lighter "do what you can" options would hand back the very thing
+   * they asked not to have. Internal only — the route's body schema does not accept it, so a
+   * client cannot suppress the draft.
+   */
+  skipTempActivities?: boolean;
 }
 
 /**
@@ -118,12 +127,13 @@ export async function enterEpisode(
   const available_equipment = input.available_equipment ?? [];
   const constraints = input.constraints ?? {};
 
-  const baseActivities = await listActivities(plan.plan_id);
-  const { temp, note } = await draftTempActivities(
-    userId,
-    { type: input.type, start, end, available_equipment, constraints },
-    baseActivities,
-  );
+  const { temp, note } = input.skipTempActivities
+    ? { temp: [] as Partial<Activity>[], note: '' }
+    : await draftTempActivities(
+        userId,
+        { type: input.type, start, end, available_equipment, constraints },
+        await listActivities(plan.plan_id),
+      );
 
   const episode = await insertEpisode(userId, {
     type: input.type,

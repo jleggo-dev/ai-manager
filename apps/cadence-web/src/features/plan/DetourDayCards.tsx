@@ -40,7 +40,7 @@ export function DetourDayCards({
   endError = null,
   onChanged,
 }: {
-  episode: Pick<ActiveEpisode, 'type' | 'start'> & { gearKnown: boolean };
+  episode: Pick<ActiveEpisode, 'type' | 'start' | 'paused'> & { gearKnown: boolean };
   /** The on-detour card's "Check in" — keeps the streak alive with nothing completed. */
   onCheckIn: () => void;
   /** "I'm back" — ends the episode; the caller owns the call and its busy/error state (the
@@ -59,6 +59,28 @@ export function DetourDayCards({
   });
 
   if (todayIso() < episode.start) return null;
+
+  /**
+   * A pause has no gear question and no options to do — the person asked for an empty stretch, so
+   * both cards below would put something back on their plate: one asks what equipment they have,
+   * the other offers to reshape the days around it. It says what is true and leaves the way back.
+   */
+  if (episode.paused) {
+    return (
+      <div className="detour">
+        <div className="detour-t">
+          <b>Paused</b>
+          <span>Nothing&rsquo;s scheduled for now. Nothing was deleted — it all comes back when you do.</span>
+        </div>
+        <div className="detour-actions">
+          <button className="detour-end" disabled={endBusy} onClick={onEnd}>
+            {endBusy ? 'One moment…' : 'Start again now'}
+          </button>
+        </div>
+        {endError && <div className="detour-saw">{endError}</div>}
+      </div>
+    );
+  }
 
   if (!episode.gearKnown) {
     return (

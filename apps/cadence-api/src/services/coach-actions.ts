@@ -18,6 +18,7 @@ import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
 import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
+import { PAUSE_WEEK } from './coach-action-pause-week.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { SET_MICRO_TARGET } from './coach-action-micro-target.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
@@ -275,7 +276,15 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           .join('\n');
       }
       if (!next.length) {
-        return 'That would empty their plan entirely, so it was not proposed. An empty week is not a rhythm — suggest keeping at least one thing.';
+        /**
+         * A refusal that names the tool that CAN do it (finding TR-5, 2026-09-03).
+         *
+         * The old line told her an empty week is not a rhythm and to suggest keeping one thing —
+         * advice, and a dead end. Someone asking for a clear week ("nothing on my plate this
+         * week") has a real request the product already serves: `pause_week` shelves the stretch
+         * without deleting anything, and the plan resumes on its own. Keep this text exact.
+         */
+        return 'That edit would leave the plan with no commitments, so no change was proposed and their plan is unchanged. pause_week clears a stretch of the week without deleting anything.';
       }
 
       await setPendingPlan(userId, {
@@ -535,6 +544,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // Tail tier (the drawer), not ALWAYS_ACTIONS: extending a week is an occasional, explicit ask
   // — the end-cap's visible send names it in the same words as its DRAWER_HOOKS line.
   extend_horizon: EXTEND_HORIZON,
+  // Tail tier, same ruling. The other end of extend_horizon: clearing a stretch instead of
+  // running one longer. It exists because the empty-plan guard below had nowhere to send her —
+  // the refusal named no way to give someone the empty week they had just asked for.
+  pause_week: PAUSE_WEEK,
 
   log_meal: LOG_MEAL,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: a doctor's number arrives once and then holds for

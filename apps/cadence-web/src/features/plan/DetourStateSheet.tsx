@@ -32,30 +32,42 @@ export function DetourStateSheet({
         <div className="sheet-grab" aria-hidden />
         <div className="detour-sheet-h">
           <b>{barLine(episode)}</b>
-          <span>Your usual plan is on hold, not lost. Do what you can — checking in keeps your streak alive.</span>
-        </div>
-
-        {/* What survives says itself; nothing here counts what was missed (BRAND.md). */}
-        <div className="detour-sheet-kept">
-          <span className="detour-sheet-label">Still on</span>
-          <span>Meals, mindset and anything you can do where you are.</span>
-        </div>
-
-        <div className="detour-sheet-kept">
-          <span className="detour-sheet-label">What you told me</span>
           <span>
-            {episode.gearKnown
-              ? 'I have your gear on file — say the word if that changed.'
-              : "I don't know what you've got with you yet. Tell me and I'll shape the days around it."}
+            {episode.paused
+              ? 'Your plan is on hold, not lost. Nothing was deleted, and it picks up where it left off.'
+              : 'Your usual plan is on hold, not lost. Do what you can — checking in keeps your streak alive.'}
           </span>
         </div>
 
+        {/* What survives says itself; nothing here counts what was missed (BRAND.md). A pause has
+            nothing in its place and no gear question — saying otherwise would put the thing they
+            asked to clear back on the page. */}
+        {!episode.paused && (
+          <>
+            <div className="detour-sheet-kept">
+              <span className="detour-sheet-label">Still on</span>
+              <span>Meals, mindset and anything you can do where you are.</span>
+            </div>
+
+            <div className="detour-sheet-kept">
+              <span className="detour-sheet-label">What you told me</span>
+              <span>
+                {episode.gearKnown
+                  ? 'I have your gear on file — say the word if that changed.'
+                  : "I don't know what you've got with you yet. Tell me and I'll shape the days around it."}
+              </span>
+            </div>
+          </>
+        )}
+
         <div className="detour-sheet-actions">
-          <button className="detour-sheet-check" onClick={onCheckIn} disabled={busy}>
-            Check in
-          </button>
+          {!episode.paused && (
+            <button className="detour-sheet-check" onClick={onCheckIn} disabled={busy}>
+              Check in
+            </button>
+          )}
           <button className="detour-sheet-resume" onClick={onResume} disabled={busy}>
-            {busy ? 'One moment…' : "I'm back — resume my plan"}
+            {busy ? 'One moment…' : episode.paused ? 'Start again now' : "I'm back — resume my plan"}
           </button>
         </div>
         {error && !busy && (

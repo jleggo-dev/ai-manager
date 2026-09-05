@@ -1,5 +1,5 @@
 /**
- * The golden set for the tool-selection eval — 56 turns, every one of them sourced from something
+ * The golden set for the tool-selection eval — 58 turns, every one of them sourced from something
  * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
@@ -436,9 +436,7 @@ const ACTIONS: EvalCase[] = [
   {
     id: 'A24',
     kind: 'action',
-    turn:
-      "started suzuki book 2 last autumn — i'm on the hungarian folk song now, everything before it is " +
-      'fine',
+    turn: "started suzuki book 2 last autumn — i'm on the hungarian folk song now, everything before it is " + 'fine',
     expect: ['offer_repertoire_review'],
     allow: [...DOSSIER_READS, 'get_repertoire', 'update_repertoire'],
     args: {
@@ -456,6 +454,44 @@ const ACTIONS: EvalCase[] = [
       'Design frame 1e (repertoire build, P7) — the sentence the door exists for. Twelve pieces sit in it ' +
       'and none are named, so update_repertoire can only write titles she guessed; the book goes up instead ' +
       'and the person ticks it.',
+  },
+  {
+    id: 'A25',
+    kind: 'action',
+    turn: "my dad died on saturday. i can't do any of this week — take everything off, i'll pick it up after",
+    expect: ['pause_week'],
+    allow: [...DOSSIER_READS],
+    // The refusal this tool replaces: removals that empty a plan are rejected by
+    // propose_plan_change's own guard, so routing here through the edit tool ends in "no".
+    forbid: ['propose_plan_change', 'start_replan', 'build_next_week'],
+    args: {
+      tool: 'pause_week',
+      check: (a) => {
+        const end = str(a.end);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return `end was "${end}" — a pause has no shape without a last day`;
+        const start = str(a.start);
+        if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) return `start was "${start}", not a YYYY-MM-DD date`;
+        if (start && start > end) return `start ${start} is after end ${end}`;
+        return null;
+      },
+    },
+    from:
+      'Finding TR-5 (tool audit, 2026-09-03) — the empty-plan guard in coach-actions.ts had nowhere to send ' +
+      'her, so a bereavement met "an empty week is not a rhythm". A pause is a detour with nothing overlaid ' +
+      'and the product already had it; nothing exposed it to the coach.',
+  },
+  {
+    id: 'A26',
+    kind: 'action',
+    turn: "skip thursday's run, i'm out all evening. rest of the week is fine",
+    expect: ['propose_plan_change'],
+    allow: [...DOSSIER_READS],
+    // The other side of A25's line, and the false trigger that would hurt most: ONE day off is a
+    // named edit, not a stretch cleared — a pause here would shelve the whole rest of the week.
+    forbid: ['pause_week', 'start_replan'],
+    from:
+      'Finding TR-5 (tool audit, 2026-09-03), the restraint half — a set of only positive cases measures ' +
+      'recall and silently ignores false triggering (TOOL-HARNESS.md, step 7).',
   },
 ];
 
