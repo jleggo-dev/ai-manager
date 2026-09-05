@@ -37,6 +37,17 @@ export const queryKeys = {
   weather: {
     all: ['weather'] as const,
   },
+  /**
+   * `/me/location` — where they live, where they ARE, and the timezone (A21's two points).
+   *
+   * Through the cache since 2026-09-05, and the reason is the boot paint rather than the request
+   * count: nothing about the place was ever kept on the device, so every cold launch started not
+   * knowing whether there was one — and the header read that silence as "never set". Persisted
+   * like everything else now (boot-policy.ts), so the place is on screen before the network.
+   */
+  location: {
+    all: ['location'] as const,
+  },
   /** `/me/health-digest` (W1-6) — stored HealthKit summaries; the steps `weekly_bars` widget. */
   healthDigest: {
     all: ['healthDigest'] as const,

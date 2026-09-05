@@ -16,6 +16,10 @@
  * tracked client-side (`cadence.locationSource`) rather than invented by re-reading `label`,
  * which a device share can also carry. This is a UI-copy decision, not a data-integrity one: the
  * underlying place and the ability to forget it round-trip through the real API either way.
+ *
+ * Those helpers live in `location-source.ts` now, because the Today header reads one of them: a
+ * forget from state (b) is the one way to say "I want no place", and auto-detect has to honour it
+ * or this screen has an off switch that does not stay off (owner, 2026-09-05).
  */
 import { useEffect, useState } from 'react';
 import {
@@ -26,31 +30,7 @@ import {
   type HomeLocation,
 } from '../../lib/api.ts';
 import { capabilities } from '../../lib/capability/index.ts';
-
-type Source = 'device' | 'city';
-const SOURCE_KEY = 'cadence.locationSource';
-
-function readSource(loc: HomeLocation | null): Source | null {
-  if (!loc) return null;
-  try {
-    const stored = window.localStorage.getItem(SOURCE_KEY);
-    if (stored === 'device' || stored === 'city') return stored;
-  } catch {
-    /* fall through to the heuristic below */
-  }
-  // No record (e.g. a place saved before this rebuild, or storage unavailable): a typed city
-  // always carries a label; a bare device share usually does not.
-  return loc.label ? 'city' : 'device';
-}
-
-function writeSource(source: Source | null) {
-  try {
-    if (source) window.localStorage.setItem(SOURCE_KEY, source);
-    else window.localStorage.removeItem(SOURCE_KEY);
-  } catch {
-    /* no localStorage, no matter — the next load falls back to the label heuristic */
-  }
-}
+import { readSource, setLocationOff, writeSource, type Source } from './location-source.ts';
 
 function formatPlace(loc: HomeLocation): string {
   const label = loc.label?.trim();
@@ -100,6 +80,7 @@ export function SettingsLocation() {
       setTimezone(saved.timezone);
       setSource('device');
       writeSource('device');
+      setLocationOff(false); // asking for a place is how the off switch is turned back on
       setFlow(false);
       setMsg('Got it — outdoor sessions can use the weather near you.');
     } catch {
@@ -120,6 +101,7 @@ export function SettingsLocation() {
       setTimezone(saved.timezone);
       setSource('city');
       writeSource('city');
+      setLocationOff(false);
       setFlow(false);
       setCity('');
       setMsg('Got it — outdoor sessions can use the weather near that city.');
@@ -144,6 +126,9 @@ export function SettingsLocation() {
         setTimezone(null);
         setSource(null);
         writeSource(null);
+        // The deliberate choice the header's auto-detect has to honour. Without this the next
+        // launch quietly puts a place back and this button reads as broken.
+        setLocationOff(true);
         setMsg('Forgot that place.');
       } else setMsg("Couldn't clear that — try again.");
     } finally {

@@ -35,6 +35,10 @@ vi.mock('../../lib/capability/index.ts', () => ({
 vi.mock('../../lib/query/index.ts', () => ({
   fetchWeatherCached: async () => ({ available: false }),
   forgetWeather: vi.fn(),
+  // The place is read through the cache now; the fixtures below still drive it via getHomeLocation.
+  fetchLocationCached: () => getHomeLocation(),
+  forgetLocation: vi.fn(),
+  queryKeys: { weather: { all: ['weather'] }, location: { all: ['location'] } },
 }));
 
 function mount() {
@@ -47,7 +51,12 @@ function mount() {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  getHomeLocation.mockResolvedValue({ home_location: HOME, current_location: null, timezone: 'America/Toronto' });
+  getHomeLocation.mockResolvedValue({
+    home_location: HOME,
+    current_location: null,
+    timezone: 'America/Toronto',
+    available: true,
+  });
   getCoarseLocation.mockResolvedValue(DOWNTOWN);
 });
 
@@ -73,6 +82,7 @@ describe('the Today header, deciding where you are', () => {
       home_location: HOME,
       current_location: { ...DOWNTOWN, label: 'Montreal, CA' },
       timezone: null,
+      available: true,
     });
     getCoarseLocation.mockResolvedValue({ lat: 45.4, lon: -73.9 });
     mount();
@@ -85,6 +95,7 @@ describe('the Today header, deciding where you are', () => {
       home_location: HOME,
       current_location: { ...DOWNTOWN, label: 'Montreal, CA' },
       timezone: null,
+      available: true,
     });
     getCoarseLocation.mockResolvedValue(DOWNTOWN);
     const { result } = mount();
@@ -92,10 +103,39 @@ describe('the Today header, deciding where you are', () => {
   });
 
   it('still auto-detects a home for someone who has none', async () => {
-    getHomeLocation.mockResolvedValue({ home_location: null, current_location: null, timezone: null });
+    getHomeLocation.mockResolvedValue({ home_location: null, current_location: null, timezone: null, available: true });
     mount();
     await waitFor(() => expect(saveHomeLocation).toHaveBeenCalled());
     expect(saveCurrentLocation).not.toHaveBeenCalled();
+  });
+
+  it('keeps a place on file for you — unless Settings says not to', async () => {
+    // The other half of "location should never be unset": a Settings forget writes this, and
+    // without it auto-detect quietly puts the place back on the next launch, which makes the
+    // off switch read as broken (owner, 2026-09-05).
+    localStorage.setItem('cadence.locationOff', '1');
+    getHomeLocation.mockResolvedValue({ home_location: null, current_location: null, timezone: null, available: true });
+
+    const { result } = mount();
+    await waitFor(() => expect(getHomeLocation).toHaveBeenCalled());
+    expect(saveHomeLocation).not.toHaveBeenCalled();
+    // And no nagging from the header either — they know where the setting is.
+    expect(result.current.needsLocation).toBe(false);
+  });
+
+  it('does not mistake a location read that FAILED for someone who has none', async () => {
+    // The bug this pins: a blip on `/me/location` soft-fails to nulls, which used to read as "no
+    // home on file" — so the app asked for a fix, and a press of the header's prompt re-homed a
+    // long-standing account to wherever it happened to be standing.
+    getHomeLocation.mockResolvedValue({
+      home_location: null,
+      current_location: null,
+      timezone: null,
+      available: false,
+    });
+    const { result } = mount();
+    await waitFor(() => expect(result.current.needsLocation).toBe(false));
+    expect(saveHomeLocation).not.toHaveBeenCalled();
   });
 
   it('takes "I am here now" at its word — one tap, no dwell', async () => {
