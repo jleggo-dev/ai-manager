@@ -53,6 +53,9 @@ describe('revise_session', () => {
     expect(out).toContain('Strength on 2026-09-03');
     expect(out).toContain('2 block(s), 3 step(s)');
     expect(out).toContain(SESSION.note);
+    // No length mandate on the explanation (TR-1).
+    expect(out).toContain('Say what changed and why it fits.');
+    expect(out).not.toMatch(/in one short line/);
   });
 
   it('takes the soonest matching session when no date is given', async () => {

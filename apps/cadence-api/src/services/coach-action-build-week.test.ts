@@ -15,13 +15,15 @@ beforeEach(() => {
 });
 
 describe('build_next_week', () => {
-  it('rolls the week and tells her to say one line, promise nothing, and skip the build card', async () => {
+  it('rolls the week, states the fact plainly (no length mandate), and skips the build card (TR-1)', async () => {
     vi.mocked(buildNextWeek).mockResolvedValue({ status: 'committed', version: 13, planId: 'p1' } as never);
     const out = await BUILD_NEXT_WEEK.run('u1', {});
     expect(buildNextWeek).toHaveBeenCalledWith('u1');
     expect(out).toContain('week 13 is being built from the same rhythm');
+    expect(out).toContain('Next week is being built.');
     expect(out).toContain('Do not promise how long it will take');
     expect(out).toContain('do not put up a build card');
+    expect(out).not.toMatch(/Say ONE short line/);
   });
 
   it('says plainly that nothing rolled when there is no plan, and points at the build card', async () => {

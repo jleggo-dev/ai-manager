@@ -121,7 +121,7 @@ export const SET_MICRO_TARGET: CoachActionTool = {
             200,
           ),
       }).catch(() => null);
-      return `Cleared — ${resolved.label} is back to the published ${String(resolved.amount)}${resolved.unit} a day. Say it back in one line so they know what they are being coached to now.`;
+      return `Cleared — ${resolved.label} is back to the published ${String(resolved.amount)}${resolved.unit} a day. Say it back so they know what they are being coached to now.`;
     }
 
     if (resolved.origin !== 'override') {
@@ -134,6 +134,6 @@ export const SET_MICRO_TARGET: CoachActionTool = {
     }).catch(() => null);
 
     const direction = resolved.direction === 'ceiling' ? 'to stay under' : 'to reach';
-    return `On file and verified: ${resolved.label} ${direction} ${String(resolved.amount)}${resolved.unit} a day, standing in for the published reference intake. Say it back in one short line so they can correct you, then carry on.`;
+    return `On file and verified: ${resolved.label} ${direction} ${String(resolved.amount)}${resolved.unit} a day, standing in for the published reference intake. Say it back so they can correct you.`;
   },
 };

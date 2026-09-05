@@ -35,7 +35,7 @@ export const BUILD_NEXT_WEEK: CoachActionTool = {
     }
     return [
       `Done — week ${result.version} is being built from the same rhythm, nothing changed. The sessions are being written in the background and the app will notify them when it is ready.`,
-      'Say ONE short line that next week is on its way. Do not promise how long it will take, do not recite what is in it, and do not put up a build card — the build is already happening.',
+      'Next week is being built. Do not promise how long it will take, do not recite what is in it, and do not put up a build card — the build is already happening.',
     ].join('\n');
   },
 };

@@ -82,9 +82,10 @@ describe('propose_plan_change', () => {
     const [, pending] = setPendingPlan.mock.calls[0]!;
     expect(pending.activities[0].recurrence).toBe('FREQ=WEEKLY;BYDAY=FR');
     expect(pending.rationale).toContain('Move Easy run');
-    // The model is told, in the tool's own output, not to claim it is done.
+    // The model is told, in the tool's own output, not to claim it is done — no length mandate (TR-1).
     expect(out).toMatch(/Apply button/);
     expect(out).toMatch(/Do NOT claim it is done/);
+    expect(out).not.toMatch(/Say in one line/);
   });
 
   it('tells the coach to offer a build instead when there is no plan to change', async () => {
@@ -346,8 +347,10 @@ describe('update_goal', () => {
     });
     expect(insertGoalEvent.mock.calls[0]![1].label).toBe('Target changed: 100 → 50 books');
     expect(out).toMatch(/aims at 50 books/);
-    // The plan does not follow automatically, and she must not imply it did.
-    expect(out).toMatch(/offer to rebuild/);
+    // The plan does not follow automatically, and she must not imply it did — she is told what
+    // the week currently holds and which tool rebuilds it, not told to "offer" anything (TR-6).
+    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).not.toMatch(/offer to rebuild/);
   });
 
   /**
@@ -377,26 +380,35 @@ describe('update_goal', () => {
   });
 
   it('moves a date, and refuses one it cannot read', async () => {
-    await update.run('u1', { goal: 'Run a 10k', action: 'redate', date: '2026-11-01' });
+    const out = await update.run('u1', { goal: 'Run a 10k', action: 'redate', date: '2026-11-01' });
     expect(updateGoal).toHaveBeenCalledWith('u1', 'g2', { timeframe: { end: '2026-11-01' } });
+    // Facts, not picks (TR-4): what the week currently holds and the tool that rebuilds it — never
+    // a "later usually eases off, earlier usually cannot be met" generalisation.
+    expect(out).toMatch(/Their plan still holds the sessions built for the old date/);
+    expect(out).toMatch(/get_active_plan/);
+    expect(out).toMatch(/start_replan rebuilds the week/);
+    expect(out).not.toMatch(/usually|offer to rebuild/);
 
     vi.clearAllMocks();
     listGoals.mockResolvedValue([
       { goal_id: 'g2', title: 'Run a 10k', status: 'committed', measure: {}, timeframe: {} },
     ]);
-    const out = await update.run('u1', { goal: 'Run a 10k', action: 'redate', date: 'next spring' });
+    const bad = await update.run('u1', { goal: 'Run a 10k', action: 'redate', date: 'next spring' });
     expect(updateGoal).not.toHaveBeenCalled();
-    expect(out).toMatch(/No usable date/);
+    expect(bad).toMatch(/No usable date/);
   });
 
-  it('completes warmly and stops without blame', async () => {
+  it("completes plainly and stops without blame — mandated warmth is not the tool's call (TR-3)", async () => {
     const done = await update.run('u1', { goal: 'Read 100 books', action: 'complete' });
     expect(setGoalStatus).toHaveBeenCalledWith('u1', 'g1', 'completed');
-    expect(done).toMatch(/worth a sentence/);
+    expect(done).toMatch(/finished/);
+    expect(done).not.toMatch(/worth a sentence|say so warmly/i);
 
     const stopped = await update.run('u1', { goal: 'Run a 10k', action: 'stop' });
     expect(setGoalStatus).toHaveBeenCalledWith('u1', 'g2', 'abandoned');
     expect(stopped).toMatch(/without any suggestion they failed/);
+    expect(stopped).toMatch(/start_replan rebuilds it/);
+    expect(stopped).not.toMatch(/offer to rebuild|offer that if it now looks empty/);
   });
 
   it('never touches a goal they already finished or dropped', async () => {
@@ -419,6 +431,8 @@ describe('update_goal', () => {
     expect(out).toMatch(/set aside/i);
     expect(out).toMatch(/stays in Progress/);
     expect(out).toMatch(/without any suggestion they failed/);
+    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).not.toMatch(/offer to rebuild/);
   });
 
   it('restores a parked goal — matched even though get_objectives would not list it', async () => {
@@ -427,6 +441,8 @@ describe('update_goal', () => {
     expect(restoreGoal).toHaveBeenCalledWith('u1', 'g4');
     expect(insertGoalEvent.mock.calls[0]![1].label).toBe('Brought back: Obstacle race');
     expect(out).toMatch(/is back/);
+    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).not.toMatch(/say so warmly|offer to rebuild/i);
   });
 
   it('refuses to retire a goal that is already set aside', async () => {
@@ -506,6 +522,8 @@ describe('correct_log', () => {
     expect(fields.log.summary).toContain('8 distance km');
     expect(fields.log.summary).toContain('28 duration min');
     expect(out).toContain('28 duration min');
+    expect(out).toMatch(/Confirm it back\./);
+    expect(out).not.toMatch(/in one short line/);
   });
 
   it('still writes only the named fields when the record had no stored numbers', async () => {
@@ -520,11 +538,12 @@ describe('correct_log', () => {
     expect(fields.log).toBeUndefined();
   });
 
-  it('un-counts a SCHEDULED session that did not happen, keeping the slot', async () => {
+  it("un-counts a SCHEDULED session that did not happen, keeping the slot — the emotional register is not the tool's call (TR-8)", async () => {
     const out = await correct.run('u1', { activity: 'Easy run', not_done: true });
     expect(correctOccurrenceLog).toHaveBeenCalledWith('u1', 'o1', { status: 'skipped' });
     expect(deleteOccurrence).not.toHaveBeenCalled();
-    expect(out).toMatch(/never a failure/);
+    expect(out).toMatch(/now reads as not done/);
+    expect(out).not.toMatch(/never a failure|needs no commiseration/);
   });
 
   /**
@@ -538,6 +557,8 @@ describe('correct_log', () => {
     expect(deleteOccurrence).toHaveBeenCalledWith('u1', 'o2');
     expect(correctOccurrenceLog).not.toHaveBeenCalled();
     expect(out).toMatch(/gone entirely/);
+    expect(out).toMatch(/Confirm it without apologising at length/);
+    expect(out).not.toMatch(/in one line/);
   });
 
   it('asks rather than guessing when the session is not found', async () => {
@@ -606,14 +627,18 @@ describe('update_constraint', () => {
     // Matched against what is on file, so the fuller stored label survives.
     expect(written[0].label).toBe('left knee — patellar tendinopathy');
     expect(out).toMatch(/still on file/);
+    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).not.toMatch(/offer to rebuild/);
   });
 
   it('brings one back when it flares', async () => {
-    await constraint.run('u1', { constraint: 'left knee', action: 'flare' });
+    const out = await constraint.run('u1', { constraint: 'left knee', action: 'flare' });
     const [, written] = mergeCapturedConstraints.mock.calls[0]!;
     expect(written[0].status).toBe('active');
     expect(written[0].plan_around).toBe(true);
     expect(removeCapturedConstraint).not.toHaveBeenCalled();
+    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).not.toMatch(/offer to change the week/);
   });
 
   it('DELETES only what was never true', async () => {
@@ -623,6 +648,8 @@ describe('update_constraint', () => {
     expect(removeCapturedConstraint).toHaveBeenCalledWith('u1', 'left knee');
     expect(mergeCapturedConstraints).not.toHaveBeenCalled();
     expect(out).toMatch(/verified gone/);
+    // The register after a correction is not the tool's call (TR-7).
+    expect(out).not.toMatch(/dwell on the mistake/);
   });
 
   it('says so plainly when there was nothing to remove', async () => {
@@ -642,6 +669,7 @@ describe('update_constraint', () => {
     expect(written[0].plan_around).toBe(true);
     expect(written[0].kind).toBe('physical');
     expect(out).toMatch(/so they can correct you/);
+    expect(out).not.toMatch(/in one line/);
   });
 
   /**
@@ -705,6 +733,7 @@ describe('update_constraint', () => {
     expect(removeCapturedConstraint).not.toHaveBeenCalled();
     expect(out).toMatch(/now reads "left ankle tendinitis"/);
     expect(out).toMatch(/verified/);
+    expect(out).not.toMatch(/in one line/);
   });
 
   it('will not reword without new wording, and asks for it', async () => {
@@ -786,9 +815,10 @@ describe('set_macro_targets', () => {
     expect(out).not.toMatch(/was /);
   });
 
-  it('tells her to speak the change as a decision, not a settings update', async () => {
+  it('tells her to speak the change as a decision, not a settings update — no length mandate (TR-1)', async () => {
     const out = await setTargets.run('u1', { kcal: 2100, why: 'x' });
     expect(out).toMatch(/sound like a decision you made/);
+    expect(out).not.toMatch(/in one line/);
   });
 });
 

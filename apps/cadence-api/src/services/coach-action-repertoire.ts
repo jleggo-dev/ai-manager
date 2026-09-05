@@ -312,7 +312,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       // directly re-usable in her next call — a count labelled "keeping up" would have her
       // writing "keeping up" as a standing and getting it rejected.
       `On file now: ${counts.queued} queued, ${counts.working} working, ${counts.known} known, ${counts.retired} retired.`,
-      'Say in one line what you noted down. Anything newly learned is worth a warm sentence — it is a thing they did.',
+      'Say in one line what you noted down.',
     ].join('\n');
   },
 };

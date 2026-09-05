@@ -45,6 +45,9 @@ describe('set_micro_target', () => {
       });
       expect(said).toMatch(/verified/i);
       expect(said).toMatch(/2000mg/);
+      // Say it back for correction, but with no length mandate (TR-1).
+      expect(said).toMatch(/Say it back so they can correct you\./);
+      expect(said).not.toMatch(/in one short line|then carry on/);
       // getUser twice: the read before the write, and the verification after it.
       expect(getUser).toHaveBeenCalledTimes(2);
     });
@@ -92,6 +95,7 @@ describe('set_micro_target', () => {
     expect(state.macro_targets.micro_targets).toEqual({});
     expect(said).toMatch(/cleared/i);
     expect(said).toMatch(/\b8mg\b/); // a 40-year-old man's published iron intake
+    expect(said).not.toMatch(/in one line/);
   });
 
   it('says so plainly when there was no override to clear', async () => {

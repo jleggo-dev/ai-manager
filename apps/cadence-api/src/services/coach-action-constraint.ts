@@ -86,7 +86,7 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
         return `"${label}" is STILL on their file — the removal did not take. Do NOT tell them it is gone. Say you could not remove it just now, and that they can take it off themselves in Settings under "What we work around".`;
       }
       return removed
-        ? `Removed "${label}" — verified gone from their file. Say so briefly and move on; do not dwell on the mistake.`
+        ? `Removed "${label}" — verified gone from their file.`
         : `Nothing on file matches "${label}", so nothing was removed. Tell them plainly it was not there.`;
     }
 
@@ -108,7 +108,7 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
       const after = await verifyConstraints(userId);
       const landed = after.some((c) => (c.label ?? '').trim() === next);
       return landed
-        ? `Reworded: "${done.from}" now reads "${next}" on their file — verified. Say it back in one line so they can tell you if it is still not right.`
+        ? `Reworded: "${done.from}" now reads "${next}" on their file — verified. Say it back so they can tell you if it is still not right.`
         : `"${label}" did NOT get reworded — the change did not take. Do not say it is fixed; say you could not save it just now, and that they can edit the wording themselves in Settings under "What we work around".`;
     }
 
@@ -142,12 +142,12 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
     }
     if (action === 'lift') {
       return row.plan_around === false
-        ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly, and if their week was built around it, offer to rebuild.`
+        ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`
         : `"${row.label}" is still being planned around — the change did not take. Do NOT say it is eased; say you could not save it just now.`;
     }
     if (action === 'flare') {
       return row.plan_around
-        ? `"${row.label}" is active again and verified: the plan should work around it. Say so, and offer to change the week if it currently ignores it.`
+        ? `"${row.label}" is active again and verified: the plan should work around it. Say so. Their current week was built while this was not being planned around, and still holds those sessions. start_replan rebuilds it.`
         : `"${row.label}" did not save as active. Do NOT say it is done; say you could not save it just now.`;
     }
     /**
@@ -158,7 +158,7 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
      * Name the nearest neighbour instead of deciding, and let her ask.
      */
     const near = !existing ? nearMiss(after, row.label ?? label) : null;
-    return `Noted and verified: they work around "${row.label}". Say it back in one line so they can correct you if you have it wrong.${
+    return `Noted and verified: they work around "${row.label}". Say it back so they can correct you if you have it wrong.${
       near
         ? ` One thing to check: this sits close to "${near}", already on their file — if those are one fact, use reword to fold them into one telling and remove the other.`
         : ''

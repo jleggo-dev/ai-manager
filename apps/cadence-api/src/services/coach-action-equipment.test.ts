@@ -78,6 +78,8 @@ describe('update_equipment', () => {
       expect(out).toContain('verified');
       expect(out).toContain('2x25lb dumbbells');
       expect(out).toContain('1 duplicate row');
+      expect(out).toContain('Say it back so they can correct you.');
+      expect(out).not.toMatch(/in one line/);
       expect(store.state.rows.map((r) => r.name)).toEqual(['2x25lb dumbbells', 'pull-up bar']);
     });
   });
@@ -93,6 +95,8 @@ describe('update_equipment', () => {
     seed('pull-up bar');
     const out = await UPDATE_EQUIPMENT.run('u1', { item: 'rowing machine', action: 'add', category: 'cardio' });
     expect(out).toContain('On file and verified');
+    expect(out).toContain('Say it back so they can correct you.');
+    expect(out).not.toMatch(/in one line/);
     expect(store.state.rows.map((r) => r.name)).toContain('rowing machine');
   });
 
@@ -101,6 +105,7 @@ describe('update_equipment', () => {
     const out = await UPDATE_EQUIPMENT.run('u1', { item: 'Suzuki book', action: 'remove' });
     expect(out).toContain('Removed');
     expect(out).toContain('verified gone');
+    expect(out).not.toMatch(/say so briefly and move on/i);
     expect(store.state.rows.map((r) => r.name)).toEqual(['piano']);
   });
 

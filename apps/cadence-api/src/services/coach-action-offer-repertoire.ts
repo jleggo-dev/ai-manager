@@ -121,7 +121,7 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
       `Done — the user now has "${collection}" up on their screen as a list they can tick.${goalNote}`,
       split,
       'NOTHING is on their file: no piece is stored until they confirm on that screen, and you have not read the book — the screen has. Do not say anything is recorded, on their list, or done.',
-      'Say ONE short line that it is up for them to check, and STOP. Do not list the pieces and do not count them. Wait for them to look.',
+      'It is up for them to check. Do not list the pieces and do not count them. Wait for them to look.',
     ].join('\n');
   },
 };

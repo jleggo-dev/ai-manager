@@ -83,7 +83,8 @@ describe('log_meal — settled vs provisional are told apart', () => {
     expect(out).toContain('protein shake');
     expect(out).toContain('Chiquita banana');
     expect(out).toContain('260 kcal');
-    expect(out).toContain('bookkeeping');
+    // Logging is not coaching, and it is not the tool's call whether the coach comments on it (TR-2).
+    expect(out).not.toMatch(/bookkeeping|say one short line|not something to review/i);
     expect(out).not.toContain('PROVISIONAL');
   });
 

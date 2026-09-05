@@ -136,11 +136,11 @@ describe('offer_repertoire_review — the gate it must never cross', () => {
 });
 
 describe('offer_repertoire_review — what it tells her to say', () => {
-  it('tells her to say one line and stop, and not to list the pieces', async () => {
+  it('states the fact plainly, with no length mandate, and not to list the pieces (TR-1)', async () => {
     const out = await OFFER_REPERTOIRE_REVIEW.run('u1', { collection: 'Suzuki Piano Book 2' });
-    expect(out).toMatch(/ONE short line/);
-    expect(out).toMatch(/STOP/);
+    expect(out).toMatch(/up for them to check/);
     expect(out).toMatch(/do not list the pieces/i);
+    expect(out).not.toMatch(/ONE short line|and STOP/);
   });
 
   it('says the split is pre-marked only when a piece was named', async () => {
