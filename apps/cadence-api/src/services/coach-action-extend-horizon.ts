@@ -46,7 +46,7 @@ export const EXTEND_HORIZON: CoachActionTool = {
     }
     return [
       `Done — their week now runs ${result.horizonDays} days, through ${result.endsOn}. The added days follow the same rhythm they already committed to, and their weekly check-in moved to the new end date.`,
-      'Say ONE short line that the week now runs further ahead and when the check-in lands. This applies to the CURRENT week only — the next week they build returns to seven days unless they ask again.',
+      'The week now runs further ahead and when the check-in lands. This applies to the CURRENT week only — the next week they build returns to seven days unless they ask again.',
     ].join('\n');
   },
 };

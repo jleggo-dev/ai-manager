@@ -52,6 +52,8 @@ describe('open_week_review', () => {
     expect(out).toMatch(/2026-08-24/);
     expect(out).toMatch(/2026-08-26/);
     expect(out).toMatch(/do not (describe|recite)/i);
+    // No length mandate on the fact itself (TR-1).
+    expect(out).not.toMatch(/Say ONE short line|Say one short line/i);
   });
 
   it('runs the full 7 days for a week that has already finished', async () => {

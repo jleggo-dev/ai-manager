@@ -320,7 +320,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
          * because nothing showed her the week her edits added up to.
          */
         ...planEditEvidence(next, me?.baseline?.constraints),
-        'Say in one line what you have put up and that it is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
+        'What you have put up is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
         unknownNote,
       ]
         .filter(Boolean)
@@ -372,8 +372,8 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           label: action === 'complete' ? `Finished: ${goal.title}` : `Stopped working on: ${goal.title}`,
         }).catch(() => null);
         return action === 'complete'
-          ? `Marked "${goal.title}" finished. Say so warmly — this is a thing they did, and it is worth a sentence, not a checkbox.`
-          : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed; the sessions that served it stay in their plan until the plan is rebuilt, so offer that if it now looks empty.`;
+          ? `Marked "${goal.title}" finished.`
+          : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`;
       }
 
       if (action === 'retire' || action === 'restore') {
@@ -392,8 +392,8 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           label: action === 'retire' ? `Set aside: ${goal.title}` : `Brought back: ${goal.title}`,
         }).catch(() => null);
         return action === 'retire'
-          ? `"${goal.title}" is set aside. Say it plainly and without any suggestion they failed — it will not shape next week's plan, but everything it already built stays in Progress. If their week now looks empty, offer to rebuild it.`
-          : `"${goal.title}" is back. Say so warmly — it will shape the plan again from the next build, so offer to rebuild if they want it woven in now.`;
+          ? `"${goal.title}" is set aside. Say it plainly and without any suggestion they failed — it will not shape next week's plan, but everything it already built stays in Progress. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`
+          : `"${goal.title}" is back. It will shape the plan again from the next build. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`;
       }
 
       if (action === 'retarget') {
@@ -425,7 +425,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           kind: 'note',
           label: `Target changed: ${String(was ?? '?')} → ${target}${unit ? ` ${unit}` : ''}`,
         }).catch(() => null);
-        return `"${retitled ?? goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed in one line. Their plan still holds the old sessions — if the new target needs a different week, offer to rebuild.`;
+        return `"${retitled ?? goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`;
       }
 
       const date = String(params.date ?? '').trim();
@@ -439,7 +439,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         kind: 'note',
         label: `Date moved: ${wasDate ?? 'unset'} → ${date}`,
       }).catch(() => null);
-      return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. A later date usually means the week can ease off, and an earlier one usually cannot be met by wishing — if the pace no longer fits, say so and offer to rebuild.`;
+      return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. Their plan still holds the sessions built for the old date. get_active_plan shows them; start_replan rebuilds the week.`;
     },
   },
 
@@ -491,10 +491,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           !!found.recurrence && expandRecurrence(found.recurrence, found.date, found.date).length > 0;
         if (wasScheduled) {
           await correctOccurrenceLog(userId, found.occurrence_id, { status: 'skipped' });
-          return `Corrected: ${found.title} on ${found.date} is no longer counted as done — it was on the plan that day, so it now reads as not done. Say so plainly; a session that did not happen is information, never a failure, and it needs no commiseration.`;
+          return `Corrected: ${found.title} on ${found.date} is no longer counted as done — it was on the plan that day, so it now reads as not done.`;
         }
         await deleteOccurrence(userId, found.occurrence_id);
-        return `Removed: ${found.title} on ${found.date} is gone entirely — nothing was scheduled that day, so that entry only existed because it was logged. Confirm it in one line without apologising at length.`;
+        return `Removed: ${found.title} on ${found.date} is gone entirely — nothing was scheduled that day, so that entry only existed because it was logged. Confirm it without apologising at length.`;
       }
 
       const raw = (params.metrics ?? {}) as Record<string, unknown>;
@@ -523,7 +523,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         value,
         ...(found.log ? { log: { ...found.log, summary } } : {}),
       });
-      return `Corrected: ${found.title} on ${found.date} now reads ${summary}. Confirm it back in one short line.`;
+      return `Corrected: ${found.title} on ${found.date} now reads ${summary}. Confirm it back.`;
     },
   },
 
@@ -612,7 +612,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       if (!logged) return 'That could not be written down just now — tell them plainly and offer to try again.';
       return [
         `Logged against ${found.title} (${found.date})${found.logged ? ', replacing what was there' : ' and marked done'}: ${logged.summary}`,
-        'Say it back in one short line so they know it is on their file, then carry on with the conversation — do not turn it into a report.',
+        'It is on their file.',
       ].join('\n');
     },
   },
@@ -667,7 +667,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         .join(', ');
       return [
         `Targets are now ${said}${wasKcal ? ` (was ${String(wasKcal)} kcal)` : ''}, and today's numbers already count against them.`,
-        'Tell them what changed and why in one line — this is the adjustment they are paying you for, so it should sound like a decision you made, not a setting that moved.',
+        'Tell them what changed and why — this is the adjustment they are paying you for, so it should sound like a decision you made, not a setting that moved.',
       ].join('\n');
     },
   },

@@ -73,9 +73,6 @@ export const LOG_MEAL: CoachActionTool = {
         'Say honestly that you logged what they said but could not price all of it. Ask for more detail (an amount, a brand) if that would help, or say the Food screen can fill in the rest. Do not claim it is fully counted.',
       ].join('\n');
     }
-    return [
-      `Logged: "${items}" for ${row.date} (${row.meal})${kcal ? `, ${kcal}` : ''}.`,
-      'Say ONE short line confirming it and move on — this is bookkeeping, not something to review or comment on unless they ask.',
-    ].join('\n');
+    return `Logged: "${items}" for ${row.date} (${row.meal})${kcal ? `, ${kcal}` : ''}.`;
   },
 };

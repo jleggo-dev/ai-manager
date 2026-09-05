@@ -48,6 +48,8 @@ describe('start_replan', () => {
     expect(out).toContain('they do not have to wait in this chat');
     // The completeness rule's sharp edge: nothing has changed and nothing may claim to have.
     expect(out).toContain('nothing does until they apply the card');
+    // No length mandate on how she says it (TR-1).
+    expect(out).not.toMatch(/Say in ONE short line/i);
   });
 
   it('says a rebuild is ALREADY going on a join — with its age from the same record the client polls', async () => {

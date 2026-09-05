@@ -75,7 +75,7 @@ export const REVISE_SESSION: CoachActionTool = {
     return [
       `Rebuilt: ${found.title} on ${found.date} now holds ${session.blocks.length} block(s), ${steps} step(s), built around "${steer}".`,
       `The new session's note: "${session.note}"`,
-      'It is already on their plan — nothing to tap. Say in one short line what changed and why it fits.',
+      'It is already on their plan — nothing to tap. Say what changed and why it fits.',
     ].join('\n');
   },
 };

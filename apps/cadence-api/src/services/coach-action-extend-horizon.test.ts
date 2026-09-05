@@ -30,6 +30,8 @@ describe('extend_horizon', () => {
     expect(extendHorizon).toHaveBeenCalledWith('u1', 14);
     expect(out).toContain('14 days');
     expect(out).toContain('2026-09-12');
+    // No length mandate on the fact itself (TR-1).
+    expect(out).not.toMatch(/Say ONE short line/i);
   });
 
   it('refuses a missing or garbled length without calling the service', async () => {

@@ -194,3 +194,11 @@ describe('update_repertoire files an item into the collection she named', () => 
     expect(collectionIdsWritten()).toEqual(['c-suzuki book 2']);
   });
 });
+
+describe("update_repertoire — mandated warmth is not the tool's call (TR-3)", () => {
+  it('tells her to say what she noted, without also mandating that she sound warm about it', async () => {
+    const out = await UPDATE_REPERTOIRE.run('u1', { items: [{ label: 'Arietta', status: 'known' }] });
+    expect(out).toContain('Say in one line what you noted down.');
+    expect(out).not.toMatch(/worth a warm sentence|newly learned is worth/i);
+  });
+});

@@ -55,7 +55,7 @@ export const PROPOSE_PROGRESS_LAYOUT: CoachActionTool = {
 
     return [
       'Done — the user now has a "Progress page" proposal card on their screen, built from what they just told you.',
-      'Say ONE short line that it is up for them to look at, and do not describe any of the sections — you have not seen the card, they are about to. Wait for them to look and tell you what stood out, then talk it through from there. Their current page has not changed and will not until they accept it.',
+      'It is up for them to look at. Do not describe any of the sections — you have not seen the card, they are about to. Wait for them to look and tell you what stood out, then talk it through from there. Their current page has not changed and will not until they accept it.',
     ].join('\n');
   },
 };

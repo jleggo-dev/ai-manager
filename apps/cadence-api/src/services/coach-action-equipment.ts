@@ -83,7 +83,7 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
       await insertEquipment(userId, { name: item, category, owned: true });
       const after = matching(await listEquipment(userId), item);
       return after.length
-        ? `On file and verified: they own "${after[0]!.name}". Say it back in one line so they can correct you.`
+        ? `On file and verified: they own "${after[0]!.name}". Say it back so they can correct you.`
         : `"${item}" is NOT on their file after that write — it did not take. Do not say it is done; say you could not save it just now.`;
     }
 
@@ -97,7 +97,7 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
       if (still.length) {
         return `"${item}" is STILL on their file — the removal did not take. Do NOT tell them it is gone; say you could not remove it just now.`;
       }
-      return `Removed "${hits.map((h) => h.name).join('", "')}" — verified gone from their file. Say so briefly and move on.`;
+      return `Removed "${hits.map((h) => h.name).join('", "')}" — verified gone from their file.`;
     }
 
     if (action === 'reword') {
@@ -115,7 +115,7 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
       const after = await listEquipment(userId);
       const landed = after.some((r) => r.name.trim() === next);
       return landed
-        ? `Reworded and verified: "${keep!.name}" now reads "${next}" on their file${dupes.length ? ` (${dupes.length} duplicate row${dupes.length > 1 ? 's' : ''} of it folded in)` : ''}. Say it back in one line so they can correct you.`
+        ? `Reworded and verified: "${keep!.name}" now reads "${next}" on their file${dupes.length ? ` (${dupes.length} duplicate row${dupes.length > 1 ? 's' : ''} of it folded in)` : ''}. Say it back so they can correct you.`
         : `"${item}" did NOT get reworded — the change did not take. Do not say it is fixed; say you could not save it just now.`;
     }
 

@@ -62,7 +62,7 @@ export const START_REPLAN: CoachActionTool = {
 
     return [
       `Started — their week is being rebuilt around "${steer}" in the background. It takes a few minutes.`,
-      'Say in ONE short line: the rework is underway, a card with the reworked week will appear on their plan, and a notification will reach them when it is ready — they do not have to wait in this chat. Do NOT promise an exact time, do NOT describe the new week (it does not exist yet), and do NOT claim anything changed — nothing does until they apply the card.',
+      'The rework is underway, a card with the reworked week will appear on their plan, and a notification will reach them when it is ready — they do not have to wait in this chat. Do NOT promise an exact time, do NOT describe the new week (it does not exist yet), and do NOT claim anything changed — nothing does until they apply the card.',
     ].join('\n');
   },
 };

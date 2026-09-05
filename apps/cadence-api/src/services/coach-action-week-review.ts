@@ -46,7 +46,7 @@ export const OPEN_WEEK_REVIEW: CoachActionTool = {
 
     return [
       `Done — the user now has a "Week review" card on their screen covering ${from} to ${to}, drawn from what they actually logged.`,
-      'Say ONE short line that their week is up for them to look at, and do not describe any of the numbers — you have not seen them, the app has, and reciting a guess would contradict what they are about to read. Wait for them to look and tell you what stood out, then talk it through from there.',
+      'Their week is up for them to look at. Do not describe any of the numbers — you have not seen them, the app has, and reciting a guess would contradict what they are about to read. Wait for them to look and tell you what stood out, then talk it through from there.',
     ].join('\n');
   },
 };
