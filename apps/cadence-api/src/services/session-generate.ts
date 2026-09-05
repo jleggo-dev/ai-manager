@@ -35,7 +35,7 @@ import { findItemForTitle } from './repertoire-practice.ts';
 import { practiceVariables } from './session-practice-facts.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
-import { coachingPhase, normalizeSession } from './session-normalize.ts';
+import { normalizeSession } from './session-normalize.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
 import { getWeatherForUser, isOutdoorActivity, type WeatherSnapshot } from './weather/weather.ts';
 
@@ -94,7 +94,6 @@ async function generateSession(
       return null;
     }),
   ]);
-  const phase = coachingPhase(history.length);
 
   // Deterministic mode (plan §deterministic fitness): once past the eval (>=1 logged) for a goal the
   // user set to 'deterministic', with a scheme on the activity, compute the session from the eval
@@ -166,7 +165,6 @@ async function generateSession(
       shelf === null
         ? 'Could not be read just now — a fault on our side, NOT an empty record. Do not assume they know nothing, and do not invent items.'
         : practiceVariables(shelf, history).repertoire,
-    phase,
     sessions_logged: String(history.length),
     occurrence_date: occ.date,
     // Empty on ordinary generations — the template ignores an empty tag, so every existing
@@ -196,7 +194,7 @@ async function generateSession(
     kind: 'prescribe_session',
     input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date, ...(steer ? { steer } : {}) },
     output: session,
-    meta: { blocks: session?.blocks.length ?? 0, ok: !!session, phase, sessions_logged: history.length, attempts },
+    meta: { blocks: session?.blocks.length ?? 0, ok: !!session, sessions_logged: history.length, attempts },
   });
   return session;
 }
