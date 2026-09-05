@@ -31,9 +31,10 @@ describe('compose-now-menu — facts, not picks', () => {
   });
 
   it('NM-1: no fixed mapping from identity to journal bank, and no banned pairing', () => {
+    expect(template).not.toContain('so match the family to what this person actually does');
     expect(template).not.toContain('a novelist gets craft, a student gets study');
     expect(template).not.toContain('NEVER hand a novelist a gratitude prompt');
-    expect(template).toContain('each bank in <journal_banks> names the practice it serves');
+    expect(template).toContain('Each bank in <journal_banks> names the practice it serves');
   });
 
   it('NM-2: fits the items to the person and the situation instead of listing who gets what', () => {

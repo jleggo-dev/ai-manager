@@ -103,10 +103,12 @@ function buildProposals(candidates: SweepCandidate[], out: Record<string, unknow
         : `Seen together on ${candidate.seen_count} days.`;
     kept.set(candidate.candidate_id, { name, yield_servings: Math.min(99, Math.max(1, yieldRaw)), line });
   }
+  // Walk the model's own order (`kept` preserves it), not the candidate order: the prompt says the
+  // app shows the first three of what she ordered best-first, and this is what makes that true.
   const proposals: FoodSweepProposal[] = [];
-  for (const c of candidates) {
-    const judged = kept.get(c.candidate_id);
-    if (!judged) continue;
+  for (const [candidateId, judged] of kept) {
+    const c = byId.get(candidateId);
+    if (!c) continue;
     proposals.push({
       id: c.candidate_id,
       yield_servings: judged.yield_servings,

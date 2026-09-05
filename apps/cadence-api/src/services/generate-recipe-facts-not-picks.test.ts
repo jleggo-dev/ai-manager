@@ -51,7 +51,7 @@ describe('generate-recipe — facts, not picks', () => {
 
   it('GR-5: their own macro targets are not something to weigh lightly', () => {
     expect(template).not.toContain('bias toward fitting their day lightly');
-    expect(template).toContain('<targets> is optional: what remains of their daily macro targets');
+    expect(template).toContain('<targets> is optional: their daily macro targets');
   });
 
   it('GR-6: does not decide which of their foods are the stars', () => {
