@@ -134,6 +134,26 @@ describe('buildPlanView', () => {
     expect((view.streak as { current: number }).current).toBe(0);
   });
 
+  /**
+   * A pause and a detour are the same row; only the stored flag tells them apart, and the screens
+   * read it to decide whether to ask a gear question that a cleared stretch has no answer to.
+   */
+  it('marks a paused stretch as paused, and an ordinary detour as not', async () => {
+    const episode = (constraints: Record<string, unknown>) => ({
+      type: 'custom',
+      start: '2026-09-07',
+      end: '2026-09-13',
+      available_equipment: [],
+      constraints,
+    });
+
+    q.getActiveEpisode.mockResolvedValue(episode({ paused: true }));
+    expect((await buildPlanView(USER, 7, 'America/Toronto')).activeEpisode?.paused).toBe(true);
+
+    q.getActiveEpisode.mockResolvedValue(episode({}));
+    expect((await buildPlanView(USER, 7, 'America/Toronto')).activeEpisode?.paused).toBe(false);
+  });
+
   it('fetches goals once, not twice', async () => {
     await buildPlanView(USER, 7, 'America/Toronto');
     expect(q.listGoals).toHaveBeenCalledTimes(1);

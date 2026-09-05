@@ -92,6 +92,12 @@ export interface ActiveEpisodeView {
   /** Has the equipment question been ANSWERED — by words, photo, or at entry? Distinct from the
    *  list being empty: "no gym here" is an answer, silence is not. Drives the arrival card. */
   gearKnown: boolean;
+  /**
+   * A PAUSE: the stretch was cleared on purpose and nothing was overlaid (`pause_week`). A detour
+   * asks what gear you have so it can shape the days; a pause has no days to shape, so the same
+   * screens would ask a question with no answer. The flag is what lets the copy differ.
+   */
+  paused: boolean;
 }
 
 /** Neutral view when the streak evaluation itself fails — never let it break the plan load. */
@@ -180,6 +186,7 @@ export async function buildPlanView(
         gearKnown:
           (episode.available_equipment ?? []).length > 0 ||
           (episode.constraints as { gear_confirmed?: unknown } | null)?.gear_confirmed === true,
+        paused: (episode.constraints as { paused?: unknown } | null)?.paused === true,
       }
     : null;
   if (!plan) {

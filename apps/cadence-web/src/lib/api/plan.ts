@@ -35,6 +35,9 @@ export interface ActiveEpisode {
   end: string;
   /** Answered — by words, photo, or at entry. Empty-list "no gym" counts; silence does not. */
   gearKnown: boolean;
+  /** A PAUSE — the stretch was cleared on purpose, with nothing put in its place. The gear
+   *  question makes no sense here, so the paused copy replaces it. Absent on older servers. */
+  paused?: boolean;
 }
 export interface PlanDay {
   date: string;

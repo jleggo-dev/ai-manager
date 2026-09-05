@@ -27,7 +27,7 @@ function startedYesterday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function mount(over: Partial<{ gearKnown: boolean }> = {}, props: Record<string, unknown> = {}) {
+function mount(over: Partial<{ gearKnown: boolean; paused: boolean }> = {}, props: Record<string, unknown> = {}) {
   return render(
     <DetourDayCards
       episode={{ type: 'travel', start: startedYesterday(), gearKnown: false, ...over }}
@@ -89,6 +89,44 @@ describe('DetourDayCards — pressed at the wire', () => {
     cleanup();
     mount({ gearKnown: true }, { onEnd, endError: "That didn't take — try again in a moment." });
     expect(screen.getByText(/That didn't take/)).toBeTruthy();
+  });
+
+  /**
+   * A pause (pause_week) is an episode with nothing overlaid. Both detour cards would put back
+   * exactly what the person asked to clear — one asks what gear they have, the other offers to
+   * reshape the days around it — so the paused stretch gets its own, quieter card.
+   */
+  describe('a paused stretch', () => {
+    it('says it is paused and nothing was deleted, with no gear question', () => {
+      mount({ paused: true });
+      expect(screen.getByText('Paused')).toBeTruthy();
+      expect(screen.getByText(/Nothing was deleted/)).toBeTruthy();
+      expect(screen.queryByText('No gym here')).toBeNull();
+      expect(screen.queryByText('Dumbbells')).toBeNull();
+      expect(screen.queryByText(/Snap the gym/)).toBeNull();
+      expect(screen.queryByText('Check in')).toBeNull();
+    });
+
+    it('offers only the way back, and it hands to the caller', () => {
+      const onEnd = vi.fn();
+      mount({ paused: true }, { onEnd });
+      fireEvent.click(screen.getByText('Start again now'));
+      expect(onEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it('goes inert while ending and says a resume that did not land', () => {
+      mount({ paused: true }, { endBusy: true });
+      expect(screen.getByText('One moment…')).toBeTruthy();
+      cleanup();
+      mount({ paused: true }, { endError: "That didn't take — try again in a moment." });
+      expect(screen.getByText(/That didn't take/)).toBeTruthy();
+    });
+
+    it('still renders the detour cards when the flag is absent', () => {
+      mount({ gearKnown: true });
+      expect(screen.getByText(/On a detour/)).toBeTruthy();
+      expect(screen.queryByText('Paused')).toBeNull();
+    });
   });
 
   it('renders nothing before the detour has started', () => {

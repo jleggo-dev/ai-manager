@@ -101,10 +101,16 @@ describe('propose_plan_change', () => {
     expect(out).toMatch(/Pilates/);
   });
 
-  it('refuses to propose an empty week', async () => {
+  /** The refusal names the tool that CAN clear a week (TR-5): a dead end here is how "I need
+   *  nothing on my plate this week" used to end in advice instead of a pause. */
+  it('refuses to propose an empty week, and points at pause_week', async () => {
     const out = await propose.run('u1', { edits: [{ action: 'remove', activity: 'Easy run' }] });
     expect(setPendingPlan).not.toHaveBeenCalled();
-    expect(out).toMatch(/empty their plan/);
+    expect(out).toMatch(/no commitments/);
+    expect(out).toMatch(/their plan is unchanged/);
+    expect(out).toContain('pause_week');
+    // No advice about what to suggest instead — facts only (owner red line).
+    expect(out).not.toMatch(/suggest keeping/);
   });
 
   it('ignores junk edits rather than acting on half of them', async () => {

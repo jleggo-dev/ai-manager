@@ -65,4 +65,37 @@ describe('barLine', () => {
     on('2026-08-17');
     expect(barLine(ep({ end: 'not-a-date' }))).not.toMatch(/NaN/);
   });
+
+  /**
+   * A pause (pause_week) is an episode with nothing overlaid, so there is no alternate plan to be
+   * on and no day-of-N to count. It says the one true thing: the day the plan comes back, which is
+   * the day AFTER the last paused day.
+   */
+  describe('a pause', () => {
+    it('names the day the plan comes back, not a day of N', () => {
+      vi.useFakeTimers();
+      on('2026-08-18');
+      const line = barLine(ep({ type: 'custom', paused: true }));
+      expect(line).toMatch(/^Paused until /);
+      // end 2026-08-23 is the LAST paused day, so the plan comes back on the 24th. The order of
+      // day and month is the reader's locale, so assert the parts rather than one rendering.
+      expect(line).toContain('Aug');
+      expect(line).toContain('24');
+      expect(line).not.toMatch(/day \d/);
+      expect(line).not.toContain('alternate plan');
+    });
+
+    it('still reads as a detour when the flag is absent, so an older server is not misdescribed', () => {
+      vi.useFakeTimers();
+      on('2026-08-18');
+      expect(barLine(ep({ type: 'custom' }))).toContain('off the usual shape');
+      expect(barLine(ep({ type: 'custom', paused: false }))).toContain('off the usual shape');
+    });
+
+    it('survives a malformed end rather than rendering NaN at someone', () => {
+      vi.useFakeTimers();
+      on('2026-08-18');
+      expect(barLine(ep({ paused: true, end: 'not-a-date' }))).not.toMatch(/NaN|Invalid/);
+    });
+  });
 });
