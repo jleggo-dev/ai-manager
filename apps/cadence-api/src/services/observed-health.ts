@@ -104,9 +104,9 @@ export interface ObservedHealth {
 
 const WHAT_THIS_IS =
   "Measured by this person's own phone/watch (Apple Health) and shared by them. This is what they " +
-  'ACTUALLY did in the world over the period below, independent of any Cadence plan. Treat it as ' +
-  'evidence of the capacity they already have and build FROM it — it is a floor, never a ceiling, ' +
-  'and never a target to be reached. READ THE RECENT FIGURES FIRST: last_28_days and ' +
+  'ACTUALLY did in the world over the period below, independent of any Cadence plan. It is ' +
+  'evidence of the capacity they already have, and never a target to be reached. The figures ' +
+  'cover two spans: last_28_days and ' +
   'recent_workouts are what they are doing NOW, and the period-long averages are the longer ' +
   'baseline behind them — a build-up and a taper produce the same average, so plan from the ' +
   'recent pair and the dated sessions. best_distance_km and best_duration_min are things this ' +

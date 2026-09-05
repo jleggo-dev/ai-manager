@@ -100,6 +100,16 @@ describe('coach capability manifest', () => {
    * so a manifest line would be the third statement of one fact, paid for on every session, with
    * 26 characters left to pay it from. If the persona sentence is ever dropped, the line has to go
    * in here and the cap has to move with it.
+   *
+   * 2026-09-03, the facts-not-picks pass (CP-1, CP-2). The cap does NOT move: the manifest got
+   * smaller. Measured either side of the change, the same way:
+   *
+   *   before  5,764   (main, matching the row above)
+   *   after   5,742   (−22: +10 for the milestones wording, −32 for dropping the pre-call count)
+   *   cap     5,824   (unchanged, so the headroom is 82 rather than the usual 60)
+   *
+   * Leaving the cap where it is banks the 22 for whatever asks next, and keeps this row honest
+   * about what was measured rather than what was hoped for.
    */
   it('stays small enough to ride every session open', () => {
     expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5824);
@@ -128,10 +138,29 @@ describe('coach capability manifest', () => {
    * that did not — her answer came back as two complete drafts concatenated. She writes a whole
    * reply, calls the tool, and the continuation writes the whole reply again from scratch, because
    * a Responses-API continuation is a fresh generation that does not know what already streamed.
-   * The lever we own is telling her to keep the pre-call line short.
+   *
+   * CP-2 (owner ruling 2026-09-03): the REASON is real and stays; "at most ONE short line" was a
+   * count we imposed on her prose. Told why a pre-call draft gets duplicated, she can decide how
+   * much to say before the call.
    */
-  it('tells her to keep the line before a tool call short, so the continuation cannot repeat it', () => {
-    expect(renderCapabilities({ healthAvailable: true })).toMatch(/ONE short line before a tool call/);
+  it('explains why a full answer written before a tool call gets repeated, without capping it', () => {
+    const out = renderCapabilities({ healthAvailable: true });
+    expect(out).toMatch(/Your real answer comes after the tool result/);
+    expect(out).toMatch(/a full answer written before the call gets repeated/);
+    expect(out).not.toMatch(/ONE short line before a tool call/);
+  });
+
+  /**
+   * CP-1 moves with SY-8: "pressure-test" and "right-size it" advertised the talked-down goal as a
+   * product feature. Milestones are a real thing a goal can carry; making them the remedy for an
+   * ambitious goal was ours.
+   */
+  it('advertises talking a goal through, not right-sizing it', () => {
+    const out = renderCapabilities({ healthAvailable: true });
+    expect(out).toMatch(/talk a goal through against where you actually are/);
+    expect(out).toMatch(/set milestones along the way if you want them/);
+    expect(out).not.toMatch(/pressure-test/);
+    expect(out).not.toMatch(/right-size it with stepping-stones/);
   });
 
   /** The fix for a real device failure, so it is pinned rather than left to survive by luck. */

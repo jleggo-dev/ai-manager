@@ -104,7 +104,7 @@ function Inner() {
               minutes={30}
               insight={{
                 source: 'last_feedback',
-                text: 'Last time this felt too hard, so today sits a notch easier. Tell me if it still bites.',
+                text: 'Last time you marked this one too hard.',
               }}
             />
           )}

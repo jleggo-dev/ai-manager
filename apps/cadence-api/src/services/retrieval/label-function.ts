@@ -161,7 +161,7 @@ function renderIdentify(id: ParsedIdentifyCapture): string {
 export const READ_LABEL: RetrievalFunction = {
   name: 'read_label',
   description:
-    'Reads a photo attached to this turn with AI vision: a nutrition panel\'s macros and nutrients at its own printed serving, or a front-of-package shot\'s name and brand. Use it when the exact printed numbers matter more than a web or database guess — a photographed label is the most authoritative source for that exact product. Pass {"photo_ref": "..."} from the attached photo; add {"mode": "identify"} for a front-of-package photo (default "nutrition_label"), or {"hint": "Wild Mushroom Co"} to help a hard read.',
+    'Reads a photo attached to this turn with AI vision: a nutrition panel\'s macros and nutrients at its own printed serving, or a front-of-package shot\'s name and brand. Use it for the printed numbers: the label carries the maker\'s own printed figures for that exact product; check_food_sources shows what the food databases hold for it. Pass {"photo_ref": "..."} from the photo; add {"mode": "identify"} for a front-of-package photo (default "nutrition_label"), or {"hint": "Wild Mushroom Co"} to help a hard read.',
   domains: ['nutrition', 'foods'],
 
   async run(userId, params) {
