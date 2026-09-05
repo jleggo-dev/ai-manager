@@ -57,8 +57,9 @@ interface SessionScenario {
   baseline: string;
   equipment: string;
   phase?: 'discover' | 'calibrate' | 'progress';
-  /** When set, a journal item that NAMES a bank must name one from this family — the guard on
-   *  "never hand a novelist a gratitude prompt". A coach-written question always passes. */
+  /** When set, a journal item that NAMES a bank must name one from this family — the check that
+   *  the bank she picked serves the practice this person actually has. A coach-written question
+   *  always passes. */
   journalFamily?: JournalFamily;
 }
 

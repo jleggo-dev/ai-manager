@@ -138,8 +138,8 @@ export async function getNowMenu(userId: string): Promise<NowMenuItem[]> {
       tools: SESSION_TOOL_KINDS.join(', '),
       breath_patterns: BREATH_PATTERNS.map((p) => `${p.id} (${patternCounts(p)})`).join(', '),
       grounding_games: Object.keys(GROUNDING_NAMES).join(', '),
-      // Grouped by family so the composer matches the practice — a novelist must never be handed a
-      // gratitude prompt just because gratitude banks happen to be listed first.
+      // Each bank carries the practice it serves, so the composer can see what a bank is FOR
+      // rather than inferring it from the order they happen to be listed in.
       journal_banks: JOURNAL_BANKS.map((b) => `${b.id} (${bankFamily(b)})`).join(', '),
     });
 
