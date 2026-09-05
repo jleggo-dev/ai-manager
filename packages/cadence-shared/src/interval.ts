@@ -128,7 +128,7 @@ export const INTERVAL_TEMPLATES: readonly IntervalTemplate[] = [
   {
     id: 'hiit',
     label: 'HIIT',
-    summary: 'hard effort with a real breather between — the generic default',
+    summary: 'hard effort with a real breather between',
     workSec: 40,
     recoverSec: 20,
     rounds: 6,
@@ -144,7 +144,7 @@ export const INTERVAL_TEMPLATES: readonly IntervalTemplate[] = [
   {
     id: 'tabata',
     label: 'Tabata',
-    summary: 'twenty on, ten off, eight rounds — four minutes, and it is meant to hurt',
+    summary: 'twenty on, ten off, eight rounds — four minutes',
     workSec: 20,
     recoverSec: 10,
     rounds: 8,
