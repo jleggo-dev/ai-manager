@@ -176,8 +176,8 @@ export function candidateNotes(food: FoodLike, n: FoodNutrients): string[] {
   // via `ledger`, not only on the turn it was first read.
   if (food.source === 'label_photo') {
     notes.push(
-      'Read from a photographed nutrition label for this exact product — the most authoritative ' +
-        'source available; prefer it over a database or web lookup when they disagree.',
+      "Read from a photographed nutrition label for this exact product — the maker's own printed " +
+        'figures for it, at its own printed serving.',
     );
   }
   return notes;
