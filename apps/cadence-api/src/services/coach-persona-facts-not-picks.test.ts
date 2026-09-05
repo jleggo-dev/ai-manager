@@ -90,9 +90,21 @@ const REPLACED: Array<[string, string, string]> = [
 
 /** [id, the steer that must never come back, the text it was cut out of] */
 const DELETED: Array<[string, string, string]> = [
-  ['SY-11 the four-item initial agenda', 'orient them to the plan, connect each activity to a goal', '- initial — the first session after their rhythm is set.'],
-  ['SY-15 one fact per turn', 'cannot be drafted without, one at a time', 'Ask the two things a temporary plan cannot be drafted without: how long'],
-  ['SY-17 what the first detour days may contain', 'keep the first days to things that need no equipment', 'set it up from the schedule alone, and tell them'],
+  [
+    'SY-11 the four-item initial agenda',
+    'orient them to the plan, connect each activity to a goal',
+    '- initial — the first session after their rhythm is set.',
+  ],
+  [
+    'SY-15 one fact per turn',
+    'cannot be drafted without, one at a time',
+    'Ask the two things a temporary plan cannot be drafted without: how long',
+  ],
+  [
+    'SY-17 what the first detour days may contain',
+    'keep the first days to things that need no equipment',
+    'set it up from the schedule alone, and tell them',
+  ],
   ['SY-18 how often she says their name', 'then use it sparingly', 'ask for it early and naturally.'],
 ];
 
