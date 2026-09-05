@@ -240,10 +240,10 @@ describe('a photographed label outranks a web lookup', () => {
     expect(sortByAuthority([fatsecret, usda]).map((c) => c.source)).toEqual(['fatsecret', 'usda']);
   });
 
-  it('names the label as the most authoritative source, right in the notes she reads', () => {
+  it("names the label as the maker's own printed figures, right in the notes she reads", () => {
     const label = food({ source: 'label_photo' });
     const notes = candidateNotes(label, label.macros_per_base).join(' ');
-    expect(notes).toContain('most authoritative');
+    expect(notes).toContain("maker's own printed figures");
   });
 
   it('toCandidate accepts an unsaved capture (no food_id yet) the same way it accepts a saved food', () => {
@@ -266,7 +266,7 @@ describe('a photographed label outranks a web lookup', () => {
     // A "100 g" serving on a base_unit:'g' food is the food's own macros unscaled — this used to
     // come back at 1/100th of this value (the exact-100g-serving instance of the bug below).
     expect(c.per.nutrients.kcal).toBeCloseTo(72, 0);
-    expect(c.notes.join(' ')).toContain('most authoritative');
+    expect(c.notes.join(' ')).toContain("maker's own printed figures");
   });
 
   /**
@@ -319,7 +319,7 @@ describe('a photographed label outranks a web lookup', () => {
       expect(c.per.nutrients.potassium_mg).toBeCloseTo(250, 0);
       expect(c.per.nutrients.calcium_mg).toBeCloseTo(10, 0);
       expect(c.per.nutrients.iron_mg).toBeCloseTo(0.3, 1);
-      expect(c.notes.join(' ')).toContain('most authoritative');
+      expect(c.notes.join(' ')).toContain("maker's own printed figures");
     };
 
     it('at its own preferred serving (no requested measure — the toCandidate fallback branch)', () => {
