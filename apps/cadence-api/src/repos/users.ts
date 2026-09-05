@@ -9,6 +9,7 @@ import type {
   PendingFoodSweep,
   PendingProposal,
   PendingPlan,
+  PendingQuestionnaire,
   PendingWeekReview,
   PointsState,
   SteerBack,
@@ -39,6 +40,10 @@ export interface CadenceUserRow {
   // collection she offered to lay out, never the pieces themselves (the review screen expands the
   // book, and only the person's confirm on it writes anything). Older rows leave it undefined.
   pending_repertoire_review?: PendingRepertoireReview | null;
+  // Present once migration 0057 is applied. The questions `send_questionnaire` put on their
+  // screen, never the answers — those come back as an ordinary message in the person's own
+  // bubble. Older rows (or a pre-migration read) leave it undefined.
+  pending_questionnaire?: PendingQuestionnaire | null;
   // Present once migration 0015 is applied; older rows (or a pre-migration read) leave it
   // undefined and callers fall back to initialStreakState().
   streak_state?: StreakState | null;
@@ -364,6 +369,25 @@ export async function setPendingRepertoireReview(
   review: PendingRepertoireReview | null,
 ): Promise<void> {
   await sql`update cadence.users set pending_repertoire_review = ${review ? json(review) : null} where id = ${userId}`;
+}
+
+/** Read the questions `send_questionnaire` put up, or null when no card is standing. Its own read
+ *  rather than a getUser() field pick: the card polls this on every finished turn, and a whole
+ *  user row is a lot of columns to move for one pointer. */
+export async function getPendingQuestionnaire(userId: string): Promise<PendingQuestionnaire | null> {
+  const [row] = await sql<{ pending_questionnaire: PendingQuestionnaire | null }[]>`
+    select pending_questionnaire from cadence.users where id = ${userId}`;
+  return row?.pending_questionnaire ?? null;
+}
+
+/** Store (or clear, with null) the questions on the person's screen. The card's Send — or their
+ *  dismissal of it — resolves it; the ANSWERS are never written here, because they leave as an
+ *  ordinary message and a second copy of them would be a record nobody keeps in step. */
+export async function setPendingQuestionnaire(
+  userId: string,
+  questionnaire: PendingQuestionnaire | null,
+): Promise<void> {
+  await sql`update cadence.users set pending_questionnaire = ${questionnaire ? json(questionnaire) : null} where id = ${userId}`;
 }
 
 /** Read the pending Sunday-sweep blob (S3). Null when nothing is on file or the user row is missing. */

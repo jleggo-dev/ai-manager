@@ -237,8 +237,23 @@ export const ALWAYS_ACTIONS = [
  * spent, and tool 24 cannot be trimmed into it. An OWNER RULING IS OWED on which way out — a
  * category consolidated the way get_nutrition already fronts the food reads, or the cap raised with
  * the arithmetic stated. Do not let the next parcel decide it by being the one that failed CI.
+ *
+ * 3,000 → 3,140 (2026-09-03, `send_questionnaire`). Measured either side of the change with
+ * `COACH_META_TOOLS[FIND_TOOLS_NAME].description.length`:
+ *
+ *   before  2,913   (main, with `set_home_location` and its `home` category already in)
+ *   after   3,070   (+157: an 88-char hook, its name and action marker, and the `asking` section)
+ *   cap     3,140   (after + 70 headroom)
+ *
+ * The paragraph above says trim first, so: the new hook is 88 of the 90 allowed and was cut to get
+ * there, and no existing hook was touched — four other tool parcels are in flight against this
+ * same file this week, and rewording their lines from here would be a conflict apiece for no
+ * measured saving. What the 157 buys is the one ability the persona has promised since v2 with
+ * nothing behind it; what it costs is ~39 tokens a message. The next thing that wants in should
+ * read the paragraph above before reading this row: two raises in three days is the shape of a
+ * tail that wants consolidating, not a budget that wants raising.
  */
-export const DRAWER_LABEL_MAX = 3000;
+export const DRAWER_LABEL_MAX = 3140;
 
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_nutrition: 'everything they eat — log, recipes, targets, trends; name the view you need',
@@ -264,6 +279,11 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
   start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
   set_home_location: 'ACTION: record where they live, so weather and daylight can be read for outdoor sessions',
+  // 88 of the 90 the hook rule allows. The brief's wording ("...on their screen AT ONCE; THEIR
+  // answers...") measured 102 with the ACTION mark; "at once" and one "their" went, and the two
+  // facts that decide whether to reach for it — several questions, and the answers arrive as the
+  // person's own message — are both still here.
+  send_questionnaire: 'ACTION: put two to six questions on their screen; answers come back as their own message',
 };
 
 /**
@@ -373,6 +393,17 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     ],
   },
   { key: 'writing', label: 'what they have written', members: ['get_journal'] },
+  {
+    key: 'asking',
+    label: 'ways to ask them things',
+    // A category of its own because every other one names a SUBJECT — their food, their plan,
+    // what they practice — and `send_questionnaire` is not about a subject. Filing it under any
+    // of them would make it findable only by someone who already knew it was there, which is the
+    // opposite of what the drill-down is for (TOOL-HARNESS.md, "Adding a tool", step 2: if it
+    // genuinely fits nowhere, add a category). Its line costs 32 characters of the session
+    // manifest — measured, and written down in coach-capabilities.test.ts beside the cap.
+    members: ['send_questionnaire'],
+  },
   {
     key: 'plan',
     label: 'their plan, what one session holds, and how far ahead it runs',

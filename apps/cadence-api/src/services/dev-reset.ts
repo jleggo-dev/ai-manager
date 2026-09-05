@@ -144,4 +144,15 @@ export async function resetUserData(userId: string): Promise<void> {
         dietary_profile = ${json(EMPTY_DIETARY_PROFILE)},
         updated_at = now()
     where id = ${userId}`;
+  // `pending_questionnaire` (migration 0057) is cleared in a statement of its own, and a failure
+  // is warned about rather than thrown — the same stance as the photo purges above. A start-over
+  // must not leave the coach's card sitting on the screen of an account that no longer has a
+  // conversation, but folding this into the update above would make every DB-backed suite fail on
+  // any database 0057 has not reached yet, and a reset that half-worked is worse than a reset that
+  // says which half. Fold it into the statement above once 0057 is applied everywhere.
+  try {
+    await sql`update cadence.users set pending_questionnaire = null where id = ${userId}`;
+  } catch (e) {
+    console.warn('[reset] pending_questionnaire not cleared — migration 0057 may not be applied:', e);
+  }
 }

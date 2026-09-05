@@ -24,6 +24,7 @@ import { SET_MICRO_TARGET } from './coach-action-micro-target.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 import { OFFER_REPERTOIRE_REVIEW } from './coach-action-offer-repertoire.ts';
+import { SEND_QUESTIONNAIRE } from './coach-action-questionnaire.ts';
 import { REVISE_SESSION } from './coach-action-revise-session.ts';
 import { START_REPLAN } from './coach-action-start-replan.ts';
 import { SET_HOME_LOCATION } from './coach-action-home-location.ts';
@@ -567,6 +568,11 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // writes no repertoire row at all. Sits beside update_repertoire so the pair is one filing:
   // individual pieces are written straight, a whole collection goes up for the person to tick.
   offer_repertoire_review: OFFER_REPERTOIRE_REVIEW,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS — new tools default to the tail plus a hook (owner
+  // ruling 2026-08-30). It writes no answer of its own: the card composes an ordinary user message
+  // and the person sends it, so this is "changes data" only in the sense that a question is now on
+  // their screen. The persona has offered a questionnaire since v2 and there was no such surface.
+  send_questionnaire: SEND_QUESTIONNAIRE,
 
   log_session: {
     name: 'log_session',

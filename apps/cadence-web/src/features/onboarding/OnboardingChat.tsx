@@ -32,6 +32,7 @@ import { ChangeCard } from './ChangeCard.tsx';
 import { WeekReviewCard } from './WeekReviewCard.tsx';
 import { LayoutProposalCard } from './LayoutProposalCard.tsx';
 import { RepertoireOfferCard } from './RepertoireOfferCard.tsx';
+import { QuestionnaireCard } from './QuestionnaireCard.tsx';
 
 /**
  * What the app tells Cadence the moment someone shares their Apple Health history. Without it she
@@ -466,6 +467,16 @@ export function OnboardingChat({
                           onOpenList={onOpenRepertoire}
                           onSeeded={(note) => void nudge(note)}
                         />
+                      )}
+                      {/**
+                       * Fifth sibling, same contract: `send_questionnaire` writes a pointer to the
+                       * questions and no answer at all, so this asks the server what is up and
+                       * draws nothing when the answer is nothing. Send rides `sendText` — the
+                       * VISIBLE send — because the answers are the person's own words and belong
+                       * in their own bubble; a nudge would hide from them what the coach just read.
+                       */}
+                      {last && !streaming && (
+                        <QuestionnaireCard key={`qn${i}`} onSend={(message) => void sendText(message)} />
                       )}
                       {/**
                        * Her block says WHAT, never how. The only thing left for it to declare is

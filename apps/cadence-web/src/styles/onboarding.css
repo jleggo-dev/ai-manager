@@ -1074,3 +1074,49 @@
   color: oklch(52% 0.16 25);
   margin-bottom: 6px;
 }
+
+/* ── The coach's questionnaire (QuestionnaireCard) ─────────────────────────────────────
+   Wears the ChangeCard frame (`cfm chg`) and borrows quick picks' own `.qp-row` for the
+   options, so a tappable answer looks the same whether it arrived one at a time or six at
+   once. Only the parts quick picks has no equivalent for are new: a question's own heading,
+   its purpose line, and a typed field. */
+.qn-q {
+  margin-bottom: 12px;
+}
+.qn-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+.qn-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: -3px 0 7px;
+}
+.qn-options {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.qn-field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--ink);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+}
+.qn-field:focus-visible {
+  outline: none;
+  border-color: var(--forest);
+}
+.cfm-build:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: default;
+}

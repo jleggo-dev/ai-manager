@@ -79,9 +79,30 @@ describe('coach capability manifest', () => {
    * the A19 measurement is what this list costs when it is silent — she answered "that's not
    * something I can control from here" WHILE holding the hook for the tool. A capability the drawer
    * names and the manifest does not is a capability she talks herself out of.
+   * 5736 → 5824 (2026-09-03, `send_questionnaire`). Measured the same way, either side of the
+   * change — and note the "before" is not the row above's 5,676: `set_home_location` (#382) landed
+   * in between and spent 54 of the 60 headroom that row left, which is the parallel-branch squeeze
+   * the DRAWER_LABEL_MAX comment describes happening to the other budget.
+   *
+   *   before  5,730   (main, with #382 in)
+   *   after   5,764   (+34, the `asking` category line riding categoryLines())
+   *   cap     5,824   (after + 60 headroom, the same margin the rows above leave)
+   *
+   * What the 34 buys: the tool is not about a subject — every other category names one — so it is
+   * filed in a category of its own, exactly as #382 filed `set_home_location` an hour earlier, and
+   * a category she is never told about is one she cannot drill into.
+   *
+   * The tool got NO capability line of its own, and that is a decision rather than an oversight.
+   * The A19 lesson above is that a capability the drawer names and the manifest does not is one she
+   * talks herself out of — but this ability is named at session open by the PERSONA, in the
+   * sentence that used to promise a questionnaire with nothing behind it
+   * (config/ai-admin/cadence-coach.system-prompt.md). It is the same channel and the same moment,
+   * so a manifest line would be the third statement of one fact, paid for on every session, with
+   * 26 characters left to pay it from. If the persona sentence is ever dropped, the line has to go
+   * in here and the cap has to move with it.
    */
   it('stays small enough to ride every session open', () => {
-    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5736);
+    expect(renderCapabilities({ healthAvailable: true }).length).toBeLessThan(5824);
   });
 
   /**
