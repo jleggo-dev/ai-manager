@@ -91,7 +91,10 @@ describe('prescribe-session — she chooses the material, and says why', () => {
       'CONSTRAINT SAFETY',
       'EVERY JOURNAL ITEM CARRIES ITS QUESTION',
       'SESSION LENGTH FITS THE ACTIVITY',
-      'COACHING ARC',
+      // COACHING ARC left with the phase machinery (owner ruling 2026-09-03, "facts, not picks"):
+      // the log count is the fact, discover/calibrate/progress was our pick. What replaced it is
+      // pinned in prescribe-session-set-flow-facts.test.ts.
+      '<sessions_logged> is how many sessions of THIS activity they have logged',
       'WEATHER',
       'SET FLOW',
       'STEER',

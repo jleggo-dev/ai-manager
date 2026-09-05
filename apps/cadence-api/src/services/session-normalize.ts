@@ -180,15 +180,4 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
   };
 }
 
-/**
- * The coaching arc, derived from data — no stored state: how many sessions of THIS activity
- * (by title, cross-plan) the user has actually logged decides how the coach behaves.
- *   discover  (0 logs) — a real coach's first session: EVALUATE, don't prescribe. Find baselines.
- *   calibrate (1-2)    — keep measuring what's unknown; gently apply what's already clear.
- *   progress  (3+)     — full evidence-based progression.
- */
-export function coachingPhase(logged: number): 'discover' | 'calibrate' | 'progress' {
-  return logged === 0 ? 'discover' : logged < 3 ? 'calibrate' : 'progress';
-}
-
 export { MAX_ITEMS };

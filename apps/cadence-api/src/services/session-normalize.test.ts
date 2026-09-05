@@ -3,17 +3,7 @@
  * Bounds + video_query URL strip are a security/UX backstop against model-invented links.
  */
 import { describe, it, expect } from 'vitest';
-import { coachingPhase, normalizeSession } from './session-normalize.ts';
-
-describe('coachingPhase', () => {
-  it('maps log counts to discover / calibrate / progress', () => {
-    expect(coachingPhase(0)).toBe('discover');
-    expect(coachingPhase(1)).toBe('calibrate');
-    expect(coachingPhase(2)).toBe('calibrate');
-    expect(coachingPhase(3)).toBe('progress');
-    expect(coachingPhase(10)).toBe('progress');
-  });
-});
+import { normalizeSession } from './session-normalize.ts';
 
 describe('normalizeSession', () => {
   it('returns null when raw is null or blocks is missing', () => {
