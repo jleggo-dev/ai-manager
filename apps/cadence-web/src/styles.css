@@ -2137,6 +2137,27 @@ html[data-native] .sheet-body {
   color: var(--text-dim);
   line-height: 1.45;
 }
+/* An ingredient whose amount was never stated: an empty box to fill in, marked so it reads as a
+   question rather than as a blank someone forgot. Nothing here says the draft is wrong. */
+.food-recipe-ing-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+.food-recipe-amount {
+  width: 6.5rem;
+  flex: 0 0 auto;
+  border-color: var(--dawn-3);
+  background: rgba(194, 95, 69, 0.06);
+}
+.food-macro-incomplete {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
 .food-recipe-steps {
   margin: 0 0 12px;
   padding-left: 1.15rem;

@@ -4,6 +4,7 @@
  */
 import {
   assessDietarySafety,
+  isAmountUnstated,
   type DietarySafetyAssessment,
   type Food,
   type Macros,
@@ -24,6 +25,7 @@ import {
   type UpdateRecipeInput,
 } from '../repos/recipes.ts';
 import { getDietaryProfile } from '../repos/users.ts';
+import { BodyValidationError } from '../validation/body.ts';
 import { logAi } from './ai-log.ts';
 import { estimateFood } from './food-capture.ts';
 import type { FoodCandidate } from './food-capture-parse.ts';
@@ -45,6 +47,17 @@ export interface ResolvedRecipeIngredient extends RecipeIngredient {
   estimated?: boolean;
   /** Contribution macros for this ingredient amount (batch, not per-serving). */
   est?: Macros;
+}
+
+/**
+ * Reject a save while any ingredient's amount is still unstated, naming the ones to fill in.
+ * A draft is allowed not to know; a saved recipe is not — its per-serving macros would be a floor
+ * for ever after, with nothing on the row to say so once the draft flag is gone.
+ */
+function assertAmountsStated(ingredients: readonly RecipeIngredient[]): void {
+  const missing = ingredients.filter(isAmountUnstated).map((i) => i.name);
+  if (missing.length === 0) return;
+  throw new BodyValidationError(`I need an amount for ${missing.join(', ')} before I can save this.`);
 }
 
 export type RecipeDraftSource = 'ai_from_chat' | 'ai_from_fridge_photo' | 'ai';
@@ -70,9 +83,23 @@ async function loadFoodMacros(
   const contributions: Macros[] = [];
 
   for (const ing of ingredients) {
+    const unit = typeof ing.unit === 'string' ? ing.unit : undefined;
+
+    // An unstated amount is not a zero: it stays null, contributes nothing, and keeps saying so.
+    // Pricing it would turn "we don't know" into a number nobody can tell apart from a real one.
+    if (isAmountUnstated(ing)) {
+      resolved.push({
+        name: ing.name,
+        qty: null,
+        ...(unit ? { unit } : {}),
+        ...(ing.food_id ? { food_id: ing.food_id } : {}),
+        amount_unstated: true,
+      });
+      continue;
+    }
+
     const qty = typeof ing.qty === 'number' ? ing.qty : Number(ing.qty);
     const qtyNum = Number.isFinite(qty) && qty > 0 ? qty : 0;
-    const unit = typeof ing.unit === 'string' ? ing.unit : undefined;
     const base: ResolvedRecipeIngredient = {
       name: ing.name,
       qty: qtyNum || ing.qty,
@@ -114,6 +141,14 @@ async function loadFoodMacros(
   return { resolved, contributions };
 }
 
+/**
+ * Mark a per-serving total that is missing at least one ingredient's contribution because nobody
+ * said how much of it there was — so the number reads as incomplete, not as low.
+ */
+function flagUnstated(macros: Macros, ingredients: readonly ResolvedRecipeIngredient[]): Macros {
+  return ingredients.some((i) => i.amount_unstated) ? { ...macros, has_unstated_amounts: true } : macros;
+}
+
 /** Recompute macros_per_serving from ingredients (food_id rows + optional est). */
 export async function recomputeRecipeMacros(
   userId: string,
@@ -123,7 +158,7 @@ export async function recomputeRecipeMacros(
   const { resolved, contributions } = await loadFoodMacros(userId, ingredients);
   return {
     ingredients: resolved,
-    macros_per_serving: computeMacrosPerServing(contributions, servings),
+    macros_per_serving: flagUnstated(computeMacrosPerServing(contributions, servings), resolved),
   };
 }
 
@@ -187,11 +222,42 @@ function priceResolvedIngredient(
  * whole recipe, so this never re-runs the four per-user queries `resolveFoods` would otherwise
  * load fresh on every call.
  */
+/**
+ * Amount unstated: identify the food anyway (the name is real, so the row is worth keeping and a
+ * food_id makes the recompute after the person fills the amount a straight price), then stop.
+ * Nothing is estimated and nothing is priced — there is no amount to price, and inventing one is
+ * exactly the failure this path exists to avoid.
+ */
+async function resolveUnstatedIngredient(
+  userId: string,
+  ing: StructuredIngredient,
+  shared: ResolveShared,
+): Promise<ResolvedRecipeIngredient> {
+  const base: ResolvedRecipeIngredient = {
+    name: ing.name,
+    qty: null,
+    ...(ing.unit ? { unit: ing.unit } : {}),
+    amount_unstated: true,
+  };
+  try {
+    const { candidates } = await resolveFoods(userId, { text: ing.name }, shared);
+    const topFood = candidates.find((c) => c.kind === 'food' && c.food_id);
+    if (topFood?.food_id) {
+      const food = await getFood(userId, topFood.food_id);
+      if (food) return { ...base, name: food.name, food_id: food.food_id };
+    }
+  } catch (e) {
+    console.warn('[recipe] resolve unstated-amount ingredient failed:', ing.name, e);
+  }
+  return base;
+}
+
 async function resolveOneIngredient(
   userId: string,
   ing: StructuredIngredient,
   shared: ResolveShared,
 ): Promise<ResolvedRecipeIngredient> {
+  if (ing.qty === null) return resolveUnstatedIngredient(userId, ing, shared);
   const qty = ing.qty;
   const unit = ing.unit;
   // Natural reading order ("3 shallots", "1 tbsp chopped rosemary") — portionFactor only reads
@@ -266,7 +332,7 @@ export async function buildDraftFromStructured(
   const ingredients = await Promise.all(structured.ingredients.map((ing) => resolveOneIngredient(userId, ing, shared)));
 
   const contributions = ingredients.map((i) => i.est).filter((m): m is Macros => !!m);
-  const macros_per_serving = computeMacrosPerServing(contributions, structured.servings);
+  const macros_per_serving = flagUnstated(computeMacrosPerServing(contributions, structured.servings), ingredients);
   const profile = await getDietaryProfile(userId);
   // Safety pass on structured names (what the model/user said), not only resolved labels —
   // allergen foods are down-ranked by the resolver and may fall through to estimate.
@@ -317,6 +383,8 @@ export async function recipeFromChat(userId: string, recipeText: string): Promis
       // MP10: how many ingredients truly contributed no numbers — an honest trace of what the
       // draft could not count, not just what it guessed at.
       unresolved: draft.ingredients.filter((i) => i.unresolved).length,
+      // How many amounts the person still has to fill in before this can be saved.
+      amount_unstated: draft.ingredients.filter((i) => i.amount_unstated).length,
       dietary_safe: draft.dietary.safe,
     },
   });
@@ -363,6 +431,7 @@ export async function createRecipe(
   },
 ): Promise<{ recipe: Recipe; dietary: DietarySafetyAssessment }> {
   const servings = Number.isInteger(input.servings) && input.servings > 0 ? input.servings : 1;
+  assertAmountsStated(input.ingredients);
   const { ingredients, macros_per_serving } = await recomputeRecipeMacros(userId, input.ingredients, servings);
   const profile = await getDietaryProfile(userId);
   const dietary = assessRecipeDietary(profile, input.name, ingredients);
@@ -394,6 +463,9 @@ export async function patchRecipe(
     saved?: boolean;
   },
 ): Promise<{ recipe: Recipe; dietary: DietarySafetyAssessment } | null> {
+  // Before the read: an edit that blanks an amount is a bad edit whether or not the recipe exists.
+  if (patch.ingredients) assertAmountsStated(patch.ingredients);
+
   const existing = await getRecipe(userId, recipeId);
   if (!existing) return null;
 

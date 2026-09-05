@@ -23,9 +23,16 @@ export type RecipeSource = Recipe['source'];
 export type RecipeIngredientRow = {
   food_id?: string;
   name: string;
-  qty: number | string;
+  /**
+   * `null` = the food was named but nobody said how much ("some onion"). The API reports the gap
+   * rather than inventing a number, and it stays a gap here: the review screen shows an empty
+   * amount to fill in and will not save until it is. Never default it to 1 on the way past.
+   */
+  qty: number | string | null;
   unit?: string;
   est?: Macros;
+  /** Set with a null `qty` — the amount is missing, not the ingredient. */
+  amount_unstated?: true;
 };
 
 /** Unsaved / draft shape from from-chat — confirm before POST /nutrition/recipes. */
@@ -92,6 +99,8 @@ function parseMacros(raw: unknown): Macros {
   if (typeof raw.carbs_g === 'number') out.carbs_g = raw.carbs_g;
   if (typeof raw.fat_g === 'number') out.fat_g = raw.fat_g;
   if (isMacrosSource(raw.source)) out.source = raw.source;
+  // The total is a floor while any amount is unstated — kept so the screen can say so.
+  if (raw.has_unstated_amounts === true) out.has_unstated_amounts = true;
   return out;
 }
 
@@ -102,12 +111,15 @@ function parseIngredients(raw: unknown): RecipeIngredientRow[] {
     if (!isRecord(row)) continue;
     const name = typeof row.name === 'string' ? row.name.trim() : '';
     if (!name) continue;
-    const qty = typeof row.qty === 'number' || typeof row.qty === 'string' ? row.qty : 1;
+    // A missing amount stays missing. This used to fall back to 1, which turned the API's honest
+    // "we were not told" into a quantity the screen showed as if the person had given it.
+    const stated = typeof row.qty === 'number' || typeof row.qty === 'string';
     const ing: RecipeIngredientRow = {
       name,
-      qty,
+      qty: stated ? (row.qty as number | string) : null,
       ...(typeof row.food_id === 'string' ? { food_id: row.food_id } : {}),
       ...(typeof row.unit === 'string' ? { unit: row.unit } : {}),
+      ...(!stated || row.amount_unstated === true ? { amount_unstated: true as const } : {}),
     };
     // WS3 drafts may attach inline estimate macros before a food_id exists.
     if (isRecord(row.est)) ing.est = parseMacros(row.est);
@@ -404,7 +416,11 @@ export async function saveRecipe(draft: RecipeDraft): Promise<SaveRecipeResult> 
       };
     }
     if (!res.ok) {
-      return { status: 'error', message: "Couldn't save that recipe just now — try again in a moment." };
+      // A 400 here is the API saying something specific and actionable — most often which
+      // ingredient still needs an amount. Showing the house line instead would hide the answer.
+      const body = res.status === 400 ? await readJson(res) : null;
+      const detail = isRecord(body) && typeof body.error === 'string' ? body.error.trim() : '';
+      return { status: 'error', message: detail || "Couldn't save that recipe just now — try again in a moment." };
     }
     const recipe = parseRecipe(unwrapRecipeBody(await readJson(res)));
     if (!recipe) {
