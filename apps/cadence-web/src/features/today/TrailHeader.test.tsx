@@ -11,16 +11,15 @@ import { TrailHeader } from './TrailHeader.tsx';
 import { WeatherSheet } from './WeatherSheet.tsx';
 
 const getWeather = vi.fn();
+const getHomeLocation = vi.fn();
 const getNotificationPrefs = vi.fn();
+const locationAvailable = vi.fn(() => false);
+const getCoarseLocation = vi.fn(() => Promise.resolve(null as { lat: number; lon: number } | null));
 
 vi.mock('../../lib/api.ts', () => ({
   getWeather: (...a: unknown[]) => getWeather(...a),
   getUnits: vi.fn().mockResolvedValue(null),
-  getHomeLocation: () =>
-    Promise.resolve({
-      home_location: { lat: 45.4, lon: -73.9, label: "Notre-Dame-de-l'Île-Perrot, QC" },
-      current_location: null,
-    }),
+  getHomeLocation: (...a: unknown[]) => getHomeLocation(...a),
   saveHomeLocation: vi.fn(),
   saveCurrentLocation: vi.fn(),
   clearCurrentLocation: vi.fn(),
@@ -29,7 +28,9 @@ vi.mock('../../lib/api.ts', () => ({
   saveNotificationPrefs: vi.fn(),
 }));
 vi.mock('../../lib/capability/index.ts', () => ({
-  capabilities: { location: { isAvailable: () => false, getCoarseLocation: () => Promise.resolve(null) } },
+  capabilities: {
+    location: { isAvailable: () => locationAvailable(), getCoarseLocation: () => getCoarseLocation() },
+  },
 }));
 vi.mock('../../components/CoachFace.tsx', () => ({ CoachFace: () => <span /> }));
 
@@ -40,6 +41,14 @@ const CLEAR = {
   label: "Notre-Dame-de-l'Île-Perrot, QC",
   precip_chance: 0.1,
   attribution: { name: 'Apple Weather', url: 'https://weather-data.apple.com/legal-attribution.html' },
+};
+
+/** A place on file, and a read that came back to say so. */
+const HOME = {
+  home_location: { lat: 45.4, lon: -73.9, label: "Notre-Dame-de-l'Île-Perrot, QC" },
+  current_location: null,
+  timezone: 'America/Toronto',
+  available: true,
 };
 
 const PREFS = {
@@ -91,7 +100,10 @@ function scrollTo(view: ReturnType<typeof renderHeader>, scrollTop: number) {
 beforeEach(() => {
   vi.clearAllMocks();
   getWeather.mockResolvedValue({ ...CLEAR });
+  getHomeLocation.mockResolvedValue({ ...HOME });
   getNotificationPrefs.mockResolvedValue({ ...PREFS });
+  locationAvailable.mockReturnValue(false);
+  getCoarseLocation.mockResolvedValue(null);
   // The hook reads the sky one frame after a scroll; run that frame inline so the test can assert.
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
@@ -165,6 +177,104 @@ describe('the weather line', () => {
   it('keeps Apple’s trademark on Plan itself', async () => {
     const view = renderHeader(at(13));
     await waitFor(() => expect(view.q('.thead-attr').textContent).toContain('Apple Weather'));
+  });
+});
+
+describe('the boot paint', () => {
+  it('opens on the place and the sky it last had, before a single request lands', async () => {
+    // What `seedBootCache` puts in the client before React's first render (boot-cache.ts). Both
+    // reads hang, so nothing here can have come from the network.
+    getHomeLocation.mockReturnValue(new Promise(() => {}));
+    getWeather.mockReturnValue(new Promise(() => {}));
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['location'], { ...HOME });
+    client.setQueryData(['weather'], { ...CLEAR });
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <div className="app">
+          <TrailHeader streak={3} xp={10} now={at(13)} />
+          <div className="scrollbody" />
+        </div>
+      </QueryClientProvider>,
+    );
+
+    expect(view.container.querySelector('.thead-wx')!.textContent).toBe('☀️ Clear · 19°');
+    expect(view.container.querySelector('.thead-set')).toBeNull();
+
+    // And the city the sheet needs came off disk with it — not from the label the sky carries.
+    fireEvent.click(view.container.querySelector('.thead-wxbtn')!);
+    expect((await screen.findByRole('dialog', { name: 'Weather' })).textContent).toContain(
+      "Notre-Dame-de-l'Île-Perrot, QC",
+    );
+  });
+});
+
+/**
+ * Whether the header asks for a place — the router that had no negative cases.
+ *
+ * It used to read "no weather" as "no location", so three of these four rows drew a first-run
+ * button at someone who had stored a place in August; the owner pressed one, and it re-homed him
+ * to the street he was standing on. Only the row where a read comes BACK and says the file is
+ * empty may ask.
+ */
+describe('the set-location prompt', () => {
+  const prompt = (view: ReturnType<typeof renderHeader>) => view.container.querySelector('.thead-set');
+
+  it('stays away when the sky is unavailable but the place is on file', async () => {
+    locationAvailable.mockReturnValue(true); // a device that COULD find one — the button's only excuse
+    getWeather.mockResolvedValue({ available: false });
+
+    const view = renderHeader(at(13));
+    await waitFor(() => expect(getWeather).toHaveBeenCalled());
+    expect(prompt(view)).toBeNull();
+    expect(view.container.querySelector('.thead-wx')).toBeNull(); // and no fabricated sky either
+  });
+
+  it('stays away while the reads are still in flight', () => {
+    locationAvailable.mockReturnValue(true);
+    getHomeLocation.mockReturnValue(new Promise(() => {})); // a cold launch, mid-round-trip
+
+    // Not knowing is not the same as knowing there is nothing, and a cold open is all of the first.
+    expect(prompt(renderHeader(at(13)))).toBeNull();
+  });
+
+  it('stays away when the location read FAILED — and still asks for the sky', async () => {
+    locationAvailable.mockReturnValue(true);
+    getHomeLocation.mockResolvedValue({
+      home_location: null,
+      current_location: null,
+      timezone: null,
+      available: false,
+    });
+
+    const view = renderHeader(at(13));
+    // The read that failed used to send this mount down the first-run path, which returned without
+    // ever reading `/me/weather`. The server still knows the place; ask it.
+    await waitFor(() => expect(getWeather).toHaveBeenCalled());
+    expect(prompt(view)).toBeNull();
+  });
+
+  it('appears when the server says there is no place stored', async () => {
+    locationAvailable.mockReturnValue(true);
+    getHomeLocation.mockResolvedValue({ home_location: null, current_location: null, timezone: null, available: true });
+    getWeather.mockResolvedValue({ available: false });
+
+    renderHeader(at(13));
+    // Auto-detect runs first and finds nothing (declined), which is when asking is the honest move.
+    await screen.findByText(/Set location for weather/);
+    expect(getCoarseLocation).toHaveBeenCalled();
+  });
+
+  it('stays away on a device that could not act on it', async () => {
+    locationAvailable.mockReturnValue(false); // no geolocation at all — Settings takes a typed city
+    getHomeLocation.mockResolvedValue({ home_location: null, current_location: null, timezone: null, available: true });
+    getWeather.mockResolvedValue({ available: false });
+
+    const view = renderHeader(at(13));
+    await waitFor(() => expect(getHomeLocation).toHaveBeenCalled());
+    expect(prompt(view)).toBeNull();
   });
 });
 

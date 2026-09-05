@@ -43,6 +43,12 @@ export const USER_SCOPED_KEYS = [
   // person's. (The snapshot ALSO stamps its owner and refuses to seed on a mismatch — this sweep is
   // what stops it lingering on disk after the identity has moved on.)
   'cadence.bootCache',
+  // How this person's place was set, and whether they asked for none at all
+  // (features/settings/location-source.ts). Both are decisions about one ACCOUNT, not one phone:
+  // inheriting "I want no location" would leave the next person with a header that stays blank and
+  // no clue why, and inheriting 'city' would label a device share as a typed city.
+  'cadence.locationSource',
+  'cadence.locationOff',
 ] as const;
 
 function read(key: string): string | null {

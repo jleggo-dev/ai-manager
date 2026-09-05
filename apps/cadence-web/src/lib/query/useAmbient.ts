@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { getDailyCheckinStatus, getWeather, type WeatherNow } from '../api.ts';
+import { getDailyCheckinStatus, getHomeLocation, getWeather, type LocationResult, type WeatherNow } from '../api.ts';
 import { AMBIENT_STALE_MS, queryKeys } from './keys.ts';
 
 /**
@@ -29,6 +29,34 @@ export function fetchWeatherCached(queryClient: QueryClient): Promise<WeatherNow
 /** After a location change the cached sky belongs to the old city — drop it before re-reading. */
 export function forgetWeather(queryClient: QueryClient): void {
   queryClient.removeQueries({ queryKey: queryKeys.weather.all });
+}
+
+/**
+ * Where they live, cached — and, through the cache, kept on the device between launches.
+ *
+ * A plain fetch for the same reason the sky is one: `useTodayHeader` drives an imperative flow
+ * (save a place → re-read the place AND the sky at it) that a bare `useQuery` cannot express.
+ *
+ * `getHomeLocation` soft-fails to `{ available: false }` rather than throwing, and that answer
+ * must NOT displace a good one: a blip would otherwise overwrite the cached place with nulls, and
+ * the next launch would paint "no location" from disk — the exact bug this is here to close. So a
+ * failed read returns the last known answer when there is one.
+ */
+export function fetchLocationCached(queryClient: QueryClient): Promise<LocationResult> {
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.location.all,
+    queryFn: async () => {
+      const fresh = await getHomeLocation();
+      if (fresh.available) return fresh;
+      return queryClient.getQueryData<LocationResult>(queryKeys.location.all) ?? fresh;
+    },
+    staleTime: AMBIENT_STALE_MS,
+  });
+}
+
+/** After a save or a forget, the cached place is the old one — drop it before re-reading. */
+export function forgetLocation(queryClient: QueryClient): void {
+  queryClient.removeQueries({ queryKey: queryKeys.location.all });
 }
 
 /**

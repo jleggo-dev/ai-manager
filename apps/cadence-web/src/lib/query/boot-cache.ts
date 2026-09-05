@@ -19,6 +19,14 @@
  * immediately; whatever comes back replaces it. Nothing here is ever sent upstream, and a device
  * that lost this file has lost a screenful of pixels and nothing else.
  *
+ * **Everything is painted; the exceptions are named** (owner, 2026-09-05: "if we're waiting to
+ * load data — do it in the background, refresh the front-end later"). This began as an allowlist
+ * of three keys, which quietly meant every OTHER screen still opened on a loader: the Progress tab
+ * reads `progress.window('month')` and the list held `progress.all`, so the dashboard cold-loaded
+ * on every launch for as long as it has existed. An allowlist cannot tell you what is missing from
+ * it. So the whole query cache goes to disk now, and `boot-policy.ts` holds the two tables that
+ * say what may not — and how long each family stays worth painting.
+ *
  * Scoped to a PERSON, not a phone, twice over: the key is registered in `USER_SCOPED_KEYS` (an
  * identity change wipes it), and every snapshot carries the id of the account it was taken from,
  * checked against the session already on disk before a single pixel is seeded. Belt AND braces,
@@ -30,13 +38,20 @@ import { getDevAccount, isDevMode } from '../api/http.ts';
 // From `persisted-session.ts`, NOT `supabase.ts`: importing the latter constructs the auth client,
 // which this barrel's importers would then all inherit — and which throws outright without env.
 import { readPersistedSession } from '../persisted-session.ts';
-import { localTodayIso, queryKeys } from './keys.ts';
-import { revivePlanSnapshot } from './usePlan.ts';
+import { queryKeys } from './keys.ts';
+import { isDenied, policyFor } from './boot-policy.ts';
 
 export const BOOT_CACHE_KEY = 'cadence.bootCache';
 
-/** Bump when an entry's stored shape changes; an older snapshot is then simply not read. */
-const VERSION = 2;
+/**
+ * Bump when an entry's stored shape changes; an older snapshot is then simply not read.
+ *
+ * Exported so no test can hand-copy it. `App.test.tsx` writes a snapshot by hand to drive the
+ * screen machine, and its literal `v: 2` silently stopped matching the moment this went to 3 —
+ * the fixture then tested the refusal path while claiming to test the paint.
+ */
+export const BOOT_CACHE_VERSION = 3;
+const VERSION = BOOT_CACHE_VERSION;
 
 /**
  * How long a snapshot is worth painting. A week, because the honest bound here is *relevance*, not
@@ -47,39 +62,20 @@ const VERSION = 2;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * A ceiling on what this may spend of a 5MB origin quota it SHARES with the coach transcript. Over
- * budget, the snapshot is dropped rather than trimmed: a half-written screen is worse than the
- * skeleton, and the transcript — the more personal and less reconstructible of the two — must never
- * be evicted to make room for a plan the server will re-send in 200ms.
+ * A ceiling on what this may spend of a 5MB origin quota it SHARES with the coach transcript. The
+ * transcript — the more personal and less reconstructible of the two — must never be evicted to
+ * make room for a plan the server will re-send in 200ms, so this budget is fixed and this file
+ * lives inside it.
+ *
+ * Over budget it TRIMS, by `rank`, rather than dropping everything. The old file dropped the whole
+ * snapshot, on the reasoning that half a screen is worse than a skeleton — sound when all three
+ * entries were one screen, wrong now that the cache holds a dozen families: keeping the week and
+ * losing the photos is the trade a phone should make, and losing both to keep neither is not.
  */
 const MAX_BYTES = 400_000;
 
-/**
- * The reads that gate the app's first screen, and nothing else.
- *
- * A deliberately short list. Everything on it is (a) already through the shared cache, (b) on
- * screen within a second of opening the app, and (c) cheap to be wrong about for that second
- * because it revalidates on arrival. A read that fails any of those three does not belong here —
- * this is the boot paint, not a general offline store, and the difference is what keeps it honest.
- */
-interface PersistedQuery {
-  /** Recomputed at read time as well as write time — `nutritionDay`'s key carries a date. */
-  keyOf: () => readonly unknown[];
-  /**
-   * Adjust a snapshot for the time that has passed since it was taken, or return null to refuse
-   * it. Only the plan needs one, and it needs it badly — see `revivePlanSnapshot`.
-   */
-  revive?: (data: unknown) => unknown | null;
-}
-
-const PERSISTED: PersistedQuery[] = [
-  { keyOf: () => queryKeys.plan.all, revive: (d) => revivePlanSnapshot(d) },
-  { keyOf: () => queryKeys.progress.all },
-  // Today's food, because the trail's food strip is on the first screen and its own skeleton is
-  // part of what the owner is looking at. Keyed by date, and the key is compared exactly on read,
-  // so yesterday's day is never seeded as today's.
-  { keyOf: () => queryKeys.nutritionDay.day(localTodayIso()) },
-];
+/** Envelope room for `v`/`owner`/`at`/`stage` and the JSON around the entries. */
+const ENVELOPE_BYTES = 512;
 
 interface Entry {
   key: unknown[];
@@ -161,9 +157,13 @@ export function seedBootCache(queryClient: QueryClient): void {
   if (!snap) return;
   for (const entry of snap.entries) {
     try {
-      const target = PERSISTED.find((p) => JSON.stringify(p.keyOf()) === JSON.stringify(entry.key));
-      if (!target) continue; // a key that has since changed shape or left the list
-      const data = target.revive ? target.revive(entry.data) : entry.data;
+      if (!Array.isArray(entry.key) || entry.key.length === 0) continue;
+      // Checked again on the way OUT, not only on the way in: a family denied since this snapshot
+      // was written is still sitting in it, and the ruling has to bind the old file too.
+      if (isDenied(entry.key)) continue;
+      const policy = policyFor(entry.key);
+      if (Date.now() - entry.at > policy.ttlMs) continue;
+      const data = policy.revive ? policy.revive(entry.data, entry.at, entry.key) : entry.data;
       if (data === null || data === undefined) continue;
       // `updatedAt` is the ORIGINAL answer's time, not now. That is what makes this
       // stale-while-revalidate rather than a lie with a week's shelf life: every seeded query is
@@ -175,15 +175,44 @@ export function seedBootCache(queryClient: QueryClient): void {
   }
 }
 
+/**
+ * Every settled answer in the cache, most-worth-painting first, cut to fit the budget.
+ *
+ * Sized per entry and filled greedily rather than re-serialized in a loop: this runs behind a
+ * 400ms debounce on a cache that fires a dozen events in a frame, and `JSON.stringify` of the
+ * whole payload is the expensive part. An entry too big for what is left is SKIPPED, not a stop —
+ * one oversized dashboard must not cost every cheaper screen behind it.
+ */
+function collect(queryClient: QueryClient): Entry[] {
+  const found: { entry: Entry; rank: number; bytes: number }[] = [];
+  for (const query of queryClient.getQueryCache().getAll()) {
+    const key = query.queryKey;
+    if (!Array.isArray(key) || key.length === 0) continue;
+    if (isDenied(key)) continue;
+    const state = query.state;
+    if (state.status !== 'success' || state.data === undefined) continue;
+    const entry: Entry = { key: [...key], data: state.data, at: state.dataUpdatedAt };
+    try {
+      found.push({ entry, rank: policyFor(key).rank, bytes: JSON.stringify(entry).length + 1 });
+    } catch {
+      /* a payload that will not serialize (a cycle, a Map) simply is not painted */
+    }
+  }
+  found.sort((a, b) => a.rank - b.rank || a.bytes - b.bytes);
+
+  let budget = MAX_BYTES - ENVELOPE_BYTES;
+  const kept: Entry[] = [];
+  for (const { entry, bytes } of found) {
+    if (bytes > budget) continue;
+    budget -= bytes;
+    kept.push(entry);
+  }
+  return kept;
+}
+
 function snapshot(queryClient: QueryClient): void {
   try {
-    const entries: Entry[] = [];
-    for (const p of PERSISTED) {
-      const key = p.keyOf();
-      const state = queryClient.getQueryState(key);
-      if (state?.status !== 'success' || state.data === undefined) continue;
-      entries.push({ key: [...key], data: state.data, at: state.dataUpdatedAt });
-    }
+    const entries = collect(queryClient);
     const plan = queryClient.getQueryData(queryKeys.plan.all) as { stage?: string } | undefined;
     if (!entries.length && !plan?.stage) return;
     const payload: Snapshot = {
@@ -193,9 +222,7 @@ function snapshot(queryClient: QueryClient): void {
       stage: plan?.stage ?? bootPlanStage(),
       entries,
     };
-    const raw = JSON.stringify(payload);
-    if (raw.length > MAX_BYTES) return; // see MAX_BYTES — drop, never trim
-    window.localStorage.setItem(BOOT_CACHE_KEY, raw);
+    window.localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify(payload));
     booted = payload;
   } catch {
     /* over quota or storage disabled — the server still has every one of these answers */

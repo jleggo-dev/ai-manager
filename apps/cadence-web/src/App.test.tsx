@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App.tsx';
-import { clearBootCache, createAppQueryClient } from './lib/query/index.ts';
+import { BOOT_CACHE_VERSION, clearBootCache, createAppQueryClient } from './lib/query/index.ts';
 import { screenFromPlanStage } from './screenFromPlanStage.ts';
 
 /**
@@ -165,7 +165,9 @@ describe('App (opening from the boot cache)', () => {
   const remember = (stage: string | null, owner: string | null = null) =>
     window.localStorage.setItem(
       'cadence.bootCache',
-      JSON.stringify({ v: 2, owner, at: Date.now(), stage, entries: [] }),
+      // The version comes FROM the module. It was a literal `2` here, and a bump to 3 turned every
+      // case below into a test of the refusal path that still read as a test of the paint.
+      JSON.stringify({ v: BOOT_CACHE_VERSION, owner, at: Date.now(), stage, entries: [] }),
     );
 
   beforeEach(() => {

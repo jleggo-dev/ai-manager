@@ -28,9 +28,16 @@ import { wxEmoji, wxLine } from './weatherCopy.ts';
  * With no location at all there is no chip and so no door — the header keeps the plain
  * "Set location" prompt in that case, never a fabricated place. That first-run button is the one
  * control here that sets where you LIVE; the sheet's city says where you ARE (A21).
+ *
+ * That prompt hangs on `needsLocation` and NOT on the absence of weather, which is the same
+ * symptom asked as a different question. Missing weather has four causes and only one of them is
+ * a missing location: the sheet's provider can blip, `/me/weather` can fail, and a cold launch
+ * simply has not answered yet. All three used to draw the first-run button — for someone who had
+ * a place on file, whose only way out was to press it and be re-homed to wherever they stood. When
+ * the sky is unknown and the place is not, the header now says nothing, which is the truth.
  */
 export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; xp: number; now?: Date }) {
-  const { weather, city, locating, requestLocation, setHereNow } = useTodayHeader();
+  const { weather, city, locating, needsLocation, requestLocation, setHereNow } = useTodayHeader();
   const head = useRef<HTMLDivElement>(null);
   const night = isNightHour(now.getHours());
   const dark = useSkyTint(head, night);
@@ -52,11 +59,11 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
               </b>
               {wx.attribution && <span className="thead-attr">{wx.attribution.name} ›</span>}
             </button>
-          ) : (
+          ) : needsLocation ? (
             <button className="thead-set" type="button" onClick={requestLocation}>
               <span aria-hidden>📍</span> {locating ? 'Locating…' : 'Set location for weather'}
             </button>
-          )}
+          ) : null}
         </div>
 
         <div className="thead-pills">

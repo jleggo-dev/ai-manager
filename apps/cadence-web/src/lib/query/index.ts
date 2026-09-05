@@ -1,7 +1,13 @@
-export { bootPlanStage, clearBootCache, persistBootCache, seedBootCache } from './boot-cache.ts';
+export { BOOT_CACHE_VERSION, bootPlanStage, clearBootCache, persistBootCache, seedBootCache } from './boot-cache.ts';
 export { createAppQueryClient } from './client.ts';
 export { AMBIENT_STALE_MS, localTodayIso, nutritionDayKeyDate, queryKeys } from './keys.ts';
-export { fetchWeatherCached, forgetWeather, useDailyCheckinDue } from './useAmbient.ts';
+export {
+  fetchLocationCached,
+  fetchWeatherCached,
+  forgetLocation,
+  forgetWeather,
+  useDailyCheckinDue,
+} from './useAmbient.ts';
 export { invalidateNutritionDay, useInvalidateNutritionDay, useNutritionDay } from './useNutritionDay.ts';
 export { fetchPlanIntoCache, hasCachedPlan, setPlanData, usePlan } from './usePlan.ts';
 export { useProgress } from './useProgress.ts';
