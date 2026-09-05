@@ -322,12 +322,14 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
     );
   });
 
-  /** PP-17: the routes are facts about what each tool does; the DIRECTION of the change was not. */
-  it('routes each answer without naming the direction the change should take', () => {
+  /** PP-16/PP-17: what they say about the week maps to a tool — a fact about each tool, never the
+   *  DIRECTION of the change (no "lighter", no scripted answer labels). */
+  it('routes what they say to a tool without naming the direction the change should take', () => {
     const out = renderPickProtocol();
-    expect(out).toMatch(/their word stands in for the missing log — call build_next_week/);
-    expect(out).toMatch(/use propose_plan_change to put it up rather than building the identical week again/);
-    expect(out).toMatch(/offer the existing detour, or a lighter build/);
+    expect(out).toMatch(/only the logging is missing, build_next_week rolls it forward/);
+    expect(out).toMatch(/propose_plan_change carries the change/);
+    expect(out).toMatch(/pause_week or a detour holds it without deleting anything/);
     expect(out).not.toContain('(lighter, shorter, fewer days)');
+    expect(out).not.toMatch(/lighter build|consolation prize|THE THREE ANSWERS/);
   });
 });
