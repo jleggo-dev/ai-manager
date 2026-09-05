@@ -22,7 +22,7 @@
  * A successful read is shaped through `toCandidate` (../food-source-report.ts, called with no
  * requested measure so it reports at the label's own preferred serving) — same `SourceCandidate`
  * shape `check_food_sources` reports, so a label read looks like every other source's answer, and
- * MP15's "most authoritative" note rides along automatically because the candidate's underlying
+ * MP15's "maker's own printed figures" note rides along automatically because the candidate's underlying
  * `source: 'label_photo'` triggers it in `candidateNotes`.
  */
 import {
