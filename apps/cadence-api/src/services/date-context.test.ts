@@ -58,6 +58,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/**
+ * Facts, not picks (owner 2026-09-03): the no-home-location line used to be "ask once, warmly, if
+ * outdoor plans come up" — it decided that she asks, when, and how. #382 replaced it with the fact
+ * and the tool that closes it; this pins the replacement so the nudge cannot come back.
+ */
+describe('the no-home-location line', () => {
+  it('states the fact and names the tool, and never tells her to ask', async () => {
+    getActivePlan.mockResolvedValue(null);
+
+    await ensureDateStamped('u1', 's1');
+
+    const said = injectedText();
+    expect(said).toMatch(/Home location is not set, so no weather is available/);
+    expect(said).toMatch(/set_home_location/);
+    expect(said).not.toMatch(/ask once/i);
+    expect(said).not.toMatch(/warmly/i);
+  });
+});
+
 describe('the check-in fact — absent when it does not apply', () => {
   it('says nothing about a check-in when the user has no active plan', async () => {
     getActivePlan.mockResolvedValue(null);

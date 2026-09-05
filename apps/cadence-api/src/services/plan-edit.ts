@@ -431,7 +431,7 @@ function applyAdd(
       ? ` If the existing "${title}" is this card's own earlier add and it is the mistake you are fixing, do not add a renamed twin beside it — call propose_plan_change again with start_over true and ONLY the corrected edits.`
       : '';
     return {
-      reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name ("${title} (Wednesday)", "${title} — hills").${redo}`,
+      reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name.${redo}`,
     };
   }
   /**
@@ -441,10 +441,13 @@ function applyAdd(
   const when = normalizeTimeOfDay(edit.time_of_day);
   if (!when) {
     return {
-      reject: `"${title}" was not added: it needs a time of day. Set one — the time their other sessions of that kind run at, or ask them — or pass time_of_day "anytime" if it genuinely floats.`,
+      reject: `"${title}" was not added: time_of_day is required. Pass a time of day, or "anytime" if it has none; get_active_plan prints the times their other commitments run at.`,
     };
   }
-  const byday = toByDay(edit.days) ?? 'MO,WE,FR';
+  const byday = toByDay(edit.days);
+  if (!byday) {
+    return { reject: `"${title}" was not added: days is required. Pass the days it repeats on.` };
+  }
   const recurrence = `FREQ=WEEKLY;BYDAY=${byday}`;
   const goalId = Object.keys(goalTitleById).find((id) => goalTitleById[id] === edit.goal_title);
   const added: PendingPlanActivity = {

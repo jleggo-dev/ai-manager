@@ -201,7 +201,7 @@ export function screenGoal(g: ScreenableGoal, bodyWeightKg?: number): GoalScreen
     return {
       verdict: 'reshape',
       code: 'out_of_scope',
-      note: 'This asks you to do the work rather than coach the rhythm of doing it. Say plainly that you do not write the thing — but that the practice of sitting down to it is exactly your job, and offer that version ("an hour on it before work, four days a week"). Offer once; if they only wanted the work done, let it go without repeating yourself.',
+      note: 'This asks you to do the work rather than coach the rhythm of doing it. Say plainly that you do not write the thing — but that the practice of sitting down to it is exactly your job, and offer that version. Offer once; if they only wanted the work done, let it go without repeating yourself.',
     };
   }
 

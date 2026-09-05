@@ -179,21 +179,20 @@ describe('density floor repair (plan-density.ts wiring)', () => {
   it('repairs a thin plan with exactly one extra call and adopts the additions', async () => {
     runJob.mockImplementation(async (_u: string, _slug: string, v: Vars) => {
       if (isVet(v)) return vetOk;
-      if ((v.user_steer ?? '').includes('DENSITY REPAIR'))
-        return synthResp([thin('Run'), thin('Stretch'), thin('Walk')]);
+      if ((v.user_steer ?? '').includes('DENSITY READ')) return synthResp([thin('Run'), thin('Stretch'), thin('Walk')]);
       return synthResp([thin('Run')]);
     });
     const res = await synthesizeAndVet(USER, { goals: [A], baseline: {}, equipment: [] });
     expect(res.status).toBe('proposed');
     expect(res.activities).toHaveLength(3);
-    const repairCalls = runJob.mock.calls.filter((c) => (vars(c).user_steer ?? '').includes('DENSITY REPAIR'));
+    const repairCalls = runJob.mock.calls.filter((c) => (vars(c).user_steer ?? '').includes('DENSITY READ'));
     expect(repairCalls).toHaveLength(1);
   });
 
   it('keeps the original when the repair returns fewer activities', async () => {
     runJob.mockImplementation(async (_u: string, _slug: string, v: Vars) => {
       if (isVet(v)) return vetOk;
-      if ((v.user_steer ?? '').includes('DENSITY REPAIR')) return synthResp([]);
+      if ((v.user_steer ?? '').includes('DENSITY READ')) return synthResp([]);
       return synthResp([thin('Run'), thin('Lift')]);
     });
     const res = await synthesizeAndVet(USER, { goals: [A], baseline: {}, equipment: [] });
