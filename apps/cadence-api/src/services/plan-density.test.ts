@@ -69,11 +69,25 @@ describe('firesOn', () => {
 });
 
 describe('densityRepairSteer', () => {
-  it('names the thin days, the floor, and the minimal exception', () => {
+  it('names the thin days, the floor, the per-day counts, and the minimal exception', () => {
     const s = densityRepairSteer(readDensity([act('FREQ=WEEKLY;BYDAY=TU,SA'), act('FREQ=WEEKLY;BYDAY=MO,TH')]));
-    expect(s).toContain('DENSITY REPAIR');
+    expect(s).toContain('DENSITY READ');
     expect(s).toContain(String(DENSITY_FLOOR));
     expect(s).toMatch(/one small commitment/);
     expect(s).toMatch(/Keep EVERY existing activity/);
+    // The facts she plans from: what every day already holds, MO..SU.
+    expect(s).toContain('MO 1, TU 1, WE 0, TH 1, FR 0, SA 1, SU 0');
+    expect(s).toContain('Anything you add carries suggested: true');
+  });
+
+  // Facts, not picks (owner 2026-09-03): the repair pass hands her the counts and the floor.
+  // It never names a length, an anchor, or a number of items to add.
+  it('never prescribes what to add, how long, or what to anchor it to', () => {
+    const s = densityRepairSteer(readDensity([act('FREQ=WEEKLY;BYDAY=TU,SA')]));
+    expect(s).not.toMatch(/ADD small anchored support routines/);
+    expect(s).not.toMatch(/5-10 minutes/);
+    expect(s).not.toMatch(/tied to waking, lunch, or bed/);
+    expect(s).not.toMatch(/until a normal active day holds at least/);
+    expect(s).not.toMatch(/too thin/);
   });
 });

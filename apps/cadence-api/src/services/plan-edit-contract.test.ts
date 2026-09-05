@@ -120,13 +120,16 @@ const PROBE: Record<string, unknown> = {
   optional: true,
 };
 
-/** The smallest edit each action needs to be valid, minus any addressing. */
+/** The smallest edit each action needs to be valid, minus any addressing. `add` carries days as
+ *  well as a time: since the MO,WE,FR default was removed (facts, not picks — a silent default is
+ *  the app deciding the week), an add that names no days is rejected, and a rejected base would
+ *  make every other field on `add` look unread. */
 const BASE: Record<string, Partial<PlanEdit>> = {
   move: { days: ['friday'] },
   retime: { time_of_day: '17:30' },
   resize: { duration_min: 55 },
   remove: {},
-  add: { title: 'Sauna', time_of_day: '19:00' },
+  add: { title: 'Sauna', days: ['tuesday'], time_of_day: '19:00' },
   rework: { how_to: 'Dead hangs instead of farmers carries' },
 };
 
