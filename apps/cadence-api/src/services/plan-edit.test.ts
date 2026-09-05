@@ -372,8 +372,32 @@ describe('applyPlanEdits — add carries what it was given', () => {
     const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['tuesday'] }]);
     expect(r.changes).toEqual([]);
     expect(r.activities).toHaveLength(0);
-    expect(r.rejected[0]).toMatch(/needs a time of day/);
+    expect(r.rejected[0]).toMatch(/time_of_day is required/);
     expect(r.rejected[0]).toMatch(/"anytime"/);
+    // Facts, not picks (owner 2026-09-03): the reject names the contract and where the times
+    // already on file can be read. It never hands her a rule for choosing one.
+    expect(r.rejected[0]).not.toMatch(/the time their other sessions of that kind run at/);
+    expect(r.rejected[0]).not.toMatch(/or ask them/);
+    expect(r.rejected[0]).toMatch(/get_active_plan/);
+  });
+
+  /**
+   * An add with no days named used to become Monday, Wednesday, Friday — silently, with nothing
+   * telling her or the user it had happened. Days is a fact she has or does not have; a default
+   * is the omission wearing a nicer name (owner 2026-09-03, facts not picks).
+   */
+  it('refuses an add that never says which days, instead of defaulting to Mon/Wed/Fri', () => {
+    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', time_of_day: '07:00' }]);
+    expect(r.changes).toEqual([]);
+    expect(r.activities).toHaveLength(0);
+    expect(r.rejected[0]).toMatch(/days is required/);
+    expect(r.rejected.join(' ')).not.toMatch(/MO,WE,FR/);
+  });
+
+  it('refuses an add whose days are all unreadable, rather than guessing three of them', () => {
+    const r = applyPlanEdits([], [{ action: 'add', title: 'Easy run', days: ['someday'], time_of_day: '07:00' }]);
+    expect(r.activities).toHaveLength(0);
+    expect(r.rejected[0]).toMatch(/days is required/);
   });
 
   it('accepts a deliberate "anytime", and says so in words on the card', () => {
@@ -478,6 +502,10 @@ describe('applyPlanEdits — twins and on_days', () => {
     const r = applyPlanEdits(PLAN, [{ action: 'add', title: 'Easy run', days: ['wednesday'] }], GOALS);
     expect(r.changes).toEqual([]);
     expect(r.rejected[0]).toMatch(/already names a commitment/);
+    expect(r.rejected[0]).toMatch(/Pick a distinct name\./);
+    // The uniqueness rule is contract; the two worked examples were a steer on what to call it.
+    expect(r.rejected[0]).not.toMatch(/\(Wednesday\)/);
+    expect(r.rejected[0]).not.toMatch(/— hills/);
     expect(r.activities.filter((a) => a.title === 'Easy run')).toHaveLength(1);
   });
 

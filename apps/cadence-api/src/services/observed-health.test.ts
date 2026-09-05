@@ -133,12 +133,18 @@ describe('toObservedHealth', () => {
     });
   });
 
-  it('names its own provenance and tells the reader it is a floor, not a ceiling', () => {
+  it('names its own provenance and says what the figures are, without a stance on them', () => {
     // The synthesize_plan template does not own this vocabulary, so the payload has to explain
-    // itself — otherwise "recent activity" reads as a cap on what to prescribe.
+    // itself — otherwise "recent activity" reads as a cap on what to prescribe. What it must NOT
+    // do is tell her which way to plan from them: "a floor, never a ceiling" is an instruction to
+    // go higher, and "READ THE RECENT FIGURES FIRST" is a reading order (owner 2026-09-03).
     const o = toObservedHealth([row(ultraRunner, '2026-08-10T05:00:00Z')], NOW)!;
     expect(o.source).toBe('apple_health');
-    expect(o.what_this_is).toMatch(/floor, never a ceiling/);
+    expect(o.what_this_is).toMatch(/evidence of the capacity they already have, and never a target to be reached/);
+    expect(o.what_this_is).toMatch(/The figures cover two spans/);
+    expect(o.what_this_is).not.toMatch(/floor, never a ceiling/);
+    expect(o.what_this_is).not.toMatch(/build FROM it/);
+    expect(o.what_this_is).not.toMatch(/READ THE RECENT FIGURES FIRST/);
     expect(o.as_of).toBe('2026-08-10');
   });
 

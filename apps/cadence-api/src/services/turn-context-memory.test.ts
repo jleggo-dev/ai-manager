@@ -39,15 +39,22 @@ describe('renderContextBlock', () => {
       [{ fn: 'get_health_history', rendered: HEALTH, freshness: 'unchanged' }],
       'user mentioned training',
     );
-    expect(block).toContain('ALREADY YOURS, UNCHANGED');
-    expect(block).toMatch(/Do NOT summarise, restate or react to it again/);
+    expect(block).toContain('UNCHANGED since you last saw it');
+    expect(block).toMatch(/Do NOT restate it uninvited/);
+    // Facts, not picks (owner 2026-09-03): the old heading forbade reacting at all, with no way
+    // back for a user who asks to hear it. The escape hatch the 'changed' heading has is here too.
+    expect(block).not.toContain('ALREADY YOURS');
+    expect(block).not.toMatch(/react to it again/);
+    expect(block).toMatch(/if they ask to hear something in full, read it back whole/);
     // The data is still THERE — that is the point; dropping it is what loses her memory.
     expect(block).toContain(HEALTH);
   });
 
   it('flags a real change as worth acknowledging', () => {
     const block = renderContextBlock([{ fn: 'get_weight', rendered: '195 lbs', freshness: 'changed' }], '');
-    expect(block).toContain('CHANGED since you last saw it');
+    expect(block).toContain('CHANGED since you last saw it.');
+    // The heading states the fact; how much to say about the delta is hers.
+    expect(block).not.toMatch(/briefly acknowledge what actually differs/);
   });
 
   it('groups by freshness so each heading is honest about its own data', () => {
@@ -59,7 +66,7 @@ describe('renderContextBlock', () => {
       'user mentioned an injury',
     );
     // Changed first, then new, then the quiet reminder — the order she should read them in.
-    expect(block.indexOf('New to you this turn')).toBeLessThan(block.indexOf('ALREADY YOURS'));
+    expect(block.indexOf('New to you this turn')).toBeLessThan(block.indexOf('UNCHANGED since you last saw it'));
     expect(block).toContain('get_constraints');
     expect(block).toContain('user mentioned an injury');
   });

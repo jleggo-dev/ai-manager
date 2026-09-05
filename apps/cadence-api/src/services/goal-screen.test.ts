@@ -114,6 +114,11 @@ describe('goal screen — reshapes rather than blocks', () => {
     expect(r.verdict).toBe('reshape');
     expect(r.code).toBe('out_of_scope');
     expect(r.note).toMatch(/practice|sitting down/i);
+    // Facts, not picks (owner 2026-09-03): the note says to offer the practice version. It does
+    // not pick the duration, the time of day, or the frequency of a goal she has not discussed.
+    expect(r.note).toMatch(/and offer that version\. Offer once;/);
+    expect(r.note).not.toMatch(/an hour on it before work/);
+    expect(r.note).not.toMatch(/four days a week/);
   });
 
   it('reshapes building a substance habit, not cutting one', () => {

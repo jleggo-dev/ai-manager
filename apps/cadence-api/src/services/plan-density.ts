@@ -4,9 +4,10 @@ import type { Activity } from '@cadence/shared';
  * The density hard line (owner, 2026-08-14: "this has to be a hard line for us or people won't
  * use the app"). Round 4 proved prose can't hold it: with adjacents default-on and "aim for 3-5"
  * in the prompt, a real plan still landed at 1-2 user items per day. So the floor is CODE — the
- * plan is measured after synthesis, and a thin week triggers ONE repair pass that asks for small
- * anchored routines on the thin days. The explicit-minimal exception stays a prompt concern: the
- * repair steer restates it, and a repair that comes back unchanged is accepted (never looped).
+ * plan is measured after synthesis, and a thin week triggers ONE repair pass that hands the coach
+ * the per-day counts and lets her decide what the days should hold. The explicit-minimal exception
+ * stays a prompt concern: the repair steer restates it, and a repair that comes back unchanged is
+ * accepted (never looped).
  */
 
 export const DENSITY_FLOOR = 3;
@@ -55,10 +56,10 @@ export function readDensity(activities: Array<Partial<Activity>>): DensityRead {
 /** The repair instruction — rides as user_steer on the one repair synthesis. */
 export function densityRepairSteer(read: DensityRead): string {
   return (
-    `DENSITY REPAIR: this plan's active days are too thin (${read.thinDays.join(', ')} hold fewer than ` +
-    `${DENSITY_FLOOR} things). Keep EVERY existing activity exactly as drafted — same titles, same days, same ` +
-    `times — and ADD small anchored support routines (5-10 minutes, tied to waking, lunch, or bed; suggested: true) ` +
-    `until a normal active day holds at least ${DENSITY_FLOOR} items. Respect the availability windows and session ` +
+    `DENSITY READ: ${read.thinDays.join(', ')} hold fewer than ${DENSITY_FLOOR} things. ` +
+    `Keep EVERY existing activity exactly as drafted — same titles, same days, same times. ` +
+    `Their days as drafted hold ${WEEK.map((d, i) => `${d} ${read.perDay[i]}`).join(', ')} user items. ` +
+    `Anything you add carries suggested: true. Respect the availability windows and session ` +
     `budget. The ONE exception that overrides this instruction: if the person explicitly asked for one small ` +
     `commitment or a minimal plan, return the drafted activities unchanged.`
   );

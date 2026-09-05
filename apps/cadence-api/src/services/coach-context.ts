@@ -76,11 +76,11 @@ export async function onboardingReadiness(userId: string): Promise<string> {
     `Captured so far: ${have.join(', ') || 'nothing yet'}.`,
     `Still to gather before planning: ${need.join(', ') || 'nothing — ready to review and set their rhythm'}.`,
     bodyRelevant
-      ? 'This goal is body-related, so age, height, and current weight matter for a safe, realistic plan — gather the missing ones (one at a time) before pointing them to Review.'
+      ? 'This goal is body-related: age, height, and current weight feed plan synthesis and the calorie-target flow. The missing ones are listed above.'
       : 'This goal does not need body metrics — do not ask for weight or height unless the user brings them up.',
     ...(gaps.length
       ? [
-          'For each numeric goal, a coach’s first question is where they are today — ask for the missing starting point in their own words (one at a time, never as a form).',
+          `These goals carry a target with no starting point on file: ${gaps.map((g) => `"${g.title}" (${g.metric})`).join(', ')}.`,
         ]
       : []),
   ].join('\n');
@@ -101,9 +101,8 @@ export async function planGapNote(userId: string): Promise<string> {
     `== PLAN GAP (deterministic — the app checked) ==`,
     `Agreed but NOT YET IN THE PLAN: ${confirmed.map((g) => `"${g.title}"`).join(', ')}.`,
     'The user said yes to this and the plan does not cover it yet — a rebuild was started and not',
-    'finished, or never started. Raise it yourself this conversation, plainly ("we said we\'d add',
-    'nutrition — want me to rebuild the week around it now?"), and end that turn with the build',
-    'card. Never claim it is already handled, and never let it stay silently stranded.',
+    'finished, or never started. start_replan rebuilds the week around it.',
+    'Never claim it is already handled, and never let it stay silently stranded.',
   ].join('\n');
 }
 
@@ -135,9 +134,8 @@ export async function targetlessGoalNote(userId: string): Promise<string> {
   if (numberless.length) {
     lines.push(
       `${numberless.map((g) => `"${g.title}"`).join(', ')} is committed with NO number — no amount, no date.`,
-      'A weight goal without a number can only be agreed with, never coached. Ask plainly — how much,',
-      'by when — and when they answer, call update_goal with action retarget. If they would rather not',
-      'chase a number, keep the goal and say so back; do not invent one for them.',
+      'Nothing downstream can measure progress without one; update_goal with action retarget writes a target and a date.',
+      'If they would rather not chase a number, keep the goal and say so back; do not invent one for them.',
     );
   }
   lines.push(

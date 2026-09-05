@@ -61,8 +61,8 @@ export async function getSessionInsight(
           source: 'last_feedback',
           text:
             fb.rpe === 'too_hard'
-              ? 'Last time this felt too hard, so today sits a notch easier. Tell me if it still bites.'
-              : "Last time this felt too easy — push a little today and I'll move the plan up if it sticks.",
+              ? 'Last time you marked this one too hard.'
+              : 'Last time you marked this one too easy.',
         };
       }
     }
