@@ -267,6 +267,13 @@
   width: 20px;
   height: 20px;
 }
+/* Recents and My meals have no drawing in the capture set, so the canvas letters them — 1b B1
+   draws ◷ and ◍ at this size and weight. Sized here so a glyph door and an icon door line up. */
+.ms-door-g {
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 20px;
+}
 .ms-express,
 .ms-day-link {
   border: 0;

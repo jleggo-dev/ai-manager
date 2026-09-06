@@ -50,22 +50,6 @@ export const SearchIcon = () => (
   </svg>
 );
 
-/** Recents — the same clock the trail draws time with, at tile weight. */
-export const ClockIcon = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-    <circle cx="12" cy="12.4" r="8" {...S} />
-    <path d="M12 7.6v5l3.2 2" {...S} />
-  </svg>
-);
-
-/** My meals — the cookbook shelf, not a bowl: what's saved, standing up. */
-export const ShelfIcon = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-    <path d="M4 4.6h3.4v14.8H4zM9.4 4.6h3.4v14.8H9.4M14.6 6.2l3.3-.9 3.1 12.1-3.3.9z" {...S} />
-    <path d="M4 19.4h8.8" {...S} />
-  </svg>
-);
-
 export const WaterIcon = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
     <path d="M12 3.2s5.5 6 5.5 9.6a5.5 5.5 0 1 1-11 0C6.5 9.2 12 3.2 12 3.2z" {...S} />
