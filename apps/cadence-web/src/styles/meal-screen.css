@@ -415,8 +415,26 @@
   font-weight: 800;
   color: var(--text);
 }
+/* A sheet hosting the add panel is COMPOSING, so it earns the height styles.css already grants
+   the "Custom — let's talk" ask (.sheet-compose, owner 2026-08-15: "There's more real-estate
+   here that we can use"). At 78% with the keyboard up the list under the field was 28px and the
+   strip hung off the bottom of the sheet, while a fifth of the screen sat behind a scrim doing
+   nothing. Same ruling, reached from the meal's side because the sheet's owner cannot see which
+   door is open. */
+.sheet:has(.ms-panel) {
+  max-height: 92%;
+}
+
+/* The field sits between the head and the list, outside the scroller, so it cannot be scrolled
+   away or squeezed out. `flex: none` is the whole point: as a flex item it would otherwise give
+   up its height to the scroller's siblings when the keyboard shortens the sheet. */
+.ms-panel-field {
+  flex: none;
+  padding: 12px 14px 0;
+}
 .ms-panel-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px 14px 16px;
   display: flex;
