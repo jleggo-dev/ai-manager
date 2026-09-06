@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { testUserId } from './test-user.ts';
+import { testName, testNamePrefix, testUserId } from './test-user.ts';
 
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env') });
 
@@ -15,8 +15,14 @@ const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PAS
 const d = HAS_DB ? describe : describe.skip;
 
 const USER = testUserId('a110');
-/** Distinctive enough that no real cached food can collide with these tests. */
-const NAME = 'Zzq Test Latte';
+/**
+ * Distinctive enough that no real cached food can collide — AND unique to this process, because
+ * the cleanup below has to sweep by name (shared rows have no owner to key on) and a name-based
+ * delete is global. Without the pid in here, two concurrent runs of this file delete each other's
+ * fixtures; see testName in ./test-user.ts.
+ */
+const NAME = testName('Latte');
+const SALMON = testName('Salmon');
 
 vi.mock('../ai/aim.ts', () => ({ runJob: vi.fn(), runJobBySlug: vi.fn() }));
 
@@ -46,19 +52,19 @@ d('clearUnusedSharedFoods (DB)', () => {
 
   afterAll(async () => {
     if (resetUserData) await resetUserData(USER);
-    if (sql) await sql`delete from cadence.foods where name like 'Zzq Test%'`;
+    if (sql) await sql`delete from cadence.foods where name like ${testNamePrefix() + '%'}`;
     if (sql) await sql.end({ timeout: 5 });
   });
 
   beforeEach(async () => {
     await resetUserData(USER);
-    await sql`delete from cadence.foods where name like 'Zzq Test%'`;
+    await sql`delete from cadence.foods where name like ${testNamePrefix() + '%'}`;
   });
 
   /** The exact collision that broke the ledger suite on 2026-08-23. */
   it('removes an unused shared row that would answer a query meant to miss', async () => {
     const id = await seedShared();
-    expect(await clearUnusedSharedFoods(['zzq test latte'])).toBe(1);
+    expect(await clearUnusedSharedFoods([NAME.toLowerCase()])).toBe(1);
     const left = await sql<{ n: string }[]>`
       select count(*)::text as n from cadence.foods where food_id = ${id}`;
     expect(Number(left[0]?.n)).toBe(0);
@@ -72,7 +78,7 @@ d('clearUnusedSharedFoods (DB)', () => {
     const id = await seedShared();
     await touchFoodUsage(USER, id, { dow: 3, meal: 'breakfast' });
 
-    expect(await clearUnusedSharedFoods(['zzq test latte'])).toBe(0);
+    expect(await clearUnusedSharedFoods([NAME.toLowerCase()])).toBe(0);
     const usage = await sql<{ n: string }[]>`
       select count(*)::text as n from cadence.food_usage where food_id = ${id}`;
     expect(Number(usage[0]?.n)).toBe(1);
@@ -91,7 +97,7 @@ d('clearUnusedSharedFoods (DB)', () => {
       provisional: false,
     });
 
-    expect(await clearUnusedSharedFoods(['zzq test latte'])).toBe(0);
+    expect(await clearUnusedSharedFoods([NAME.toLowerCase()])).toBe(0);
   });
 
   it('never touches a food somebody owns', async () => {
@@ -106,7 +112,7 @@ d('clearUnusedSharedFoods (DB)', () => {
       default_serving: 0,
       confidence: 1,
     });
-    expect(await clearUnusedSharedFoods(['zzq test latte'])).toBe(0);
+    expect(await clearUnusedSharedFoods([NAME.toLowerCase()])).toBe(0);
     const left = await sql<{ n: string }[]>`
       select count(*)::text as n from cadence.foods where food_id = ${own.food_id}`;
     expect(Number(left[0]?.n)).toBe(1);
@@ -121,10 +127,10 @@ d('clearUnusedSharedFoods (DB)', () => {
     // row costs a re-import of 5,690.
     await sql`
       insert into cadence.foods (owner_user_id, visibility, name, source, base_unit, macros_per_base, servings, default_serving, confidence)
-      values (null, 'shared', 'Zzq Test Salmon', 'cnf', 'g', '{}'::jsonb, '[]'::jsonb, 0, 1)`;
-    expect(await clearUnusedSharedFoods(['zzq test salmon'])).toBe(0);
+      values (null, 'shared', ${SALMON}, 'cnf', 'g', '{}'::jsonb, '[]'::jsonb, 0, 1)`;
+    expect(await clearUnusedSharedFoods([SALMON.toLowerCase()])).toBe(0);
     const [still] = await sql<{ n: string }[]>`
-      select count(*)::text as n from cadence.foods where name = 'Zzq Test Salmon'`;
+      select count(*)::text as n from cadence.foods where name = ${SALMON}`;
     expect(still?.n).toBe('1');
   });
 

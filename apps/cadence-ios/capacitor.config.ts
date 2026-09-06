@@ -24,21 +24,28 @@ const config: CapacitorConfig = {
      * wide and which the app respects; a webview scale the app cannot read or reset is not it.
      */
     zoomEnabled: false,
+
     /**
-     * Makes the WKWebView visible to Safari's Web Inspector — the only way to see the console of
-     * the app as it actually runs on a phone, which is where most of this app's bugs live.
+     * `webContentsDebuggingEnabled` is DELIBERATELY ABSENT — do not add it back.
      *
-     * Set EXPLICITLY rather than relying on Capacitor's `#if DEBUG` default, because this project
-     * consumes Capacitor through SPM: that `#if` is evaluated when the Capacitor *framework* was
-     * compiled, not when the app is, so a debug app build can still ship a non-inspectable
-     * webview. Capacitor's own source comments on that case. Guessing which way it fell is exactly
-     * the kind of hunt that wastes an afternoon.
+     * This file is static JSON by the time the app runs (`cap sync` copies it into the bundle),
+     * so any value set here applies to Debug and Release alike. It was previously hardcoded
+     * `true`, which meant every archive — TestFlight and App Store included — shipped a webview
+     * that anyone holding the device could attach Safari's inspector to.
      *
-     * ⚠️ MUST be gated before App Store submission — as written this applies to Release builds
-     * too, and anyone with the device could then inspect the webview. Tracked in
-     * docs/cadence/PLAN.md (backlog A0). Acceptable now: pre-launch, one device, one user.
+     * Omitting the key hands the decision to Capacitor's own fallback in `CAPInstanceDescriptor`,
+     * which is built for exactly this project's shape. Its `#if DEBUG` branch is useless to us:
+     * we consume Capacitor as a prebuilt SPM xcframework, so that flag was resolved when Ionic
+     * compiled the framework, not when this app compiles. Ionic's documented workaround for that
+     * case is the `#else` branch — the `CAPACITOR_DEBUG` Info.plist string, which Info.plist has
+     * always carried as `$(CAPACITOR_DEBUG)`. Nothing defined that build setting, so it expanded
+     * to empty and the hardcoded `true` above was the only thing ever turning the inspector on.
+     *
+     * It is now a real per-configuration build setting in App.xcodeproj: `true` in Debug, `false`
+     * in Release. Cable and simulator builds keep the inspector — which is where most of this
+     * app's bugs are found — and archives do not, with no env var to remember and nothing to
+     * toggle by hand before a release.
      */
-    webContentsDebuggingEnabled: true,
   },
 };
 
