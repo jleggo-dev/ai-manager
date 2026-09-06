@@ -16,11 +16,15 @@ const getActivePlan = vi.fn();
 const listActivities = vi.fn();
 const getUser = vi.fn();
 const upsertOccurrences = vi.fn();
+const listSettledCommitmentDates = vi.fn();
 
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/activities.ts', () => ({ listActivities: (...a: unknown[]) => listActivities(...a) }));
 vi.mock('../repos/users.ts', () => ({ getUser: (...a: unknown[]) => getUser(...a) }));
 vi.mock('../repos/occurrences.ts', () => ({ upsertOccurrences: (...a: unknown[]) => upsertOccurrences(...a) }));
+vi.mock('../repos/commitment-dates.ts', () => ({
+  listSettledCommitmentDates: (...a: unknown[]) => listSettledCommitmentDates(...a),
+}));
 
 const { ensureHorizon } = await import('./plan-horizon.ts');
 
@@ -34,6 +38,7 @@ beforeEach(() => {
   // No timezone → localMinutes falls back to UTC, so "now" is comparable in the assertions below.
   getUser.mockResolvedValue({ timezone: 'UTC' });
   upsertOccurrences.mockResolvedValue(undefined);
+  listSettledCommitmentDates.mockResolvedValue([]);
 });
 
 /** The dates this run would have created for a given activity. */
@@ -69,6 +74,45 @@ describe('ensureHorizon and today', () => {
     listActivities.mockResolvedValue([{ activity_id: 'a1', schedule: { recurrence: DAILY } }]);
 
     await ensureHorizon('u1', 2);
+
+    expect(datesFor()).toContain(today);
+  });
+});
+
+/**
+ * The second ruck (2026-09-06). The owner finished and logged a ruck; the coach then moved the
+ * weigh-in to Monday, which committed a new plan version with fresh activity rows. The done ruck
+ * stayed on the old row as history, the fill saw the new ruck row with nothing on today, and
+ * issued the ruck again. The commitment lineage says they are one thing; the fill must read it.
+ */
+describe('ensureHorizon and a commitment already settled today', () => {
+  const ruck = { activity_id: 'a-new', commitment_id: 'c-ruck', schedule: { recurrence: DAILY, time_of_day: '06:30' } };
+
+  it('does not re-issue a commitment that is already done on that date, even after a commit', async () => {
+    listActivities.mockResolvedValue([ruck]);
+    listSettledCommitmentDates.mockResolvedValue([{ commitment_id: 'c-ruck', date: today }]);
+
+    await ensureHorizon('u1', 2, { keepElapsedToday: true });
+
+    expect(datesFor()).not.toContain(today);
+    // Tomorrow is untouched — only the settled date is held back.
+    expect(datesFor().length).toBeGreaterThan(0);
+  });
+
+  it('still issues a different commitment on the same date', async () => {
+    listActivities.mockResolvedValue([{ ...ruck, activity_id: 'a-walk', commitment_id: 'c-walk' }]);
+    listSettledCommitmentDates.mockResolvedValue([{ commitment_id: 'c-ruck', date: today }]);
+
+    await ensureHorizon('u1', 2, { keepElapsedToday: true });
+
+    expect(datesFor()).toContain(today);
+  });
+
+  it('an activity with no commitment lineage is never held back', async () => {
+    listActivities.mockResolvedValue([{ ...ruck, commitment_id: undefined }]);
+    listSettledCommitmentDates.mockResolvedValue([{ commitment_id: 'c-ruck', date: today }]);
+
+    await ensureHorizon('u1', 2, { keepElapsedToday: true });
 
     expect(datesFor()).toContain(today);
   });

@@ -85,7 +85,9 @@ describe('tool catalog carries facts, not picks', () => {
     expect(t.summary).toBe(
       "a 20-second check-in — ONE word for how they're doing and how much room it's taking, plus an optional line",
     );
-    expect(t.notWhen).toBe('a word and a size, never sentences — writing meant to be reread is journal');
+    expect(t.notWhen).toContain('a word and a size, never sentences — writing meant to be reread is journal');
+    // ...and, since 2026-09-06, which HALF of the person it is about — a knee is not "settled".
+    expect(t.notWhen).toContain('a check on a knee, a back, an ankle is checkoff');
   });
 
   it('TK-11: the interval trap places warm-up and cool-down without saying when to omit them', () => {

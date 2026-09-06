@@ -2,6 +2,7 @@ import { getActivePlan, setPlanHorizon } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { getUser } from '../repos/users.ts';
 import { upsertOccurrences, type NewOccurrence } from '../repos/occurrences.ts';
+import { listSettledCommitmentDates } from '../repos/commitment-dates.ts';
 import { expandRecurrence } from './scheduling.ts';
 import { localMinutes } from './notify/policy.ts';
 import { localDayIso, localDayIsoPlus } from './plan-day.ts';
@@ -77,12 +78,27 @@ export async function ensureHorizon(
 
   const activities = await listActivities(plan.plan_id);
   const nowMinutes = localMinutes(now, timezone);
+  /**
+   * A commitment already settled on a date is never re-issued for it.
+   *
+   * Every commit inserts fresh activity rows, and the upsert's duplicate check is keyed on the
+   * row, not the commitment. The commit carries an unchanged activity's PENDING rows onto its new
+   * row, but a row already done is history and stays behind on the old version — so the fill
+   * saw the new ruck activity with nothing on today and issued a second ruck two hours after the
+   * first was finished and logged (2026-09-06, over a weigh-in moved to Monday). The commitment
+   * lineage is the fact that says they are the same thing; this is where it gets consulted.
+   * A second session added on purpose carries its own commitment id and is unaffected.
+   */
+  const settled = new Set(
+    (await listSettledCommitmentDates(userId, today, to)).map((r) => `${r.commitment_id}|${r.date}`),
+  );
   const occ: NewOccurrence[] = [];
   for (const a of activities) {
     const recurrence = a.schedule?.recurrence;
     if (!recurrence) continue;
     const startsAt = minutesOfDay(a.schedule?.time_of_day);
     for (const date of expandRecurrence(recurrence, today, to, anchor)) {
+      if (a.commitment_id && settled.has(`${a.commitment_id}|${date}`)) continue;
       /**
        * Skipping a slot whose hour has already gone is right for the ROLLING TOP-UP — nobody wants
        * a 6am session materialized at 3pm. It is exactly wrong after a COMMIT, and it silently ate

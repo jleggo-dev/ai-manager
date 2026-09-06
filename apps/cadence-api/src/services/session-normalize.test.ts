@@ -246,6 +246,22 @@ describe('effort keeps its full length through normalize', () => {
   });
 });
 
+describe('per_side survives normalize only as a stated true', () => {
+  const one = (item: Record<string, unknown>) =>
+    normalizeSession({ blocks: [{ label: 'Cool-down', items: [{ name: 'Calf stretch', ...item }] }] })!.blocks[0]!
+      .items[0]!;
+
+  it('keeps the fact the coach stated', () => {
+    expect(one({ tool: 'timer', duration_min: 1, per_side: true }).per_side).toBe(true);
+  });
+
+  it('never invents one — absent, false, or a stray string all leave it absent', () => {
+    expect(one({ tool: 'timer', duration_min: 1 })).not.toHaveProperty('per_side');
+    expect(one({ tool: 'timer', duration_min: 1, per_side: false })).not.toHaveProperty('per_side');
+    expect(one({ tool: 'timer', duration_min: 1, per_side: 'yes' })).not.toHaveProperty('per_side');
+  });
+});
+
 describe('the metronome survives normalize, bounded', () => {
   const one = (item: Record<string, unknown>) =>
     normalizeSession({ blocks: [{ label: 'Practice', items: [{ name: 'Scales', ...item }] }] })!.blocks[0]!.items[0]!;

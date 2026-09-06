@@ -502,11 +502,41 @@ describe('applyPlanEdits — twins and on_days', () => {
     const r = applyPlanEdits(PLAN, [{ action: 'add', title: 'Easy run', days: ['wednesday'] }], GOALS);
     expect(r.changes).toEqual([]);
     expect(r.rejected[0]).toMatch(/already names a commitment/);
-    expect(r.rejected[0]).toMatch(/Pick a distinct name\./);
+    expect(r.rejected[0]).toMatch(/NOTHING was added/);
     // The uniqueness rule is contract; the two worked examples were a steer on what to call it.
     expect(r.rejected[0]).not.toMatch(/\(Wednesday\)/);
     expect(r.rejected[0]).not.toMatch(/— hills/);
     expect(r.activities.filter((a) => a.title === 'Easy run')).toHaveLength(1);
+  });
+
+  /**
+   * The same thing on the same day is a QUESTION for the person (owner, 2026-09-06), not a naming
+   * problem for the coach. "Pick a distinct name" steered her to invent "Ruck 2"; the two things
+   * they can mean — a change to what they have, or a second one beside it — only they can settle.
+   */
+  it('the same thing on the same day: reports the facts and tells her to ask, never picks', () => {
+    const longRun = PLAN[1]!;
+    const r = applyPlanEdits(PLAN, [{ action: 'add', title: 'Long run', days: ['sunday'], time_of_day: '08:00' }]);
+    expect(r.changes).toEqual([]);
+    expect(r.activities.filter((a) => a.title === 'Long run')).toHaveLength(1);
+    const msg = r.rejected[0]!;
+    expect(msg).toMatch(/already names a commitment on Sun/);
+    expect(msg).toMatch(new RegExp(activityHandle(longRun.commitment_id)));
+    expect(msg).toMatch(/lands on Sun too/);
+    expect(msg).toMatch(/ask whether they mean a SECOND "Long run" that day/);
+    expect(msg).toMatch(/or a change to the existing one/);
+    expect(msg).toMatch(/NOTHING was added/);
+    // Facts, not picks: no invented name, no default decision.
+    expect(msg).not.toMatch(/Pick a distinct name/);
+  });
+
+  it('the same thing on a DIFFERENT day: asks whether it is a move or a second one', () => {
+    const r = applyPlanEdits(PLAN, [{ action: 'add', title: 'Long run', days: ['saturday'], time_of_day: '08:00' }]);
+    const msg = r.rejected[0]!;
+    expect(msg).toMatch(/already names a commitment on Sun/);
+    expect(msg).toMatch(/MOVED to Sat/);
+    expect(msg).toMatch(/or a second one alongside it/);
+    expect(msg).not.toMatch(/lands on/);
   });
 
   it('will not RENAME into a twin either — how this pair was actually born', () => {

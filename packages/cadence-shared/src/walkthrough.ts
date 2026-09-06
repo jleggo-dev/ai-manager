@@ -24,6 +24,7 @@ import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from
 import { clampFreeWriteMinutes } from './freewrite.ts';
 import { type IntervalPlan, intervalTotalMinutes, singleSetPlan } from './interval.ts';
 import { type MetronomeSpec, normalizeMetronome } from './metronome.ts';
+import { bodyCheckinPart, bodyCheckinPrompt, isOpenEndedTimer, mentionsSides } from './step-cues.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -44,7 +45,11 @@ export interface CircuitExercise {
 
 export type StepTool =
   | { kind: 'read' }
-  | { kind: 'timer'; seconds: number; chime?: boolean }
+  // `open_ended`: the clock chimes at its target and KEEPS RUNNING until stopped — a ruck, a walk, a
+  // practice block — and the log is the time actually spent. `switch_sides`: a chime and a visible
+  // cue at the halfway point, for a stretch or hold done one side then the other. Both are read
+  // off the step's own words and length (step-cues.ts); the coach never writes them.
+  | { kind: 'timer'; seconds: number; chime?: boolean; open_ended?: boolean; switch_sides?: boolean }
   // Intervals — the timer generalised from one phase to a list (warm-up → work/recover × rounds →
   // cool-down), handing over on its own. The already-clamped PLAN travels with the step, not the
   // expanded phases: expansion is deterministic arithmetic the renderer can do (`expandIntervalPhases`),
@@ -54,7 +59,9 @@ export type StepTool =
   // A circuit rotates through its exercises for `rounds` rounds (A,B,A,B) — one cohesive step whose
   // ring is the ROUNDS. Straight sets stay as separate `reps` steps (ring = that exercise's sets).
   | { kind: 'circuit'; rounds: number; exercises: CircuitExercise[] }
-  | { kind: 'checkoff'; label?: string }
+  // `prompt`: the question a free-text check asks ("How is the knee?"). A checkoff with a prompt is
+  // the body-side check-in — a few words about a part, logged as the note.
+  | { kind: 'checkoff'; label?: string; prompt?: string }
   // Paced breathing (REQ9 §4.1). The resolved pattern travels WITH the step so the renderer stays
   // dumb — it animates `pattern.phases` without knowing any technique's name. `cycles` is already
   // safety-clamped; the renderer never re-derives it.
@@ -273,12 +280,45 @@ export function inferTool(item: SessionItem): StepTool {
   }
   if (typeof item.sets === 'number' && item.sets > 0) return repsTool(item);
   if (typeof item.duration_min === 'number' && item.duration_min > 0) {
-    return { kind: 'timer', seconds: Math.round(item.duration_min * 60), chime: true };
+    return timerTool(item, Math.round(item.duration_min * 60));
   }
   if (typeof item.distance_km === 'number' && item.distance_km > 0) {
     return { kind: 'checkoff', label: `${item.distance_km} km` };
   }
   return { kind: 'read' };
+}
+
+/**
+ * A timer from a length. Two things ride on it: a timer of ten minutes or more is an effort that
+ * keeps running past its target (a threshold, step-cues.ts), and a two-sided hold gets its halfway
+ * chime. The coach STATES the second as `per_side`; reading the cue text for "each side" is only
+ * the fallback for sessions prescribed before the field existed, and is never consulted when the
+ * coach said anything either way. Neither key is written when it is off, so a plain 30-second hold
+ * stays exactly `{ kind, seconds, chime }`.
+ */
+function timerTool(item: SessionItem, seconds: number): StepTool {
+  const sides =
+    typeof item.per_side === 'boolean' ? item.per_side : mentionsSides(item.name) || mentionsSides(item.detail);
+  return {
+    kind: 'timer',
+    seconds,
+    chime: true,
+    ...(isOpenEndedTimer(seconds) ? { open_ended: true } : {}),
+    ...(sides ? { switch_sides: true } : {}),
+  };
+}
+
+/**
+ * A feeling log — unless the step is plainly about a BODY part, in which case it becomes a
+ * free-text check on that part. The feeling vocabulary (settled, wired, foggy…) is about the
+ * head; "Knee check-in" prescribed as a feeling_log asked the wrong question with a straight
+ * face (2026-09-06). The catalog now tells the coach the difference; this guard covers the
+ * sessions already on file and the ones where she forgets.
+ */
+function feelingOrBodyCheck(item: SessionItem): StepTool {
+  const part = bodyCheckinPart(item.name);
+  if (!part) return { kind: 'feeling_log' };
+  return { kind: 'checkoff', prompt: item.detail?.trim() || bodyCheckinPrompt(part) };
 }
 
 /** A reps tool from an item's sets/reps/load. `sets` floors at 1 for an explicit-but-unquantified pick. */
@@ -295,7 +335,7 @@ function repsTool(item: SessionItem): StepTool {
 function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
   switch (kind) {
     case 'timer':
-      return { kind: 'timer', seconds: item.duration_min ? Math.round(item.duration_min * 60) : 60, chime: true };
+      return timerTool(item, item.duration_min ? Math.round(item.duration_min * 60) : 60);
     case 'interval':
       return intervalTool(item);
     case 'reps':
@@ -313,7 +353,7 @@ function toolFromKind(kind: SessionItemTool, item: SessionItem): StepTool {
     case 'grounding':
       return groundingTool(item);
     case 'feeling_log':
-      return { kind: 'feeling_log' };
+      return feelingOrBodyCheck(item);
     case 'read':
       return { kind: 'read' };
     default: {

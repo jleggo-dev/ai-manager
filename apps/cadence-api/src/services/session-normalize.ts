@@ -153,6 +153,8 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             // Rides along with any tool (see metronome.ts) — absent unless the coach asked for a
             // pulse, and bounded here so a stored session never holds a tempo nobody can play.
             ...metronomeFieldsOf(i),
+            // A stated fact, kept only when stated: anything but a literal true is absent.
+            ...(i.per_side === true ? { per_side: true } : {}),
             // Bounded here too, so a stored session never holds an out-of-range sit.
             meditate_interval_min:
               num(i.meditate_interval_min) === undefined

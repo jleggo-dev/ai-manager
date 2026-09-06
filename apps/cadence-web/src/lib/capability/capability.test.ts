@@ -23,6 +23,18 @@ describe('capability seam — push notifications on web', () => {
   });
 });
 
+describe('capability seam — the timer alarm on web', () => {
+  it('reports it could not be booked, and cancelling is inert — no browser can ring a closed tab', async () => {
+    // The walkthrough timer books its pocket bell through this and must get an honest "no" on
+    // the web, where the in-page chime is the most that exists.
+    expect(capabilities.localNotifications.isAvailable()).toBe(false);
+    await expect(
+      capabilities.localNotifications.scheduleAlarm({ at: Date.now() + 1000, title: 'Ruck', body: 'up' }),
+    ).resolves.toBe(false);
+    await expect(capabilities.localNotifications.cancelAlarm()).resolves.toBeUndefined();
+  });
+});
+
 describe('capability seam — dictation', () => {
   it('reports unavailable and returns null sessions when SpeechRecognition is missing', () => {
     const w = window as unknown as {

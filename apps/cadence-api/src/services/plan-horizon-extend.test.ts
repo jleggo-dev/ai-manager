@@ -15,6 +15,7 @@ const upsertOccurrences = vi.fn(async (..._a: unknown[]) => {});
 vi.mock('../repos/occurrences.ts', () => ({
   upsertOccurrences: (...a: unknown[]) => upsertOccurrences(...a),
 }));
+vi.mock('../repos/commitment-dates.ts', () => ({ listSettledCommitmentDates: vi.fn(async () => []) }));
 vi.mock('../repos/activities.ts', () => ({ listActivities: vi.fn(async () => []) }));
 vi.mock('../repos/users.ts', () => ({ getUser: vi.fn(async () => null) }));
 

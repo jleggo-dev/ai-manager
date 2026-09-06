@@ -90,6 +90,66 @@ describe('inferTool', () => {
   });
 });
 
+describe('the cues a timer reads off its own step (step-cues.ts)', () => {
+  // From the 2026-09-06 ruck: the 50-min timer auto-advanced at 50:00 and could not be told the
+  // ruck ran to 110; the calf stretch said "switch sides" and nothing marked halfway.
+  it('a long timer is open-ended — it keeps running past its target until stopped', () => {
+    expect(inferTool({ name: 'Ruck', duration_min: 50, tool: 'timer' })).toEqual({
+      kind: 'timer',
+      seconds: 3000,
+      chime: true,
+      open_ended: true,
+    });
+    // Inferred from the duration alone, the same rule applies.
+    expect(inferTool({ name: 'Easy walk', duration_min: 10 })).toMatchObject({ kind: 'timer', open_ended: true });
+  });
+  it('a short hold is not — a 60s stretch still chimes and moves on', () => {
+    expect(inferTool({ name: 'Wall sit', duration_min: 1 })).toEqual({ kind: 'timer', seconds: 60, chime: true });
+  });
+  it('the coach states per_side, and her word beats the cue text either way', () => {
+    expect(inferTool({ name: 'Calf stretch', duration_min: 1, tool: 'timer', per_side: true })).toEqual({
+      kind: 'timer',
+      seconds: 60,
+      chime: true,
+      switch_sides: true,
+    });
+    // She said no: a cue that happens to say "each side" does not overrule her.
+    expect(
+      inferTool({ name: 'Wall sit', duration_min: 1, tool: 'timer', per_side: false, detail: 'Feel it on each side.' }),
+    ).toEqual({ kind: 'timer', seconds: 60, chime: true });
+  });
+  it('"switch sides" in the cue or the title adds the halfway chime — the fallback for older sessions', () => {
+    expect(
+      inferTool({ name: 'Calf stretch against wall', duration_min: 1, detail: 'Hold 30s, then switch sides.' }),
+    ).toEqual({ kind: 'timer', seconds: 60, chime: true, switch_sides: true });
+    expect(inferTool({ name: 'Hip flexor stretch (each side)', duration_min: 2, tool: 'timer' })).toMatchObject({
+      switch_sides: true,
+    });
+    // The near-miss: a side plank is ONE side.
+    expect(inferTool({ name: 'Side plank', duration_min: 1 })).toEqual({ kind: 'timer', seconds: 60, chime: true });
+  });
+});
+
+describe('a feeling_log about a body part becomes a free-text check on that part', () => {
+  // "Knee check-in" prescribed as a feeling_log asked settled / wired / foggy about a knee.
+  it('reroutes by the named part, asking in the coach’s voice', () => {
+    expect(inferTool({ name: 'Knee check-in', tool: 'feeling_log' })).toEqual({
+      kind: 'checkoff',
+      prompt: 'How is the knee?',
+    });
+  });
+  it('the coach’s own question wins when she wrote one', () => {
+    expect(inferTool({ name: 'Ankle check', tool: 'feeling_log', detail: 'Any pinch on the outside?' })).toEqual({
+      kind: 'checkoff',
+      prompt: 'Any pinch on the outside?',
+    });
+  });
+  it('a real feeling log is untouched', () => {
+    expect(inferTool({ name: 'How are you doing?', tool: 'feeling_log' })).toEqual({ kind: 'feeling_log' });
+    expect(inferTool({ name: 'Mood check', tool: 'feeling_log' })).toEqual({ kind: 'feeling_log' });
+  });
+});
+
 describe('measure — the one tool with no item.tool route', () => {
   // `measure` is deliberately excluded from `SessionItemTool` (tool-catalog.ts): the coach never
   // emits it, so `measure_metric`/`measure_unit` are the ONLY way an item becomes a measure step —

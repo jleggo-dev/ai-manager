@@ -209,7 +209,13 @@ export function Walkthrough({
         ) : (
           <>
             <StepHeader step={step} />
-            <div style={{ marginTop: 18 }}>{renderTool(step, logs, setLog, next, steps[idx + 1]?.title)}</div>
+            {/* Keyed by step so each step gets its OWN tool instance. Without the key React reused
+                the calf stretch's timer for the hip flexor stretch — same component type, same
+                position — and the new step opened with the old step's finished clock: 0:00 left,
+                "Resume" (2026-09-06). */}
+            <div key={step.id} style={{ marginTop: 18 }}>
+              {renderTool(step, logs, setLog, next, steps[idx + 1]?.title)}
+            </div>
             {/* The metronome rides ALONGSIDE the tool rather than being one, so it is attached here
                 — once, under whatever card the step rendered — instead of inside each tool that
                 might want it. Circuits and intervals are the two that own their whole body and so
@@ -303,6 +309,7 @@ function renderTool(
           load={t.load}
           log={log?.kind === 'reps' ? log : undefined}
           onLog={(l) => setLog(step.id, l)}
+          onDone={onAdvance}
         />
       );
     case 'timer':
@@ -310,6 +317,9 @@ function renderTool(
         <StepTimer
           seconds={t.seconds}
           chime={t.chime ?? true}
+          openEnded={t.open_ended ?? false}
+          switchSides={t.switch_sides ?? false}
+          title={step.title}
           nextTitle={nextTitle}
           log={log?.kind === 'timer' ? log : undefined}
           onLog={(l) => setLog(step.id, l)}
@@ -386,6 +396,7 @@ function renderTool(
       return (
         <StepCheckoff
           label={t.kind === 'checkoff' ? t.label : undefined}
+          prompt={t.kind === 'checkoff' ? t.prompt : undefined}
           log={log?.kind === 'done' ? log : undefined}
           onLog={(l) => setLog(step.id, l)}
         />

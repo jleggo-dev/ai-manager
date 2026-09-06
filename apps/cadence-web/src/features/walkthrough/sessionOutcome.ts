@@ -11,6 +11,11 @@ import { stepFraction, type StepLogs } from './state.ts';
  * Mind vs movement is decided by the TOOLS the session actually used, not by the activity's
  * title or category. A "walk" that turns out to be a walking meditation should get the mind
  * question, and title-matching would never know that.
+ *
+ * By the MINUTES, though — not by the presence of one mind tool. A 50-minute ruck with a
+ * one-minute check-in at the end is a ruck; it was asked "how's your head now?" (2026-09-06)
+ * because a single feeling_log made the whole session mind. The session is what most of its
+ * time was.
  */
 
 /** Tools whose whole point is interior state — these make a session a mind session. */
@@ -30,8 +35,12 @@ export interface SessionOutcome {
   asks: 'rpe' | 'reason' | 'felt_state';
 }
 
+const totalMinutes = (steps: WalkthroughStep[]) => steps.reduce((n, s) => n + Math.max(1, s.minutes), 0);
+const mindMinutes = (steps: WalkthroughStep[]) =>
+  steps.reduce((n, s) => n + (MIND_TOOLS.has(s.tool.kind) ? Math.max(1, s.minutes) : 0), 0);
+
 export function sessionOutcome(steps: WalkthroughStep[], logs: StepLogs): SessionOutcome {
-  const kind: SessionOutcome['kind'] = steps.some((s) => MIND_TOOLS.has(s.tool.kind)) ? 'mind' : 'movement';
+  const kind: SessionOutcome['kind'] = mindMinutes(steps) * 2 > totalMinutes(steps) ? 'mind' : 'movement';
   const total = steps.length;
   const logged = steps.filter((s) => logs[s.id]).length;
   const anyPartialTool = steps.some((s) => {

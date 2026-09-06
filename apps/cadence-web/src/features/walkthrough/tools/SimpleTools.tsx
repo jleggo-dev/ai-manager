@@ -12,20 +12,32 @@ type DoneLog = Extract<StepLog, { kind: 'done' }>;
  * checkoff / read — one deliberate tone button that logs "done" (the browse/do/commit "do"). The
  * note field is optional and free — "a distance, an errand" rarely needs one, so it never blocks
  * the single tap; whatever's typed rides along in the same log write rather than needing a second
- * action.
+ * action. With a `prompt` it is a QUESTION — "How is the knee?" — and the note is the answer: the
+ * body-side check-in, a few free words about a part, never a mood vocabulary.
  */
-export function StepCheckoff({ label, log, onLog }: { label?: string; log?: DoneLog; onLog: (l: DoneLog) => void }) {
+export function StepCheckoff({
+  label,
+  prompt,
+  log,
+  onLog,
+}: {
+  label?: string;
+  prompt?: string;
+  log?: DoneLog;
+  onLog: (l: DoneLog) => void;
+}) {
   const [note, setNote] = useState('');
   const done = !!log;
   return (
     <div style={card}>
       {label && <div style={{ fontSize: 30, fontWeight: 800, color: TONE.deep, textAlign: 'center' }}>{label}</div>}
+      {prompt && <div style={promptStyle}>{prompt}</div>}
       {done ? (
         log.note && <div style={savedNote}>{log.note}</div>
       ) : (
         <input
           style={noteInput}
-          placeholder="anything to add? (optional)"
+          placeholder={prompt ? 'a few words (optional)' : 'anything to add? (optional)'}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           maxLength={200}
@@ -36,7 +48,7 @@ export function StepCheckoff({ label, log, onLog }: { label?: string; log?: Done
         onClick={() => onLog({ kind: 'done', ...(note.trim() ? { note: note.trim() } : {}) })}
         disabled={done}
       >
-        {done ? '✓ Logged' : 'Log this done'}
+        {done ? '✓ Logged' : prompt ? 'Log it' : 'Log this done'}
       </button>
     </div>
   );
@@ -148,6 +160,13 @@ const noteInput: CSSProperties = {
   fontFamily: 'inherit',
   color: 'oklch(30% 0.02 150)',
   outline: 'none',
+};
+const promptStyle: CSSProperties = {
+  fontFamily: 'var(--display), serif',
+  fontWeight: 600,
+  fontSize: 19,
+  lineHeight: 1.3,
+  color: 'oklch(28% 0.02 150)',
 };
 const savedNote: CSSProperties = {
   fontSize: 12.5,
