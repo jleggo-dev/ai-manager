@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react';
 import '../../styles/settings-room.css';
-import {
-  getConstraints,
-  getDevAccount,
-  getReview,
-  isDevMode,
-  type ReviewData,
-  type UserConstraint,
-  type UserRoutine,
-} from '../../lib/api.ts';
+import { getDevAccount, isDevMode, type UserRoutine } from '../../lib/api.ts';
+import { useConstraints, useReview } from '../../lib/query/index.ts';
+import { readPersistedSession } from '../../lib/persisted-session.ts';
 import { supabase } from '../../lib/supabase.ts';
 import { ActivityBuilder } from '../builder/ActivityBuilder.tsx';
 import { AppleHealthSettings } from './AppleHealthSettings.tsx';
@@ -38,9 +32,12 @@ type RoomScreen =
  * responsibility `FoodHome.tsx` draws for itself — the groups, the account/danger card and each
  * door's content each own their own file.
  *
- * `getReview()` and `getConstraints()` are fetched ONCE here, not by each row that needs them, so
- * the goal/equipment counts on the root list and whatever the door screens show underneath can
- * never disagree.
+ * The review and the constraints come from the shared query cache (`lib/query/useReview.ts`), not
+ * from a fetch this screen owns. Same guarantee as before — one answer, so the counts on the root
+ * list and the door screens underneath can never disagree — plus the one this screen was missing:
+ * the answer OUTLIVES the screen. Settings used to open half-written and fill itself in a round
+ * trip later, every single time; now the cache (and, across launches, the boot paint) has it
+ * before the first frame, and a count moves only when the fact behind it moved.
  */
 export function SettingsRoom({
   email,
@@ -58,19 +55,20 @@ export function SettingsRoom({
    *  as every other door here, so editing never leaves Settings and MainTabs never learns about
    *  it. Update mode: saving writes the routine in place (updateRoutineId), never a copy. */
   const [editing, setEditing] = useState<UserRoutine | null>(null);
-  const [review, setReview] = useState<ReviewData | null>(null);
-  const [constraints, setConstraints] = useState<UserConstraint[] | null>(null);
-  const [weekN, setWeekN] = useState<number | null>(null);
+  const { data: review } = useReview();
+  const { data: constraints } = useConstraints();
+  /**
+   * WEEK N, off the session already on disk so the header's sub-line is whole on the first frame
+   * too. `getSession()` is still the authority and still runs below — but it is a promise that
+   * awaits a token refresh whenever the access token has aged out, which is most launches, and
+   * waiting on the network to print a number derived from a date this device has had all along is
+   * the same defect as the counts.
+   */
+  const [weekN, setWeekN] = useState<number | null>(() => weeksSinceCreation(readPersistedSession()?.user?.created_at));
   const dev = isDevMode();
 
   useEffect(() => {
     let alive = true;
-    void getReview()
-      .then((r) => alive && setReview(r))
-      .catch(() => {});
-    void getConstraints()
-      .then((c) => alive && setConstraints(c))
-      .catch(() => alive && setConstraints([]));
     // Dev mode has no real Supabase session, so `created_at` is unavailable — weekN then stays
     // null and the header simply omits WEEK, per the design's own instruction.
     void supabase.auth.getSession().then(({ data }) => {
@@ -156,8 +154,8 @@ export function SettingsRoom({
         </button>
 
         <SettingsYouGroup
-          review={review}
-          constraints={constraints}
+          review={review ?? null}
+          constraints={constraints ?? null}
           onOpenGoals={() => setScreen('goals')}
           onOpenActivities={() => setScreen('activities')}
           onOpenTools={() => setScreen('tools')}

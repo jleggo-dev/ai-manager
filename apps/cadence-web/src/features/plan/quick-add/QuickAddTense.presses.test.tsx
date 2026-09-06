@@ -6,7 +6,8 @@
  * affordance's own callback.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 
 const logAdhoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
@@ -44,7 +45,7 @@ type MountProps = {
 };
 
 function mount(props: MountProps = {}) {
-  return render(
+  return renderWithQuery(
     <QuickAddTense
       area={props.area ?? 'movement'}
       noun={props.noun ?? 'A workout'}

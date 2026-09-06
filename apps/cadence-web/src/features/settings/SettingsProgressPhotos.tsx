@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { getProgressPhotosStatus, setProgressPhotosEnabled } from '../../lib/api.ts';
+import { useState } from 'react';
+import { setProgressPhotosEnabled } from '../../lib/api.ts';
+import { useProgressPhotosStatus, useSetProgressPhotosStatus } from '../../lib/query/index.ts';
 
 /**
  * "Progress photos" — an INLINE TOGGLE, not a door (design owner-approved 2026-08-31). The full
@@ -10,19 +11,14 @@ import { getProgressPhotosStatus, setProgressPhotosEnabled } from '../../lib/api
  * lose either direction, so the only failure that matters is the save itself not landing.
  */
 export function SettingsProgressPhotos() {
-  const [enabled, setEnabled] = useState<boolean | null>(null);
+  // Through the shared status entry (lib/query/useProgressPhotos.ts): the row is in the list with
+  // every other row rather than appearing under them a round trip later, and the quick-add surface
+  // that reads the same fact never disagrees with this switch.
+  const { data } = useProgressPhotosStatus();
+  const setEnabled = useSetProgressPhotosStatus();
+  const enabled = data?.enabled ?? null;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-
-  useEffect(() => {
-    let alive = true;
-    void getProgressPhotosStatus().then((s) => {
-      if (alive) setEnabled(s.enabled);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   async function toggle() {
     if (busy || enabled === null) return;

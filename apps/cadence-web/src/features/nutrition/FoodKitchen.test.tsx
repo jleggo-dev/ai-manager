@@ -9,7 +9,8 @@
  * These drive the real components through clicks and assert on what is on the screen and what
  * reached the API — not on whether a string exists somewhere in the source.
  */
-import { render, screen, within, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import { screen, within, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 import type { Recipe } from '@cadence/shared';
 
 const listRecipes = vi.fn();
@@ -91,7 +92,7 @@ afterEach(cleanup);
 
 /** Wait past the hook's two opening fetches so the tab is settled before we click. */
 async function mountKitchen() {
-  const view = render(<FoodKitchen />);
+  const view = renderWithQuery(<FoodKitchen />);
   await waitFor(() => expect(getCurrentMealPlan).toHaveBeenCalled());
   return view;
 }
@@ -356,7 +357,7 @@ describe('the paste-a-recipe door (10)', () => {
 describe('opening on a named section (the pill re-point)', () => {
   it('opens on the shopping list when asked', async () => {
     getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
-    render(<FoodKitchen initialView="shop" />);
+    renderWithQuery(<FoodKitchen initialView="shop" />);
     expect(await screen.findByRole('region', { name: /Shopping list/i })).toBeInTheDocument();
     // The plan lands after the deep-linked mount — its saved ticks seed the basket in place.
     await waitFor(() =>
@@ -366,7 +367,7 @@ describe('opening on a named section (the pill re-point)', () => {
 
   it('opens on the planner when asked', async () => {
     getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
-    render(<FoodKitchen initialView="week" />);
+    renderWithQuery(<FoodKitchen initialView="week" />);
     expect(await screen.findByRole('region', { name: /Plan the week/i })).toBeInTheDocument();
   });
 });

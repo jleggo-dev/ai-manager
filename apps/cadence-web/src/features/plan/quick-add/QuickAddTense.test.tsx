@@ -4,7 +4,8 @@
  * now-menu's area filter, and the empty-menu no-heading rule (DoNowSection's own rule, reused).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 
 const logAdhoc = vi.fn(async (..._a: unknown[]) => ({ ok: true }));
 const getNowMenu = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
@@ -104,7 +105,7 @@ type MountProps = {
 };
 
 function mount(props: MountProps = {}) {
-  return render(
+  return renderWithQuery(
     <QuickAddTense
       area={props.area ?? 'movement'}
       noun={props.noun ?? 'A workout'}

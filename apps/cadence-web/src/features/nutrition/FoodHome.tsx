@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react';
-import { getCurrentMealPlan, getRecentMeals, listRecipes, patchMeal, type Meal } from '../../lib/api.ts';
-import { localTodayIso, useInvalidateNutritionDay, useNutritionDay } from '../../lib/query/index.ts';
+import { useState } from 'react';
+import { patchMeal } from '../../lib/api.ts';
+import {
+  localTodayIso,
+  useInvalidateFoodLibrary,
+  useInvalidateNutritionDay,
+  useMealPlan,
+  useNutritionDay,
+  useRecentMeals,
+  useRecipes,
+} from '../../lib/query/index.ts';
 import type { MealKind } from '@cadence/shared';
 import { ExpressFood } from '../food/ExpressFood.tsx';
 import { MealScreen } from '../food/meal/MealScreen.tsx';
@@ -87,33 +95,29 @@ export function FoodHome({
   const { data: day = null, isPending: dayPending, refetch } = useNutritionDay(date);
   const invalidate = useInvalidateNutritionDay();
   const [confirming, setConfirming] = useState<string | null>(null);
-  const [recent, setRecent] = useState<Meal[]>([]);
-  const [hasWeek, setHasWeek] = useState(false);
-  const [recipeCount, setRecipeCount] = useState<number | null>(null);
+  /**
+   * The room's three standing facts, through the shared cache (lib/query/useFoodData.ts).
+   *
+   * Eight days, not seven: the Mon–Sun week and the Sun-start dot row each reach up to six days
+   * back, and a window that stops one short would silently blank a Monday.
+   *
+   * They were three per-mount fetches, so the dots, the week strip and the cookbook count each
+   * arrived a round trip after the room did — every time it was opened, including straight back
+   * from a meal you just logged. Cached, they are drawn with the room and corrected behind it.
+   */
+  const { data: recentMeals } = useRecentMeals(8);
+  const recent = recentMeals ?? [];
+  const { data: mealPlan } = useMealPlan();
+  const hasWeek = mealPlan?.status === 'ok' && !!mealPlan.plan;
+  const { data: recipes } = useRecipes();
+  const recipeCount = recipes?.status === 'ok' ? recipes.recipes.length : null;
   /** Mirrors the day's water so a tap moves the row now; tagged with its date so it cannot leak
    *  onto another day when you navigate off today and back. */
   const [water, setWater] = useState<{ date: string; ml: number } | null>(null);
-  /** Bumped when a surface below may have changed the cookbook or the week — a meal-screen save
-   *  mints a recipe, so the counts refetch when it closes rather than going stale until remount. */
-  const [standingNonce, setStandingNonce] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    // Eight days, not seven: the Mon–Sun week and the Sun-start dot row each reach up to six days
-    // back, and a window that stops one short would silently blank a Monday.
-    getRecentMeals(8)
-      .then((meals: Meal[]) => alive && setRecent(meals))
-      .catch(() => {});
-    getCurrentMealPlan()
-      .then((r) => alive && setHasWeek(r.status === 'ok' && !!r.plan))
-      .catch(() => {});
-    listRecipes()
-      .then((r) => alive && setRecipeCount(r.status === 'ok' ? r.recipes.length : null))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [standingNonce]);
+  /** Called when a surface below may have changed the cookbook or the week — a meal-screen save
+   *  mints a recipe, so the counts re-read when it closes rather than going stale until remount.
+   *  What the room shows meanwhile is the answer it already had, not an empty shelf. */
+  const invalidateFoodLibrary = useInvalidateFoodLibrary();
 
   /** A correction rewrote the meal server-side — re-read rather than patch state by hand. */
   async function onCorrected() {
@@ -167,7 +171,7 @@ export function FoodHome({
         meal={logMeal === 'any' ? undefined : logMeal}
         onClose={() => {
           setLogMeal(null);
-          setStandingNonce((n) => n + 1);
+          void invalidateFoodLibrary();
           void refetch();
           onLogged?.();
         }}

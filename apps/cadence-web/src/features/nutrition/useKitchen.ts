@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { mealPlanItems, type MealPlanDay, type Recipe, type ShoppingListItem } from '@cadence/shared';
 import {
   deleteMealPlan,
-  getCurrentMealPlan,
-  listRecipes,
   patchMealPlan,
   probeRecipeDiscovery,
   saveMealPlan,
@@ -11,6 +9,7 @@ import {
   type MealPlanDraft,
   type MealPlanRecord,
 } from '../../lib/api.ts';
+import { useInvalidateFoodLibrary, useMealPlan, useRecipes, useSetMealPlan } from '../../lib/query/index.ts';
 import { toDraftRecipe } from './kitchenPlan.ts';
 
 export type KitchenStatus = 'loading' | 'ok' | 'unavailable' | 'error';
@@ -65,15 +64,36 @@ export function weekShift(weekOf: string, delta: number): string {
 export function useKitchen(): KitchenData {
   const thisWeek = useState(() => weekOfMonday())[0];
   const [weekOf, setWeekOf] = useState(thisWeek);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [plan, setPlan] = useState<MealPlanRecord | null>(null);
-  const [status, setStatus] = useState<KitchenStatus>('loading');
+  /**
+   * The cookbook and the week, through the shared cache (lib/query/useFoodData.ts). The Kitchen
+   * opened on "loading" every time it was entered — even straight back from the Day tab a second
+   * later — because both reads lived in a mount effect and neither answer outlived the tab. They
+   * are the same two entries the Food room and the meal sheets read, so the tab now opens on what
+   * they already have and corrects itself behind the paint.
+   *
+   * `setPlan` keeps its old signature (a record, a null, or an updater) and writes to the cache
+   * instead of to local state, so every edit path below is unchanged — and the week the Food room
+   * shows changes with them.
+   */
+  const { data: cookbook, isError: cookbookFailed } = useRecipes(true);
+  const recipes = useMemo(() => cookbook?.recipes ?? [], [cookbook]);
+  const { data: weekRead, isPending: weekPending } = useMealPlan(weekOf);
+  const plan = weekRead?.status === 'ok' ? weekRead.plan : null;
+  const setPlan = useSetMealPlan(weekOf);
+  // Paging to a week nobody has looked at yet is still a wait; paging back to one we hold is not.
+  const status: KitchenStatus = cookbookFailed
+    ? 'error'
+    : !cookbook || weekPending
+      ? 'loading'
+      : cookbook.status === 'unavailable'
+        ? 'unavailable'
+        : 'ok';
   const [discoveryLive, setDiscoveryLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
-  const [nonce, setNonce] = useState(0);
 
-  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  const invalidateFoodLibrary = useInvalidateFoodLibrary();
+  const reload = useCallback(() => void invalidateFoodLibrary(), [invalidateFoodLibrary]);
 
   /** Page the week — back freely, forward never past the running week (planning lives there). */
   const goWeek = useCallback(
@@ -95,22 +115,6 @@ export function useKitchen(): KitchenData {
       alive = false;
     };
   }, []);
-
-  useEffect(() => {
-    let alive = true;
-    setStatus('loading');
-    void Promise.all([listRecipes({ savedOnly: true }), getCurrentMealPlan(weekOf)]).then(([r, p]) => {
-      if (!alive) return;
-      setRecipes(r.status === 'ok' ? r.recipes : []);
-      setPlan(p.status === 'ok' ? p.plan : null);
-      if (r.status === 'unavailable') setStatus('unavailable');
-      else if (r.status === 'error') setStatus('error');
-      else setStatus('ok');
-    });
-    return () => {
-      alive = false;
-    };
-  }, [weekOf, nonce]);
 
   const commitDays = useCallback(
     async (days: MealPlanDay[]) => {
@@ -183,7 +187,7 @@ export function useKitchen(): KitchenData {
         setBusy(false);
       }
     },
-    [busy, plan, recipes, weekOf],
+    [busy, plan, recipes, setPlan, weekOf],
   );
 
   /**
@@ -208,7 +212,7 @@ export function useKitchen(): KitchenData {
         setBusy(false);
       }
     },
-    [busy, reload],
+    [busy, reload, setPlan],
   );
 
   /**
@@ -223,7 +227,7 @@ export function useKitchen(): KitchenData {
       const r = await patchMealPlan(planId, { shopping_list: list }).catch(() => null);
       if (r?.status === 'ok') setPlan(r.plan);
     },
-    [plan?.meal_plan_id],
+    [plan?.meal_plan_id, setPlan],
   );
 
   return {

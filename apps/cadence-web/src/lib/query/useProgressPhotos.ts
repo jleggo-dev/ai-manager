@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getProgressPhotoPair, getProgressPhotos, postProgressPhoto, putProgressPhotosEnabled } from '../api.ts';
+import {
+  getProgressPhotoPair,
+  getProgressPhotos,
+  getProgressPhotosStatus,
+  postProgressPhoto,
+  putProgressPhotosEnabled,
+  type ProgressPhotosStatus,
+} from '../api.ts';
 import { queryKeys } from './keys.ts';
 
 /** `photo_pair` — the earliest and latest progress photos (opt-in; omission when off or empty). */
@@ -13,11 +20,34 @@ export function useProgressPhotos() {
   return useQuery({ queryKey: queryKeys.progressPhotos.all, queryFn: getProgressPhotos });
 }
 
+/**
+ * Just the opt-in state, count and next-due — the Settings toggle and the quick-add row, neither of
+ * which wants the signed URL of every photo in order to draw itself. Cached so those two render
+ * with the screen around them instead of appearing a round trip into it.
+ */
+export function useProgressPhotosStatus() {
+  return useQuery<ProgressPhotosStatus>({
+    queryKey: queryKeys.progressPhotos.status,
+    queryFn: getProgressPhotosStatus,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Flip the cached opt-in state after a toggle, so both readers of it agree immediately. */
+export function useSetProgressPhotosStatus() {
+  const queryClient = useQueryClient();
+  return (enabled: boolean) =>
+    queryClient.setQueryData<ProgressPhotosStatus>(queryKeys.progressPhotos.status, (prev) =>
+      prev ? { ...prev, enabled } : prev,
+    );
+}
+
 /** Invalidate both photo reads — the pair card and the full list agree on the same facts, so an
  *  upload or an enable/disable must refresh whichever of the two is on screen. */
 function invalidatePhotoReads(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.progressPhotos.all });
   void queryClient.invalidateQueries({ queryKey: queryKeys.progressPhotos.pair });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.progressPhotos.status });
 }
 
 /**

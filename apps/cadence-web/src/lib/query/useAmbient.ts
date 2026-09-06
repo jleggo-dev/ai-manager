@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { getDailyCheckinStatus, getHomeLocation, getWeather, type LocationResult, type WeatherNow } from '../api.ts';
 import { AMBIENT_STALE_MS, queryKeys } from './keys.ts';
 
@@ -42,16 +42,40 @@ export function forgetWeather(queryClient: QueryClient): void {
  * the next launch would paint "no location" from disk — the exact bug this is here to close. So a
  * failed read returns the last known answer when there is one.
  */
+function locationQueryFn(queryClient: QueryClient) {
+  return async (): Promise<LocationResult> => {
+    const fresh = await getHomeLocation();
+    if (fresh.available) return fresh;
+    return queryClient.getQueryData<LocationResult>(queryKeys.location.all) ?? fresh;
+  };
+}
+
 export function fetchLocationCached(queryClient: QueryClient): Promise<LocationResult> {
   return queryClient.fetchQuery({
     queryKey: queryKeys.location.all,
-    queryFn: async () => {
-      const fresh = await getHomeLocation();
-      if (fresh.available) return fresh;
-      return queryClient.getQueryData<LocationResult>(queryKeys.location.all) ?? fresh;
-    },
+    queryFn: locationQueryFn(queryClient),
     staleTime: AMBIENT_STALE_MS,
   });
+}
+
+/**
+ * The same entry as a hook, for the Settings row that shows and edits the place. Same key and the
+ * same soft-fail guard as the header's fetch, so the two can never be looking at different places —
+ * and so the row is drawn with the rest of Settings rather than a round trip after it.
+ */
+export function useHomeLocation() {
+  const queryClient = useQueryClient();
+  return useQuery<LocationResult>({
+    queryKey: queryKeys.location.all,
+    queryFn: locationQueryFn(queryClient),
+    staleTime: AMBIENT_STALE_MS,
+  });
+}
+
+/** A save or a forget answers with the new place — write it straight in so the header follows. */
+export function useSetHomeLocation() {
+  const queryClient = useQueryClient();
+  return (next: LocationResult) => queryClient.setQueryData<LocationResult>(queryKeys.location.all, next);
 }
 
 /** After a save or a forget, the cached place is the old one — drop it before re-reading. */

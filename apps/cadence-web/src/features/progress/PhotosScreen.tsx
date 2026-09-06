@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { displayWeightUnit, formatWeight, type ProgressPhotoSlot, type WeightUnit } from '@cadence/shared';
 import type { ProgressPhotoList } from '../../lib/api.ts';
-import { useProgressPhotoPair, useProgressPhotos, useUploadProgressPhoto } from '../../lib/query/index.ts';
-import { getUnits } from '../../lib/api.ts';
+import { useProgressPhotoPair, useProgressPhotos, useUnits, useUploadProgressPhoto } from '../../lib/query/index.ts';
 import { localTodayIso } from '../../lib/query/keys.ts';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
 import '../../styles/progress-widgets.css';
@@ -52,13 +51,11 @@ function PhotoCell({ slot, unit }: { slot: ProgressPhotoSlot; unit: WeightUnit }
 }
 
 /** The stamp speaks the user's own unit (resolved server-side — never re-derived here); a failed
- *  read falls back to kg rather than blocking the photos. */
+ *  read falls back to kg rather than blocking the photos. Through the shared units entry, so the
+ *  stamps are in the right unit on the first frame rather than flipping under the reader. */
 function useBodyWeightUnit(): WeightUnit {
-  const [unit, setUnit] = useState<WeightUnit>('kg');
-  useEffect(() => {
-    void getUnits().then((r) => setUnit(displayWeightUnit(r?.resolved?.body_weight)));
-  }, []);
-  return unit;
+  const { data } = useUnits();
+  return displayWeightUnit(data?.resolved?.body_weight);
 }
 
 function DueCard({

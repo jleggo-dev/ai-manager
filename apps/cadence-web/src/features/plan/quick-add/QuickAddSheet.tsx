@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { NowMenuItem } from '@cadence/shared';
-import { getNowMenu, getProgressPhotosStatus, logAdhoc } from '../../../lib/api.ts';
-import { useNutritionDay, usePlan } from '../../../lib/query/index.ts';
+import { getNowMenu, logAdhoc } from '../../../lib/api.ts';
+import { useNutritionDay, usePlan, useProgressPhotosStatus } from '../../../lib/query/index.ts';
 import { DoNowSection } from '../DoNowSection.tsx';
 import { SheetRowsSkeleton } from '../SheetSkeletons.tsx';
 import { GLYPH } from '../../today/glyphs.ts';
@@ -80,16 +80,10 @@ export function QuickAddSheet({
    */
   const { data: plan, error } = usePlan();
   const { data: day } = useNutritionDay();
-  const [photosEnabled, setPhotosEnabled] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    void getProgressPhotosStatus().then((s) => {
-      if (alive) setPhotosEnabled(s.enabled);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // The same cached opt-in state Settings' toggle writes, so the row is either here or not the
+  // moment the sheet opens — never appearing under the reader's thumb a beat later.
+  const { data: photos } = useProgressPhotosStatus();
+  const photosEnabled = photos?.enabled ?? false;
 
   /**
    * The now-menu, fetched once here instead of inside DoNowSection (device-test bug, 2026-09-01):

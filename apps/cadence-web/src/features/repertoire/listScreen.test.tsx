@@ -12,7 +12,8 @@
  * `EmptyState`) is this parcel's own and is exercised for real.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within, cleanup } from '@testing-library/react';
+import { screen, within, cleanup } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 import userEvent from '@testing-library/user-event';
 import type { RepertoireItem } from '@cadence/shared';
 import { COMPOSER_KEY, PRACTICE_NOTE_KEY, RANK_KEY } from '@cadence/shared';
@@ -30,7 +31,10 @@ const removeCollection = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/api/repertoire-list.ts', () => ({
   getRepertoireListItems: (...a: unknown[]) => getRepertoireListItems(...a),
 }));
-vi.mock('../../lib/query/index.ts', () => ({
+/** Partial: the progress card's read is stubbed, while the room's own list read runs through the
+ *  real cached hook onto the mocked `getRepertoireListItems` above. */
+vi.mock('../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/query/index.ts')>()),
   useProgressRepertoire: (...a: unknown[]) => useProgressRepertoire(...a),
 }));
 vi.mock('../../lib/api/repertoire-item.ts', () => ({
@@ -130,7 +134,7 @@ function mount(
   // 'goalId' in over, not `over.goalId ?? default`: a test that passes goalId: null means it, and
   // `??` would otherwise silently replace that null with the default too.
   const goalId = 'goalId' in over ? (over.goalId ?? null) : 'g-piano';
-  return render(<ListScreen goalId={goalId} goalName="Piano" onBack={() => {}} />);
+  return renderWithQuery(<ListScreen goalId={goalId} goalName="Piano" onBack={() => {}} />);
 }
 
 beforeEach(() => {
@@ -350,7 +354,7 @@ describe('the ＋ door', () => {
     const onOpenChat = vi.fn();
     getRepertoireListItems.mockResolvedValue({ ok: true, items: BASE_ITEMS, collisions: [] });
     useProgressRepertoire.mockReturnValue({ data: CARD });
-    render(<ListScreen goalId="g-piano" goalName="Piano" onBack={() => {}} onOpenChat={onOpenChat} />);
+    renderWithQuery(<ListScreen goalId="g-piano" goalName="Piano" onBack={() => {}} onOpenChat={onOpenChat} />);
     await user.click(await screen.findByRole('button', { name: 'Add' }));
     await user.click(await screen.findByText('Just tell me in chat'));
     expect(onOpenChat).toHaveBeenCalledTimes(1);
@@ -440,7 +444,7 @@ describe('a fault reading the shelf', () => {
     const user = userEvent.setup();
     getRepertoireListItems.mockResolvedValueOnce({ ok: false, fault: 'a fault on our side' });
     useProgressRepertoire.mockReturnValue({ data: CARD });
-    render(<ListScreen goalId="g-piano" goalName="Piano" onBack={() => {}} />);
+    renderWithQuery(<ListScreen goalId="g-piano" goalName="Piano" onBack={() => {}} />);
     expect(await screen.findByText('a fault on our side')).toBeInTheDocument();
     expect(screen.queryByText("Tell me what you already know, and I'll stop asking.")).not.toBeInTheDocument();
 
@@ -729,7 +733,7 @@ describe('verses, by heart (P8)', () => {
     });
     useProgressRepertoire.mockReturnValue({ data: { learned_in_year: 2, noun: 'verses' } });
     getReview.mockResolvedValue({ goals: [] });
-    render(<ListScreen goalId="g-piano" goalName="Verses" onBack={() => {}} />);
+    renderWithQuery(<ListScreen goalId="g-piano" goalName="Verses" onBack={() => {}} />);
     expect(await screen.findByText('1 VERSES · 2 BY HEART THIS YEAR')).toBeInTheDocument();
   });
 });

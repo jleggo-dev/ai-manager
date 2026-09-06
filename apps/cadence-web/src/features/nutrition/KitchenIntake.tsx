@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { DietaryProfile, Recipe } from '@cadence/shared';
-import { getDietaryProfile, type RecipeDraft } from '../../lib/api.ts';
+import { useState } from 'react';
+import type { Recipe } from '@cadence/shared';
+import { type RecipeDraft } from '../../lib/api.ts';
+import { useDietaryProfile } from '../../lib/query/index.ts';
 import { FridgeFromPhotoPanel } from '../food/FridgeFromPhotoPanel.tsx';
 import { RecipeDiscoverPanel } from '../food/RecipeDiscoverPanel.tsx';
 import { RecipeFromChatPanel } from '../food/RecipeFromChatPanel.tsx';
@@ -30,17 +31,10 @@ export function KitchenIntake({
   onSaved: (recipe: Recipe) => void;
 }) {
   const [draft, setDraft] = useState<RecipeDraft | null>(null);
-  const [dietary, setDietary] = useState<DietaryProfile | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    void getDietaryProfile().then((r) => {
-      if (alive && r.status === 'ok') setDietary(r.profile);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // The one cached profile Settings and the coach's food sheet also read (lib/query/useFoodData.ts).
+  // An allergen is the fact this app must never let two surfaces disagree about.
+  const { data: profile } = useDietaryProfile();
+  const dietary = profile?.status === 'ok' ? profile.profile : null;
 
   if (draft) {
     return (

@@ -6,7 +6,8 @@
  *   • "no weigh-in on your plan" is answered as a fact, not swallowed as a failure.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 
 const api = vi.hoisted(() => ({
   getReview: vi.fn(),
@@ -25,14 +26,14 @@ afterEach(() => {
 });
 
 async function openPanel() {
-  render(<WeighInSettings />);
+  renderWithQuery(<WeighInSettings />);
   fireEvent.click(await screen.findByText('Weigh-ins'));
 }
 
 describe('WeighInSettings', () => {
   it('defaults to weekly when nothing has been chosen', async () => {
     api.getReview.mockResolvedValueOnce(review());
-    render(<WeighInSettings />);
+    renderWithQuery(<WeighInSettings />);
     expect(await screen.findByText('Once a week')).toBeInTheDocument();
   });
 

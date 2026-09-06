@@ -6,7 +6,8 @@
  * stubs it) and credits on completion.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 import type { UserRoutine } from '../../lib/api.ts';
 
 const api = vi.hoisted(() => ({
@@ -78,7 +79,7 @@ afterEach(() => {
 describe('SettingsYourActivities — the three list states', () => {
   it('renders a row with real-facts-only meta when loaded', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
 
     expect(await screen.findByText('Hotel HIIT')).toBeInTheDocument();
     expect(screen.getByText('2 steps · 12 min · run 4 times')).toBeInTheDocument();
@@ -93,13 +94,13 @@ describe('SettingsYourActivities — the three list states', () => {
         schedule: { days: ['tue', 'fri'], time_of_day: 'evening' },
       }),
     ]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     expect(await screen.findByText('2 steps · 12 min · never run · on the plan Tue & Fri')).toBeInTheDocument();
   });
 
   it('shows the quiet empty-state line — never the load-failure line', async () => {
     api.listUserRoutines.mockResolvedValueOnce([]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     expect(
       await screen.findByText('Nothing built yet — the ＋ on your plan is where an activity starts.'),
     ).toBeInTheDocument();
@@ -107,7 +108,7 @@ describe('SettingsYourActivities — the three list states', () => {
 
   it('shows the honest load-failure line on a null response — a DIFFERENT string than empty', async () => {
     api.listUserRoutines.mockResolvedValueOnce(null);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     expect(await screen.findByText("Couldn't load your activities just now — try again shortly.")).toBeInTheDocument();
     expect(
       screen.queryByText('Nothing built yet — the ＋ on your plan is where an activity starts.'),
@@ -119,7 +120,7 @@ describe('SettingsYourActivities — rename', () => {
   it('renames through updateUserRoutine with the exact id and patch', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
     api.updateUserRoutine.mockResolvedValueOnce(routine({ name: 'Hotel HIIT v2' }));
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Rename'));
@@ -137,7 +138,7 @@ describe('SettingsYourActivities — duplicate', () => {
     const src = routine({ provenance: { kind: 'from_cadence', source_commitment_id: 'c9' } });
     api.listUserRoutines.mockResolvedValueOnce([src]);
     api.createUserRoutine.mockResolvedValueOnce(routine({ routine_id: 'r-dup', name: 'Hotel HIIT 2' }));
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Duplicate'));
@@ -157,7 +158,7 @@ describe('SettingsYourActivities — duplicate', () => {
     api.createUserRoutine.mockResolvedValueOnce(
       routine({ routine_id: 'r-dup', name: 'Hotel HIIT 2', area: 'movement' }),
     );
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
     fireEvent.click(screen.getByText('Duplicate'));
 
@@ -172,7 +173,7 @@ describe('SettingsYourActivities — duplicate', () => {
 describe('SettingsYourActivities — delete', () => {
   it('the light confirm names the routine and counts real runs — "Keep it" calls nothing', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine({ runs: 4 })]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Delete…'));
@@ -188,7 +189,7 @@ describe('SettingsYourActivities — delete', () => {
   it('"Delete" calls deleteUserRoutine with the routine id and drops the row on success', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
     api.deleteUserRoutine.mockResolvedValueOnce(true);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
     fireEvent.click(screen.getByText('Delete…'));
     fireEvent.click(screen.getByText('Delete'));
@@ -201,7 +202,7 @@ describe('SettingsYourActivities — delete', () => {
 describe('SettingsYourActivities — the Edit steps seam', () => {
   it('hides "Edit steps" when onEditRoutine is absent', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
     expect(screen.queryByText('Edit steps')).not.toBeInTheDocument();
   });
@@ -209,7 +210,7 @@ describe('SettingsYourActivities — the Edit steps seam', () => {
   it('calls onEditRoutine with the routine when present', async () => {
     const onEditRoutine = vi.fn();
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
-    render(<SettingsYourActivities onBack={() => {}} onEditRoutine={onEditRoutine} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} onEditRoutine={onEditRoutine} />);
     await openMenu();
     fireEvent.click(screen.getByText('Edit steps'));
     expect(onEditRoutine).toHaveBeenCalledWith(routine());
@@ -219,7 +220,7 @@ describe('SettingsYourActivities — the Edit steps seam', () => {
 describe('SettingsYourActivities — Run it now', () => {
   it('plays the routine straight from its own session and credits logUserRoutineRun on completion', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Run it now'));
@@ -233,7 +234,7 @@ describe('SettingsYourActivities — Run it now', () => {
 
   it('closing without finishing never credits anything', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine()]);
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
     fireEvent.click(screen.getByText('Run it now'));
     await screen.findByText('playing: Hotel HIIT');
@@ -248,7 +249,7 @@ describe('SettingsYourActivities — Schedule it…', () => {
   it('opens the schedule sheet naming the routine, and writes the schedule back onto the row', async () => {
     api.listUserRoutines.mockResolvedValueOnce([routine({ schedule: null })]);
     api.scheduleUserRoutine.mockResolvedValueOnce({ ok: true });
-    render(<SettingsYourActivities onBack={() => {}} />);
+    renderWithQuery(<SettingsYourActivities onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Schedule it…'));

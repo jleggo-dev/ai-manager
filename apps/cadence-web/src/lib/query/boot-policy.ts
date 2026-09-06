@@ -95,6 +95,21 @@ const FAMILIES: Record<string, BootPolicy> = {
   // here whose key is declared outside keys.ts (settings/notifications/useNotificationPrefs.ts) —
   // it is named anyway, because ranking it by hand beats letting the default decide a first paint.
   notificationPrefs: { ttlMs: 7 * DAY, rank: 22 },
+  // Goals, tools, the baseline; and what we work around. A week, like the place they live and for
+  // the same reason: these are the slowest-moving facts the app holds, and Settings exists to show
+  // them rather than to act on them — the worst a stale one can do is name yesterday's count for
+  // the moment before the server names today's.
+  review: { ttlMs: 7 * DAY, rank: 24 },
+  constraints: { ttlMs: 7 * DAY, rank: 25 },
+  // What they've built, what they cook from, what they can't eat. All slow-moving, all read by
+  // more than one surface, and every one of them a screen that used to open empty. Ranked here
+  // rather than higher because they are moderate in size and back rooms you walk INTO; the
+  // cookbook sits further down still (below), being the one of them that can run to real weight.
+  routines: { ttlMs: 7 * DAY, rank: 26 },
+  dietaryProfile: { ttlMs: 7 * DAY, rank: 27 },
+  recentMeals: { ttlMs: DAY, rank: 28 },
+  mealPlan: { ttlMs: 2 * DAY, rank: 29 },
+  repertoireList: { ttlMs: 2 * DAY, rank: 32 },
   progress: { ttlMs: DAY, rank: 30 },
   progressLayout: { ttlMs: 7 * DAY, rank: 35 },
   progressExtras: { ttlMs: DAY, rank: 40 },
@@ -102,6 +117,9 @@ const FAMILIES: Record<string, BootPolicy> = {
   datedSessions: { ttlMs: DAY, rank: 50 },
   healthDigest: { ttlMs: DAY, rank: 55 },
   recaps: { ttlMs: 7 * DAY, rank: 60 },
+  // Every saved recipe with its ingredients and steps — the heaviest thing here that is not a
+  // photo, so it goes to disk after the dashboards and gives way before them.
+  recipes: { ttlMs: 2 * DAY, rank: 65 },
   // Photos are the one family whose payload can go bad rather than merely stale: the slots carry
   // signed Storage URLs, and an expired one paints a broken image, which is worse than the empty
   // frame it replaced. Short-lived and first to be dropped — they are also the heaviest thing here.

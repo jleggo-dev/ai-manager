@@ -2,7 +2,7 @@
  * Settings Room — "Your activities" (Activity Builder wave 3, W3-3): manage what you've built.
  * Mounted beside `SettingsGoals` (design D: "on Settings' own row grammar — it sits beside the
  * goals section, which already does rename/retire this way"). Standalone, same shape as
- * `SettingsGoals`: fetches its own data via `listUserRoutines()` and takes only
+ * `SettingsGoals`: reads the shared routine list out of the query cache and takes only
  * `onBack`/`onEditRoutine` — nothing here is passed down from `SettingsRoom`.
  *
  * "The coach can schedule them, never edit them" (design D) is a real seam, not just copy: Edit
@@ -11,16 +11,16 @@
  * the typed danger-zone ritual: logged history survives it (`runs` stays a fact forever), so the
  * stakes are low and the copy says why.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { deriveWalkthrough } from '@cadence/shared';
 import {
   createUserRoutine,
   deleteUserRoutine,
-  listUserRoutines,
   updateUserRoutine,
   type UserRoutine,
   type UserRoutineSchedule,
 } from '../../lib/api.ts';
+import { useRoutines, useUpdateRoutines } from '../../lib/query/index.ts';
 import { ActivityScheduleSheet } from './ActivityScheduleSheet.tsx';
 import { joinDays } from './activityDays.ts';
 import { useUserRoutinePlay } from './useUserRoutinePlay.tsx';
@@ -55,8 +55,10 @@ export function SettingsYourActivities({
    *  Absent → the "Edit steps" menu item simply doesn't render, never a dead button. */
   onEditRoutine?: (routine: UserRoutine) => void;
 }) {
-  const [routines, setRoutines] = useState<UserRoutine[] | null>(null);
-  const [loadErr, setLoadErr] = useState(false);
+  const { data, isError } = useRoutines();
+  const setRoutines = useUpdateRoutines();
+  const routines = data ?? null;
+  const loadErr = isError && !data;
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<UserRoutine | null>(null);
@@ -64,28 +66,9 @@ export function SettingsYourActivities({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    listUserRoutines()
-      .then((r) => {
-        if (!alive) return;
-        if (r) setRoutines(r);
-        else setLoadErr(true);
-      })
-      .catch(() => {
-        if (alive) setLoadErr(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   const { node: playerNode, play } = useUserRoutinePlay((routineId) => {
-    setRoutines(
-      (rs) =>
-        rs?.map((r) =>
-          r.routine_id === routineId ? { ...r, runs: r.runs + 1, last_run: new Date().toISOString() } : r,
-        ) ?? rs,
+    setRoutines((rs) =>
+      rs.map((r) => (r.routine_id === routineId ? { ...r, runs: r.runs + 1, last_run: new Date().toISOString() } : r)),
     );
   });
 
@@ -97,7 +80,7 @@ export function SettingsYourActivities({
     setMsg('');
     try {
       const updated = await updateUserRoutine(routine.routine_id, { name: next });
-      if (updated) setRoutines(routines.map((r) => (r.routine_id === routine.routine_id ? updated : r)));
+      if (updated) setRoutines((rs) => rs.map((r) => (r.routine_id === routine.routine_id ? updated : r)));
       else setMsg(GENERIC_FAIL);
     } finally {
       setBusy(false);
@@ -119,7 +102,7 @@ export function SettingsYourActivities({
         session: routine.session,
         provenance: routine.provenance,
       });
-      if (created) setRoutines([created, ...routines]);
+      if (created) setRoutines((rs) => [created, ...rs]);
       else setMsg(GENERIC_FAIL);
     } finally {
       setBusy(false);
@@ -133,7 +116,7 @@ export function SettingsYourActivities({
     try {
       const ok = await deleteUserRoutine(routine.routine_id);
       if (ok) {
-        setRoutines(routines.filter((r) => r.routine_id !== routine.routine_id));
+        setRoutines((rs) => rs.filter((r) => r.routine_id !== routine.routine_id));
         setDeleting(null);
       } else {
         setMsg(GENERIC_FAIL);
@@ -144,7 +127,7 @@ export function SettingsYourActivities({
   }
 
   function scheduleDone(routineId: string, schedule: UserRoutineSchedule | null) {
-    setRoutines((rs) => rs?.map((r) => (r.routine_id === routineId ? { ...r, schedule } : r)) ?? rs);
+    setRoutines((rs) => rs.map((r) => (r.routine_id === routineId ? { ...r, schedule } : r)));
     setScheduling(null);
   }
 

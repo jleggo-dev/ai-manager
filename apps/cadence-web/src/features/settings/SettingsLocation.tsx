@@ -21,14 +21,9 @@
  * forget from state (b) is the one way to say "I want no place", and auto-detect has to honour it
  * or this screen has an off switch that does not stay off (owner, 2026-09-05).
  */
-import { useEffect, useState } from 'react';
-import {
-  browserTimezone,
-  clearHomeLocation,
-  getHomeLocation,
-  saveHomeLocation,
-  type HomeLocation,
-} from '../../lib/api.ts';
+import { useState } from 'react';
+import { browserTimezone, clearHomeLocation, saveHomeLocation, type HomeLocation } from '../../lib/api.ts';
+import { useHomeLocation, useSetHomeLocation } from '../../lib/query/index.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { readSource, setLocationOff, writeSource, type Source } from './location-source.ts';
 
@@ -39,30 +34,29 @@ function formatPlace(loc: HomeLocation): string {
 }
 
 export function SettingsLocation() {
-  const [loc, setLoc] = useState<HomeLocation | null>(null);
-  const [timezone, setTimezone] = useState<string | null>(null);
-  const [available, setAvailable] = useState(true);
-  const [source, setSource] = useState<Source | null>(null);
+  /**
+   * The place comes from the same cached entry the trail header reads (lib/query/useAmbient.ts).
+   * Two things follow: this row is on screen with the rest of Settings instead of appearing under
+   * it a moment later, and a place saved here reaches the header without a reload — they were two
+   * copies of one fact before, and only one of them ever heard about a change.
+   *
+   * Nothing is mirrored into local state. `source` is derived, because `writeSource` has already
+   * recorded how the place got there by the time the new place lands in the cache.
+   */
+  const { data: place } = useHomeLocation();
+  const writePlace = useSetHomeLocation();
+  const loc = place?.home_location ?? null;
+  const timezone = place?.timezone ?? null;
+  // Errs toward available while the answer is still coming: hiding the row and then growing it is
+  // the pop-in this is here to remove, and an unavailable endpoint is the rarer case by far.
+  const available = place?.available ?? true;
+  const source: Source | null = readSource(loc);
   const [flow, setFlow] = useState(false);
   const [useDevice, setUseDevice] = useState(true);
   const [city, setCity] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const geoOk = capabilities.location.isAvailable();
-
-  useEffect(() => {
-    let cancelled = false;
-    void getHomeLocation().then((r) => {
-      if (cancelled) return;
-      setAvailable(r.available);
-      setLoc(r.home_location);
-      setTimezone(r.timezone);
-      setSource(readSource(r.home_location));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function shareFromDevice() {
     if (busy || !geoOk) return;
@@ -76,10 +70,8 @@ export function SettingsLocation() {
       }
       const tz = browserTimezone();
       const saved = await saveHomeLocation({ lat: coords.lat, lon: coords.lon, ...(tz ? { timezone: tz } : {}) });
-      setLoc(saved.home_location);
-      setTimezone(saved.timezone);
-      setSource('device');
-      writeSource('device');
+      writeSource('device'); // before the cache write: `source` is derived from it on the re-render
+      writePlace(saved);
       setLocationOff(false); // asking for a place is how the off switch is turned back on
       setFlow(false);
       setMsg('Got it — outdoor sessions can use the weather near you.');
@@ -97,10 +89,8 @@ export function SettingsLocation() {
     try {
       const tz = browserTimezone();
       const saved = await saveHomeLocation({ city: city.trim(), label: city.trim(), ...(tz ? { timezone: tz } : {}) });
-      setLoc(saved.home_location);
-      setTimezone(saved.timezone);
-      setSource('city');
       writeSource('city');
+      writePlace(saved);
       setLocationOff(false);
       setFlow(false);
       setCity('');
@@ -122,10 +112,8 @@ export function SettingsLocation() {
     try {
       const ok = await clearHomeLocation();
       if (ok) {
-        setLoc(null);
-        setTimezone(null);
-        setSource(null);
         writeSource(null);
+        writePlace({ available: true, home_location: null, current_location: null, timezone: null });
         // The deliberate choice the header's auto-detect has to honour. Without this the next
         // launch quietly puts a place back and this button reads as broken.
         setLocationOff(true);

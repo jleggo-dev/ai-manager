@@ -8,8 +8,7 @@
  * updates keep their sheets: neither has a screen of its own.
  */
 import { useEffect, useState } from 'react';
-import type { DietaryProfile } from '@cadence/shared';
-import { getDietaryProfile } from '../../lib/api.ts';
+import { useDietaryProfile } from '../../lib/query/index.ts';
 import type { CoachFoodAction } from '../../lib/api/coach-food.ts';
 import { RecipeSaveConfirm } from '../food/RecipeSaveConfirm.tsx';
 import { CoachDietaryConfirm } from './CoachDietaryConfirm.tsx';
@@ -25,14 +24,11 @@ export function CoachFoodActionSheet({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [dietary, setDietary] = useState<DietaryProfile | null>(null);
+  // Shared with Settings and the kitchen intake (lib/query/useFoodData.ts): one read, and the
+  // allergies are in hand as the sheet opens rather than a round trip into it.
+  const { data: profile } = useDietaryProfile();
+  const dietary = profile?.status === 'ok' ? profile.profile : null;
   const [view, setView] = useState<View>({ mode: 'loading' });
-
-  useEffect(() => {
-    getDietaryProfile().then((r) => {
-      if (r.status === 'ok') setDietary(r.profile);
-    });
-  }, []);
 
   useEffect(() => {
     if (action.kind === 'save_recipe') setView({ mode: 'recipe_save' });

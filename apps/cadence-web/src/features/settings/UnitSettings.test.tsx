@@ -7,7 +7,8 @@
  * of controls that quietly drag each other is the same failure wearing five hats.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 import userEvent from '@testing-library/user-event';
 
 const api = { getUnits: vi.fn(), setUnits: vi.fn() };
@@ -15,8 +16,6 @@ vi.mock('../../lib/api.ts', () => ({
   getUnits: () => api.getUnits(),
   setUnits: (p: unknown) => api.setUnits(p),
 }));
-
-vi.mock('../../lib/query/index.ts', () => ({ useInvalidateUnits: () => vi.fn() }));
 
 const { UnitSettings } = await import('./UnitSettings.tsx');
 
@@ -40,7 +39,7 @@ const row = (label: string) => screen.getByRole('group', { name: label });
 
 describe('UnitSettings', () => {
   it('shows every axis at the unit the server resolved', async () => {
-    render(<UnitSettings />);
+    renderWithQuery(<UnitSettings />);
     await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
 
     expect(within(row('Your weight')).getByRole('button', { name: 'pounds' })).toHaveAttribute('aria-pressed', 'true');
@@ -53,7 +52,7 @@ describe('UnitSettings', () => {
 
   it('sends ONLY the axis that changed — the rest are not asserted', async () => {
     const user = userEvent.setup();
-    render(<UnitSettings />);
+    renderWithQuery(<UnitSettings />);
     await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
 
     await user.click(within(row('Food volume')).getByRole('button', { name: 'millilitres' }));
@@ -64,7 +63,7 @@ describe('UnitSettings', () => {
   /** THE one that matters: changing food volume must not move body weight. */
   it('leaves the other axes alone', async () => {
     const user = userEvent.setup();
-    render(<UnitSettings />);
+    renderWithQuery(<UnitSettings />);
     await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
 
     await user.click(within(row('Food volume')).getByRole('button', { name: 'millilitres' }));
@@ -81,7 +80,7 @@ describe('UnitSettings', () => {
   it('says so when a save fails, and does not pretend it worked', async () => {
     api.setUnits.mockResolvedValue(null);
     const user = userEvent.setup();
-    render(<UnitSettings />);
+    renderWithQuery(<UnitSettings />);
     await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
 
     await user.click(within(row('Distance')).getByRole('button', { name: 'miles' }));
@@ -91,7 +90,7 @@ describe('UnitSettings', () => {
   /** Nothing to show is better than an empty shell of controls that cannot save. */
   it('renders nothing until it knows the current units', () => {
     api.getUnits.mockReturnValue(new Promise(() => {}));
-    const { container } = render(<UnitSettings />);
+    const { container } = renderWithQuery(<UnitSettings />);
     expect(container).toBeEmptyDOMElement();
   });
 });

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { getReview, updateBaseline, recordWeighInToday } from '../../lib/api.ts';
+import { useState } from 'react';
+import { updateBaseline, recordWeighInToday } from '../../lib/api.ts';
+import { useReview, useUpdateReview } from '../../lib/query/index.ts';
 
 type Cadence = 'weekly' | 'daily';
 
@@ -13,31 +14,33 @@ type Cadence = 'weekly' | 'daily';
  *
  * Choosing daily does not add seven tasks to the week. The plan keeps its one scheduled weigh-in;
  * this just opens a place to enter a number on the days between.
+ *
+ * The baseline comes off the shared review (`lib/query/useReview.ts`), which is also what the room
+ * around it reads — so this row is on screen with the rest of the list instead of appearing a
+ * round trip after it, and it costs no request of its own.
  */
 export function WeighInSettings() {
   const [open, setOpen] = useState(false);
-  const [cadence, setCadence] = useState<Cadence | null>(null);
-  const [unit, setUnit] = useState<'lb' | 'kg'>('lb');
+  const { data: review, isPending } = useReview();
+  const updateReview = useUpdateReview();
+  const [unitOverride, setUnitOverride] = useState<'lb' | 'kg' | null>(null);
   const [weight, setWeight] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const r = await getReview();
-        setCadence(r.baseline?.weigh_in_cadence ?? 'weekly');
-        if (r.baseline?.weight_unit === 'kg') setUnit('kg');
-      } catch {
-        setCadence('weekly');
-      }
-    })();
-  }, []);
+  /** Weekly is the default and the fallback: a review we could not read is not a reason to hide a
+   *  row, only a reason not to claim they chose daily. Null ONLY while the answer is still coming
+   *  — the row stays out of the list rather than flip its own sub-line a moment later. */
+  const settledCadence: Cadence = review?.baseline?.weigh_in_cadence === 'daily' ? 'daily' : 'weekly';
+  const cadence: Cadence | null = !review && isPending ? null : settledCadence;
+  const unit = unitOverride ?? (review?.baseline?.weight_unit === 'kg' ? 'kg' : 'lb');
 
   if (cadence === null) return null;
 
   async function choose(next: Cadence) {
-    setCadence(next);
+    // Straight into the shared review, so the choice survives closing the room and coming back —
+    // and so nothing here has to hold a second copy of a fact the cache already carries.
+    updateReview((r) => ({ ...r, baseline: { ...r.baseline, weigh_in_cadence: next } }));
     setNote('');
     try {
       await updateBaseline({ weigh_in_cadence: next });
@@ -112,7 +115,7 @@ export function WeighInSettings() {
               placeholder={unit === 'lb' ? 'e.g. 195' : 'e.g. 88.5'}
               onChange={(e) => setWeight(e.target.value)}
             />
-            <button className="wiz-sel" disabled={busy} onClick={() => setUnit(unit === 'lb' ? 'kg' : 'lb')}>
+            <button className="wiz-sel" disabled={busy} onClick={() => setUnitOverride(unit === 'lb' ? 'kg' : 'lb')}>
               {unit} ⇄
             </button>
           </div>
