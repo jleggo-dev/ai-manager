@@ -10,7 +10,7 @@ import { FETCH_FAILED, SESSION_GONE } from './useRoutinePlay.tsx';
 
 /**
  * "Build my own" → Start from (Activity Builder 2A, "2A · Build — start from") — three shelves,
- * scoped to the noun's own area: coach routines to copy ("From Cadence"), the user's own routines
+ * scoped to the noun's own area: coach routines to copy ("From the coach"), the user's own routines
  * to duplicate ("Yours"), and a truly blank start. Saving is deterministic everywhere past this
  * screen (TURN 1's third law, "the coach reviews, never rewrites") — the only read that happens
  * HERE is a From-Cadence pick's session fetch, the same one `useRoutinePlay` already makes to
@@ -85,7 +85,7 @@ export function StartFromScreen({
 
       {coachRoutines.length > 0 && (
         <div className="ld2-sec">
-          <b>From Cadence</b> <span>built for you</span>
+          <b>From the coach</b> <span>built for you</span>
           <div className="ld-list">
             {coachRoutines.map((routine) => {
               const routineArea = routine.area ?? area;

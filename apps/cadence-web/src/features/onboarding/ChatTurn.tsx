@@ -3,7 +3,7 @@ import { CoachFace } from '../../components/CoachFace.tsx';
 
 /** Three dots in an otherwise-empty coach bubble — the wait has a face on it, not a spinner. */
 export const TypingDots = () => (
-  <span className="typing" role="status" aria-label="Cadence is replying">
+  <span className="typing" role="status" aria-label="The coach is replying">
     <i />
     <i />
     <i />

@@ -146,7 +146,7 @@ export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach
         {onCoach && (
           <button className="se-coach-door" onClick={() => onCoach(COACH_NOTE)}>
             <b>Want a goal to mean something different?</b>
-            <span>Talk it through with Cadence — tapping this drafts the message in your words.</span>
+            <span>Talk it through with the coach — tapping this drafts the message in your words.</span>
           </button>
         )}
       </div>

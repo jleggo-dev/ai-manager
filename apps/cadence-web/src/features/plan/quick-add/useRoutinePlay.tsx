@@ -42,7 +42,7 @@ export interface UseRoutinePlayResult {
 /** `ok: false` — the fetch itself failed (network, non-OK). Never dressed as "nothing to play":
  *  the row says try again, not that the routine is gone. Exported so the Start-from screen
  *  (StartFromScreen.tsx) can show the exact same line on its own `getRoutineSession` read for a
- *  "From Cadence" pick, rather than a copy-pasted duplicate that could drift from this one. */
+ *  "From the coach" pick, rather than a copy-pasted duplicate that could drift from this one. */
 export const FETCH_FAILED = "Couldn't open that one just now — try again in a moment.";
 /** `ok: true, session: null` — the listing said this routine had steps, but the cached session
  *  behind them is gone by the time of the tap (replaced by a newer prescribe_session run

@@ -57,7 +57,7 @@ export function SettingsNutrition({ onBack, onCoach }: { onBack: () => void; onC
         {onCoach && (
           <button className="se-coach-door" onClick={() => onCoach(RETARGET_NOTE)}>
             <b>Not sure what these should be?</b>
-            <span>Ask Cadence to re-look.</span>
+            <span>Ask the coach to re-look.</span>
           </button>
         )}
 

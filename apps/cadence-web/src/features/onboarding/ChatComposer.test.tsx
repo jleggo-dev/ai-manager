@@ -122,9 +122,9 @@ describe('ChatComposer', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
   });
 
-  it('locks everything while Cadence is replying', () => {
+  it('locks everything while the coach is replying', () => {
     render(<ChatComposer value="hi" onChange={noop} onSend={noop} streaming showDisclaimer={false} />);
-    expect(screen.getByPlaceholderText(/Cadence is replying/)).toBeDisabled();
+    expect(screen.getByPlaceholderText(/coach is replying/)).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dictate' })).not.toBeInTheDocument();
   });

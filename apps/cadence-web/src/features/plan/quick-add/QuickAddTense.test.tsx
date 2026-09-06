@@ -422,7 +422,7 @@ describe('QuickAddTense — Build my own', () => {
     mount({ area: 'movement', noun: 'A workout', onBuild: vi.fn() });
     fireEvent.click(await screen.findByLabelText('Build my own'));
     expect(screen.getByText('Start from')).toBeTruthy();
-    expect(screen.getByText('From Cadence')).toBeTruthy();
+    expect(screen.getByText('From the coach')).toBeTruthy();
     expect(screen.getByText('Easy 5k')).toBeTruthy();
     expect(screen.getByText('Yours')).toBeTruthy();
     expect(screen.getByText('Hotel HIIT')).toBeTruthy();
