@@ -291,7 +291,7 @@ function CoachApp({ session, authReady = true }: { session: Session | null; auth
             <div className="wiz-empty" style={{ marginTop: 48 }}>
               {"Couldn't reach your plan just now — it's safe on the server."}
             </div>
-            <button className="cta" style={{ margin: '16px 20px' }} onClick={loadPlan}>
+            <button className="cta" style={{ marginTop: 16 }} onClick={loadPlan}>
               Try again
             </button>
           </div>

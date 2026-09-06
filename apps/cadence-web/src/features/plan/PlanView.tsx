@@ -190,7 +190,7 @@ export function PlanView({
         <div className="wiz-empty" style={{ marginTop: 24 }}>
           {"Couldn't reach your week just now — it's safe on the server."}
         </div>
-        <button className="cta" style={{ margin: '16px 20px' }} onClick={() => void refetch()}>
+        <button className="cta" style={{ marginTop: 16 }} onClick={() => void refetch()}>
           Try again
         </button>
       </div>
