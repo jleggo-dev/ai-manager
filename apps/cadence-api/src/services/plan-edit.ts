@@ -1,5 +1,6 @@
 import type { Activity, PendingPlanActivity } from '@cadence/shared';
 import { describeRecurrence, parseRecurrence } from './scheduling.ts';
+import { sameTitleIntent } from './plan-edit-intent.ts';
 
 /**
  * Applying a NAMED change to an existing plan — deterministically, in code.
@@ -412,6 +413,7 @@ function applyAdd(
   working: PendingPlanActivity[],
   goalTitleById: Record<string, string>,
   onProposal: boolean,
+  handles: Map<PendingPlanActivity, string>,
 ): { change?: string; reject?: string; added?: PendingPlanActivity } {
   const title = edit.title?.trim();
   if (!title) return { reject: 'Tried to add a commitment with no name.' };
@@ -426,13 +428,11 @@ function applyAdd(
    * name, so the redo landed BESIDE the wrong add. The way out of a wrong card is start_over,
    * and a rejection that does not say so steers straight back into the trap.
    */
-  if (working.some((a) => a.title.trim().toLowerCase() === title.toLowerCase())) {
-    const redo = onProposal
-      ? ` If the existing "${title}" is this card's own earlier add and it is the mistake you are fixing, do not add a renamed twin beside it — call propose_plan_change again with start_over true and ONLY the corrected edits.`
-      : '';
-    return {
-      reject: `"${title}" already names a commitment — two by the same name are indistinguishable to the user reading their own week. Pick a distinct name.${redo}`,
-    };
+  const same = working.find((a) => a.title.trim().toLowerCase() === title.toLowerCase());
+  if (same) {
+    // ...and since 2026-09-06 the collision is a question for the PERSON, not a naming problem
+    // for the coach: see plan-edit-intent.ts.
+    return { reject: sameTitleIntent(title, same, handles.get(same) ?? '?', toByDay(edit.days), onProposal) };
   }
   /**
    * A new commitment must say WHEN, even if the answer is "no particular time". Not a default —
@@ -644,7 +644,7 @@ export function applyPlanEdits(
      */
     ignored.push(...ignoredFieldNotes(edit));
     if (edit.action === 'add') {
-      const { change, reject, added } = applyAdd(edit, working, goalTitleById, onProposal);
+      const { change, reject, added } = applyAdd(edit, working, goalTitleById, onProposal, handles);
       if (reject) rejected.push(reject);
       if (added) {
         working.push(added);
