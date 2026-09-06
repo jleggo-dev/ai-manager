@@ -125,6 +125,42 @@ export async function getWeather(): Promise<WeatherNow> {
   }
 }
 
+/** One hour ahead. `at` is the instant; the sheet writes it in the forecast's own zone. */
+export type ForecastHour = { at: string; temp_c: number; conditions: string; precip_chance: number | null };
+
+/** One day ahead. `date` is the local calendar day (YYYY-MM-DD) in the forecast's zone. */
+export type ForecastDay = {
+  date: string;
+  high_c: number;
+  low_c: number;
+  conditions: string;
+  precip_chance: number | null;
+};
+
+/**
+ * The hours and days behind the weather sheet's tabs. As long as the provider sees — ten days
+ * from Apple, five from OpenWeatherMap — never padded; the sheet says how far it got.
+ */
+export type Forecast = {
+  available: boolean;
+  timezone?: string | null;
+  hourly?: ForecastHour[];
+  daily?: ForecastDay[];
+  source?: 'openweathermap' | 'weatherkit';
+  attribution?: { name: string; url: string } | null;
+};
+
+/** GET /me/forecast — read with the sky, ahead of the tap, so the sheet opens on a forecast. */
+export async function getForecast(): Promise<Forecast> {
+  try {
+    const res = await fetch(`${BASE}/me/forecast`, { headers: headers() });
+    if (!res.ok) return { available: false };
+    return (await res.json()) as Forecast;
+  } catch {
+    return { available: false };
+  }
+}
+
 /** GET /me/today-brief — the Today header's one-line day recap (cached per user+day). */
 export async function getTodayBrief(): Promise<{ recap: string | null }> {
   try {

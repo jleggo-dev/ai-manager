@@ -27,11 +27,24 @@ export interface WeatherKitCurrent {
 export interface WeatherKitHourly {
   forecastStart?: string;
   precipitationChance?: number; // 0..1
+  temperature?: number; // °C
+  conditionCode?: string; // CamelCase enum
+}
+
+/** One calendar day of `forecastDaily` — only the fields the weather sheet's day rows read. */
+export interface WeatherKitDaily {
+  forecastStart?: string;
+  temperatureMax?: number; // °C
+  temperatureMin?: number; // °C
+  conditionCode?: string;
+  precipitationChance?: number; // 0..1
 }
 
 export interface WeatherKitPayload {
   currentWeather?: WeatherKitCurrent;
   forecastHourly?: { hours?: WeatherKitHourly[] };
+  /** Present only when the request asked for it (`forecast-ahead.ts` does; the snapshot path does not). */
+  forecastDaily?: { days?: WeatherKitDaily[] };
 }
 
 function num(v: unknown): number | null {

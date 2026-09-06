@@ -8,9 +8,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TrailHeader } from './TrailHeader.tsx';
-import { WeatherSheet } from './WeatherSheet.tsx';
 
 const getWeather = vi.fn();
+const getForecast = vi.fn();
 const getHomeLocation = vi.fn();
 const getNotificationPrefs = vi.fn();
 const locationAvailable = vi.fn(() => false);
@@ -18,6 +18,7 @@ const getCoarseLocation = vi.fn(() => Promise.resolve(null as { lat: number; lon
 
 vi.mock('../../lib/api.ts', () => ({
   getWeather: (...a: unknown[]) => getWeather(...a),
+  getForecast: (...a: unknown[]) => getForecast(...a),
   getUnits: vi.fn().mockResolvedValue(null),
   getHomeLocation: (...a: unknown[]) => getHomeLocation(...a),
   saveHomeLocation: vi.fn(),
@@ -41,6 +42,27 @@ const CLEAR = {
   label: "Notre-Dame-de-l'Île-Perrot, QC",
   precip_chance: 0.1,
   attribution: { name: 'Apple Weather', url: 'https://weather-data.apple.com/legal-attribution.html' },
+};
+
+/** The day of hours and the ten days behind the sheet's tabs, as `/me/forecast` hands them back. */
+const FORECAST = {
+  available: true,
+  timezone: null,
+  source: 'weatherkit' as const,
+  attribution: CLEAR.attribution,
+  hourly: Array.from({ length: 24 }, (_, i) => ({
+    at: new Date(2026, 7, 18, 13 + i, 0).toISOString(),
+    temp_c: 19 - i,
+    conditions: 'clear',
+    precip_chance: 0,
+  })),
+  daily: Array.from({ length: 10 }, (_, i) => ({
+    date: `2026-08-${18 + i}`,
+    high_c: 25 - i,
+    low_c: 14 - i,
+    conditions: 'mostly clear',
+    precip_chance: 0.05,
+  })),
 };
 
 /** A place on file, and a read that came back to say so. */
@@ -100,6 +122,7 @@ function scrollTo(view: ReturnType<typeof renderHeader>, scrollTop: number) {
 beforeEach(() => {
   vi.clearAllMocks();
   getWeather.mockResolvedValue({ ...CLEAR });
+  getForecast.mockResolvedValue({ ...FORECAST });
   getHomeLocation.mockResolvedValue({ ...HOME });
   getNotificationPrefs.mockResolvedValue({ ...PREFS });
   locationAvailable.mockReturnValue(false);
@@ -299,40 +322,31 @@ describe('the weather sheet', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Weather' })).toBeNull());
   });
 
-  it('shows the short forecast when there is one, and no empty row when there is not', () => {
-    const hours = [
-      { at: '21:00', icon: '🌙', temp: '18°' },
-      { at: '22:00', icon: '🌙', temp: '17°' },
-      { at: '23:00', icon: '🌙', temp: '16°' },
-      { at: '00:00', icon: '🌙', temp: '15°' },
-    ];
-    const sheet = (rows?: typeof hours) =>
-      render(
-        <WeatherSheet weather={CLEAR} city="Montreal" night hours={rows} onHereNow={() => {}} onClose={() => {}} />,
-      );
+  /**
+   * The bug this sheet had: it opened on two actions and no forecast. Two things have to hold
+   * now — the forecast is read WITH the sky, before anyone taps, and the tap opens on it.
+   */
+  it('reads the forecast with the sky, before the tap, and opens straight onto it', async () => {
+    const view = renderHeader(at(13));
+    await waitFor(() => expect(view.q('.thead-wxbtn')).toBeTruthy());
+    // Nothing has been tapped, and the forecast has already been asked for.
+    await waitFor(() => expect(getForecast).toHaveBeenCalled());
 
-    const withRows = sheet(hours);
-    expect(withRows.container.querySelectorAll('.wxsheet-hour')).toHaveLength(4);
-    expect(withRows.container.querySelector('.wxsheet-hour')!.textContent).toBe('21:00🌙18°');
-    withRows.unmount();
+    fireEvent.click(view.q('.thead-wxbtn'));
+    const sheet = await screen.findByRole('dialog', { name: 'Weather' });
+    expect(screen.getByRole('tablist', { name: 'Forecast range' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Hourly' }).getAttribute('aria-selected')).toBe('true');
+    expect(sheet.querySelectorAll('.wxsheet-hour')).toHaveLength(24);
+    expect(sheet.textContent).not.toContain('Reading the days ahead');
 
-    // Nothing supplies the series yet, and a repeated current reading would be a lie — so the row
-    // is simply absent rather than filled in.
-    expect(sheet().container.querySelector('.wxsheet-hours')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '14 days' }));
+    expect(sheet.querySelectorAll('.wxsheet-day')).toHaveLength(10);
   });
 
-  it('says what the sky is doing in her own words, from the reading', () => {
-    const { container } = render(
-      <WeatherSheet
-        weather={{ ...CLEAR, precip_chance: 0.4 }}
-        city="Montreal"
-        night
-        onHereNow={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    expect(container.querySelector('.wxsheet-coach')!.textContent).toBe(
-      'Clear and 19° right now — about a 40% chance of rain later on.',
-    );
+  it('does not ask for a forecast when there is no sky to hang it on', async () => {
+    getWeather.mockResolvedValue({ available: false });
+    renderHeader(at(13));
+    await waitFor(() => expect(getWeather).toHaveBeenCalled());
+    expect(getForecast).not.toHaveBeenCalled();
   });
 });

@@ -6440,13 +6440,47 @@ html[data-native] .sheet-body {
   margin-top: 3px;
   font-size: 12px;
 }
+/* The three ranges — Hourly | 7 days | 14 days — a pill toggle like the Today|Week segment. */
+.wxsheet-seg {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0 12px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.wxsheet-seg button {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.wxsheet-seg button.is-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(44, 40, 32, 0.08);
+}
+/* A day of hours, scrolling sideways — the strip owns its own x-scroll (the sheet clamps it). */
 .wxsheet-hours {
   display: flex;
   gap: 8px;
-  margin: 16px 0 14px;
+  margin: 0 -2px 12px;
+  padding: 0 2px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.wxsheet-hours::-webkit-scrollbar {
+  display: none;
 }
 .wxsheet-hour {
-  flex: 1;
+  flex: 0 0 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6469,6 +6503,67 @@ html[data-native] .sheet-body {
   font-size: 13px;
   font-weight: 800;
   color: var(--text);
+}
+/* Chance of rain, from one in five up; an empty span otherwise so every hour stands the same height. */
+.wxsheet-precip {
+  min-height: 12px;
+  font-size: 10px;
+  font-weight: 800;
+  color: oklch(45% 0.09 250);
+}
+/* The days ahead: when · sky · condition · rain · low→high, one row each. */
+.wxsheet-days {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+.wxsheet-day {
+  display: grid;
+  grid-template-columns: 78px 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12.5px;
+}
+.wxsheet-day:first-child {
+  border-top: 0;
+}
+.wxsheet-day-when {
+  font-weight: 800;
+  color: var(--text);
+}
+.wxsheet-day-cond {
+  font-weight: 700;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wxsheet-day-precip {
+  min-width: 34px;
+  font-size: 11px;
+  font-weight: 800;
+  color: oklch(45% 0.09 250);
+  text-align: right;
+}
+.wxsheet-day-range {
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wxsheet-day-range i {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--text-mute);
+}
+/* What the coach says under a list shorter than its tab — never rows nobody forecast. */
+.wxsheet-horizon {
+  margin: 4px 0 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-mute);
 }
 .wxsheet-coach {
   margin-top: 14px;

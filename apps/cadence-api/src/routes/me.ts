@@ -20,6 +20,7 @@ import {
   needsAppleAttribution,
   APPLE_WEATHER_ATTRIBUTION_URL,
 } from '../services/weather/weather.ts';
+import { getForecastWhereYouAre } from '../services/weather/forecast-ahead.ts';
 import { getDayRecap } from '../services/day-recap.ts';
 import { getNowMenu } from '../services/now-menu.ts';
 import { BodyValidationError, parseBody, unitPrefsBodySchema } from '../validation/body.ts';
@@ -76,6 +77,36 @@ router.get('/weather', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[GET /me/weather]', err);
     res.status(500).json({ error: 'failed to load weather' });
+  }
+});
+
+/**
+ * GET /me/forecast — the hours and days ahead where the user IS, for the weather sheet's tabs.
+ * Read ahead of the tap (the client prefetches it with the current reading), so the sheet opens
+ * on a forecast instead of a spinner. `available:false` mirrors `/me/weather`: no place, no
+ * provider, or nothing usable — the sheet then shows the current reading alone.
+ *
+ * The series is as long as the provider sees, never padded: WeatherKit gives ten days, OWM's
+ * free tier five. The sheet says so under its list rather than inventing the rest of a fortnight.
+ * `attribution` follows the series' own `source`, for the same licence reason as `/me/weather`.
+ */
+router.get('/forecast', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const f = await getForecastWhereYouAre(userId);
+    if (!f) return void res.json({ available: false });
+    const { series, timezone } = f;
+    res.json({
+      available: true,
+      timezone,
+      hourly: series.hourly,
+      daily: series.daily,
+      source: series.source,
+      attribution: needsAppleAttribution(series) ? { name: 'Apple Weather', url: APPLE_WEATHER_ATTRIBUTION_URL } : null,
+    });
+  } catch (err) {
+    console.error('[GET /me/forecast]', err);
+    res.status(500).json({ error: 'failed to load forecast' });
   }
 });
 

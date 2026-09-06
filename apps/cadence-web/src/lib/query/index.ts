@@ -6,7 +6,9 @@ export {
   fetchWeatherCached,
   forgetLocation,
   forgetWeather,
+  prefetchForecast,
   useDailyCheckinDue,
+  useForecast,
   useHomeLocation,
   useSetHomeLocation,
 } from './useAmbient.ts';

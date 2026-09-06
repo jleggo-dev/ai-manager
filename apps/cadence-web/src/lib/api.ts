@@ -307,11 +307,15 @@ export {
   clearCurrentLocation,
   browserTimezone,
   getWeather,
+  getForecast,
   getTodayBrief,
   type HomeLocation,
   type CurrentLocation,
   type LocationResult,
   type WeatherNow,
+  type Forecast,
+  type ForecastDay,
+  type ForecastHour,
 } from './api/location.ts';
 
 export {

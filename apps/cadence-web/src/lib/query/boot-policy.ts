@@ -80,6 +80,9 @@ const FAMILIES: Record<string, BootPolicy> = {
   // are painting what a fresh read would have said, outside it we are putting yesterday's rain
   // over today's sun.
   weather: { ttlMs: HOUR, rank: 10 },
+  // The days ahead, behind the sky's tap. Same hour as the sky, for the same reason — and painted
+  // so the sheet opens on last launch's forecast even before the network has answered.
+  forecast: { ttlMs: HOUR, rank: 11 },
   // Today's food, for the trail's strip. The date is IN the key, so age is the wrong guard —
   // yesterday's day is refused by name, however recently it was written.
   nutritionDay: {

@@ -1,5 +1,13 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { getDailyCheckinStatus, getHomeLocation, getWeather, type LocationResult, type WeatherNow } from '../api.ts';
+import {
+  getDailyCheckinStatus,
+  getForecast,
+  getHomeLocation,
+  getWeather,
+  type Forecast,
+  type LocationResult,
+  type WeatherNow,
+} from '../api.ts';
 import { AMBIENT_STALE_MS, queryKeys } from './keys.ts';
 
 /**
@@ -26,9 +34,37 @@ export function fetchWeatherCached(queryClient: QueryClient): Promise<WeatherNow
   });
 }
 
-/** After a location change the cached sky belongs to the old city — drop it before re-reading. */
+/** After a location change the cached sky belongs to the old city — drop it before re-reading.
+ *  The forecast goes with it: it describes the same point, and a fortnight for the wrong city is
+ *  worse than a moment's spinner. */
 export function forgetWeather(queryClient: QueryClient): void {
   queryClient.removeQueries({ queryKey: queryKeys.weather.all });
+  queryClient.removeQueries({ queryKey: queryKeys.forecast.all });
+}
+
+/**
+ * The weather sheet's forecast, read AHEAD of the tap. Fired (not awaited) by the header right
+ * after the sky comes back, so by the time anyone opens the sheet the hours and days are already
+ * in the cache — the sheet used to open on two actions and no forecast, and a sheet that opens on
+ * a spinner is only half a fix. Inside `AMBIENT_STALE_MS` a repeat costs nothing.
+ */
+export function prefetchForecast(queryClient: QueryClient): Promise<void> {
+  return queryClient.prefetchQuery({
+    queryKey: queryKeys.forecast.all,
+    queryFn: getForecast,
+    staleTime: AMBIENT_STALE_MS,
+  });
+}
+
+/** The same forecast, for the sheet to draw. `undefined` while it is still on its way. */
+export function useForecast(enabled: boolean): Forecast | undefined {
+  const { data } = useQuery({
+    queryKey: queryKeys.forecast.all,
+    queryFn: getForecast,
+    staleTime: AMBIENT_STALE_MS,
+    enabled,
+  });
+  return data;
 }
 
 /**
