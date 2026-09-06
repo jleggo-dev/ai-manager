@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { MealMacros, MealPreview, OccurrenceDetail } from '../../../lib/api.ts';
 import { MealScreen } from '../../food/meal/MealScreen.tsx';
+import { doorForMethod } from '../../food/meal/methodDoor.ts';
 import { MealParseCard } from '../../food/MealParseCard.tsx';
 import { RecipeQuickLog } from '../../food/RecipeQuickLog.tsx';
 import { useUsualAtSlot } from '../../food/useUsualAtSlot.ts';
@@ -67,9 +68,14 @@ export function MealCapturePanel({
     // rejoins its own window, so a half-built breakfast from the Food screen is the SAME
     // breakfast here. Closing lands back on the capture sheet with the occurrence ticked
     // server-side by the close itself.
+    //
+    // The tile they already tapped rides along as the door to open in — without it every
+    // method landed on the meal's own picker and asked the same question a second time.
+    const door = doorForMethod(logOpen);
     return (
       <MealScreen
         meal={cap.mealKind}
+        {...(door ? { openAt: door } : {})}
         onClose={() => {
           setLogOpen(null);
           cap.markLogged();

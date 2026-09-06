@@ -6,6 +6,7 @@
  *
  * Props contract (for the integrator):
  *   meal?            — initial slot; the header chip stays changeable in one tap, asked once
+ *   openAt?          — the door the caller ALREADY chose (a capture tile) — open in it, don't ask again
  *   onClose          — ‹ back / after the meal closes; the draft itself stays open server-side
  *   onExpressSingle  — "Just one thing and you're done? Log a single food instead ›"
  *   onOpenDay?       — the quiet "Your whole day ›" link (omit to hide it)
@@ -27,6 +28,12 @@ import { useMealDraft } from './useMealDraft.ts';
 
 export interface MealScreenProps {
   meal?: MealKind;
+  /**
+   * The door to open in. A caller that already asked "how do you want to add this" — the capture
+   * sheet's method tiles — answers it here, so the tap lands IN chat / search / the scanner
+   * instead of on the meal's own picker asking the same question a second time.
+   */
+  openAt?: MealDoor;
   onClose: () => void;
   onExpressSingle: () => void;
   onOpenDay?: () => void;
@@ -34,10 +41,10 @@ export interface MealScreenProps {
 
 type SaveFlow = { part: string; to: 'meal' | 'recipe' | 'rename' };
 
-export function MealScreen({ meal: initialMeal, onClose, onExpressSingle, onOpenDay }: MealScreenProps) {
+export function MealScreen({ meal: initialMeal, openAt, onClose, onExpressSingle, onOpenDay }: MealScreenProps) {
   const draft = useMealDraft(initialMeal);
   const offer = useGroupOffer();
-  const [door, setDoor] = useState<MealDoor | null>(null);
+  const [door, setDoor] = useState<MealDoor | null>(openAt ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [saveFlow, setSaveFlow] = useState<SaveFlow | null>(null);
 
@@ -108,6 +115,7 @@ export function MealScreen({ meal: initialMeal, onClose, onExpressSingle, onOpen
             kind={kind}
             busy={draft.busy}
             onSearch={() => setDoor({ at: 'add' })}
+            onVoice={() => setDoor({ at: 'chat', listening: true })}
             onPhoto={(file) => {
               if (!file) return;
               void downscalePhoto(file).then((photo) => setDoor({ at: 'photo', photo }));

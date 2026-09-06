@@ -265,33 +265,39 @@ export function MealAddPanel({
         onDone={onDone}
       />
       {sheet && (
-        <AddFoodSheet
-          food={sheet}
-          meal={kind}
-          mode="draft"
-          mealLabel={kind}
-          busy={draft.busy}
-          onAdd={(p) => {
-            void draft
-              .appendFood({ food_id: sheet.food_id, serving_index: p.servingIndex, quantity: p.quantity }, 'searched')
-              .then((m) => {
-                if (m) landed(m, sheet.food_id);
-              });
-          }}
-          onLog={() => {}}
-          onBack={backToSearch}
-          strip={
-            <DraftStrip
-              mealLabel={kind}
-              count={draft.items.length}
-              kcal={draft.total.kcal}
-              chips={chips}
-              busy={draft.busy}
-              onUndo={() => void undoLast()}
-              onRemove={(i) => void removeAt(i)}
-            />
-          }
-        />
+        // A cover, not a footer. Rendered in flow it landed BELOW the strip — off the bottom of a
+        // panel already taller than the sheet it lives in — so tapping a › food looked like
+        // nothing happened at all (owner, on device, 2026-09-06). The panel stays mounted behind
+        // it so the search field, its text and its focus survive the round trip.
+        <div className="ms-cover" role="dialog" aria-label="Add food">
+          <AddFoodSheet
+            food={sheet}
+            meal={kind}
+            mode="draft"
+            mealLabel={kind}
+            busy={draft.busy}
+            onAdd={(p) => {
+              void draft
+                .appendFood({ food_id: sheet.food_id, serving_index: p.servingIndex, quantity: p.quantity }, 'searched')
+                .then((m) => {
+                  if (m) landed(m, sheet.food_id);
+                });
+            }}
+            onLog={() => {}}
+            onBack={backToSearch}
+            strip={
+              <DraftStrip
+                mealLabel={kind}
+                count={draft.items.length}
+                kcal={draft.total.kcal}
+                chips={chips}
+                busy={draft.busy}
+                onUndo={() => void undoLast()}
+                onRemove={(i) => void removeAt(i)}
+              />
+            }
+          />
+        </div>
       )}
     </div>
   );

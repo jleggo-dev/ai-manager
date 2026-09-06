@@ -61,7 +61,10 @@ vi.mock('../../plan/occurrence/format.ts', () => ({
   downscalePhoto: vi.fn(async () => 'data:image/jpeg;base64,x'),
   mealForNow: () => 'breakfast',
 }));
-vi.mock('../../../components/MicButton.tsx', () => ({ MicButton: () => null }));
+/** Renders nothing unless it was opened live, so a test can tell the two chat doors apart. */
+vi.mock('../../../components/MicButton.tsx', () => ({
+  MicButton: ({ autoStart }: { autoStart?: boolean }) => (autoStart ? <i data-testid="mic-live" /> : null),
+}));
 vi.mock('../FoodBarcodePanel.tsx', () => ({ FoodBarcodePanel: () => <div>barcode-door</div> }));
 vi.mock('../shelf/CookbookShelf.tsx', () => ({ CookbookShelf: () => <div>cookbook-shelf</div> }));
 
@@ -117,6 +120,48 @@ it('shows the empty state and fires the express lane and the way back to the day
   expect(onExpressSingle).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByText('Your whole day ›'));
   expect(onOpenDay).toHaveBeenCalledTimes(1);
+});
+
+describe("the empty state's doors — each one opens its own surface", () => {
+  /** The door, and the one thing that can only be on screen if it opened the right surface. */
+  const DOORS: Array<{ door: string; landmark: string; how: 'text' | 'label' }> = [
+    { door: 'Barcode', landmark: 'barcode-door', how: 'text' },
+    { door: 'Recents', landmark: 'Search foods', how: 'label' },
+    { door: 'My meals', landmark: 'cookbook-shelf', how: 'text' },
+  ];
+
+  it.each(DOORS)('$door', async ({ door, landmark, how }) => {
+    await mount();
+    fireEvent.click(await screen.findByRole('button', { name: door }));
+    const found = how === 'label' ? await screen.findByLabelText(landmark) : await screen.findByText(landmark);
+    expect(found).toBeInTheDocument();
+    expect(screen.queryByText('Add everything you had')).toBeNull();
+  });
+
+  it('Picture is a camera input, not a button — iOS only hands back a photo for a real label', async () => {
+    await mount();
+    await screen.findByText('Add everything you had');
+    const input = document.querySelector('.ms-door input[type="file"]');
+    expect(input).not.toBeNull();
+    expect(input).toHaveAttribute('capture', 'environment');
+  });
+
+  it('the field keeps both halves of its promise: the words open search, the mic opens chat LIVE', async () => {
+    // The field shipped as a bare text button, so "or just describe it" had nothing behind it —
+    // the canvas (1b B1) draws a search icon, the words, and a mic. This pins the mic.
+    await mount();
+    await screen.findByText('Add everything you had');
+    fireEvent.click(screen.getByRole('button', { name: 'Say what you had' }));
+    expect(await screen.findByLabelText('What did you have?')).toBeInTheDocument();
+    // …and it arrived listening, rather than as the plain chat door.
+    expect(screen.getByTestId('mic-live')).toBeInTheDocument();
+  });
+
+  it('the words still open search, unchanged', async () => {
+    await mount();
+    fireEvent.click(await screen.findByText('Search, or just describe it…'));
+    expect(await screen.findByLabelText('Search foods')).toBeInTheDocument();
+  });
 });
 
 it('rejoins an open meal and draws its rows, window and totals', async () => {

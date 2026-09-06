@@ -4,8 +4,14 @@
  * makes several. Every value here is lifted from the canvas frames A1–A4 / A2-mid-drag / A3 /
  * B1-select / B3 / C3 — change the canvas first, then this file.
  *
- * Only the `.mb-*` family lives here. Capture surfaces stay in food-capture.css (.fa-*/.fm-*),
- * reading screens in styles.css — this file never touches either.
+ * Only the `.mb-` family lives here. Capture surfaces stay in food-capture.css (the .fa- and
+ * .fm- families), reading screens in styles.css — this file never touches either.
+ *
+ * Careful with globs in this header: a `.fa-` wildcard followed by a slash closes the comment
+ * right there. It did, and it swallowed the `.mb-list` rule below — the bracket's row column had
+ * no `display: flex` anywhere it is drawn, for as long as this file has existed (found
+ * 2026-09-06, alongside the same defect in meal-screen.css). styles/stylesheets.contract.test.ts
+ * parses every stylesheet now and fails if a rule goes missing this way.
  */
 
 .mb-list {
