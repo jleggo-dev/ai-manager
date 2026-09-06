@@ -67,12 +67,14 @@ Address blockers from step 2. Re-run lint/typecheck. Loop until exit criteria fo
 
 ### Write tests
 
-| Change type | Add/update |
-|-------------|------------|
-| New service/util | Unit test in `backend/test/*.test.ts` |
-| New route behavior | Route or integration test |
-| SSE/tool loops, providers | Focused unit tests + live E2E if env keys exist |
-| Frontend logic | `frontend` vitest if non-trivial |
+| Change type                                         | Add/update                                                                                                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New service/util                                    | Unit test in `backend/test/*.test.ts`                                                                                                                    |
+| New route behavior                                  | Route or integration test                                                                                                                                |
+| SSE/tool loops, providers                           | Focused unit tests + live E2E if env keys exist                                                                                                          |
+| Frontend logic                                      | `frontend` vitest if non-trivial                                                                                                                         |
+| A deterministic router (title → sheet/tool/matcher) | A TABLE test of positives and near-misses, e.g. `apps/cadence-web/src/features/plan/taskShape.test.ts` — the wrong branch opens silently, nothing throws |
+| Any bug fix                                         | The test that would have caught it, in the same PR (owner, 2026-09-01: the weigh-in sheet opened over "Weighted hill intervals" for weeks)               |
 
 ### Run targeted tests first
 
@@ -96,12 +98,12 @@ note if unset; do not treat skip as pass for risky paths.
 Backend and root E2E scripts run AI Admin leftover cleanup **only when the suite exits 0**
 (`vitest run && cleanup…`). Failed runs skip cleanup so junk remains for debugging.
 
-| Command | Cleanup on success |
-|---------|-------------------|
+| Command                                                        | Cleanup on success                                                                     |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `npm run test --workspace=backend` (or `npm run test:backend`) | `cleanup:e2e-ai-admin:soft` (e2e% rows + lifecycle/test-named providers/profiles/jobs) |
-| `npm run test:e2e` | same soft cleanup |
-| `npm run test:no-cleanup --workspace=backend` | none (debug) |
-| `SKIP_TEST_DATA_CLEANUP=1` on any of the above | skip cleanup even on success |
+| `npm run test:e2e`                                             | same soft cleanup                                                                      |
+| `npm run test:no-cleanup --workspace=backend`                  | none (debug)                                                                           |
+| `SKIP_TEST_DATA_CLEANUP=1` on any of the above                 | skip cleanup even on success                                                           |
 
 Cadence scratch-account reset is **not** part of the post-test hook — use full
 `npm run cleanup:test-data` after merge (step 12b) or when you intentionally want account-1/2 wiped.
@@ -161,13 +163,13 @@ item such as key rotation).
 
 ### How to read checks (this repo)
 
-| Signal | Meaning |
-|--------|---------|
-| **`CI gate` green** + expected product jobs ran & passed | Safe to treat product CI as green |
-| **`CI gate` green** but `ai-admin/*` / `cadence/*` / `format:check` all **skipped** | Docs/path-skip only — **not** proof the app is healthy |
-| Non-skipped `ai-admin/*`, `cadence/*`, or `format:check` **red** | **Blocker** — fix before merge / next batch |
-| **Vercel** deployment **red** | Real build/deploy failure — investigate before merge (the Hobby rate-limit carve-out is retired: off the Hobby plan since 2026-09-01) |
-| Config-drift / other workflows | Separate from product `CI`; handle on their own merits |
+| Signal                                                                              | Meaning                                                                                                                               |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **`CI gate` green** + expected product jobs ran & passed                            | Safe to treat product CI as green                                                                                                     |
+| **`CI gate` green** but `ai-admin/*` / `cadence/*` / `format:check` all **skipped** | Docs/path-skip only — **not** proof the app is healthy                                                                                |
+| Non-skipped `ai-admin/*`, `cadence/*`, or `format:check` **red**                    | **Blocker** — fix before merge / next batch                                                                                           |
+| **Vercel** deployment **red**                                                       | Real build/deploy failure — investigate before merge (the Hobby rate-limit carve-out is retired: off the Hobby plan since 2026-09-01) |
+| Config-drift / other workflows                                                      | Separate from product `CI`; handle on their own merits                                                                                |
 
 - Never leave **product** jobs **red** and move on to the next task or batch.
 - Product CI is the ship gate agents must honor (INFRA-02); GitHub ruleset API may 403 —
@@ -195,11 +197,11 @@ Apply [pr-tl-review](../pr-tl-review/SKILL.md).
 
 ### 9a — Security, performance, build (mandatory)
 
-| Lens | Check |
-|------|--------|
-| **Security** | Auth on new routes; no API keys in client; RLS/tenant; user credential isolation; SSRF/path injection in attachments |
-| **Performance** | N+1 queries; unbounded loops (SSE, tool rounds); large payloads in hot paths |
-| **Build / CI** | Vercel services (`backend` tsc, `frontend` vite); both workspaces; no broken exports; interface syntax in TSX; **PR checks green** |
+| Lens            | Check                                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Security**    | Auth on new routes; no API keys in client; RLS/tenant; user credential isolation; SSRF/path injection in attachments               |
+| **Performance** | N+1 queries; unbounded loops (SSE, tool rounds); large payloads in hot paths                                                       |
+| **Build / CI**  | Vercel services (`backend` tsc, `frontend` vite); both workspaces; no broken exports; interface syntax in TSX; **PR checks green** |
 
 Also watch: `chat-sessions` locks/409, provider metadata, jobs-as-tools loops.
 
@@ -275,11 +277,11 @@ runs or manual UI experiments is cleared.
 
 ### What to clean
 
-| Surface | Safe target | Command (repo root, PowerShell) |
-|---------|-------------|-----------------------------------|
-| Cadence scratch accounts (`account-1` / `account-2`) | Allowlisted UUIDs only | `npm run cleanup:cadence-dev-accounts` |
-| AI Admin E2E leftovers | `calling_application` / `display_name` LIKE `e2e%`; plus providers/profiles/jobs matching lifecycle & test name patterns (never by `type` alone) | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
-| Both | Same as above | `npm run cleanup:test-data` |
+| Surface                                              | Safe target                                                                                                                                      | Command (repo root, PowerShell)                                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Cadence scratch accounts (`account-1` / `account-2`) | Allowlisted UUIDs only                                                                                                                           | `npm run cleanup:cadence-dev-accounts`                                                          |
+| AI Admin E2E leftovers                               | `calling_application` / `display_name` LIKE `e2e%`; plus providers/profiles/jobs matching lifecycle & test name patterns (never by `type` alone) | Dry-run: `npx tsx backend/scripts/cleanup-e2e-test-data.ts` then `npm run cleanup:e2e-ai-admin` |
+| Both                                                 | Same as above                                                                                                                                    | `npm run cleanup:test-data`                                                                     |
 
 Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inventory) /
 `reset <slug>`; in-app `POST /dev/reset` when `CADENCE_DEV_USER_ID` is set.
@@ -291,7 +293,7 @@ Also useful: `node --import tsx apps/cadence-api/scripts/account.ts list` (inven
 - Cadence reset only touches allowlisted scratch accounts — not real JWT users.
 - AI Admin cleanup deletes `e2e%` tagged rows (sessions, diagnostic logs, calling apps) **and**
   ephemeral providers/profiles/jobs whose **names** match test patterns (e.g. `V1 Lifecycle
-  Provider*`, `E2E * Provider*`). It does **not** delete by provider type — real `Devs.ai`,
+Provider*`, `E2E * Provider*`). It does **not** delete by provider type — real `Devs.ai`,
   `Devs.ai v2`, and `Google Gemini` rows are protected by exact-name guard.
 - If you cannot tell **dev vs production**, or the workspace/project looks wrong — **stop and
   ask** rather than guessing a destructive wipe.
@@ -319,22 +321,22 @@ plan when applicable.
 
 ## Quick reference — npm scripts
 
-| Script | When |
-|--------|------|
-| `npm run lint` | Step 2 |
-| `npm run typecheck` | Step 2 |
-| `npm run prepush` | Step 4 (and after each fix loop) |
-| `npm test` | Steps 4–5 (backend suite auto-cleans AI Admin e2e leftovers on success) |
-| `npm run test:backend` | Step 4 — backend only (+ soft e2e cleanup on success) |
-| `npm run test:e2e` | Step 4 when chat/API/integration touched (+ soft e2e cleanup on success) |
+| Script                      | When                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run lint`              | Step 2                                                                               |
+| `npm run typecheck`         | Step 2                                                                               |
+| `npm run prepush`           | Step 4 (and after each fix loop)                                                     |
+| `npm test`                  | Steps 4–5 (backend suite auto-cleans AI Admin e2e leftovers on success)              |
+| `npm run test:backend`      | Step 4 — backend only (+ soft e2e cleanup on success)                                |
+| `npm run test:e2e`          | Step 4 when chat/API/integration touched (+ soft e2e cleanup on success)             |
 | `npm run cleanup:test-data` | Step 12b — Cadence scratch accounts + AI Admin `e2e%` / lifecycle-provider leftovers |
-| `npm run ci` | Stricter than prepush (no Vite build); optional extra gate |
-| `gh pr checks` | Steps 7, 11, 12 |
+| `npm run ci`                | Stricter than prepush (no Vite build); optional extra gate                           |
+| `gh pr checks`              | Steps 7, 11, 12                                                                      |
 
 ## Child skills
 
-| Skill | Step |
-|-------|------|
-| [pre-push-review](../pre-push-review/SKILL.md) | 2 — diff/architecture checklist |
-| [pre-push-qa](../pre-push-qa/SKILL.md) | 4 — prepush commands detail |
-| [pr-tl-review](../pr-tl-review/SKILL.md) | 9 — TL security/performance/build review |
+| Skill                                          | Step                                     |
+| ---------------------------------------------- | ---------------------------------------- |
+| [pre-push-review](../pre-push-review/SKILL.md) | 2 — diff/architecture checklist          |
+| [pre-push-qa](../pre-push-qa/SKILL.md)         | 4 — prepush commands detail              |
+| [pr-tl-review](../pr-tl-review/SKILL.md)       | 9 — TL security/performance/build review |

@@ -22,6 +22,13 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Export compliance. Cadence uses only HTTPS/TLS through the OS, which Apple exempts, so
+	     there is nothing to declare. Answering it HERE rather than in App Store Connect matters
+	     operationally: without this key every single upload lands flagged "Missing Compliance"
+	     and is NOT installable by testers until someone answers the same questionnaire by hand in
+	     the web UI — a manual gate between every build and the people waiting for it. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>CFBundleURLTypes</key>
