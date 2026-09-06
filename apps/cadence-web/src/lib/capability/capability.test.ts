@@ -35,6 +35,17 @@ describe('capability seam — the timer alarm on web', () => {
   });
 });
 
+describe('capability seam — the lock-screen timer on web', () => {
+  it('reports unavailable and every call is inert — a browser has no lock screen to draw on', async () => {
+    expect(capabilities.liveActivity.isAvailable()).toBe(false);
+    await expect(
+      capabilities.liveActivity.start({ title: 'Ruck', targetSeconds: 3000, startedAt: Date.now(), baseSeconds: 0 }),
+    ).resolves.toBe(false);
+    await expect(capabilities.liveActivity.pause(10)).resolves.toBeUndefined();
+    await expect(capabilities.liveActivity.end()).resolves.toBeUndefined();
+  });
+});
+
 describe('capability seam — dictation', () => {
   it('reports unavailable and returns null sessions when SpeechRecognition is missing', () => {
     const w = window as unknown as {

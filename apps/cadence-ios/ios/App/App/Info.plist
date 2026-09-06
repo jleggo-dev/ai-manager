@@ -58,6 +58,10 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<!-- The walkthrough timer on the lock screen (CadenceLiveActivity + the CadenceTimerWidget
+	     extension). The only switch a Live Activity needs — no entitlement. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<!-- Required alongside the Communication Notifications entitlement: an app that donates
 	     INSendMessageIntent must declare it here, or the donation/updating(from:) call is refused. -->
 	<key>NSUserActivityTypes</key>

@@ -235,10 +235,39 @@ export interface WatchPendingLog {
   payload: unknown;
 }
 
+/**
+ * The walkthrough timer on the lock screen (iOS Live Activity, ios/App/App/CadenceLiveActivity).
+ *
+ * The webview cannot run in a pocket, so the activity is handed INSTANTS — when the run began,
+ * how much was done before it, the target length — and draws its own countdown off them. Once
+ * started it needs nothing more from the app until the person pauses, resumes or stops. Web has
+ * no such surface and reports unavailable; the timer then behaves exactly as it always did.
+ */
+export interface LiveActivityCapability {
+  isAvailable(): boolean;
+  /** Show the timer. Replaces any activity already up. False when it could not be shown. */
+  start(state: TimerActivityStart): Promise<boolean>;
+  /** Freeze the clock at `baseSeconds` done. A resume is a fresh `start`, which replaces it. */
+  pause(baseSeconds: number): Promise<void>;
+  /** Take it off the lock screen. Always safe. */
+  end(): Promise<void>;
+}
+
+export interface TimerActivityStart {
+  /** The step's own words — "Weighted ruck/hike". */
+  title: string;
+  targetSeconds: number;
+  /** Epoch ms of the instant this run began. */
+  startedAt: number;
+  /** Seconds done before this run — 0 fresh, the paused elapsed on a resume. */
+  baseSeconds: number;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
   localNotifications: LocalNotificationsCapability;
+  liveActivity: LiveActivityCapability;
   coachIdentity: CoachIdentityCapability;
   location: LocationCapability;
   dictation: DictationCapability;

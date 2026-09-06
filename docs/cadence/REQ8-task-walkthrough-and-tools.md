@@ -149,6 +149,12 @@ tool and the finish, all closed together:
   bell rings from a pocket. The iOS audio session is `.playback` + `.mixWithOthers` so chimes
   sound under the silent switch without stopping the podcast; WebAudio uses one context unlocked
   on Start (`chime.ts`).
+- **The timer on the lock screen** (2026-09-06, follow-up): an iOS Live Activity —
+  `ios/App/App/CadenceLiveActivity` (plugin), `ios/App/CadenceTimerWidget` (the widget target
+  that draws it), `Shared/TimerActivityAttributes.swift` (the one shape both share). The app hands
+  over instants and the lock screen counts on its own: remaining counts down and rests at 0:00,
+  elapsed counts up forever, so a ruck that runs long reads as such with the app asleep. Written
+  blind — see the plugin README for the Xcode first-open steps and the device checklist.
 - **Holds vs efforts** (`step-cues.ts`): a timer of ≥10 min is `open_ended` — it chimes at the
   target, keeps counting, and **Stop logs the minutes actually spent** (110, not 50); a short hold
   still auto-advances. the coach states `per_side: true` on a two-sided hold (catalog field) and the

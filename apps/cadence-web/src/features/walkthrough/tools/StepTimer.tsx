@@ -6,6 +6,7 @@ import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { useWallClock } from './useWallClock.ts';
 import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
+import { endTimerActivity, pauseTimerActivity, startTimerActivity } from './timerLiveActivity.ts';
 import { HandsFree } from './HandsFree.tsx';
 import { card, logBtn, greyBtn, secBtn, chimeOnStyle, footnote, banner, doneRow, minutesInput } from './timerStyles.ts';
 
@@ -22,8 +23,9 @@ const TIMER_COMMANDS: HandsFreeCommand[] = ['start', 'pause', 'restart'];
  * never logged. At zero the ring resets to full and turns tone, the real clock runs. One tone button
  * toggles Start ⇄ (Skip the count) ⇄ Pause; +1 min / Reset / Chime sit below.
  *
- * Time is kept by the WALL CLOCK (`useWallClock`), so leaving the app mid-ruck loses nothing, and
- * a native alarm is booked for the target so the bell rings from a pocket.
+ * Time is kept by the WALL CLOCK (`useWallClock`), so leaving the app mid-ruck loses nothing; a
+ * native alarm is booked for the target so the bell rings from a pocket, and the same instants go
+ * to the lock screen as a Live Activity (`timerLiveActivity`) that counts on its own.
  *
  * Two shapes, decided by the step (step-cues.ts):
  *  • a HOLD — reaching the target chimes, logs the full duration and hands off to the next step
@@ -73,20 +75,26 @@ export function StepTimer({
   const remaining = Math.max(0, seconds - elapsed);
   const over = elapsed - seconds;
 
-  /** Start the clock from `base` — now, from the wall clock. Books the pocket bell. */
+  /** Start the clock from `base` — now, from the wall clock. Books the pocket bell and the lock-screen clock. */
   function run() {
     const now = Date.now();
     setStartedAt(now);
     setPhase('running');
     if (base < seconds) bookTimerAlarm(now + (seconds - base) * 1000, title ?? 'Time', mmss(seconds));
+    startTimerActivity(title ?? 'Timer', seconds, now, base);
   }
 
-  /** Stop the clock at `at` seconds, keeping them. */
-  function halt(at: number) {
+  /**
+   * Stop the clock at `at` seconds, keeping them. A PAUSE keeps the lock screen up, frozen at the
+   * time done; every other stop — finished, stopped, reset, logged off-phone — takes it down.
+   */
+  function halt(at: number, why: 'paused' | 'ended' = 'ended') {
     setBase(at);
     setStartedAt(null);
     setPhase('idle');
     cancelTimerAlarm();
+    if (why === 'paused') pauseTimerActivity(at);
+    else endTimerActivity();
   }
 
   useEffect(() => {
@@ -121,8 +129,15 @@ export function StepTimer({
     handoff.schedule(onDone, 600);
   });
 
-  // Whatever is booked on the notification centre dies with the tool.
-  useEffect(() => () => cancelTimerAlarm(), []);
+  // Whatever is booked on the notification centre, and whatever is on the lock screen, dies
+  // with the tool.
+  useEffect(
+    () => () => {
+      cancelTimerAlarm();
+      endTimerActivity();
+    },
+    [],
+  );
 
   function reset() {
     handoff.cancel(); // Reset inside the 600 ms hand-off means stay here, don't move on.
@@ -151,7 +166,7 @@ export function StepTimer({
     unlockAudio(); // inside the gesture, so the chimes a minute from now are allowed to sound
     if (phase === 'running') {
       if (finished.current) return stop();
-      halt(elapsed);
+      halt(elapsed, 'paused');
       onLog({ kind: 'timer', elapsedSec: elapsed, targetSec: seconds, done: false });
     } else if (phase === 'preroll') {
       run(); // skip the count
