@@ -58,6 +58,13 @@ export const webCapabilities: Capabilities = {
     scheduleAlarm: async () => false,
     cancelAlarm: async () => {},
   },
+  // A browser has no lock screen to draw on. Unavailable means the timer never tries.
+  liveActivity: {
+    isAvailable: () => false,
+    start: async () => false,
+    pause: async () => {},
+    end: async () => {},
+  },
   // No web equivalent: communication notifications are an iOS system feature, and there is no
   // browser API that makes a notification look like it came from a person.
   coachIdentity: {
