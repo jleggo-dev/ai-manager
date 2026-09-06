@@ -367,7 +367,63 @@ describe('buildWatchWeek — the week itself', () => {
 
   it('drops occurrences outside the window rather than growing the payload', () => {
     const payload = build([occ({ date: '2026-10-30' }), occ({ occurrence_id: 'b', date: '2026-01-01' })]);
-    expect(payload.days).toEqual([]);
+    // Nothing in range leaves today alone on the wrist, as the rest day it is — never a week
+    // that starts next month.
+    expect(payload.days.map((d) => d.date)).toEqual([TODAY]);
+    expect(dayAt(payload, 0).sessions).toEqual([]);
+  });
+
+  it('always carries today, even when nothing is on it', () => {
+    // The Sunday bug: a plan committed on a Sunday for a week starting Monday reached the watch
+    // with no Sunday row and no `isToday` at all, so the wrist opened on Monday.
+    const sunday = '2026-09-06';
+    const payload = build([occ({ date: '2026-09-07' }), occ({ occurrence_id: 'b', date: '2026-09-08' })], sunday);
+    expect(payload.days.map((d) => d.date)).toEqual([sunday, '2026-09-07', '2026-09-08']);
+    expect(dayAt(payload, 0)).toMatchObject({ weekday: 'Sunday', isToday: true, sessions: [] });
+    expect(payload.days.filter((d) => d.isToday).map((d) => d.date)).toEqual([sunday]);
+  });
+
+  it('runs through the window edge the caller names, rest days included', () => {
+    // The phone's week is seven days whatever is on them; the wrist's has to be the same week.
+    const payload = buildWatchWeek({
+      todayISO: TODAY,
+      throughISO: '2026-09-13',
+      occurrences: [occ({ date: '2026-09-10' })],
+      generatedAt: STAMP,
+    });
+    expect(payload.days.map((d) => d.date)).toEqual([
+      '2026-09-07',
+      '2026-09-08',
+      '2026-09-09',
+      '2026-09-10',
+      '2026-09-11',
+      '2026-09-12',
+      '2026-09-13',
+    ]);
+    expect(dayAt(payload, 6).sessions).toEqual([]);
+  });
+
+  it('keeps today and tomorrow when the cap squeezes the week, shedding past days first', () => {
+    const occurrences = Array.from({ length: 20 }, (_, i) => {
+      // 2026-08-30 through 2026-09-18: ten days behind today, ten ahead.
+      const date = new Date(Date.UTC(2026, 7, 30 + i)).toISOString().slice(0, 10);
+      return occ({ occurrence_id: `o${i}`, date });
+    });
+    const payload = build(occurrences);
+    expect(payload.days.length).toBe(WATCH_MAX_DAYS);
+    // Today opens the window; the ten past days are the ones that did not fit.
+    expect(dayAt(payload, 0)).toMatchObject({ date: TODAY, isToday: true });
+    expect(dayAt(payload, 1).date).toBe('2026-09-08');
+    expect(dayAt(payload, WATCH_MAX_DAYS - 1).date).toBe('2026-09-14');
+  });
+
+  it('carries a past day for the week face when there is room for it', () => {
+    const payload = build([
+      occ({ occurrence_id: 'a', date: '2026-09-05', status: 'done' }),
+      occ({ occurrence_id: 'b', date: '2026-09-08' }),
+    ]);
+    expect(payload.days.map((d) => d.date)).toEqual(['2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08']);
+    expect(dayAt(payload, 2).isToday).toBe(true);
   });
 
   it('never returns more than WATCH_MAX_DAYS days', () => {
@@ -481,8 +537,15 @@ describe('buildWatchWeek — the week itself', () => {
     expect(sessionsOf(payload).map((r) => r.occurrenceId)).toEqual(['good']);
   });
 
-  it('answers an empty week with an empty payload, not a throw', () => {
-    expect(build([])).toEqual({ version: WATCH_PAYLOAD_VERSION, generatedAt: STAMP, days: [] });
+  it('answers a week with nothing on it as today alone, and no week at all as nothing', () => {
+    // A plan with no sessions in range still has a today — a rest day, drawn as one.
+    expect(build([])).toEqual({
+      version: WATCH_PAYLOAD_VERSION,
+      generatedAt: STAMP,
+      days: [{ date: TODAY, weekday: 'Monday', isToday: true, sessions: [] }],
+    });
+    // No committed plan at all (the route sends an empty today) is an empty payload, not a throw.
+    expect(build([], '')).toEqual({ version: WATCH_PAYLOAD_VERSION, generatedAt: STAMP, days: [] });
   });
 
   it('omits absent quantities rather than sending zeros', () => {

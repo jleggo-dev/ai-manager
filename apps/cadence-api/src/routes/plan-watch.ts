@@ -73,7 +73,10 @@ router.get('/watch', async (req: Request, res: Response) => {
       })),
     );
 
-    res.json(buildWatchWeek({ todayISO, occurrences, generatedAt: new Date().toISOString() }));
+    // The view's own last day, so the wrist draws the same week the phone does — a rest day at
+    // the end of the week is still a day, and today is still today when nothing is on it.
+    const throughISO = view.week[view.week.length - 1]?.date;
+    res.json(buildWatchWeek({ todayISO, throughISO, occurrences, generatedAt: new Date().toISOString() }));
   } catch (err) {
     console.error('[GET /plan/watch]', err);
     res.status(500).json({ error: 'failed to build watch week' });
