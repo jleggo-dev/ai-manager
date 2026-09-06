@@ -80,7 +80,7 @@ export function ChatComposer({
               onSend();
             }
           }}
-          placeholder={streaming ? 'Cadence is replying — tap stop to interrupt' : placeholder}
+          placeholder={streaming ? 'The coach is replying — tap stop to interrupt' : placeholder}
         />
         {streaming ? (
           // A live Stop, not a dead arrow. Someone who has just realised they mistyped should not

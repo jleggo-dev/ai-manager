@@ -12,6 +12,8 @@ import { WeekReviewSheet } from '../plan/week-review/WeekReviewSheet.tsx';
 import { WeekChangesSheet } from '../plan/week-changes/WeekChangesSheet.tsx';
 import { ActivityBuilder } from '../builder/ActivityBuilder.tsx';
 import type { BuilderSeed } from '../plan/quick-add/builderSeed.ts';
+import { readDraft, type BuilderDraft } from '../builder/draftStore.ts';
+import { DraftPill } from '../builder/DraftPill.tsx';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -135,12 +137,74 @@ export function MainTabs({
    * Start-from screen (QuickAddTense → QuickAddSheet → here). `open: false` means "not building";
    * the seed only matters while it's true, so there is nothing to reset when it closes.
    */
-  const [building, setBuilding] = useState<{ open: boolean; seed?: BuilderSeed }>({ open: false });
+  const [building, setBuilding] = useState<{
+    open: boolean;
+    minimized: boolean;
+    seed?: BuilderSeed;
+    restore?: BuilderDraft;
+    /**
+     * Bumped only when a genuinely NEW build starts, and used as the builder's `key`.
+     *
+     * Minimizing keeps the component mounted, so without this a ＋ → "Build my own" tapped while
+     * a draft is parked would reuse that instance: React keeps the old state and the new seed is
+     * ignored, handing someone the draft they minimized under the name of the thing they just
+     * picked. Restoring from the pill deliberately does NOT bump it — a remount there would throw
+     * away the scroll position and open palette that staying mounted exists to keep.
+     */
+    buildKey: number;
+  }>(() => {
+    // A draft left on this device opens the builder MINIMIZED — the pill is the offer, not the
+    // screen. Somebody who force-quit mid-build gets their work back without being dropped into
+    // it, which would be its own kind of hijack on launch.
+    const draft = readDraft();
+    return draft
+      ? { open: true, minimized: true, restore: draft, buildKey: 0 }
+      : { open: false, minimized: false, buildKey: 0 };
+  });
+  /** Mounted AND on the glass. Minimized, it is mounted and hidden — see the render below. */
+  const builderShowing = building.open && !building.minimized;
+
+  /**
+   * Land on a nav destination, leaving whatever full screen was covering it.
+   *
+   * Both full screens — the Settings Room and the Activity Builder — REPLACE the tab content
+   * (they gate every branch above), but the tab buttons only ever set `tab`. So tapping Plan,
+   * Coach or Progress while one was up changed the hidden tab underneath and left the screen on
+   * the glass: the nav bar did nothing, four times in a row, with no way to tell it apart from a
+   * frozen app (owner, 2026-09-05: "I click the other nav buttons and it stays on settings").
+   * Settings was the reported half; the builder had the identical trap, gear included.
+   */
+  const landOn = (next: Tab | 'settings') => {
+    setSettingsRoomOpen(next === 'settings');
+    if (next !== 'settings') setTab(next);
+  };
+
+  const minimizeBuilder = () => setBuilding((b) => ({ ...b, minimized: true }));
+  const closeBuilder = () => setBuilding({ open: false, minimized: false, buildKey: 0 });
+
+  /**
+   * Every tab tap, the gear included.
+   *
+   * A tap while the builder is up MINIMIZES it and asks nothing — because nothing is lost. The
+   * draft is held on disk from the first keystroke (draftStore.ts) and the pill brings it back,
+   * so the question a dialog would have posed has no stakes left in it (owner ruling 2026-09-06,
+   * choosing this over a four-way "leave your draft?" sheet: fewest taps, no dialog in the way).
+   * Save and Discard are deliberate acts with their own buttons in the builder's header.
+   */
+  const goTab = (next: Tab | 'settings') => {
+    if (builderShowing) minimizeBuilder();
+    landOn(next);
+  };
+  /**
+   * What the bar should light up. The room is a DESTINATION, not a layer over the tab behind it
+   * — leaving Plan lit while Settings fills the screen is the same lie the dead taps told.
+   */
+  const current: Tab | 'settings' = settingsRoomOpen ? 'settings' : tab;
 
   return (
     <>
       <div className="app">
-        {tab === 'plan' && !food && !settingsRoomOpen && !building.open && (
+        {tab === 'plan' && !food && !settingsRoomOpen && !builderShowing && (
           <PlanView
             onCoach={(note) => {
               if (note) setCoachNote(note);
@@ -171,7 +235,7 @@ export function MainTabs({
             }}
           />
         )}
-        {tab === 'plan' && food && !settingsRoomOpen && !building.open && (
+        {tab === 'plan' && food && !settingsRoomOpen && !builderShowing && (
           <FoodHome
             initialKitchen={food === 'shop' ? 'shop' : null}
             initialLogMeal={food === 'log'}
@@ -184,7 +248,7 @@ export function MainTabs({
             onLogged={() => setPlanReload((k) => k + 1)}
           />
         )}
-        {settingsRoomOpen && !building.open && (
+        {settingsRoomOpen && !builderShowing && (
           <SettingsRoom
             email={email}
             onBack={() => setSettingsRoomOpen(false)}
@@ -203,26 +267,42 @@ export function MainTabs({
          * `onSaved` both return to the plan tab — Save is the only door that ALSO counts as
          * "something happened" (a fresh routine on the plan/library), so only it bumps the reload.
          */}
+        {/**
+         * Hidden with CSS rather than unmounted, the same trick the coach tab uses two blocks
+         * down and for the same reason: minimize has to be free. Disk holds the draft across a
+         * force-quit, but only staying mounted keeps the things disk cannot — the scroll
+         * position, an open palette, the caret in the name field — so coming back is the screen
+         * you left rather than a faithful reconstruction of it.
+         *
+         * `contents` when showing, not `block`: `.app` is a flex column and a plain wrapper
+         * becomes a flex child with no sizing of its own (see the coach's note below).
+         */}
         {building.open && (
-          <ActivityBuilder
-            initial={building.seed}
-            onClose={() => {
-              setBuilding({ open: false });
-              setTab('plan');
-            }}
-            onSaved={() => {
-              setBuilding({ open: false });
-              setTab('plan');
-              setPlanReload((k) => k + 1);
-            }}
-            // "Ask the coach to look at it" — the same VISIBLE send every other steer uses; her
-            // context pack already carries the routine's steps, so the words are the whole payload.
-            onAskReview={(text) => {
-              setBuilding({ open: false });
-              setTab('coach');
-              setAutoSend({ text, key: Date.now() });
-            }}
-          />
+          <div style={{ display: builderShowing ? 'contents' : 'none' }}>
+            <ActivityBuilder
+              key={building.buildKey}
+              initial={building.seed}
+              restore={building.restore}
+              onMinimize={minimizeBuilder}
+              onClose={() => {
+                closeBuilder();
+                landOn('plan');
+              }}
+              onSaved={() => {
+                closeBuilder();
+                landOn('plan');
+                setPlanReload((k) => k + 1);
+              }}
+              // "Ask the coach" — the same VISIBLE send every other steer uses. From the save
+              // moment her context pack already carries the routine's steps; from a draft the
+              // builder composes them into the message itself and minimizes rather than closing,
+              // so there is still a draft to apply her answer to.
+              onAskReview={(text) => {
+                landOn('coach');
+                setAutoSend({ text, key: Date.now() });
+              }}
+            />
+          </div>
         )}
         {/**
          * The coach stays MOUNTED and is hidden with CSS when another tab is showing. It is the one
@@ -246,7 +326,7 @@ export function MainTabs({
             tab bar pushed off, the app apparently frozen (owner, 2026-08-16). `display: contents`
             removes the wrapper from layout entirely, so the chat stays a direct flex child exactly
             as it was before it was wrapped. */}
-        <div style={{ display: tab === 'coach' && !settingsRoomOpen && !building.open ? 'contents' : 'none' }}>
+        <div style={{ display: tab === 'coach' && !settingsRoomOpen && !builderShowing ? 'contents' : 'none' }}>
           <>
             <OnboardingChat
               intent="ongoing"
@@ -271,7 +351,7 @@ export function MainTabs({
             </button>
           </>
         </div>
-        {tab === 'progress' && !settingsRoomOpen && !building.open && (
+        {tab === 'progress' && !settingsRoomOpen && !builderShowing && (
           <ProgressView
             onCoach={(note) => {
               setCoachNote(note);
@@ -281,37 +361,54 @@ export function MainTabs({
             onRepertoireOpened={() => setOpenRepertoire(false)}
           />
         )}
-        {tab !== 'coach' && !food && !settingsRoomOpen && !building.open && (
+        {tab !== 'coach' && !food && !settingsRoomOpen && !builderShowing && (
           <button className="fab" onClick={() => setLogDidOpen(true)} aria-label="Quick add">
             ＋
           </button>
         )}
+        {/**
+         * The way back from a minimized draft — the other half of the owner's third door
+         * (2026-09-06). Shown on EVERY surface the builder isn't on, the Settings Room included:
+         * a draft you cannot get back to from where you happen to be standing is the same trap,
+         * one screen along. Bottom-left, so it never fights the ＋ FAB or the coach tab's own
+         * top-right "Your week ↗".
+         */}
+        {building.open && building.minimized && (
+          <DraftPill onClick={() => setBuilding((b) => ({ ...b, minimized: false }))} />
+        )}
         <nav className="tabbar" aria-label="Main">
           <button
-            className={`tab${tab === 'plan' ? ' tab-on' : ''}`}
+            className={`tab${current === 'plan' ? ' tab-on' : ''}`}
             onClick={() => {
-              if (tab === 'plan') setFood(null); // tapping Plan while on Food is the way back to the trail
-              setTab('plan');
+              // Tapping Plan while on Food is the way back to the trail — but only while Food is
+              // the thing being LOOKED at. With the room covering it, this tap is the way out of
+              // the room, and it lands you back on the screen you left rather than skipping past it.
+              if (current === 'plan' && !builderShowing) setFood(null);
+              goTab('plan');
             }}
           >
             <TodayIcon />
             <span>Plan</span>
           </button>
           <button
-            className={`tab${tab === 'coach' ? ' tab-on' : ''}${guide ? ' tab-guided' : ''}`}
+            className={`tab${current === 'coach' ? ' tab-on' : ''}${guide ? ' tab-guided' : ''}`}
             onClick={() => {
               setGuide(false);
-              setTab('coach');
+              goTab('coach');
             }}
           >
             <CoachIcon />
             <span>Coach</span>
           </button>
-          <button className={`tab${tab === 'progress' ? ' tab-on' : ''}`} onClick={() => setTab('progress')}>
+          <button className={`tab${current === 'progress' ? ' tab-on' : ''}`} onClick={() => goTab('progress')}>
             <ProgressIcon />
             <span>Progress</span>
           </button>
-          <button className="tab" onClick={() => setSettingsRoomOpen(true)} aria-label="Settings">
+          <button
+            className={`tab${current === 'settings' ? ' tab-on' : ''}`}
+            onClick={() => goTab('settings')}
+            aria-label="Settings"
+          >
             <GearIcon />
             <span>Settings</span>
           </button>
@@ -389,7 +486,7 @@ export function MainTabs({
             // left is opening the builder on the plan tab.
             onBuild={(seed) => {
               setTab('plan');
-              setBuilding({ open: true, seed });
+              setBuilding({ open: true, minimized: false, seed, buildKey: Date.now() });
             }}
           />
         )}

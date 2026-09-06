@@ -227,7 +227,7 @@ describe('OnboardingChat', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   });
 
-  it('locks the composer while Cadence is replying', async () => {
+  it('locks the composer while the coach is replying', async () => {
     let release: (() => void) | null = null;
     sendCoachMessage.mockImplementationOnce(
       (_id: string, _t: string, onDelta: (d: string) => void) =>
@@ -243,7 +243,7 @@ describe('OnboardingChat', () => {
     fireEvent.change(screen.getByPlaceholderText(OPENING_PLACEHOLDER), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await waitFor(() => expect(screen.getByPlaceholderText(/Cadence is replying/)).toBeDisabled());
+    await waitFor(() => expect(screen.getByPlaceholderText(/coach is replying/)).toBeDisabled());
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
     // Interrupting her is offered, not just implied — see A3.
     expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled();

@@ -49,6 +49,10 @@ export const USER_SCOPED_KEYS = [
   // no clue why, and inheriting 'city' would label a device share as a typed city.
   'cadence.locationSource',
   'cadence.locationOff',
+  // A half-built activity (features/builder/draftStore.ts). Someone else's unfinished work is not
+  // yours to be offered, and the pill offers it on sight. The draft ALSO stamps its owner and
+  // refuses to read on a mismatch — this sweep is what stops it sitting on disk afterwards.
+  'cadence.builderDraft',
 ] as const;
 
 function read(key: string): string | null {

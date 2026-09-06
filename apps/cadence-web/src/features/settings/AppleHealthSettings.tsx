@@ -75,7 +75,7 @@ export function AppleHealthSettings() {
       {workouts === null ? (
         <button type="button" className="set-row" onClick={connect} disabled={busy}>
           <b>Connect Apple Health</b>
-          <span>iOS will ask what to share — workouts is all Cadence reads.</span>
+          <span>iOS will ask what to share — workouts is all the coach reads.</span>
         </button>
       ) : (
         <>

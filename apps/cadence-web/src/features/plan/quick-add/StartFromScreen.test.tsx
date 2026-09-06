@@ -72,15 +72,15 @@ afterEach(() => {
 });
 
 describe('StartFromScreen', () => {
-  it('empty shelves are simply absent — no "From Cadence" or "Yours" heading over nothing', () => {
+  it('empty shelves are simply absent — no "From the coach" or "Yours" heading over nothing', () => {
     mount();
-    expect(screen.queryByText('From Cadence')).toBeNull();
+    expect(screen.queryByText('From the coach')).toBeNull();
     expect(screen.queryByText('Yours')).toBeNull();
     // Blank is always there — you can always start from nothing.
     expect(screen.getByText('Blank')).toBeTruthy();
   });
 
-  it('a From Cadence pick fetches the session, then hands onBuild the exact seed', async () => {
+  it('a From the coach pick fetches the session, then hands onBuild the exact seed', async () => {
     getRoutineSession.mockResolvedValue({ ok: true, session: SESSION });
     const onBuild = vi.fn();
     mount({ coachRoutines: [coachRoutine()], onBuild });
@@ -95,7 +95,7 @@ describe('StartFromScreen', () => {
     });
   });
 
-  it('a failed From Cadence session fetch shows the row-level honest line and never calls onBuild', async () => {
+  it('a failed From the coach session fetch shows the row-level honest line and never calls onBuild', async () => {
     getRoutineSession.mockResolvedValue({ ok: false, session: null });
     const onBuild = vi.fn();
     mount({ coachRoutines: [coachRoutine()], onBuild });

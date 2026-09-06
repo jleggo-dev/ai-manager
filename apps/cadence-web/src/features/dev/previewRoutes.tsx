@@ -18,6 +18,7 @@ import { ItemScreenPreview } from '../repertoire/ItemScreenPreview.tsx';
 import { SeedReviewPreview } from '../repertoire/SeedReviewPreview.tsx';
 import { ListScreenPreview } from '../repertoire/ListScreenPreview.tsx';
 import { CollectionsScreenPreview } from '../repertoire/CollectionsScreenPreview.tsx';
+import { ActivityBuilderPreview } from '../builder/ActivityBuilderPreview.tsx';
 
 /**
  * `?preview=<tool>` — render ONE component against fixture data, short-circuiting auth and the
@@ -44,6 +45,8 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   seed: () => <SeedReviewPreview />,
   repertoire: () => <ListScreenPreview />,
   collections: () => <CollectionsScreenPreview />,
+  // `&draft=held` opens minimized with a draft already on disk — a launch after a force-quit.
+  builder: () => <ActivityBuilderPreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {
