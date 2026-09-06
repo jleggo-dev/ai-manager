@@ -6,11 +6,15 @@ import type { WeatherSnapshot } from '../services/weather/weather-map.ts';
  * or a second instance reuses a snapshot instead of re-billing the provider. Keyed by place+date,
  * never by user (see the migration's header for why). Every function soft-fails: the cache is an
  * optimisation, and a cache outage must degrade to a provider call, never to an error.
+ *
+ * Generic over the row's shape since the forecast series (`forecast-ahead.ts`) joined the
+ * snapshot in here: the column is jsonb, the keys are namespaced (`forecast:` vs. the bare
+ * place+date), and the point of a shared cache — one bill per populated cell — holds for both.
  */
 
-export async function getCachedWeather(cacheKey: string): Promise<WeatherSnapshot | null> {
+export async function getCachedWeather<T = WeatherSnapshot>(cacheKey: string): Promise<T | null> {
   try {
-    const rows = await sql<{ snapshot: WeatherSnapshot }[]>`
+    const rows = await sql<{ snapshot: T }[]>`
       select snapshot from cadence.weather_cache
       where cache_key = ${cacheKey} and expires_at > now()`;
     return rows[0]?.snapshot ?? null;
@@ -20,7 +24,11 @@ export async function getCachedWeather(cacheKey: string): Promise<WeatherSnapsho
   }
 }
 
-export async function putCachedWeather(cacheKey: string, snapshot: WeatherSnapshot, ttlMs: number): Promise<void> {
+export async function putCachedWeather<T = WeatherSnapshot>(
+  cacheKey: string,
+  snapshot: T,
+  ttlMs: number,
+): Promise<void> {
   try {
     const expiresAt = new Date(Date.now() + ttlMs).toISOString();
     await sql`

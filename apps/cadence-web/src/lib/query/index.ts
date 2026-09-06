@@ -6,7 +6,9 @@ export {
   fetchWeatherCached,
   forgetLocation,
   forgetWeather,
+  prefetchForecast,
   useDailyCheckinDue,
+  useForecast,
 } from './useAmbient.ts';
 export { invalidateNutritionDay, useInvalidateNutritionDay, useNutritionDay } from './useNutritionDay.ts';
 export { fetchPlanIntoCache, hasCachedPlan, setPlanData, usePlan } from './usePlan.ts';

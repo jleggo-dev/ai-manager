@@ -14,6 +14,7 @@ import {
   fetchWeatherCached,
   forgetLocation,
   forgetWeather,
+  prefetchForecast,
   queryKeys,
 } from '../../lib/query/index.ts';
 import { isLocationOff } from '../settings/location-source.ts';
@@ -102,6 +103,10 @@ export function useTodayHeader(): TodayHeader {
     const w = await fetchWeatherCached(queryClient);
     setWeather(w);
     if (w.available && w.label) setCity(w.label);
+    // The sheet behind the chip, read now rather than at the tap — and only once there IS a sky,
+    // since the chip (and so the sheet) is not drawn without one. Not awaited: the header's own
+    // line must never wait on a fortnight it is not showing.
+    if (w.available) void prefetchForecast(queryClient);
   }, [queryClient]);
 
   /** Read both stored points and keep the header's yardstick in step. The city shown is where you

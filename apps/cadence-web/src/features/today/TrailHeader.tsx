@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTodayHeader } from './useTodayHeader.ts';
+import { useClockUnit, useForecast } from '../../lib/query/index.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { QuietHoursChip } from './QuietHoursChip.tsx';
 import { WeatherSheet } from './WeatherSheet.tsx';
@@ -42,8 +43,12 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
   const night = isNightHour(now.getHours());
   const dark = useSkyTint(head, night);
   const quietUp = useQuietChipUp(now);
-  const [forecast, setForecast] = useState(false);
+  const [open, setOpen] = useState(false);
   const wx = weather?.available ? weather : null;
+  // The sheet's series, from the cache the header's own weather read already filled (useAmbient):
+  // subscribing here — not inside the sheet — is what lets a tap open on a forecast, not a spinner.
+  const forecast = useForecast(Boolean(wx));
+  const clock = useClockUnit();
 
   return (
     <>
@@ -52,7 +57,7 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
 
         <div className="thead-main">
           {wx ? (
-            <button className="thead-wxbtn" type="button" onClick={() => setForecast(true)}>
+            <button className="thead-wxbtn" type="button" onClick={() => setOpen(true)}>
               <b className="thead-wx">
                 <span aria-hidden>{wxEmoji(wx.conditions ?? '', night)}</span>{' '}
                 {wxLine(wx.conditions, wx.temp_c, quietUp)}
@@ -87,13 +92,16 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
 
       {/* Outside the band on purpose: `.thead` is positioned now, and a sheet inside it would rise
           from the header's own bottom edge instead of the bottom of the screen. */}
-      {forecast && wx && (
+      {open && wx && (
         <WeatherSheet
           weather={wx}
           city={city}
           night={night}
+          forecast={forecast}
+          clock={clock}
+          now={now}
           onHereNow={setHereNow}
-          onClose={() => setForecast(false)}
+          onClose={() => setOpen(false)}
         />
       )}
     </>

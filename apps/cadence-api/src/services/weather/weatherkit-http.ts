@@ -76,22 +76,31 @@ export function __setWeatherKitFetchForTests(fn: FetchFn | null): void {
   cooldownUntil = 0;
 }
 
+/** The data sets Apple can bundle into one call. The snapshot path asks for the first two. */
+export type WeatherKitDataSet = 'currentWeather' | 'forecastHourly' | 'forecastDaily';
+
 /**
- * Current + next hours for one coordinate, in one request.
+ * Current + next hours for one coordinate, in one request — or, with `dataSets`, whichever sets
+ * the caller needs (the weather sheet's series adds `forecastDaily` for the days ahead).
  *
  * `timezone` is required by the API for daily boundaries; we pass the user's IANA zone when we
  * have one. A 404 means Apple has no data for that point (mid-ocean, some territories) — a real
  * answer, not a failure, so it is reported as an error the caller falls back from rather than
  * retried.
  */
-export async function weatherKitGet(lat: number, lon: number, timezone?: string | null): Promise<unknown> {
+export async function weatherKitGet(
+  lat: number,
+  lon: number,
+  timezone?: string | null,
+  dataSets: readonly WeatherKitDataSet[] = ['currentWeather', 'forecastHourly'],
+): Promise<unknown> {
   if (!isWeatherKitConfigured()) throw new WeatherKitError(0, 'WeatherKit is not configured');
   if (Date.now() < cooldownUntil) throw new WeatherKitError(429, 'WeatherKit cooling down after a rate limit');
 
   const tz = timezone?.trim() || 'UTC';
   const url =
     `${WEATHERKIT_BASE}/weather/en/${encodeURIComponent(String(lat))}/${encodeURIComponent(String(lon))}` +
-    `?dataSets=currentWeather,forecastHourly&timezone=${encodeURIComponent(tz)}`;
+    `?dataSets=${dataSets.join(',')}&timezone=${encodeURIComponent(tz)}`;
 
   const res = await fetchImpl(url, {
     method: 'GET',

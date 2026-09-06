@@ -37,6 +37,12 @@ export const queryKeys = {
   weather: {
     all: ['weather'] as const,
   },
+  /** `/me/forecast` — the hours and days behind the weather sheet's tabs. Read WITH the sky,
+   *  ahead of the tap, so the sheet opens on a forecast rather than a spinner; dropped with it
+   *  whenever the place moves (`forgetWeather`), since both describe the same point. */
+  forecast: {
+    all: ['forecast'] as const,
+  },
   /**
    * `/me/location` — where they live, where they ARE, and the timezone (A21's two points).
    *

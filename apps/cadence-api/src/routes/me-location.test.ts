@@ -34,6 +34,7 @@ vi.mock('../services/weather/weather.ts', () => ({
 }));
 // Everything below is a neighbour on the same router, mocked only so importing it never reaches
 // db/sql.ts or AI Admin.
+vi.mock('../services/weather/forecast-ahead.ts', () => ({ getForecastWhereYouAre: vi.fn(async () => null) }));
 vi.mock('../services/dev-reset.ts', () => ({ resetUserData: vi.fn() }));
 vi.mock('../services/dev-trace.ts', () => ({ clearTrace: vi.fn() }));
 vi.mock('../ai/aim.ts', () => ({ AimError: class extends Error {}, purgeUserAiData: vi.fn() }));
