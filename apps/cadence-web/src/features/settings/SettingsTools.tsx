@@ -6,40 +6,32 @@
  * neutral default the old wizard's "+ Add a tool" button always used, and never surfaces a picker
  * for it. The user never chooses one; that sorting is Cadence's job, not theirs (footer line).
  *
- * Standalone: fetches its own data via getReview() and takes only onBack/onCoach, so the Settings
- * Room parcel can mount it without knowing anything about review state.
+ * Reads the shared review out of the query cache (`lib/query/useReview.ts`) and takes only
+ * onBack/onCoach, so the Settings Room parcel can mount it without knowing anything about review
+ * state — and the chips are on screen the moment the door opens rather than a round trip later.
+ * Adding or removing one writes back into that entry, so the "N things · …" preview on the row
+ * behind this screen is already right when you walk back through it.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Equipment, EquipmentCategory } from '@cadence/shared';
-import { addEquipment, deleteEquipmentItem, getReview, sendGymPhotos } from '../../lib/api.ts';
+import { addEquipment, deleteEquipmentItem, sendGymPhotos } from '../../lib/api.ts';
+import { useReview, useUpdateReview } from '../../lib/query/index.ts';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
 import '../../styles/settings-editors.css';
 
 const EQUIPMENT_DEFAULT_CATEGORY: EquipmentCategory = 'other';
 
 export function SettingsTools({ onBack }: { onBack: () => void; onCoach?: (note: string) => void }) {
-  const [equipment, setEquipment] = useState<Equipment[] | null>(null);
-  const [loadErr, setLoadErr] = useState(false);
+  const { data: review, isError } = useReview();
+  const updateReview = useUpdateReview();
+  const equipment = review?.equipment ?? null;
+  const loadErr = isError && !review;
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    getReview()
-      .then((r) => {
-        if (alive) setEquipment(r.equipment);
-      })
-      .catch(() => {
-        if (alive) setLoadErr(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   async function remove(item: Equipment) {
     if (!equipment) return;
-    setEquipment(equipment.filter((x) => x.equipment_id !== item.equipment_id));
+    updateReview((r) => ({ ...r, equipment: r.equipment.filter((x) => x.equipment_id !== item.equipment_id) }));
     try {
       await deleteEquipmentItem(item.equipment_id);
     } catch {
@@ -54,7 +46,7 @@ export function SettingsTools({ onBack }: { onBack: () => void; onCoach?: (note:
     setBusy(true);
     try {
       const created = await addEquipment({ name, category: EQUIPMENT_DEFAULT_CATEGORY });
-      setEquipment([...equipment, created]);
+      updateReview((r) => ({ ...r, equipment: [...r.equipment, created] }));
       setDraft('');
     } catch {
       // Leave the draft in place so the tap isn't lost — they can just try again.

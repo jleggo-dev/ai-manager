@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { mealPlanItems, mealPlanLabel, type MealPlanItem, type MealPlanMeal } from '@cadence/shared';
-import { getCurrentMealPlan, type MealKind } from '../../../lib/api.ts';
+import type { MealKind } from '../../../lib/api.ts';
+import { useMealPlan } from '../../../lib/query/index.ts';
 
 /**
  * MP19 — a planned dish, in either shape the week's plan can hold it: the legacy single recipe
@@ -42,36 +43,30 @@ export function usePlannedMeal(
   mealKind: MealKind,
   date: string,
 ): { planned: PlannedMeal | null; alsoThisWeek: PlannedMeal[] } {
-  const [planned, setPlanned] = useState<PlannedMeal | null>(null);
-  const [alsoThisWeek, setAlsoThisWeek] = useState<PlannedMeal[]>([]);
+  // The week comes from the shared cache (lib/query/useFoodData.ts), so the row that says what is
+  // planned is there as the sheet opens — and the Food room, which reads the same week, pays for
+  // it once between them.
+  const { data } = useMealPlan();
+  const plan = data?.status === 'ok' ? data.plan : null;
 
-  useEffect(() => {
-    let alive = true;
-    getCurrentMealPlan().then((r) => {
-      if (!alive || r.status !== 'ok' || !r.plan) return;
-      const today = r.plan.days.find((d) => d.day === date);
-      const slot = today?.meals.find((m) => m.slot === mealKind);
-      const here = slot ? toPlannedMeal(slot) : null;
-      setPlanned(here);
+  return useMemo(() => {
+    if (!plan) return { planned: null, alsoThisWeek: [] };
+    const today = plan.days.find((d) => d.day === date);
+    const slot = today?.meals.find((m) => m.slot === mealKind);
+    const here = slot ? toPlannedMeal(slot) : null;
 
-      const seen = new Set<string>(here ? [plannedKey(here)] : []);
-      const others: PlannedMeal[] = [];
-      for (const d of r.plan.days) {
-        for (const m of d.meals) {
-          const p = toPlannedMeal(m);
-          if (!p) continue;
-          const key = plannedKey(p);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          others.push(p);
-        }
+    const seen = new Set<string>(here ? [plannedKey(here)] : []);
+    const others: PlannedMeal[] = [];
+    for (const d of plan.days) {
+      for (const m of d.meals) {
+        const p = toPlannedMeal(m);
+        if (!p) continue;
+        const key = plannedKey(p);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        others.push(p);
       }
-      setAlsoThisWeek(others.slice(0, 3));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [mealKind, date]);
-
-  return { planned, alsoThisWeek };
+    }
+    return { planned: here, alsoThisWeek: others.slice(0, 3) };
+  }, [plan, mealKind, date]);
 }

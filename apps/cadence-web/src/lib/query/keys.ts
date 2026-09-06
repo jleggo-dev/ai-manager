@@ -91,6 +91,9 @@ export const queryKeys = {
   progressPhotos: {
     pair: ['progressPhotos', 'pair'] as const,
     all: ['progressPhotos', 'all'] as const,
+    /** Just the opt-in state + count + next-due, without the signed URLs of every photo — what a
+     *  settings toggle and the quick-add row need in order to render themselves. */
+    status: ['progressPhotos', 'status'] as const,
   },
   /** `/me/recaps` (the `recap_rail` widget, Progress Engine W2-1) — weekly check-in recaps,
    *  persisted at confirm time. Scoped by `limit` so the rail's own default doesn't collide with a
@@ -102,6 +105,46 @@ export const queryKeys = {
    *  trail, the rows, the quiet-hours chip and the proposed week all read the clock from it. */
   units: {
     all: ['units'] as const,
+  },
+  /** `/review` — goals, tools and the baseline. One key: the Settings root counts them, the goals
+   *  and tools doors edit them, and the weigh-in row reads the baseline out of the same answer, so
+   *  none of the four can be showing a different account of what is on the plan. */
+  review: {
+    all: ['review'] as const,
+  },
+  /** `/me/constraints` — what the plan is being built around. Its own key rather than a slice of
+   *  `review`: a different endpoint, and coach-owned, so it is invalidated on its own terms. */
+  constraints: {
+    all: ['constraints'] as const,
+  },
+  /** `/me/routines` — the activities they've built. Settings' "Your activities" door lists and
+   *  edits them; quick-add shelves the same rows per area. */
+  routines: {
+    all: ['routines'] as const,
+  },
+  /** `/nutrition/recipes` — the cookbook. Scoped by `savedOnly` because the shelves ask for the
+   *  saved ones and the Food room's count asks for all of them; two questions, two answers. */
+  recipes: {
+    scoped: (savedOnly: boolean) => ['recipes', savedOnly ? 'saved' : 'all'] as const,
+  },
+  /** `/nutrition/meal-plans?week_of=` — the cooking week. Keyed by the week so scrolling to
+   *  another one caches on its own terms; `'current'` is whatever `getCurrentMealPlan` defaults to. */
+  mealPlan: {
+    week: (weekOf?: string) => ['mealPlan', weekOf ?? 'current'] as const,
+  },
+  /** `/nutrition/recent?days=N` — the meals behind the Food room's day dots and week strip. */
+  recentMeals: {
+    days: (days: number) => ['recentMeals', days] as const,
+  },
+  /** `/nutrition/dietary-profile` — allergies and things to skip. Read by Settings, the kitchen
+   *  intake and the coach's food sheet, which must never disagree about an allergen. */
+  dietaryProfile: {
+    all: ['dietaryProfile'] as const,
+  },
+  /** `/progress/repertoire/items` — the whole list room (items, collisions, collections), scoped
+   *  by the goal it is filtered to; `''` is everything they keep. */
+  repertoireList: {
+    scoped: (goalId: string | null) => ['repertoireList', goalId ?? ''] as const,
   },
   /** `/plan/earlier?weeks=N` — the week(s) before today, loaded when the trail is scrolled back
    *  to log something missed. Under the `plan` prefix so a log invalidates it with the week. */

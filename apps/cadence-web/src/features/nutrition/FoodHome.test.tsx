@@ -9,11 +9,15 @@
  *   • the coach hand-offs carry an app-authored note (log a meal / talk food with me).
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 
 const useNutritionDay = vi.fn();
 const invalidate = vi.fn();
-vi.mock('../../lib/query/index.ts', () => ({
+/** Partial: the day read and "today" are stubbed (each has its own suite), while the room's three
+ *  standing reads run through the real cached hooks onto the mocked API below. */
+vi.mock('../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/query/index.ts')>()),
   useNutritionDay: (...a: unknown[]) => useNutritionDay(...a),
   useInvalidateNutritionDay: () => invalidate,
   localTodayIso: () => '2026-08-19',
@@ -66,7 +70,7 @@ function mount(
   query: Record<string, unknown> = {},
 ) {
   useNutritionDay.mockReturnValue({ data: d, refetch, ...query });
-  return render(<FoodHome onBack={() => {}} onCoach={() => {}} {...props} />);
+  return renderWithQuery(<FoodHome onBack={() => {}} onCoach={() => {}} {...props} />);
 }
 
 beforeEach(() => {

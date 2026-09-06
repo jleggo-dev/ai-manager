@@ -44,7 +44,13 @@ function sessionStorageKey(): string | null {
  * returns null, which falls back to exactly the behaviour that shipped before it.
  */
 export function readPersistedSession(): {
-  user?: { id?: string; is_anonymous?: boolean; identities?: { provider?: string }[] | null };
+  user?: {
+    id?: string;
+    is_anonymous?: boolean;
+    identities?: { provider?: string }[] | null;
+    /** When the account was made — the Settings header's WEEK N, printable without the network. */
+    created_at?: string;
+  };
 } | null {
   try {
     const key = sessionStorageKey();

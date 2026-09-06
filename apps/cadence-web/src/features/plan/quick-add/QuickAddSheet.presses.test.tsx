@@ -5,12 +5,16 @@
  * exact wire call (owner's mandate, W2-C) — mount-only assertions belong to the other file.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 
 const usePlan = vi.fn();
 const useNutritionDay = vi.fn();
 const uploadMutateAsync = vi.fn(async (..._a: unknown[]): Promise<string | null> => 'photo-1');
-vi.mock('../../../lib/query/index.ts', () => ({
+/** Partial: the stubs below stand in for the reads this suite drives; the shared photo-status read
+ *  runs through the real cached hook onto the mocked API. */
+vi.mock('../../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/query/index.ts')>()),
   usePlan: () => usePlan(),
   useNutritionDay: () => useNutritionDay(),
   useInvalidateNutritionDay: () => vi.fn(),
@@ -72,7 +76,9 @@ function mount(
 ) {
   usePlan.mockReturnValue({ data: state.plan ?? basePlan(), error: null });
   useNutritionDay.mockReturnValue({ data: state.day ?? null });
-  return render(<QuickAddSheet onClose={props.onClose ?? (() => {})} onLogged={props.onLogged ?? (() => {})} />);
+  return renderWithQuery(
+    <QuickAddSheet onClose={props.onClose ?? (() => {})} onLogged={props.onLogged ?? (() => {})} />,
+  );
 }
 
 afterEach(() => {

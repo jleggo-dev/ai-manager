@@ -4,13 +4,13 @@ import {
   getNowMenu,
   getRoutines,
   getWorkoutHistory,
-  listUserRoutines,
   logAdhoc,
   logUserRoutineRun,
   type PlanRoutine,
   type UserRoutine,
   type WorkoutHistoryListItem,
 } from '../../../lib/api.ts';
+import { useRoutines } from '../../../lib/query/index.ts';
 import { Walkthrough } from '../../walkthrough/Walkthrough.tsx';
 import { sessionFor } from '../nowMenuSession.ts';
 import { categoryOfArea } from '../../today/category.ts';
@@ -106,9 +106,6 @@ export function QuickAddTense({
   // null = not loaded yet (or the read failed) — same no-claim `getRoutines` already draws between
   // "couldn't load" and "you have none"; `playableRoutines` below collapses both to no rows shown.
   const [routines, setRoutines] = useState<PlanRoutine[] | null>(null);
-  // Same no-claim reading of `listUserRoutines` — it carries every area, filtered to this one at
-  // render time (the endpoint itself has no `?area=`, unlike `getRoutines`).
-  const [userRoutines, setUserRoutines] = useState<UserRoutine[] | null>(null);
   // "Browse all N ›" swaps this section, in place, for the full playable-routines list (both
   // tiers). "Build my own" swaps the WHOLE screen for `StartFromScreen` — a bigger, separate
   // concern, so it gets its own flag rather than living inside the routines section's toggle.
@@ -146,15 +143,12 @@ export function QuickAddTense({
     };
   }, [area]);
 
-  useEffect(() => {
-    let alive = true;
-    listUserRoutines().then((rows) => {
-      if (alive) setUserRoutines(rows);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Same no-claim reading as `getRoutines` above: it carries every area, filtered to this one at
+  // render time (the endpoint itself has no `?area=`). Through the cache, so it is the same list
+  // Settings' "Your activities" door reads — and it is populated as this screen draws rather than
+  // a round trip into it.
+  const { data: routineRows } = useRoutines();
+  const userRoutines = routineRows ?? null;
 
   useEffect(() => {
     if (area !== 'movement') return; // practice never calls getWorkoutHistory

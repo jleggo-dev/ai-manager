@@ -2,15 +2,18 @@
  * Settings Room 1c — "Your goals": the door, not the editor. Rename or retire a goal that has
  * already been confirmed/committed; nothing about what a goal MEANS (target, deadline, area) is
  * editable here — that stays a conversation with the coach, reached through the dashed door at the
- * bottom. Standalone: fetches its own data via getReview() and takes only onBack/onCoach.
+ * bottom. Reads the shared review out of the query cache (`lib/query/useReview.ts`) and takes only
+ * onBack/onCoach — so the list is on screen the moment the door opens, and a rename or a retire is
+ * written back into that same entry: the count on the Settings row behind this screen is already
+ * right when you walk back through it.
  *
  * Rename/retire ride SR-1's goal-lifecycle api (lib/api/review.ts): retire sets status 'parked'
  * (reversible through the coach); Progress keeps everything a parked goal built.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Goal, GoalType } from '@cadence/shared';
-import { getReview } from '../../lib/api.ts';
 import { renameGoal, retireGoal } from '../../lib/api.ts';
+import { useReview, useUpdateReview } from '../../lib/query/index.ts';
 import '../../styles/settings-editors.css';
 
 /** The mono meta line's opening word — how each goal TYPE reads as a measurement kind. Only one
@@ -49,27 +52,17 @@ const COACH_NOTE =
   'help reshape the goal together; a new target, deadline, or area is your conversation to have.';
 
 export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach?: (note: string) => void }) {
-  const [goals, setGoals] = useState<Goal[] | null>(null);
-  const [loadErr, setLoadErr] = useState(false);
+  const { data: review, isError } = useReview();
+  const updateReview = useUpdateReview();
+  /** Retiring parks a goal, so this filter is what drops it from the list — no local copy to keep
+   *  in step with the row behind the door. */
+  const goals = review ? review.goals.filter((g) => g.status === 'confirmed' || g.status === 'committed') : null;
+  const loadErr = isError && !review;
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [retiring, setRetiring] = useState<Goal | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-
-  useEffect(() => {
-    let alive = true;
-    getReview()
-      .then((r) => {
-        if (alive) setGoals(r.goals.filter((g) => g.status === 'confirmed' || g.status === 'committed'));
-      })
-      .catch(() => {
-        if (alive) setLoadErr(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   async function doRename(goal: Goal, title: string) {
     const next = title.trim();
@@ -79,8 +72,12 @@ export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach
     setMsg('');
     try {
       const ok = await renameGoal(goal.goal_id, next);
-      if (ok) setGoals(goals.map((g) => (g.goal_id === goal.goal_id ? { ...g, title: next } : g)));
-      else setMsg("That didn't go through — try again in a moment.");
+      if (ok) {
+        updateReview((r) => ({
+          ...r,
+          goals: r.goals.map((g) => (g.goal_id === goal.goal_id ? { ...g, title: next } : g)),
+        }));
+      } else setMsg("That didn't go through — try again in a moment.");
     } finally {
       setBusy(false);
     }
@@ -93,7 +90,12 @@ export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach
     try {
       const ok = await retireGoal(goal.goal_id);
       if (ok) {
-        setGoals(goals.filter((g) => g.goal_id !== goal.goal_id));
+        // 'parked', not gone: the row behind this door counts everything that isn't abandoned, and
+        // a retire is reversible through the coach — so the count holds while the list lets go.
+        updateReview((r) => ({
+          ...r,
+          goals: r.goals.map((g) => (g.goal_id === goal.goal_id ? { ...g, status: 'parked' as const } : g)),
+        }));
         setRetiring(null);
       } else {
         setMsg("That didn't go through — try again in a moment.");

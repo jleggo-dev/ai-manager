@@ -3,7 +3,8 @@
  * it's logged. Butter — pick a portion first, and the stepper's count rides out through onPick.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 import userEvent from '@testing-library/user-event';
 import type { Recipe } from '@cadence/shared';
 import { CookbookShelf } from './CookbookShelf.tsx';
@@ -44,7 +45,7 @@ beforeEach(() => {
 
 describe('CookbookShelf', () => {
   it('splits the shelf on yield — the whole taxonomy, no tabs', async () => {
-    render(<CookbookShelf onPick={() => {}} onClose={() => {}} />);
+    renderWithQuery(<CookbookShelf onPick={() => {}} onClose={() => {}} />);
     expect(await screen.findByText("ONE PORTION · TAP AND IT'S LOGGED")).toBeInTheDocument();
     expect(screen.getByText('MAKES SEVERAL · PICK A PORTION')).toBeInTheDocument();
     expect(listRecipes).toHaveBeenCalledWith({ savedOnly: true });
@@ -62,7 +63,7 @@ describe('CookbookShelf', () => {
   it('logs a one-portion row on the tap — no stepper in the way', async () => {
     const user = userEvent.setup();
     const onPick = vi.fn();
-    render(<CookbookShelf onPick={onPick} onClose={() => {}} />);
+    renderWithQuery(<CookbookShelf onPick={onPick} onClose={() => {}} />);
     await user.click(await screen.findByRole('button', { name: 'Chia bowl — log one portion' }));
     expect(onPick).toHaveBeenCalledWith(chia, 1);
   });
@@ -70,7 +71,7 @@ describe('CookbookShelf', () => {
   it('asks a makes-several row for a portion count, and onPick carries it', async () => {
     const user = userEvent.setup();
     const onPick = vi.fn();
-    render(<CookbookShelf onPick={onPick} onClose={() => {}} />);
+    renderWithQuery(<CookbookShelf onPick={onPick} onClose={() => {}} />);
     await user.click(await screen.findByRole('button', { name: /Chickpea & spinach stew — makes 4/ }));
 
     expect(screen.getByText('1 of 4 servings')).toBeInTheDocument();
@@ -82,7 +83,7 @@ describe('CookbookShelf', () => {
 
   it('filters the shelf client-side, sections included', async () => {
     const user = userEvent.setup();
-    render(<CookbookShelf onPick={() => {}} onClose={() => {}} />);
+    renderWithQuery(<CookbookShelf onPick={() => {}} onClose={() => {}} />);
     await screen.findByText("ONE PORTION · TAP AND IT'S LOGGED");
     await user.type(screen.getByRole('searchbox', { name: 'Search your meals and recipes' }), 'stew');
     expect(screen.queryByText("ONE PORTION · TAP AND IT'S LOGGED")).not.toBeInTheDocument();
