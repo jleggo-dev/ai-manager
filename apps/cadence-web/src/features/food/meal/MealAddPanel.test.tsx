@@ -139,7 +139,13 @@ it('an ambiguous food opens the repriced sheet — "Add to breakfast" — and re
   expect(await screen.findByText(/several serving sizes · asks first/)).toBeInTheDocument();
   fireEvent.click(screen.getByText('Granola, maple pecan'));
   const addBtn = await screen.findByRole('button', { name: 'Add to breakfast' });
+  // REGRESSION (2026-09-06, on device): the sheet used to render in flow AFTER the strip, below
+  // the fold of a panel taller than the sheet hosting it, so a › tap looked like a dead button.
+  // It has to be drawn over the panel — `.ms-cover` is that contract (pinned in cover.contract.test.ts).
+  expect(addBtn.closest('.ms-cover')).not.toBeNull();
   expect(screen.getByText("You'll come straight back here for the next one.")).toBeInTheDocument();
+  // …and the panel behind it stays mounted, which is what lets the field keep its focus.
+  expect(screen.getByLabelText('Search foods')).toBeInTheDocument();
   // The draft owns the slot — the sheet asks no meal question.
   expect(screen.queryByLabelText('Meal')).toBeNull();
   fireEvent.click(addBtn);

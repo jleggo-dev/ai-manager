@@ -135,25 +135,29 @@ export function MealDoors({
         onCancel={onClose}
       />
       {scanSheet && (
-        <AddFoodSheet
-          food={scanSheet}
-          meal={kind}
-          mode="draft"
-          mealLabel={kind}
-          busy={draft.busy}
-          onAdd={(p) => appendScanned(scanSheet, p)}
-          onLog={() => {}}
-          onBack={() => setScanSheet(null)}
-          strip={
-            <DraftStrip
-              mealLabel={kind}
-              count={draft.items.length}
-              kcal={draft.total.kcal}
-              busy={draft.busy}
-              onUndo={() => void draft.undoLast()}
-            />
-          }
-        />
+        // A cover, for the same reason the add panel's is: in flow it stacked under the scanner
+        // and never entered the viewport. The scanner stays mounted behind it.
+        <div className="ms-cover" role="dialog" aria-label="Add food">
+          <AddFoodSheet
+            food={scanSheet}
+            meal={kind}
+            mode="draft"
+            mealLabel={kind}
+            busy={draft.busy}
+            onAdd={(p) => appendScanned(scanSheet, p)}
+            onLog={() => {}}
+            onBack={() => setScanSheet(null)}
+            strip={
+              <DraftStrip
+                mealLabel={kind}
+                count={draft.items.length}
+                kcal={draft.total.kcal}
+                busy={draft.busy}
+                onUndo={() => void draft.undoLast()}
+              />
+            }
+          />
+        </div>
       )}
     </>
   );

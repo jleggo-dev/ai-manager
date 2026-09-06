@@ -1,14 +1,28 @@
 /* ── The meal screen (meal-logging rework P4, canvas "Cadence Meal Logging" 1b + turn-3 B2) ──
  * The meal is the screen: you open Breakfast, not Log. Only the `.ms-*` family lives here — the
  * bracket keeps bracket.css (.mb-*), the row/stepper/chips idiom keeps food-capture.css
- * (.fa-*/.fq-*), and this file composes around both. Copy lives in the components, verbatim from
- * the canvas; this file only draws it.
+ * (the .fa- and .fq- families), and this file composes around both. Copy lives in the
+ * components, verbatim from the canvas; this file only draws it.
+ *
+ * Careful with globs in this header: `.fa-*` followed by `/` closes the comment right there. It
+ * did, for as long as this file has existed — so the `.ms` rule below was swallowed into the
+ * garbage selector that followed and never applied at all, which is why the meal screen grew
+ * past its host instead of scrolling inside it (found 2026-09-06). cover.contract.test.ts now
+ * parses this file and fails if a rule goes missing the same way.
  */
 
+/* The meal screen fills its host and clips INSIDE itself — .ms-scroll / .ms-panel-scroll do the
+   scrolling, so the header stays put and the footer (or the draft strip) stays pinned where the
+   design puts it. `min-height: 100%` did the opposite: the column grew past its host, so the
+   strip carrying "Done · back to breakfast" sat 300px below the bottom of the phone (measured on
+   the capture sheet, 2026-09-06) — and on the Food tab, whose .app is overflow:hidden, whatever
+   ran over was clipped away entirely. Both hosts are flex columns with a real height, so
+   flex + min-height:0 is what makes the inner scrollers actually scroll. */
 .ms {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
   background: var(--ink);
 }
 .ms-scroll {
@@ -240,10 +254,18 @@
   color: var(--text-dim);
   cursor: pointer;
 }
+/* The doors carry the capture set's own drawings (captureIcons.tsx), so a door looks like
+   itself whichever way you came in. Stroke-only, currentColor — the tint is set here. */
 .ms-door i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-style: normal;
-  font-size: 16px;
   color: var(--text-mute);
+}
+.ms-door i svg {
+  width: 20px;
+  height: 20px;
 }
 .ms-express,
 .ms-day-link {
@@ -292,11 +314,30 @@
   margin-bottom: 6px;
 }
 
+/* ── A cover — the surface that ASKS ──────────────────────────────────────────
+ * The serving sheet (and the scanner's twin) is drawn over everything, not appended after it.
+ * In flow it rendered below the strip of a panel already taller than the sheet hosting it, so
+ * it never entered the viewport and a tap on a › food read as a dead button (owner, on device,
+ * 2026-09-06). Above .sheet (51) and .ms-sheet-backdrop (40); opaque, because the panel it
+ * covers stays mounted so the search field keeps its text and its focus. */
+.ms-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--ink);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+}
+
 /* ── The add panel (turn-3 B2 — no sheet at all) ───────────────────────────── */
 .ms-panel {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
   background: var(--ink);
 }
 .ms-panel-head {

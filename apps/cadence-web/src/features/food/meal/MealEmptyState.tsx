@@ -6,6 +6,7 @@
  */
 import type { MealKind } from '@cadence/shared';
 import { useRecipes } from '../../../lib/query/index.ts';
+import { CameraIcon, ClockIcon, ScanIcon, ShelfIcon } from '../captureIcons.tsx';
 import { FoodPickHead, FoodPickRow } from '../FoodPickRow.tsx';
 import { useUsualAtSlot } from '../useUsualAtSlot.ts';
 import { fmtKcal } from '../bracket/copy.ts';
@@ -79,9 +80,14 @@ export function MealEmptyState({
       <button type="button" className="ms-field" onClick={onSearch}>
         Search, or just describe it…
       </button>
+      {/* Small buttons, not the main event (1b B1) — but the SAME drawings the capture sheet's
+          tiles use. They were ad-hoc text glyphs (◲ ▥ ◷ ◍), so one door read as two different
+          apps depending on which way you came in (owner, on device, 2026-09-06). */}
       <div className="ms-doors">
         <label className="ms-door">
-          <i aria-hidden="true">◲</i>
+          <i aria-hidden="true">
+            <CameraIcon />
+          </i>
           Picture
           <input
             type="file"
@@ -96,15 +102,21 @@ export function MealEmptyState({
           />
         </label>
         <button type="button" className="ms-door" disabled={busy} onClick={onBarcode}>
-          <i aria-hidden="true">▥</i>
+          <i aria-hidden="true">
+            <ScanIcon />
+          </i>
           Barcode
         </button>
         <button type="button" className="ms-door" disabled={busy} onClick={onRecents}>
-          <i aria-hidden="true">◷</i>
+          <i aria-hidden="true">
+            <ClockIcon />
+          </i>
           Recents
         </button>
         <button type="button" className="ms-door" disabled={busy} onClick={onMyMeals}>
-          <i aria-hidden="true">◍</i>
+          <i aria-hidden="true">
+            <ShelfIcon />
+          </i>
           My meals
         </button>
       </div>
