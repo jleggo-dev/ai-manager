@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   createUserRoutine,
   updateUserRoutine,
@@ -6,6 +6,8 @@ import {
   type UserRoutineProvenance,
 } from '../../lib/api/user-routines.ts';
 import type { OccurrenceSession, SessionItem } from '@cadence/shared';
+import { clearDraft, writeDraft, type BuilderDraft } from './draftStore.ts';
+import { describeDraft } from './draftMessage.ts';
 import {
   addCircuitExercise,
   addStepOfKind,
@@ -55,6 +57,8 @@ export function ActivityBuilder({
   onSaved,
   onClose,
   onAskReview,
+  restore,
+  onMinimize,
 }: {
   initial?: {
     name?: string;
@@ -74,29 +78,57 @@ export function ActivityBuilder({
   updateRoutineId?: string;
   onSaved: (routine: UserRoutine) => void;
   onClose: () => void;
-  /** The save moment's "Ask the coach to look at it" (owner ruling 2026-09-01) — hands the ask,
-   *  in the user's own visible words, to whatever steer bridge the host wires. The door hides
-   *  itself without one. Her context pack already carries the routine's steps, so the ask needs
-   *  no payload beyond the name. */
+  /** "Ask the coach" — hands the ask, in the user's own visible words, to whatever steer bridge the
+   *  host wires. The door hides itself without one. From the SAVE MOMENT the name is the whole
+   *  payload (the routine is on the server, so her context pack carries its steps); from a DRAFT
+   *  the steps travel in the message, because a draft is on nobody's server (draftMessage.ts). */
   onAskReview?: (text: string) => void;
+  /**
+   * A draft this device was already holding (draftStore.ts), seeded straight into the state below.
+   * Set by the host when the pill reopens a minimized builder, or on a launch that found one left
+   * over from before a force-quit. It wins over `initial`: it IS the later version of it.
+   */
+  restore?: BuilderDraft;
+  /**
+   * Step aside without deciding anything — the owner's third door (2026-09-06), and the one a nav
+   * tap now takes by itself. The draft is held on disk either way, so the host is free to simply
+   * hide this screen and offer it back; nothing here needs to ask a question first.
+   */
+  onMinimize?: () => void;
 }) {
-  const isUpdate = !!updateRoutineId;
-  if (import.meta.env.DEV && isUpdate && !initial?.session) {
+  const isUpdate = !!(updateRoutineId ?? restore?.updateRoutineId);
+  // A restored draft IS something to edit, so it satisfies the same requirement `initial.session`
+  // does — the assertion is about having content, not about which door delivered it.
+  if (import.meta.env.DEV && isUpdate && !initial?.session && !restore) {
     throw new Error('ActivityBuilder: updateRoutineId requires initial.session — nothing to edit without one.');
   }
-  const [phase, setPhase] = useState<'type' | 'builder' | 'saved'>(initial?.session || isUpdate ? 'builder' : 'type');
-  const [family, setFamily] = useState<BuilderFamily | null>(null);
-  const [cards, setCards] = useState<BuilderCard[]>(() => cardsFromSession(initial?.session));
-  const [name, setName] = useState(initial?.name ?? '');
-  const [area, setArea] = useState<UserRoutine['area'] | undefined>(initial?.area);
+  const [phase, setPhase] = useState<'type' | 'builder' | 'saved'>(
+    restore?.phase ?? (initial?.session || isUpdate ? 'builder' : 'type'),
+  );
+  const [family, setFamily] = useState<BuilderFamily | null>(restore?.family ?? null);
+  const [cards, setCards] = useState<BuilderCard[]>(() => restore?.cards ?? cardsFromSession(initial?.session));
+  const [name, setName] = useState(restore?.name ?? initial?.name ?? '');
+  const [area, setArea] = useState<UserRoutine['area'] | undefined>(restore?.area ?? initial?.area);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedRoutine, setSavedRoutine] = useState<UserRoutine | null>(null);
 
-  const initialName = (initial?.name ?? '').trim();
-  const hasEdits = cards.length > 0 || name.trim() !== initialName;
+  /**
+   * Hold the draft on every change, so minimizing it is lossless without anyone deciding to save.
+   *
+   * This is what lets a nav tap ask nothing at all: the promise the pill makes ("it's still
+   * there") is kept by disk, not by the component staying mounted, so it survives a force-quit
+   * and iOS reclaiming the webview. `writeDraft` drops an empty draft rather than storing it, so
+   * opening the builder, looking at it and tapping away leaves nothing behind.
+   *
+   * Only while there is a draft to hold: the saved phase has already handed its routine over, and
+   * re-persisting it there would put a finished activity back in the pill.
+   */
+  useEffect(() => {
+    if (phase === 'saved') return;
+    writeDraft({ phase, family, cards, name, area, updateRoutineId });
+  }, [phase, family, cards, name, area, updateRoutineId]);
 
   function pickSeed(seed: BuilderSeed) {
     setCards(cardsFromSession(seed.session));
@@ -112,10 +144,22 @@ export function ActivityBuilder({
     setPhase('builder');
   }
 
-  function requestClose() {
-    if (hasEdits) setConfirmClose(true);
-    else onClose();
+  /**
+   * Throw the draft away, on purpose and at once.
+   *
+   * There is no "are you sure?" here by owner ruling (2026-09-06), and the reason it is safe to
+   * drop is that navigation no longer destroys anything: the way to leave without deciding is to
+   * tap a tab, which minimizes. That leaves Discard as the one deliberate destructive act on the
+   * screen, under a button that says exactly what it does.
+   */
+  function discard() {
+    clearDraft();
+    onClose();
   }
+
+  /** "Ask the coach" from inside a draft — the steps travel with it (draftMessage.ts), and the
+   *  builder steps aside rather than closing, so the draft is still there to apply her answer to. */
+  const draftAsk = onAskReview && phase === 'builder' ? describeDraft(name, cards) : null;
 
   async function handleSave() {
     if (saving) return;
@@ -138,6 +182,7 @@ export function ActivityBuilder({
       setSaveError('Couldn’t save — try again. Your steps are still here.');
       return;
     }
+    clearDraft(); // it is a routine now, not unfinished business the pill should keep offering
     setSavedRoutine(result);
     setPhase('saved');
   }
@@ -150,7 +195,7 @@ export function ActivityBuilder({
         onPickSeed={pickSeed}
         onBlank={pickBlank}
         onBackToFamilies={() => setFamily(null)}
-        onClose={onClose}
+        onClose={discard}
       />
     );
   }
@@ -171,10 +216,25 @@ export function ActivityBuilder({
 
   return (
     <div className="ab" role="region" aria-label="Build your own activity">
+      {/* Three doors, and the fourth is the tab bar: minimize is what a nav tap does by itself, so
+          it needs no button here (owner, 2026-09-06). Ask the coach sits in the middle because it is
+          the one that keeps the draft — Discard and Save both end it. */}
       <div className="ab-bhead">
-        <button type="button" className="ab-cancel" onClick={requestClose}>
-          Cancel
+        <button type="button" className="ab-discard" onClick={discard}>
+          Discard
         </button>
+        {draftAsk && (
+          <button
+            type="button"
+            className="ab-ask"
+            onClick={() => {
+              onMinimize?.();
+              onAskReview?.(draftAsk);
+            }}
+          >
+            Ask the coach
+          </button>
+        )}
         <button type="button" className="ab-save" onClick={() => void handleSave()} disabled={saving}>
           {saving ? 'Saving…' : isUpdate ? 'Save changes' : 'Save'}
         </button>
@@ -225,29 +285,6 @@ export function ActivityBuilder({
           }}
           onClose={() => setPaletteOpen(false)}
         />
-      )}
-      {confirmClose && (
-        <div className="ab-confirm-wrap" role="dialog" aria-modal="true" aria-label="Discard this draft?">
-          <div className="ab-confirm">
-            <div className="ab-confirm-t">Discard this draft?</div>
-            <div className="ab-confirm-sub">Your steps won’t be saved.</div>
-            <div className="ab-confirm-row">
-              <button type="button" onClick={() => setConfirmClose(false)}>
-                Keep editing
-              </button>
-              <button
-                type="button"
-                className="ab-confirm-danger"
-                onClick={() => {
-                  setConfirmClose(false);
-                  onClose();
-                }}
-              >
-                Discard
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

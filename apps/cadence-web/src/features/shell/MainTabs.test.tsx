@@ -1,6 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MainTabs } from './MainTabs.tsx';
+import { writeDraft } from '../builder/draftStore.ts';
+
+// The shell reads a held draft on mount (draftStore.ts), so each test starts on a clean device —
+// otherwise one test's draft opens the next test's builder.
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 /**
  * The shell's hand-off wiring (Phase 2, PLAN-CHANGES.md): a steer from the plan surface must
@@ -25,7 +33,16 @@ vi.mock('../onboarding/OnboardingChat.tsx', () => ({
   ),
 }));
 vi.mock('../progress/ProgressView.tsx', () => ({ ProgressView: () => null }));
-vi.mock('../settings/SettingsRoom.tsx', () => ({ SettingsRoom: () => null }));
+// The Settings Room stub renders something identifiable (the real room is a full screen) plus its
+// own `‹` exit, so the nav suite below can tell "the room is still on the glass" apart from "the
+// tab content came back" — the exact distinction the trapped-in-Settings bug turned on.
+vi.mock('../settings/SettingsRoom.tsx', () => ({
+  SettingsRoom: ({ onBack }: { onBack: () => void }) => (
+    <div data-testid="settings-room">
+      <button onClick={onBack}>room-back</button>
+    </div>
+  ),
+}));
 vi.mock('../plan/AdjustSheet.tsx', () => ({
   AdjustSheet: ({ mode }: { mode?: string }) => <div data-testid="adjust-sheet">{mode}</div>,
 }));
@@ -51,16 +68,31 @@ vi.mock('../builder/ActivityBuilder.tsx', () => ({
     onSaved,
     onClose,
     onAskReview,
+    restore,
+    onMinimize,
   }: {
     initial?: unknown;
     onSaved: (routine: unknown) => void;
     onClose: () => void;
     onAskReview?: (text: string) => void;
+    restore?: unknown;
+    onMinimize?: () => void;
   }) => (
     <div>
       <div data-testid="builder-seed">{JSON.stringify(initial ?? null)}</div>
+      {/* What it was reopened FROM, so the shell's restore wiring is visible from out here. */}
+      <div data-testid="builder-restore">{restore ? 'restored' : ''}</div>
       {onAskReview && (
-        <button onClick={() => onAskReview('Can you look over my activity "Hotel HIIT"?')}>builder-ask-review</button>
+        <button
+          onClick={() => {
+            // The real builder minimizes before handing the ask over, so the draft is still
+            // there to apply her answer to (ActivityBuilder.tsx).
+            onMinimize?.();
+            onAskReview('Can you look over my activity "Hotel HIIT"?');
+          }}
+        >
+          builder-ask-review
+        </button>
       )}
       <button onClick={() => onSaved({ routine_id: 'r1' })}>builder-save</button>
       <button onClick={onClose}>builder-close</button>
@@ -131,10 +163,11 @@ describe('MainTabs — hosting the Activity Builder', () => {
 
     fireEvent.click(screen.getByText('builder-ask-review'));
 
-    // The builder is gone and the conversation holds the user's own words — the same visible
-    // autoSend bridge every other steer uses, never a whispered note.
-    expect(screen.queryByTestId('builder-seed')).toBeNull();
+    // The conversation holds the user's own words — the same visible autoSend bridge every other
+    // steer uses, never a whispered note. The builder MINIMIZES rather than closing (2026-09-06),
+    // so the draft her answer is about is one tap away.
     expect(screen.getByTestId('auto-send').textContent).toBe('Can you look over my activity "Hotel HIIT"?');
+    expect(screen.getByLabelText('Back to your draft')).toBeTruthy();
   });
 
   it('Cancel (onClose) also lands back on the plan tab, WITHOUT bumping the reload', () => {
@@ -147,5 +180,174 @@ describe('MainTabs — hosting the Activity Builder', () => {
     expect(screen.queryByTestId('builder-seed')).toBeNull();
     expect(screen.getByText('steer-to-coach')).toBeTruthy();
     expect(screen.getByTestId('plan-reload').textContent).toBe('0');
+  });
+});
+
+/**
+ * The tab bar is the one control that must always work, and it did not: the Settings Room gates
+ * every tab branch in the shell, but the tab buttons only set `tab` — so a tap on Plan, Coach or
+ * Progress swapped the hidden tab underneath and left the room on screen (owner, 2026-09-05:
+ * "I click the other nav buttons and it stays on settings"). A dead nav button throws nothing and
+ * looks exactly like a frozen app, so it gets the table treatment the routers get: every tab that
+ * must leave the room, plus the near-misses that must NOT.
+ */
+describe('MainTabs — the tab bar always leaves the Settings Room', () => {
+  const openSettings = () => {
+    render(<MainTabs email={null} />);
+    fireEvent.click(screen.getByLabelText('Settings'));
+    expect(screen.getByTestId('settings-room')).toBeTruthy();
+  };
+
+  it.each([
+    ['Plan', 'steer-to-coach'],
+    ['Progress', null],
+  ] as const)('tapping %s closes the room and shows that tab', (label, marker) => {
+    openSettings();
+
+    fireEvent.click(screen.getByText(label).closest('button')!);
+
+    expect(screen.queryByTestId('settings-room')).toBeNull();
+    expect(screen.getByText(label).closest('button')!.className).toContain('tab-on');
+    if (marker) expect(screen.getByText(marker)).toBeTruthy();
+  });
+
+  it('tapping Coach closes the room and puts the conversation back on screen', () => {
+    openSettings();
+
+    fireEvent.click(screen.getByText('Coach').closest('button')!);
+
+    expect(screen.queryByTestId('settings-room')).toBeNull();
+    // The chat is kept mounted and hidden with CSS, so "showing" is `display: contents`.
+    expect(screen.getByTestId('auto-send').closest('[style]')!.getAttribute('style')).toContain('contents');
+    expect(screen.getByText('Coach').closest('button')!.className).toContain('tab-on');
+  });
+
+  // Near-misses: the two taps that must leave you exactly where you are.
+  it('tapping Settings again keeps the room open', () => {
+    openSettings();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByTestId('settings-room')).toBeTruthy();
+  });
+
+  it("the room's own back button still closes it", () => {
+    openSettings();
+
+    fireEvent.click(screen.getByText('room-back'));
+
+    expect(screen.queryByTestId('settings-room')).toBeNull();
+    expect(screen.getByText('steer-to-coach')).toBeTruthy();
+  });
+
+  it('the bar shows Settings as current — and Plan as NOT current — while the room is open', () => {
+    openSettings();
+
+    expect(screen.getByLabelText('Settings').className).toContain('tab-on');
+    expect(screen.getByText('Plan').closest('button')!.className).not.toContain('tab-on');
+  });
+});
+
+/**
+ * Minimize — the owner's third door (2026-09-06), and what a nav tap now does by itself.
+ *
+ * The earlier fix made the tab bar ask "discard or keep editing?" before letting you leave. The
+ * ruling replaced the question with a better answer: nothing is lost, so nothing is asked. The
+ * builder steps aside, the draft is held on disk (draftStore.ts, its own suite), and a pill brings
+ * it back. Save and Discard stay deliberate acts with their own buttons.
+ */
+describe('MainTabs — a nav tap minimizes the builder', () => {
+  const openBuilder = () => {
+    render(<MainTabs email={null} />);
+    fireEvent.click(screen.getByLabelText('Quick add'));
+    fireEvent.click(screen.getByText('quick-add-build'));
+    expect(screen.getByTestId('builder-seed')).toBeTruthy();
+  };
+
+  it.each([
+    ['Coach', 'auto-send'],
+    ['Progress', null],
+  ] as const)('tapping %s steps the builder aside and lands there, no questions', (label, marker) => {
+    openBuilder();
+
+    fireEvent.click(screen.getByText(label).closest('button')!);
+
+    expect(screen.getByText(label).closest('button')!.className).toContain('tab-on');
+    if (marker) expect(screen.getByTestId(marker)).toBeTruthy();
+    // Nothing asked, and nothing thrown away: the draft is still mounted behind the pill.
+    expect(screen.queryByText('Discard this draft?')).toBeNull();
+    expect(screen.getByLabelText('Back to your draft')).toBeTruthy();
+  });
+
+  it('the pill brings it back exactly where it was', () => {
+    openBuilder();
+    fireEvent.click(screen.getByText('Progress').closest('button')!);
+
+    fireEvent.click(screen.getByLabelText('Back to your draft'));
+
+    expect(screen.getByTestId('builder-seed').textContent).toBe(JSON.stringify({ name: 'Piano — mine' }));
+    // Back on the glass, so the pill stands down.
+    expect(screen.queryByLabelText('Back to your draft')).toBeNull();
+  });
+
+  it('the gear minimizes it too, and the draft is still reachable from inside Settings', () => {
+    openBuilder();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByTestId('settings-room')).toBeTruthy();
+    // A draft you cannot get back to from where you are standing is the same trap, one screen on.
+    expect(screen.getByLabelText('Back to your draft')).toBeTruthy();
+  });
+
+  // Near-misses: the two exits that END a draft must leave no pill behind.
+  it.each(['builder-save', 'builder-close'])('%s closes it for good — no pill', (button) => {
+    openBuilder();
+
+    fireEvent.click(screen.getByText(button));
+
+    expect(screen.queryByTestId('builder-seed')).toBeNull();
+    expect(screen.queryByLabelText('Back to your draft')).toBeNull();
+    expect(screen.getByText('Plan').closest('button')!.className).toContain('tab-on');
+  });
+
+  it('starting a NEW build over a parked draft opens the new one, not the old', () => {
+    openBuilder();
+    fireEvent.click(screen.getByText('Progress').closest('button')!);
+    expect(screen.getByLabelText('Back to your draft')).toBeTruthy();
+
+    // Minimizing keeps the builder MOUNTED, so this is the tap that would quietly hand back the
+    // parked draft under the new pick's name if the shell reused the instance.
+    fireEvent.click(screen.getByLabelText('Quick add'));
+    fireEvent.click(screen.getByText('quick-add-build'));
+
+    expect(screen.getByTestId('builder-seed').textContent).toBe(JSON.stringify({ name: 'Piano — mine' }));
+    expect(screen.getByTestId('builder-restore').textContent).toBe(''); // a fresh one, not a restore
+  });
+
+  it('with no draft on the device, nothing is offered at launch', () => {
+    render(<MainTabs email={null} />);
+
+    expect(screen.queryByLabelText('Back to your draft')).toBeNull();
+    expect(screen.queryByTestId('builder-seed')).toBeNull();
+  });
+
+  it('a draft left from a previous run comes back as the PILL, not as the screen', () => {
+    writeDraft({
+      phase: 'builder',
+      family: 'practice',
+      cards: [{ id: 'c1', block: { label: 'Practice', items: [{ name: 'Scales', duration_min: 10 }] } }],
+      name: 'Piano — mine',
+    });
+
+    render(<MainTabs email={null} />);
+
+    // Offered, never imposed: relaunching into someone's half-built activity would be its own hijack.
+    expect(screen.getByLabelText('Back to your draft')).toBeTruthy();
+    expect(screen.getByText('steer-to-coach')).toBeTruthy(); // the plan tab, as ever
+
+    fireEvent.click(screen.getByLabelText('Back to your draft'));
+
+    expect(screen.getByTestId('builder-restore').textContent).toBe('restored');
   });
 });

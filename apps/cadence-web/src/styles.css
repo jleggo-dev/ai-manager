@@ -3936,6 +3936,27 @@ html[data-native] .sheet-body {
 }
 
 /* ── ＋ FAB (log something) + coach bay (Cadence avatar in the crescent) ── */
+/* The way back to a minimized draft (owner's third door, 2026-09-06). Mirrors the ＋ FAB across
+   the screen so the two can be on it at once, and clears the tab bar by the same margin. */
+.draft-pill {
+  position: absolute;
+  left: 18px;
+  bottom: 100px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--forest);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+}
+
 .fab {
   position: absolute;
   right: 18px;
@@ -8714,7 +8735,7 @@ html[data-native] .sheet-body {
   justify-content: space-between;
   padding: 12px 16px 4px;
 }
-.ab-cancel {
+.ab-discard {
   border: none;
   background: transparent;
   font-size: 14px;
@@ -8735,6 +8756,17 @@ html[data-native] .sheet-body {
 .ab-save:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* The middle door of the builder header (owner 2026-09-06). Weighted between its neighbours:
+   heavier than Discard, lighter than Save — it is the one that decides nothing. */
+.ab-ask {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--dusk);
+  cursor: pointer;
+  padding: 6px;
 }
 .ab-name-row {
   display: flex;

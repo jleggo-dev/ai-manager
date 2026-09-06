@@ -24,11 +24,15 @@ vi.mock('../../lib/api/user-routines.ts', async (importOriginal) => {
 });
 
 const { ActivityBuilder } = await import('./ActivityBuilder.tsx');
+const { readDraft } = await import('./draftStore.ts');
 const { SEEDS } = await import('./builderSeeds.ts');
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  // The builder now holds its draft on disk (draftStore.ts). Left behind, it restores itself into
+  // the NEXT test — so the device is wiped between them, exactly as a fresh one would be.
+  window.localStorage.clear();
 });
 
 const savedRoutine: UserRoutine = {
@@ -47,7 +51,7 @@ const savedRoutine: UserRoutine = {
 async function enterBlankBuilder(onSaved = vi.fn(), onClose = vi.fn()) {
   render(<ActivityBuilder onSaved={onSaved} onClose={onClose} />);
   fireEvent.click(screen.getByText('Start blank instead'));
-  await screen.findByText('Cancel');
+  await screen.findByText('Discard');
   return { onSaved, onClose };
 }
 
@@ -223,27 +227,33 @@ describe('ActivityBuilder — cancel', () => {
     expect(screen.queryByText('Discard this draft?')).toBeNull();
   });
 
-  it('with edits (a card added), Cancel shows a light confirm — Keep editing dismisses it', async () => {
+  /**
+   * The "Discard this draft?" confirm is gone, and the reason is the whole 2026-09-06 design: a
+   * nav tap MINIMIZES now, so navigation cannot destroy a draft and there is nothing left to
+   * guard against. Discard became the one deliberate destructive act on the screen, under a
+   * button that says so — owner's call, taking the fewest-taps option over keeping the dialog.
+   */
+  it('Discard throws the draft away at once — no confirm in the way', async () => {
     const onClose = vi.fn();
     await enterBlankBuilder(vi.fn(), onClose);
     fireEvent.click(screen.getByText('＋ Add step'));
     fireEvent.click(screen.getByText('Timer'));
-    fireEvent.click(screen.getByText('Cancel'));
-    expect(screen.getByText('Discard this draft?')).toBeTruthy();
-    expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText('Keep editing'));
+
+    fireEvent.click(screen.getByText('Discard'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Discard this draft?')).toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('Discard on the confirm calls onClose', async () => {
-    const onClose = vi.fn();
-    await enterBlankBuilder(vi.fn(), onClose);
+  it('Discard also wipes the held draft, so nothing is offered back afterwards', async () => {
+    await enterBlankBuilder();
     fireEvent.click(screen.getByText('＋ Add step'));
     fireEvent.click(screen.getByText('Timer'));
-    fireEvent.click(screen.getByText('Cancel'));
+    expect(readDraft()).not.toBeNull(); // held from the first change
+
     fireEvent.click(screen.getByText('Discard'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+
+    expect(readDraft()).toBeNull();
   });
 });
 
