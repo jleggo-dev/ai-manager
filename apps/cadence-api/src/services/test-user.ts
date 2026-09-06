@@ -26,7 +26,38 @@
  */
 export function testUserId(marker: string): string {
   if (!/^[0-9a-f]{4}$/.test(marker)) throw new Error(`testUserId: marker must be 4 hex chars, got "${marker}"`);
-  // 8 hex of pid fills the 12-character final group. Pids are well under 2^32.
-  const pid = (process.pid >>> 0).toString(16).padStart(8, '0').slice(-8);
-  return `00000000-0000-4000-a000-${marker}${pid}`;
+  return `00000000-0000-4000-a000-${marker}${pidHex()}`;
+}
+
+/** 8 hex of pid — fills a uuid's 12-character final group. Pids are well under 2^32. */
+function pidHex(): string {
+  return (process.pid >>> 0).toString(16).padStart(8, '0').slice(-8);
+}
+
+/**
+ * A fixture NAME nobody else is using — the same isolation, for rows that are not keyed by user.
+ *
+ * `testUserId` covers almost everything, because almost everything in `cadence` hangs off a
+ * user_id. The shared food cache is the documented exception: those rows have `owner_user_id =
+ * null` on purpose, so `resetUserData` cannot reach them and a suite has to tidy them by NAME
+ * instead. A name is global. `delete from cadence.foods where name like 'Zzq Test%'` therefore
+ * deletes every concurrent run's fixtures along with its own, and hands back exactly the failure
+ * this module was written to end — one process's row vanishing between two of another's
+ * statements.
+ *
+ * It did, on 2026-09-05: an assertion that a PRIVATE food survived, in a suite where the function
+ * under test provably cannot delete private foods, reddened a PR that had touched nothing but an
+ * Info.plist and two docs files. Re-running it went green, which is the outcome this file's
+ * opening comment warns is the real cost.
+ *
+ * So a name carries the process too. Still starts with `Zzq` so a stray row reads as obviously
+ * synthetic, and so any human-facing sweep for test detritus still finds it.
+ */
+export function testNamePrefix(): string {
+  return `Zzq${pidHex()}`;
+}
+
+/** `Zzq<pid> Latte` — a fixture name unique to this process. Sweep with `testNamePrefix()`. */
+export function testName(base: string): string {
+  return `${testNamePrefix()} ${base}`;
 }
