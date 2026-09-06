@@ -1,7 +1,14 @@
-import { claimPlanRun, setPlanRun, setPlanRunStage, PLAN_RUN_STALE_MINUTES, type PlanRun } from '../repos/users.ts';
+import {
+  claimPlanRun,
+  setPlanRun,
+  setPlanRunStage,
+  setPlanRunDrafted,
+  PLAN_RUN_STALE_MINUTES,
+  type PlanRun,
+} from '../repos/users.ts';
 import { runInBackground } from './background.ts';
 import { sendPlanReadyPush } from './plan-ready-push.ts';
-import type { CommitResult, PlanFlowResult } from './plan-synthesis.ts';
+import type { CommitResult, PlanFlowResult, PlanProgress } from './plan-synthesis.ts';
 
 /**
  * The run machinery behind every background plan synthesis (Phase 0, docs/cadence/PLAN-CHANGES.md).
@@ -17,7 +24,13 @@ import type { CommitResult, PlanFlowResult } from './plan-synthesis.ts';
 
 /** How the run ends, seen by the client poll. Derived by readPlanRun — never stored directly. */
 export type PlanRunState =
-  | { status: 'running'; stage: NonNullable<PlanRun['stage']>; startedAt: string }
+  | {
+      status: 'running';
+      stage: NonNullable<PlanRun['stage']>;
+      startedAt: string;
+      /** Present only during `drafting`, where the fan-out has real sub-events to count. */
+      drafted?: { done: number; total: number; title?: string };
+    }
   | { status: 'failed'; error: string }
   | null;
 
@@ -118,5 +131,28 @@ export function readPlanRun(row: { plan_run?: PlanRun | null } | null): PlanRunS
   const stale = !Number.isFinite(startedMs) || Date.now() - startedMs > PLAN_RUN_STALE_MINUTES * 60_000;
   if (stale) return { status: 'failed', error: 'That run went quiet — try again.' };
   // No stage yet just means the work hasn't reported one — it starts by reading.
-  return { status: 'running', stage: run.stage ?? 'reading', startedAt: run.started_at };
+  return {
+    status: 'running',
+    stage: run.stage ?? 'reading',
+    startedAt: run.started_at,
+    ...(run.drafted ? { drafted: run.drafted } : {}),
+  };
+}
+
+/**
+ * The bridge from a synthesis's progress callbacks to the durable run record.
+ *
+ * Every method is fire-and-forget for the reason `planRunStage` already is: this narrates the
+ * work, and narration that can fail the work is a worse bug than silence. A run with no watcher
+ * simply never gets one of these — `progress` is optional the whole way down.
+ */
+export function planRunProgress(userId: string): PlanProgress {
+  return {
+    stage: (stage) => planRunStage(userId, stage),
+    drafted: (done, total, title) => {
+      void setPlanRunDrafted(userId, done, total, title).catch((err) =>
+        console.warn('[plan-run] drafted write failed:', err),
+      );
+    },
+  };
 }

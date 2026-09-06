@@ -16,6 +16,7 @@ export * from './repertoire.ts';
 export * from './repertoire-seed.ts';
 export * from './types/equipment.ts';
 export * from './types/plan.ts';
+export * from './plan-run-stages.ts';
 export * from './types/occurrence.ts';
 export * from './occurrence-titles.ts';
 export * from './types/progress.ts';

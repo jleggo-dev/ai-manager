@@ -17,7 +17,7 @@ import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
 import { readDensity, densityRepairSteer } from './plan-density.ts';
-import type { Activity, Goal, PendingPlanActivity, PlanVetResult } from '@cadence/shared';
+import type { Activity, Goal, PendingPlanActivity, PlanRunStage, PlanVetResult } from '@cadence/shared';
 
 const COMPLETION_SOURCES = new Set(['self_report', 'healthkit', 'reply', 'auto']);
 
@@ -65,6 +65,25 @@ export interface SynthesizeResult {
   violations?: string[];
 }
 
+/**
+ * Where a synthesis reports what it is doing, so a waiting screen can say something true.
+ *
+ * A callback rather than a direct write to the run record, because synthesis is also run by
+ * flows with no run record at all (smoke scripts, the coach's own tools) — those pass nothing
+ * and the calls become no-ops. Every method must stay fire-and-forget: progress reporting that
+ * can fail a build is worse than no progress reporting.
+ */
+export interface PlanProgress {
+  /** Entering a stage. Called in PLAN_RUN_STAGES order; `repairing` is skipped on a dense week. */
+  stage(stage: PlanRunStage): void;
+  /**
+   * One more per-goal draft has landed, and which goal it was. The only sub-event a long stage
+   * actually has — and naming the goal is what makes it the person's own wait rather than a
+   * counter: "worked out your running" is a fact about them, "2 of 3" is a fact about us.
+   */
+  drafted(done: number, total: number, title?: string): void;
+}
+
 /** Inputs shared by every synthesis path (single-call, per-goal draft, and reduce). */
 export interface SynthesizeOpts {
   goals: Goal[];
@@ -73,6 +92,8 @@ export interface SynthesizeOpts {
   currentPlan?: unknown;
   recentActivity?: unknown;
   userSteer?: string;
+  /** Optional throughout: a synthesis nobody is watching reports to nobody. */
+  progress?: PlanProgress;
 }
 
 /**
@@ -265,6 +286,10 @@ export async function finalizeCoverage(
   const repairDensity = async (current: Partial<Activity>[]): Promise<Partial<Activity>[]> => {
     const density = readDensity(current);
     if (!density.needsRepair) return current;
+    // Only now is `repairing` real: a dense week never enters it, so it is announced when it
+    // starts rather than reserved in advance. A bar that had already budgeted for it would
+    // stall on every plan that did not need it.
+    opts.progress?.stage('repairing');
     try {
       const repaired = await runSynthesize(
         userId,

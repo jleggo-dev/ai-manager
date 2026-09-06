@@ -10,7 +10,7 @@ import { getActivePlan } from '../repos/plans.ts';
 import { evaluateGuardrail } from './goal-guardrail.ts';
 import { observedHealthForPlanning } from './observed-health.ts';
 import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
-import { type PlanFlowResult } from './plan-synthesis.ts';
+import { type PlanFlowResult, type PlanProgress } from './plan-synthesis.ts';
 import { planSynthesize } from './plan-fanout.ts';
 import { confirmPendingPlan } from './plan-commit-flow.ts';
 import { sendPlanReadyPush } from './plan-ready-push.ts';
@@ -22,7 +22,10 @@ import { sendPlanReadyPush } from './plan-ready-push.ts';
  * (BRAND.md's autonomy stance), the same pattern already used for the weekly re-plan proposal.
  * confirmLock applies it; dismissLock discards it so the user can go adjust goals instead.
  */
-export async function previewLock(userId: string): Promise<PlanFlowResult> {
+export async function previewLock(userId: string, progress?: PlanProgress): Promise<PlanFlowResult> {
+  // Everything up to the first model call is gathering: goals, equipment, baseline, observed
+  // health. Fast, but it is what the screen shows for the seconds before `drafting` lands.
+  progress?.stage('reading');
   // Reconcile the live captured set into scope FIRST. A goal still `captured` at lock — a direct
   // /plan/lock, or goals captured after the wizard's confirm step — would otherwise be silently
   // excluded from the plan (the root cause of a multi-goal onboarding producing a one-goal plan).
@@ -62,6 +65,7 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
     baseline,
     equipment,
     ...(observed ? { recentActivity: { observed_health: observed } } : {}),
+    ...(progress ? { progress } : {}),
   });
   if (s.status === 'vetoed') return { status: 'vetoed', violations: s.violations };
 
@@ -84,7 +88,11 @@ export async function previewLock(userId: string): Promise<PlanFlowResult> {
  * call, a smoke script), a missing preview runs previewLock inline first so this never errors
  * just because preview wasn't called; it only ever commits a plan that's actually been vetted.
  */
-export async function confirmLock(userId: string, occurrenceDays = DEFAULT_HORIZON_DAYS): Promise<PlanFlowResult> {
+export async function confirmLock(
+  userId: string,
+  occurrenceDays = DEFAULT_HORIZON_DAYS,
+  progress?: PlanProgress,
+): Promise<PlanFlowResult> {
   // With an ACTIVE plan, a missing pending_plan is the change-card race (the card was applied,
   // dismissed, or expired between screens) — and the old inline fallback answered it by silently
   // rebuilding the whole week: minutes of synthesis, a bulldozed plan, behind a button that
@@ -97,13 +105,14 @@ export async function confirmLock(userId: string, occurrenceDays = DEFAULT_HORIZ
 
   const result = await confirmPendingPlan(
     userId,
-    () => previewLock(userId),
+    () => previewLock(userId, progress),
     async (pending) => {
       // First lock's post-commit: flip the confirmed goals → committed, clear the preview.
       for (const goalId of pending.goal_ids) await setGoalStatus(userId, goalId, 'committed');
       await setPendingPlan(userId, null);
     },
     occurrenceDays,
+    () => progress?.stage('saving'),
   );
 
   // "Your week is ready" — the doom-scroll contract's second half. The build runs minutes and the

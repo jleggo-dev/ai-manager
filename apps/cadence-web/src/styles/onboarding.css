@@ -1120,3 +1120,32 @@
   box-shadow: none;
   cursor: default;
 }
+
+/**
+ * The build bar. Its job is to show MOVEMENT, not to predict a finish: the underlying synthesis
+ * has measured anywhere from 79s to 563s for the same phase, so the width is driven by real
+ * stage transitions and eased between them (planRunProgress, @cadence/shared) rather than by any
+ * estimate. The transition below is what makes a value that updates once a second read as
+ * continuous travel instead of a ratchet.
+ */
+.cwork-bar {
+  width: min(240px, 60%);
+  height: 4px;
+  margin: 10px auto 0;
+  border-radius: 999px;
+  background: var(--line, rgba(0, 0, 0, 0.1));
+  overflow: hidden;
+}
+.cwork-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent, currentColor);
+  transition: width 1s linear;
+}
+/* Reduced motion keeps the bar — it carries information — but stops it sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .cwork-bar > i {
+    transition: none;
+  }
+}

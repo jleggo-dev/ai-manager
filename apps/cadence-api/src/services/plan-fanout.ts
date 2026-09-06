@@ -56,12 +56,23 @@ export async function synthesizeFanoutAndVet(userId: string, opts: SynthesizeOpt
   // 1. Fan-out — draft the goals concurrently in bounded batches (DRAFT_CONCURRENCY), keyed by
   // goal for the coverage backstop. Bounded, not all-at-once: see the constant.
   const drafts: { goal: Goal; activities: Partial<Activity>[] }[] = [];
+  // Counted as they RESOLVE, not as each batch completes: within a batch the goals finish on
+  // wildly different clocks (79s, 97s and 179s in one measured run), and reporting only at the
+  // batch boundary would throw away the two checkpoints in between — which are most of the
+  // movement this stage has to offer.
+  const total = opts.goals.length;
+  let done = 0;
+  opts.progress?.stage('drafting');
+  opts.progress?.drafted(0, total);
   for (let i = 0; i < opts.goals.length; i += DRAFT_CONCURRENCY) {
     drafts.push(
       ...(await Promise.all(
-        opts.goals
-          .slice(i, i + DRAFT_CONCURRENCY)
-          .map((goal) => draftPerGoal(userId, goal, opts).then((activities) => ({ goal, activities }))),
+        opts.goals.slice(i, i + DRAFT_CONCURRENCY).map((goal) =>
+          draftPerGoal(userId, goal, opts).then((activities) => {
+            opts.progress?.drafted(++done, total, goal.title);
+            return { goal, activities };
+          }),
+        ),
       )),
     );
   }
@@ -70,6 +81,7 @@ export async function synthesizeFanoutAndVet(userId: string, opts: SynthesizeOpt
 
   // 2. Reduce — one coordinating synthesize primed with the drafts. Its rationale is the one kept:
   // it is the only call that saw the whole week, so only it can explain the whole shape.
+  opts.progress?.stage('coordinating');
   const { normalized, note, rationale } = await runSynthesize(userId, opts, allDrafts);
   if (normalized.length === 0) return { status: 'vetoed', violations: ['reduce step returned no activities'] };
 

@@ -93,6 +93,7 @@ export {
   acceptProposal,
   dismissProposal,
   lockPlan,
+  getBuildRun,
   getPendingChange,
   dismissPendingChange,
   getPendingChangeDetail,

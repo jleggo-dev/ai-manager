@@ -68,7 +68,7 @@ function NotifyWhenReady() {
 export function BuildingScreen({ onReady, onBackToChat }: { onReady: () => void; onBackToChat: () => void }) {
   const { faceId, setFaceId } = useCoachFace();
   const [built, setBuilt] = useState(false);
-  const { phase, note, error, retry } = useBuildPlan({ onDone: () => setBuilt(true) });
+  const { phase, note, error, retry, progress } = useBuildPlan({ onDone: () => setBuilt(true) });
 
   // No toggle-to-clear here: every tile is a positive choice, and the mark tile IS the way to
   // choose no face. Re-tapping the current face should be a no-op, not a quiet un-picking.
@@ -95,7 +95,11 @@ export function BuildingScreen({ onReady, onBackToChat }: { onReady: () => void;
 
   return (
     <div className="building">
-      <CadenceWorking label={built ? 'Your week is ready.' : 'Building your week…'} note={note} />
+      <CadenceWorking
+        label={built ? 'Your week is ready.' : 'Building your week…'}
+        note={note}
+        progress={built ? 1 : progress}
+      />
 
       <div className="build-say">
         <CoachFace size={40} />

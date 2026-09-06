@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PendingPlanActivity } from '@cadence/shared';
+import type { PendingPlanActivity, PlanRunStage } from '@cadence/shared';
 import { confirmGoals, previewReplan, getPendingReplan } from '../../lib/api.ts';
 import { useAppResume } from '../../lib/useAppResume.ts';
 
 export type ReplanProposal = { activities: PendingPlanActivity[]; note: string };
 export type ReplanPhase = 'idle' | 'thinking' | 'failed';
-/** The run's real stage, reported by the server's durable run record — never guessed here. */
-export type ReplanStage = 'reading' | 'drafting' | 'saving';
+/**
+ * The run's real stage, reported by the server's durable run record — never guessed here.
+ *
+ * An alias, not a copy. This was independently spelled out here, in lib/api/plan.ts, and in the
+ * API's own PlanRun, so a stage added on the server had three places to be forgotten; adding
+ * `coordinating` and `repairing` broke this file, which is precisely the compile error a
+ * hand-copied union is supposed to give you and usually does not.
+ */
+export type ReplanStage = PlanRunStage;
 
 /**
  * Asking for an adjustment, and getting one back — however long that takes and wherever the
@@ -44,6 +51,8 @@ const TICK_MS = 1_000;
  */
 export function waitingNote(stage: ReplanStage | null): string {
   if (stage === 'drafting') return 'Drafting the changes — this is the long part…';
+  if (stage === 'coordinating') return 'Fitting the changes into the rest of your week…';
+  if (stage === 'repairing') return 'Evening out the days that came back thin…';
   if (stage === 'saving') return 'Writing it down…';
   return 'Reading back through your goals and your week…';
 }
