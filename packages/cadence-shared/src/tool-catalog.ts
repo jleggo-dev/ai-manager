@@ -92,7 +92,8 @@ export type ItemField =
   | 'interval_warmup_sec'
   | 'interval_cooldown_sec'
   | 'metronome_bpm'
-  | 'metronome_meter';
+  | 'metronome_meter'
+  | 'per_side';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -136,10 +137,11 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     // now warns against: it taught timer-for-meditate, and by analogy timer-for-any-short-mind-
     // practice, which is how a 5-min noticing practice kept getting a bare clock (probe, 2 of 3
     // runs 2026-08-04) instead of the grounding flow that IS the practice.
-    summary: 'one physical effort held or sustained for a set time — a 1-min plank, a 20-min zone-2 run, a wall sit',
+    summary:
+      'one physical effort held or sustained for a set time — a 1-min plank, a 20-min zone-2 run, a wall sit. A timer of 10 min or more keeps running past its target until they stop it (a ruck can run long) and logs the time they actually spent. Set per_side: true when the hold is done one side then the other (a calf stretch, a single-leg balance) — the app chimes and says "switch sides" at the halfway point, so give duration_min as the TOTAL for both sides',
     notWhen:
       'do NOT pick timer just because a step has a duration: "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch — work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval. A duration alone does not pick the tool: meditate runs silence with bells, grounding runs a noticing game, and timer runs a plain clock',
-    reads: ['duration_min'],
+    reads: ['duration_min', 'per_side'],
     example: { name: 'Forearm plank', tool: 'timer', duration_min: 1 },
   },
   interval: {
@@ -166,7 +168,8 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
   },
   checkoff: {
     class: 'guided',
-    summary: 'do-it-and-confirm with nothing to capture — a distance target, "step outside", a mobility drill',
+    summary:
+      'do-it-and-confirm with nothing to capture — a distance target, "step outside", a mobility drill. Also the check on a BODY part: name it ("Knee check-in") and put the question in detail, and they answer in a few free words',
     notWhen:
       'if they WATCH a clock while doing it, that is timer; checkoff is for things you simply confirm happened (a distance, an errand, a drill). And it is a real step of its own — a cue inside another step is read',
     reads: ['distance_km', 'detail'],
@@ -203,7 +206,8 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     class: 'capture',
     summary:
       "a 20-second check-in — ONE word for how they're doing and how much room it's taking, plus an optional line",
-    notWhen: 'a word and a size, never sentences — writing meant to be reread is journal',
+    notWhen:
+      'a word and a size, never sentences — writing meant to be reread is journal. It is about their HEAD (settled, wired, heavy, foggy) and only that: a check on a knee, a back, an ankle is checkoff with the question in detail, never feeling_log',
     reads: ['detail'],
     example: { name: 'How are you doing?', tool: 'feeling_log' },
   },

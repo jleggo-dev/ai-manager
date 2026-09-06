@@ -45,17 +45,17 @@ step the short version must never drop. `video_query` rides alongside _any_ tool
 
 ### The tool catalog (`StepTool`)
 
-| Tool | Config | Capture | Notes |
-|---|---|---|---|
-| `read` | — | done | A cue to follow (mindset prompt, mobility drill). |
-| `timer` | `seconds`, `chime?` | done | Plank 30s, meditate 5 min, easy-run 20 min. |
-| `reps` | `sets`, `reps?`, `load?` | **structured** | Cycle sets; emits the set log. |
-| `checkoff` | `label?` | done | "Did it" — a distance target, a simple task. |
-| `photo` | `prompt`, `purpose` | **structured** | Meal / progress / form photo. |
-| `journal` | `prompt`, `mode` | **structured** | Text / voice (STT) reflection. |
-| `measure` | `metric`, `unit` | **structured** | Weigh-in and the like. |
-| `rings` | `source:'nutrition'` | none | Insight tool — the macro rings. |
-| `insight` | `card` | none | Insight tool — consistency / count / countdown / trend / streak. |
+| Tool       | Config                   | Capture        | Notes                                                            |
+| ---------- | ------------------------ | -------------- | ---------------------------------------------------------------- |
+| `read`     | —                        | done           | A cue to follow (mindset prompt, mobility drill).                |
+| `timer`    | `seconds`, `chime?`      | done           | Plank 30s, meditate 5 min, easy-run 20 min.                      |
+| `reps`     | `sets`, `reps?`, `load?` | **structured** | Cycle sets; emits the set log.                                   |
+| `checkoff` | `label?`                 | done           | "Did it" — a distance target, a simple task.                     |
+| `photo`    | `prompt`, `purpose`      | **structured** | Meal / progress / form photo.                                    |
+| `journal`  | `prompt`, `mode`         | **structured** | Text / voice (STT) reflection.                                   |
+| `measure`  | `metric`, `unit`         | **structured** | Weigh-in and the like.                                           |
+| `rings`    | `source:'nutrition'`     | none           | Insight tool — the macro rings.                                  |
+| `insight`  | `card`                   | none           | Insight tool — consistency / count / countdown / trend / streak. |
 
 **Capture classes** (`stepCaptureMode`): _orient_ (`rings`/`insight` — write nothing), _guided_
 (`read`/`timer`/`checkoff` — the log records only that it happened), _capture_
@@ -96,18 +96,18 @@ Every current Progress surface is already **deterministic** (`services/progress.
 anywhere in this surface"), so each becomes an insight tool the coach _or_ a plain rule can drop in
 with zero generation. Inventory → placement:
 
-| Surface today | As a step-tool, in… |
-|---|---|
-| Macro **rings** (kcal/protein/carbs/fat left) | first step of "Log a meal"; a "Nutrition check-in" task |
-| Eat-back slider | a step in a workout's completion |
-| Nutrition insight ("eat more spinach") | closing step of the meal task / an end-of-day reflection |
-| **consistency** ("3/7 days") | morning mindset check-in, or the celebration |
-| **count** ("2/12 books · +add one") | already task-shaped — the "+add one" is its capture step |
-| **latest_vs_target** (weight + sparkline) | first step of the weigh-in task, then capture |
-| **countdown** ("marathon 88 days out") | opening step of the run task (motivation) |
-| **trend** (pace / top-load sparkline) | run/lift celebration ("pace: 6:10 → 5:55") |
-| History feed | stays in the **Progress tab** (the archive) |
-| streak + freezes | header pill + "+1 day" on celebration |
+| Surface today                                 | As a step-tool, in…                                      |
+| --------------------------------------------- | -------------------------------------------------------- |
+| Macro **rings** (kcal/protein/carbs/fat left) | first step of "Log a meal"; a "Nutrition check-in" task  |
+| Eat-back slider                               | a step in a workout's completion                         |
+| Nutrition insight ("eat more spinach")        | closing step of the meal task / an end-of-day reflection |
+| **consistency** ("3/7 days")                  | morning mindset check-in, or the celebration             |
+| **count** ("2/12 books · +add one")           | already task-shaped — the "+add one" is its capture step |
+| **latest_vs_target** (weight + sparkline)     | first step of the weigh-in task, then capture            |
+| **countdown** ("marathon 88 days out")        | opening step of the run task (motivation)                |
+| **trend** (pace / top-load sparkline)         | run/lift celebration ("pace: 6:10 → 5:55")               |
+| History feed                                  | stays in the **Progress tab** (the archive)              |
+| streak + freezes                              | header pill + "+1 day" on celebration                    |
 
 Resulting IA: **Today (trail) = _do_ · inside tasks = _orient/reward_ · Progress = _review_.**
 
@@ -140,9 +140,38 @@ degrades gracefully.
 
 ## 7. What's built vs. next
 
+**The ruck round (2026-09-06)** — one 110-minute ruck found seven gaps in the timer, the reps
+tool and the finish, all closed together:
+
+- **The timer keeps time from the wall clock** (`tools/useWallClock.ts`), so leaving the app to
+  start a podcast loses nothing; a native local-notification **alarm** is booked for the target
+  (`localNotifications.scheduleAlarm`, id `TIMER_ALARM_ID`, which plan syncs step around) so the
+  bell rings from a pocket. The iOS audio session is `.playback` + `.mixWithOthers` so chimes
+  sound under the silent switch without stopping the podcast; WebAudio uses one context unlocked
+  on Start (`chime.ts`).
+- **Holds vs efforts** (`step-cues.ts`): a timer of ≥10 min is `open_ended` — it chimes at the
+  target, keeps counting, and **Stop logs the minutes actually spent** (110, not 50); a short hold
+  still auto-advances. the coach states `per_side: true` on a two-sided hold (catalog field) and the
+  step gets `switch_sides`: a halfway chime and a visible "Switch sides"; the cue-text read
+  ("each side / switch sides") is only the fallback for sessions prescribed before the field. **"Did it already"** logs a session done off the
+  phone at the minutes named. The recap line for a done timer is the elapsed time, never the
+  prescription.
+- **Reps auto-advance** on the last set (same `useHandoff` contract as the timer); re-opening a
+  chip inside the beat cancels it.
+- **One tool instance per step** — the shell keys the tool by step id; two consecutive timers had
+  been sharing one component instance, so the second opened with the first's finished clock.
+- **Body check-ins** — a `feeling_log` whose title names a body part ("Knee check-in") is rerouted
+  to a `checkoff` with a `prompt` (free words about the part); the catalog now tells the coach
+  the feeling log is about the head only.
+- **The finish question is decided by minutes** (`sessionOutcome.ts`): a ruck with a one-minute
+  check-in is a movement session and gets "How did it feel?", not "How's your head now?".
+- **Done closes at once** (`StartSheet.handleComplete`): the parse-session-log write runs behind
+  the closed sheet and refreshes the plan when it lands, instead of holding "Done" for 15 s.
+
 **Built & green now (all three workspaces: typecheck + lint + prettier + tests):**
 
 _Walkthrough projection & tools_
+
 - `packages/cadence-shared/src/walkthrough.ts` — `StepTool` catalog, `WalkthroughStep`,
   `deriveWalkthrough`, `inferTool`, `condense`, `stepCaptureMode` (+ unit tests).
 - **Coach specifies the tool** — `SessionItem.tool` (`SessionItemTool`) added; `inferTool` now
@@ -157,6 +186,7 @@ _Walkthrough projection & tools_
   silent). Not yet mounted — drops into the walkthrough shell (slice 3).
 
 _Rewards (parked per owner — foundation only)_
+
 - `types/rewards.ts` (`PointsState`/`PointsView`), `services/points.ts` engine (+ tests), migration
   `0020_points_state.sql` **APPLIED + VERIFIED LIVE** (8 users backfilled, advisor-clean), repo
   `points_state` + `setPointsState`. The finalize / route / UI are deferred.

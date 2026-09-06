@@ -138,10 +138,12 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
     // absent rather than leaving a trailing space.
     case 'measure':
       return log.unit ? `${log.value} ${log.unit}` : log.value;
+    // A finished timer logs the minutes actually spent, never the prescription: a 50-min ruck
+    // that ran to 110 reads "110 min". The two only differ when the effort ran over.
     case 'timer': {
       const m = Math.floor(log.elapsedSec / 60);
       const s = log.elapsedSec % 60;
-      return log.done ? `${Math.round(log.targetSec / 60)} min` : `${m}:${String(s).padStart(2, '0')}`;
+      return log.done ? `${Math.max(1, Math.round(log.elapsedSec / 60))} min` : `${m}:${String(s).padStart(2, '0')}`;
     }
     case 'done':
       return log.note?.trim() || 'done';

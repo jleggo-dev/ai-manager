@@ -53,6 +53,10 @@ export const webCapabilities: Capabilities = {
     sync: async () => 0,
     cancelAll: async () => {},
     pendingCount: async () => 0,
+    // A web timer keeps time from the wall clock and chimes when the tab is next awake; there is
+    // no way to ring a closed tab, so the alarm reports it could not be set rather than pretending.
+    scheduleAlarm: async () => false,
+    cancelAlarm: async () => {},
   },
   // No web equivalent: communication notifications are an iOS system feature, and there is no
   // browser API that makes a notification look like it came from a person.

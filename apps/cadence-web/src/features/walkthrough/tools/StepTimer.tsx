@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C } from './tone.ts';
-import { playChime } from './chime.ts';
+import { CHIME_SWITCH, playChime, playTones, unlockAudio } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
+import { useWallClock } from './useWallClock.ts';
+import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
 import { HandsFree } from './HandsFree.tsx';
+import { card, logBtn, greyBtn, secBtn, chimeOnStyle, footnote, banner, doneRow, minutesInput } from './timerStyles.ts';
 
 type TimerLog = Extract<StepLog, { kind: 'timer' }>;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const minutesOf = (s: number) => Math.round(s / 60) || 1;
 const PREROLL = 5;
 const TIMER_COMMANDS: HandsFreeCommand[] = ['start', 'pause', 'restart'];
 
@@ -16,14 +20,28 @@ const TIMER_COMMANDS: HandsFreeCommand[] = ['start', 'pause', 'restart'];
  * counts m:ss down. Start hands to a **5 s grey pre-roll** (design B3): a cool-grey sweep counting
  * 5→1 with "Get in position", because the phone is on the floor by second two; pre-roll seconds are
  * never logged. At zero the ring resets to full and turns tone, the real clock runs. One tone button
- * toggles Start ⇄ (Skip the count) ⇄ Pause; +1 min / Reset / Chime sit below. One of the steps that
- * auto-advance (see `useHandoff`): on completion it chimes, logs the full duration, and moves on
- * without a tap — Reset inside that window keeps you here. Pause captures
- * partial elapsed (recap shows partial, not skipped); Resume skips the pre-roll.
+ * toggles Start ⇄ (Skip the count) ⇄ Pause; +1 min / Reset / Chime sit below.
+ *
+ * Time is kept by the WALL CLOCK (`useWallClock`), so leaving the app mid-ruck loses nothing, and
+ * a native alarm is booked for the target so the bell rings from a pocket.
+ *
+ * Two shapes, decided by the step (step-cues.ts):
+ *  • a HOLD — reaching the target chimes, logs the full duration and hands off to the next step
+ *    without a tap (see `useHandoff`); Reset inside that window keeps you here.
+ *  • an EFFORT (`openEnded`) — reaching the target chimes and logs, but the clock KEEPS RUNNING
+ *    over, and "Stop" logs the time actually spent. A 50-minute ruck that ran to 110 is logged
+ *    as 110, not 50.
+ * `switchSides` adds a chime and a visible cue at the halfway point. "Did it already" logs a
+ * session done off the phone — a ruck with the watch, a walk without the app — at the minutes
+ * you name. Pause captures partial elapsed (recap shows partial, not skipped); Resume skips the
+ * pre-roll.
  */
 export function StepTimer({
   seconds,
   chime,
+  openEnded = false,
+  switchSides = false,
+  title,
   nextTitle,
   log,
   onLog,
@@ -31,6 +49,9 @@ export function StepTimer({
 }: {
   seconds: number;
   chime: boolean;
+  openEnded?: boolean;
+  switchSides?: boolean;
+  title?: string;
   nextTitle?: string;
   log?: TimerLog;
   onLog: (l: TimerLog) => void;
@@ -38,55 +59,104 @@ export function StepTimer({
 }) {
   const [phase, setPhase] = useState<'idle' | 'preroll' | 'running'>('idle');
   const [preroll, setPreroll] = useState(PREROLL);
-  const [elapsed, setElapsed] = useState(log?.done ? seconds : (log?.elapsedSec ?? 0));
+  // The clock: `base` is what was done before the current run; `startedAt` the instant it began.
+  const [base, setBase] = useState(log?.done ? log.elapsedSec : (log?.elapsedSec ?? 0));
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const elapsed = useWallClock(startedAt, base);
   const [chimeOn, setChimeOn] = useState(chime);
+  const [didIt, setDidIt] = useState(false);
+  const [didItMin, setDidItMin] = useState(String(minutesOf(seconds)));
   const finished = useRef(log?.done ?? false);
+  const switched = useRef(false);
   const handoff = useHandoff();
   const [voiceOn, setVoiceOn] = useState(false);
   const remaining = Math.max(0, seconds - elapsed);
+  const over = elapsed - seconds;
+
+  /** Start the clock from `base` — now, from the wall clock. Books the pocket bell. */
+  function run() {
+    const now = Date.now();
+    setStartedAt(now);
+    setPhase('running');
+    if (base < seconds) bookTimerAlarm(now + (seconds - base) * 1000, title ?? 'Time', mmss(seconds));
+  }
+
+  /** Stop the clock at `at` seconds, keeping them. */
+  function halt(at: number) {
+    setBase(at);
+    setStartedAt(null);
+    setPhase('idle');
+    cancelTimerAlarm();
+  }
 
   useEffect(() => {
     if (phase !== 'preroll') return undefined;
     if (preroll <= 0) {
-      setPhase('running');
+      run();
       if (chimeOn) playChime();
       return undefined;
     }
     const id = setTimeout(() => setPreroll((p) => p - 1), 1000);
     return () => clearTimeout(id);
-  }, [phase, preroll, chimeOn]);
+  });
+
+  // Halfway, for a two-sided hold: the ear gets a turn-over chime, the eye gets the banner.
+  useEffect(() => {
+    if (!switchSides || phase !== 'running' || switched.current || elapsed < seconds / 2) return;
+    switched.current = true;
+    if (chimeOn) playTones(CHIME_SWITCH);
+    navigator.vibrate?.(30);
+  }, [switchSides, phase, elapsed, seconds, chimeOn]);
 
   useEffect(() => {
-    if (phase !== 'running') return undefined;
-    const id = setInterval(() => setElapsed((e) => Math.min(seconds, e + 1)), 1000);
-    return () => clearInterval(id);
-  }, [phase, seconds]);
+    if (phase !== 'running' || elapsed < seconds || finished.current) return;
+    finished.current = true;
+    if (chimeOn) playChime();
+    navigator.vibrate?.(60);
+    cancelTimerAlarm();
+    onLog({ kind: 'timer', elapsedSec: seconds, targetSec: seconds, done: true });
+    // An effort keeps the clock running; a hold stops here and moves on.
+    if (openEnded) return;
+    halt(seconds);
+    handoff.schedule(onDone, 600);
+  });
 
-  useEffect(() => {
-    if (phase === 'running' && elapsed >= seconds && !finished.current) {
-      finished.current = true;
-      setPhase('idle');
-      if (chimeOn) playChime();
-      onLog({ kind: 'timer', elapsedSec: seconds, targetSec: seconds, done: true });
-      handoff.schedule(onDone, 600);
-    }
-  }, [phase, elapsed, seconds, chimeOn, onLog, onDone, handoff]);
+  // Whatever is booked on the notification centre dies with the tool.
+  useEffect(() => () => cancelTimerAlarm(), []);
 
   function reset() {
     handoff.cancel(); // Reset inside the 600 ms hand-off means stay here, don't move on.
-    setPhase('idle');
+    halt(0);
     finished.current = false;
-    setElapsed(0);
+    switched.current = false;
+  }
+
+  /** The effort's own ending: stop the clock and log the time actually spent. */
+  function stop() {
+    halt(elapsed);
+    onLog({ kind: 'timer', elapsedSec: elapsed, targetSec: seconds, done: true });
+    handoff.schedule(onDone, 600);
+  }
+
+  /** Done off the phone — log the minutes named, then move on. */
+  function logDidIt() {
+    const min = Math.max(1, Math.round(Number(didItMin) || minutesOf(seconds)));
+    finished.current = true;
+    halt(min * 60);
+    onLog({ kind: 'timer', elapsedSec: min * 60, targetSec: seconds, done: true });
+    handoff.schedule(onDone, 600);
   }
 
   function primary() {
+    unlockAudio(); // inside the gesture, so the chimes a minute from now are allowed to sound
     if (phase === 'running') {
-      setPhase('idle');
+      if (finished.current) return stop();
+      halt(elapsed);
       onLog({ kind: 'timer', elapsedSec: elapsed, targetSec: seconds, done: false });
     } else if (phase === 'preroll') {
-      setPhase('running'); // skip the count
-    } else if (elapsed > 0) {
-      setPhase('running'); // resume — no pre-roll
+      run(); // skip the count
+    } else if (base > 0) {
+      run(); // resume — no pre-roll
     } else {
       setPreroll(PREROLL);
       setPhase('preroll');
@@ -107,7 +177,9 @@ export function StepTimer({
   );
 
   const isPre = phase === 'preroll';
-  const frac = isPre ? preroll / PREROLL : seconds > 0 ? elapsed / seconds : 0;
+  const isOver = phase === 'running' && finished.current && over >= 0;
+  const frac = isPre ? preroll / PREROLL : seconds > 0 ? Math.min(1, elapsed / seconds) : 0;
+  const showSwitch = switchSides && phase === 'running' && switched.current && !finished.current;
 
   return (
     <div style={card}>
@@ -139,7 +211,7 @@ export function StepTimer({
                 fill="none"
                 strokeWidth={13}
                 strokeLinecap="round"
-                stroke={isPre ? 'oklch(78% 0.008 250)' : TONE.fillA}
+                stroke={isPre ? 'oklch(78% 0.008 250)' : isOver ? TONE.deep : TONE.fillA}
                 strokeDasharray={`${RING_C * frac} ${RING_C}`}
                 transform="rotate(-90 64 64)"
                 style={{ transition: isPre ? 'none' : 'stroke-dasharray 1s linear' }}
@@ -157,7 +229,7 @@ export function StepTimer({
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
-              {isPre ? preroll : mmss(remaining)}
+              {isPre ? preroll : isOver ? `+${mmss(over)}` : mmss(remaining)}
             </div>
             {!isPre && (
               <div
@@ -169,7 +241,7 @@ export function StepTimer({
                   color: TONE.sub,
                 }}
               >
-                left of {mmss(seconds)}
+                {isOver ? `past ${mmss(seconds)}` : `left of ${mmss(seconds)}`}
               </div>
             )}
           </div>
@@ -193,21 +265,27 @@ export function StepTimer({
             </div>
           </div>
         )}
+        {showSwitch && <div style={banner}>Switch sides</div>}
+        {isOver && (
+          <div style={{ ...banner, background: 'oklch(96% 0.035 62)' }}>Time&apos;s up — keep going or stop</div>
+        )}
       </div>
 
       <button style={isPre ? greyBtn : logBtn} onClick={primary}>
-        {phase === 'running'
-          ? 'Pause'
-          : isPre
-            ? 'Skip the count · start now'
-            : elapsed > 0
-              ? 'Resume'
-              : `Start · ${Math.round(seconds / 60) || 1} min`}
+        {isOver
+          ? `Stop · log ${minutesOf(elapsed)} min`
+          : phase === 'running'
+            ? 'Pause'
+            : isPre
+              ? 'Skip the count · start now'
+              : base > 0
+                ? 'Resume'
+                : `Start · ${minutesOf(seconds)} min`}
       </button>
 
       {!isPre && (
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={secBtn} onClick={() => setElapsed((e) => Math.max(0, e - 60))}>
+          <button style={secBtn} onClick={() => setBase((b) => Math.max(0, b - 60))}>
             +1 min
           </button>
           <button style={secBtn} onClick={reset}>
@@ -219,69 +297,38 @@ export function StepTimer({
         </div>
       )}
 
+      {phase === 'idle' && base === 0 && !finished.current && (
+        <div style={doneRow}>
+          {didIt ? (
+            <>
+              <input
+                style={minutesInput}
+                inputMode="numeric"
+                aria-label="Minutes done"
+                value={didItMin}
+                onChange={(e) => setDidItMin(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+              />
+              <span style={{ fontSize: 12, fontWeight: 800, color: TONE.sub }}>min</span>
+              <button style={{ ...secBtn, flex: 'none', padding: '10px 14px' }} onClick={logDidIt}>
+                Log it done
+              </button>
+            </>
+          ) : (
+            <button style={{ ...secBtn, border: 'none', padding: 4 }} onClick={() => setDidIt(true)}>
+              Did it already — log it without the clock
+            </button>
+          )}
+        </div>
+      )}
+
       <HandsFree state={voice} on={voiceOn} onToggle={() => setVoiceOn((v) => !v)} />
 
       <div style={footnote}>
-        Logs {Math.round(seconds / 60) || 1} min and {nextTitle ? `moves to ${nextTitle} on its own` : 'moves on'} when
-        it ends. Pausing keeps the time you&apos;ve done.
+        {openEnded
+          ? `Chimes at ${minutesOf(seconds)} min and keeps counting — stop it when you're done and it logs the time you actually did${nextTitle ? `, then moves to ${nextTitle}` : ''}.`
+          : `Logs ${minutesOf(seconds)} min and ${nextTitle ? `moves to ${nextTitle} on its own` : 'moves on'} when it ends.`}
+        {switchSides ? ' Chimes halfway to switch sides.' : ''} Pausing keeps the time you&apos;ve done.
       </div>
     </div>
   );
 }
-
-const card: CSSProperties = {
-  background: 'white',
-  border: '1px solid oklch(91% 0.015 85)',
-  borderRadius: 18,
-  padding: 18,
-  boxShadow: '0 1px 3px oklch(0% 0 0 / 0.04)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 14,
-};
-const logBtn: CSSProperties = {
-  border: 'none',
-  borderRadius: 16,
-  padding: 15,
-  fontSize: 15,
-  fontWeight: 900,
-  color: 'white',
-  cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
-};
-const greyBtn: CSSProperties = {
-  border: 'none',
-  borderRadius: 16,
-  padding: 15,
-  fontSize: 15,
-  fontWeight: 900,
-  color: 'oklch(42% 0.02 150)',
-  cursor: 'pointer',
-  background: 'linear-gradient(180deg, oklch(96% 0.008 85) 0%, oklch(93% 0.01 85) 46%)',
-  boxShadow: '0 5px 0 oklch(87% 0.015 85)',
-};
-const secBtn: CSSProperties = {
-  flex: 1,
-  textAlign: 'center',
-  background: 'white',
-  border: '1.5px solid oklch(90% 0.015 95)',
-  borderRadius: 12,
-  padding: '10px 0',
-  fontSize: 12,
-  fontWeight: 900,
-  color: 'oklch(40% 0.02 150)',
-  cursor: 'pointer',
-};
-const chimeOnStyle: CSSProperties = {
-  background: 'oklch(97% 0.02 74)',
-  border: '1.5px solid oklch(86% 0.04 66)',
-  color: TONE.chipInk,
-};
-const footnote: CSSProperties = {
-  borderTop: '1px solid oklch(93% 0.012 85)',
-  paddingTop: 12,
-  fontSize: 11.5,
-  lineHeight: 1.4,
-  color: 'oklch(48% 0.02 150)',
-};

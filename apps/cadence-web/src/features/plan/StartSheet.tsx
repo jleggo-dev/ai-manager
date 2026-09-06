@@ -84,15 +84,19 @@ export function StartSheet({
     };
   }, [detail]);
 
-  async function handleComplete(summary: string) {
+  /**
+   * Done closes the sheet NOW. The write behind it — a model parse of the summary into a
+   * structured log — takes ten to fifteen seconds, and waiting on it left "Done" apparently dead
+   * on a finished ruck (2026-09-06). The celebration already happened; nothing on this screen
+   * depends on the server's answer. The plan refresh runs when the write lands (or fails — the
+   * refresh then shows reality), so the trail catches up on its own.
+   */
+  function handleComplete(summary: string) {
     if (!detail) return;
-    try {
-      if (summary.trim()) await logOccurrence(detail.occurrence_id, summary);
-      else await setOccurrence(detail.occurrence_id, 'done');
-    } catch {
-      /* best-effort — the plan refresh reflects reality */
-    }
-    onLogged?.();
+    const write = summary.trim()
+      ? logOccurrence(detail.occurrence_id, summary)
+      : setOccurrence(detail.occurrence_id, 'done');
+    void write.catch(() => undefined).then(() => onLogged?.());
     setRun(null);
     onClose();
   }

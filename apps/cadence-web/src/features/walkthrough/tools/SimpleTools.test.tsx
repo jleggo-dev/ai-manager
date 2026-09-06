@@ -32,6 +32,20 @@ describe('StepCheckoff — did it, with an optional note', () => {
     expect(screen.queryByPlaceholderText('anything to add? (optional)')).not.toBeInTheDocument();
   });
 
+  // The body-side check-in: "Knee check-in" prescribed as a feeling_log asked settled / wired /
+  // foggy about a knee (2026-09-06). With a prompt, the checkoff IS the question and the note is
+  // the answer.
+  it('with a prompt it asks the question, and the answer rides the log', () => {
+    const onLog = vi.fn();
+    render(<StepCheckoff prompt="How is the knee?" onLog={onLog} />);
+    expect(screen.getByText('How is the knee?')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('a few words (optional)'), {
+      target: { value: 'a little stiff on the downhill' },
+    });
+    fireEvent.click(screen.getByText('Log it'));
+    expect(onLog).toHaveBeenCalledWith({ kind: 'done', note: 'a little stiff on the downhill' });
+  });
+
   it('degrades honestly: a logged step with no note shows no note line at all', () => {
     const { container } = render(<StepCheckoff log={{ kind: 'done' }} onLog={() => {}} />);
     expect(screen.getByText('✓ Logged')).toBeInTheDocument();

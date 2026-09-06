@@ -69,10 +69,36 @@ describe('sessionOutcome', () => {
     expect(o.asks).toBe('felt_state');
   });
 
-  it('treats a mixed session containing any mind tool as a mind session', () => {
-    const steps = [reps('warmup'), breathing('winddown')];
-    const logs: StepLogs = {};
-    expect(sessionOutcome(steps, logs).kind).toBe('mind');
+  // The session is what most of its MINUTES were. A 50-min ruck with a one-minute check-in at the
+  // end was asked "how's your head now?" (2026-09-06) because one feeling_log made it all mind.
+  it('a mixed session is mind when the mind tools carry most of the time', () => {
+    const steps = [reps('warmup'), { ...breathing('winddown'), minutes: 10 }];
+    expect(sessionOutcome(steps, {}).kind).toBe('mind');
+  });
+
+  it('a movement session with a short check-in stays a movement session', () => {
+    const ruck: WalkthroughStep = {
+      id: 'ruck',
+      title: 'Ruck',
+      minutes: 50,
+      tool: { kind: 'timer', seconds: 3000, open_ended: true },
+      core: true,
+      skippable: false,
+    };
+    const checkin: WalkthroughStep = {
+      id: 'head',
+      title: 'How are you doing?',
+      minutes: 1,
+      tool: { kind: 'feeling_log' },
+      skippable: true,
+    };
+    const o = sessionOutcome([ruck, checkin], {
+      ruck: { kind: 'timer', elapsedSec: 6600, targetSec: 3000, done: true },
+      head: { kind: 'feeling_log', word: 'settled', family: null, room: 1 },
+    });
+    expect(o.kind).toBe('movement');
+    expect(o.asks).toBe('rpe');
+    expect(o.question).toBe('How did it feel?');
   });
 
   it('handles a session where nothing was logged at all', () => {

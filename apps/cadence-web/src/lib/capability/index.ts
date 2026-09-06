@@ -100,11 +100,29 @@ export interface LocalNotificationsCapability {
   isAvailable(): boolean;
   /** iOS shares one permission with push — granting either covers both. */
   requestPermission(): Promise<boolean>;
-  /** Replace ALL Cadence-owned reminders with exactly these. Idempotent. */
+  /** Replace ALL Cadence-owned reminders with exactly these. Idempotent. Leaves the alarm alone. */
   sync(specs: LocalNotificationSpec[]): Promise<number>;
   cancelAll(): Promise<void>;
   pendingCount(): Promise<number>;
+  /**
+   * The one fixed-moment alarm: a walkthrough timer ringing while the phone is in a pocket and
+   * the webview is asleep. It is NOT a plan reminder — `sync` and `cancelAll` step around it —
+   * and there is only ever one, because only one timer runs at a time. Rescheduling replaces.
+   * Resolves false when nothing could be scheduled (web, or permission refused).
+   */
+  scheduleAlarm(alarm: TimerAlarm): Promise<boolean>;
+  cancelAlarm(): Promise<void>;
 }
+
+/** What the alarm says when it fires. `at` is an epoch-ms instant, never a relative delay. */
+export interface TimerAlarm {
+  at: number;
+  title: string;
+  body: string;
+}
+
+/** The alarm's reserved id — above every hashed reminder id (those top out at 2147483646 - 1). */
+export const TIMER_ALARM_ID = 2147483646;
 
 /**
  * The coach's face on a notification (iOS communication notifications).

@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C } from './tone.ts';
+import { useHandoff } from './useHandoff.ts';
 
 const GAP = 10;
 type RepsLog = Extract<StepLog, { kind: 'reps' }>;
@@ -10,7 +11,10 @@ type RepsLog = Extract<StepLog, { kind: 'reps' }>;
  * flanking − / + dial; the delta line doubles as the reset-to-target control; the ONE tone button
  * logs the number it names ("Log set 3 · 12 reps"). A fresh set opens at what you logged last (set 1
  * at target), so the common case is repeating reality. Tap a logged chip to re-open + edit it. Every
- * write goes through `onLog` — moving between steps logs nothing.
+ * write goes through `onLog` — moving between steps logs nothing. Logging the LAST set hands off to
+ * the next step on its own, like the timer does (see `useHandoff`): "Sets logged · 1 of 1" was a
+ * dead end that needed a second tap on › (2026-09-06). Re-opening a chip inside that window keeps
+ * you here.
  */
 export function StepReps({
   sets,
@@ -18,16 +22,20 @@ export function StepReps({
   load,
   log,
   onLog,
+  onDone,
 }: {
   sets: number;
   reps?: number;
   load?: string;
   log?: RepsLog;
   onLog: (l: RepsLog) => void;
+  /** Called a beat after the last set is logged. Omitted → the step waits for ›. */
+  onDone?: () => void;
 }) {
   const logged = log?.sets ?? [];
   const [editing, setEditing] = useState<number | null>(null);
   const [dial, setDial] = useState<number | null>(null);
+  const handoff = useHandoff();
 
   const fallback = target ?? 10;
   const carry = editing != null ? (logged[editing] ?? fallback) : logged.length ? logged[logged.length - 1]! : fallback;
@@ -44,6 +52,7 @@ export function StepReps({
       setEditing(null);
     } else if (logged.length < sets) {
       onLog({ kind: 'reps', sets: [...logged, reps], target, load });
+      if (logged.length + 1 >= sets && onDone) handoff.schedule(onDone, 700);
     }
     setDial(null);
   }
@@ -151,6 +160,7 @@ export function StepReps({
               onClick={
                 done
                   ? () => {
+                      handoff.cancel(); // re-opening a set inside the hand-off window means stay
                       setEditing(i);
                       setDial(logged[i]!);
                     }

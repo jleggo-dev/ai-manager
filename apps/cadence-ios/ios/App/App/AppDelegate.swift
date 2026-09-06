@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 import Capacitor
 
 @UIApplicationMain
@@ -7,8 +8,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        configureAudioSession()
         return true
+    }
+
+    /**
+     The walkthrough's chimes (WebAudio in the webview) play under the default `.ambient`
+     category, which the ring/silent switch mutes — the calf stretch's end bell did not sound on a
+     phone set to silent (2026-09-06). `.playback` is heard regardless of the switch;
+     `.mixWithOthers` keeps a podcast playing underneath rather than ducking or stopping it, which
+     is exactly how the phone is used on a ruck. Nothing else in the app plays sound, so this
+     applies to every chime and to nothing else.
+     */
+    private func configureAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // No audio session — the visual completion state carries the signal, as on the web.
+        }
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

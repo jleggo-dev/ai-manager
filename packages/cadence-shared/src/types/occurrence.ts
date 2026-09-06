@@ -99,6 +99,11 @@ export interface SessionItem {
   metronome_bpm?: number;
   /** Beats to a bar for the accent (default 4). Ignored unless `metronome_bpm` is set. */
   metronome_meter?: number;
+  /** `timer` only — the hold is done one side, then the other (a calf stretch, a single-leg
+   *  balance, a carry). The timer chimes and shows "Switch sides" at the halfway point. The
+   *  coach states it here; the walkthrough only falls back to reading the cue text for sessions
+   *  prescribed before this field existed (step-cues.ts). */
+  per_side?: boolean;
   /** `measure` only — what's being measured ("Weight", "Distance", "Wingspan"). Deliberately NOT
    *  a `SessionItemTool` member (see tool-catalog.ts's exclusion note): the coach never emits this
    *  tool, so these two fields exist only for a client-built activity (or any other direct writer
