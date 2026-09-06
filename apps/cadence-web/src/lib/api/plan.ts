@@ -3,6 +3,7 @@ import type {
   OccurrenceStatus,
   PendingPlanActivity,
   PendingWeekReview,
+  PlanRunStage,
   ProgressData,
   ProgressWindow,
   RhythmWeek,
@@ -278,7 +279,9 @@ export async function dismissReplanPreview(): Promise<void> {
 }
 /** The live run's stage report, verbatim from the server's durable run record. */
 export interface ReplanRun {
-  stage: 'reading' | 'drafting' | 'saving';
+  /** Derived from @cadence/shared: this used to be a hand-copied union, which is how a client
+   *  quietly stops understanding a stage the server has started sending. */
+  stage: PlanRunStage;
   startedAt: string;
 }
 
@@ -538,9 +541,46 @@ export async function toggleWeekReviewMindStep(occurrenceId: string, step: strin
   return res.ok;
 }
 
+/**
+ * Start the first build. Answers 202 as soon as the run is CLAIMED — the synthesis itself runs
+ * in the background and is watched with `getBuildRun`. It used to hold the connection open for
+ * the whole build, which on a phone meant the one thing guaranteed not to survive it.
+ *
+ * `joined: true` means a run was already in flight and this tap joined it rather than starting a
+ * second one; either way the caller polls. 409/422 still carry a real refusal (needs_focus, no
+ * goals) and are surfaced as before.
+ */
 export async function lockPlan(): Promise<{ status: number; body: Record<string, unknown> }> {
   const res = await fetch(`${BASE}/plan/lock`, { method: 'POST', headers: headers() });
   return { status: res.status, body: await res.json() };
+}
+
+/**
+ * Watch the first build. Exactly one of: committed (the plan exists — the artifact IS the answer),
+ * a running record with the stage she is actually in, or a failure worth showing.
+ *
+ * `ok` keeps a failed READ apart from "nothing on file", for the reason getPendingReplan already
+ * does: the paint-before-auth boot fires reads before the bearer token exists, and a 401 folded
+ * into "nothing running" would strand the screen on a build that is going perfectly well.
+ */
+export async function getBuildRun(): Promise<{
+  ok: boolean;
+  committed: boolean;
+  running?: { stage: PlanRunStage; startedAt: string; drafted?: { done: number; total: number } };
+  failed?: { message: string };
+}> {
+  try {
+    const res = await fetch(`${BASE}/plan/build`, { headers: headers() });
+    if (!res.ok) return { ok: false, committed: false };
+    const body = (await res.json()) as {
+      committed: boolean;
+      running?: { stage: PlanRunStage; startedAt: string; drafted?: { done: number; total: number } };
+      failed?: { message: string };
+    };
+    return { ok: true, committed: !!body.committed, running: body.running, failed: body.failed };
+  } catch {
+    return { ok: false, committed: false };
+  }
 }
 
 /* ── Progress dashboard ────────────────────────────────────────── */

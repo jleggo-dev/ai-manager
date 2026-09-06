@@ -1,4 +1,4 @@
-import type { UnitPrefs } from '@cadence/shared';
+import type { UnitPrefs, PlanRunStage } from '@cadence/shared';
 import { sql, json } from '../db/sql.ts';
 import { mergeConstraints, sameConstraint } from '../services/constraint-merge.ts';
 import type {
@@ -100,9 +100,21 @@ export interface PendingRepertoireReview {
  * success signal; a lingering success record would just be a second thing to keep consistent).
  */
 export interface PlanRun {
-  kind: 'replan_preview' | 'proposal_accept';
+  /** `first_plan` is onboarding's build — the last synthesis still running inside its request. */
+  kind: 'replan_preview' | 'proposal_accept' | 'first_plan';
   status: 'running' | 'failed';
-  stage?: 'reading' | 'drafting' | 'saving';
+  /** Union derived from @cadence/shared so the client cannot fall behind a stage added here. */
+  stage?: PlanRunStage;
+  /**
+   * How many of the fan-out's per-goal drafts have landed, and how many there are.
+   *
+   * Stages alone cannot keep a screen honest: `drafting` has measured anywhere from 79s to 563s,
+   * so a stage stamp leaves minutes with nothing to show and no way to tell a slow run from a
+   * dead one. The fan-out is the one place with real sub-events — each goal is its own call and
+   * finishes on its own clock — so the count is the difference between one opaque block and
+   * three true checkpoints. Absent on every other stage, which have nothing countable in them.
+   */
+  drafted?: { done: number; total: number; title?: string };
   started_at: string;
   error?: string;
 }
@@ -142,16 +154,33 @@ export async function claimPlanRun(userId: string, run: PlanRun): Promise<boolea
 }
 
 /**
- * Stamp which stage the running synthesis is in ('reading' | 'drafting' | 'saving') so the client
- * can say more than "working". Guarded on status='running': a run that already settled (failed,
- * or cleared on success) must not be resurrected by a stage write that lost the race — jsonb_set
- * on a null column is a no-op anyway, and the status guard covers the failed case.
+ * Stamp which stage the running synthesis is in (PLAN_RUN_STAGES) so the client can say more than
+ * "working". Guarded on status='running': a run that already settled (failed, or cleared on
+ * success) must not be resurrected by a stage write that lost the race — jsonb_set on a null
+ * column is a no-op anyway, and the status guard covers the failed case.
+ *
+ * Entering a stage clears `drafted`: the count belongs to the fan-out, and leaving it behind
+ * would have the coordinating screen still claiming "2 of 3 worked out".
  */
 export async function setPlanRunStage(userId: string, stage: NonNullable<PlanRun['stage']>): Promise<void> {
   await sql`
     update cadence.users
-       set plan_run = jsonb_set(plan_run, '{stage}', ${json(stage)})
+       set plan_run = jsonb_set(plan_run, '{stage}', ${json(stage)}) - 'drafted'
      where id = ${userId} and plan_run->>'status' = 'running'`;
+}
+
+/**
+ * Stamp how many per-goal drafts have landed. Same status guard as the stage write, and
+ * additionally guarded on the run still being in `drafting`: a draft that resolves just after the
+ * fan-out moved on must not reopen a count the next stage already cleared.
+ */
+export async function setPlanRunDrafted(userId: string, done: number, total: number, title?: string): Promise<void> {
+  await sql`
+    update cadence.users
+       set plan_run = jsonb_set(plan_run, '{drafted}', ${json({ done, total, ...(title ? { title } : {}) })})
+     where id = ${userId}
+       and plan_run->>'status' = 'running'
+       and plan_run->>'stage' = 'drafting'`;
 }
 
 export async function getUser(userId: string): Promise<CadenceUserRow | null> {

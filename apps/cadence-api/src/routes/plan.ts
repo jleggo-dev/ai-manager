@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
-import { previewLock, confirmLock, dismissLock } from '../services/lock.ts';
+import { previewLock, dismissLock } from '../services/lock.ts';
 import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
@@ -405,24 +405,6 @@ router.post('/preview/dismiss', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[POST /plan/preview/dismiss]', err);
     res.status(500).json({ error: 'dismiss failed' });
-  }
-});
-
-/**
- * POST /plan/lock — commit the previewed plan: activities + scheduled occurrences; flips
- * confirmed goals to committed. Self-sufficient if called without a prior /plan/preview (runs
- * the same gate + synthesis inline first) — see services/lock.ts.
- *  200 committed · 409 needs_focus (goal-cap) · 422 vetoed (no goals / vet failed).
- */
-router.post('/lock', async (req: Request, res: Response) => {
-  const userId = req.cadenceUserId!;
-  try {
-    const result = await confirmLock(userId);
-    const code = result.status === 'committed' ? 200 : result.status === 'needs_focus' ? 409 : 422;
-    res.status(code).json(result);
-  } catch (err) {
-    console.error('[POST /plan/lock]', err);
-    res.status(500).json({ error: 'lock failed' });
   }
 });
 

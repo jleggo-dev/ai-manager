@@ -15,12 +15,18 @@ export function CadenceWorking({
   size = 104,
   label,
   note,
+  progress,
 }: {
   size?: number;
   /** What is being built, in the coach's voice ("Building your week…"). */
   label?: string;
   /** The line underneath — the specific work happening right now. */
   note?: string;
+  /**
+   * How far along, 0-1, when the caller genuinely knows. Omit it and no bar is drawn at all —
+   * a wait with nothing to measure should not grow a bar that is really just an animation.
+   */
+  progress?: number;
 }) {
   return (
     <div className="cwork">
@@ -41,6 +47,17 @@ export function CadenceWorking({
         </div>
       )}
       {note && <div className="cwork-note">{note}</div>}
+      {progress !== undefined && (
+        <div
+          className="cwork-bar"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+        >
+          <i style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }} />
+        </div>
+      )}
     </div>
   );
 }

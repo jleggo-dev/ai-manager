@@ -18,6 +18,9 @@ export async function confirmPendingPlan(
   preview: () => Promise<PlanFlowResult>,
   onCommitted: (pending: { goal_ids: string[] }) => Promise<void>,
   occurrenceDays?: number,
+  /** Fired once synthesis is settled and the write is about to start — the 'saving' stage. It
+   *  must come after `preview`, which on a first lock IS the minutes-long synthesis. */
+  onSaving?: () => void,
 ): Promise<PlanFlowResult> {
   let pending = (await getUser(userId))?.pending_plan;
 
@@ -32,6 +35,7 @@ export async function confirmPendingPlan(
   // it as the COMPLETE next plan version. See plan-partial-apply.ts for the substitution rule.
   const activities = await resolveToggledActivities(userId, pending.activities);
 
+  onSaving?.();
   const r = await commitActivities(userId, {
     activities,
     note: pending.note,

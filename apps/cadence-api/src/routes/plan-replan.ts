@@ -10,10 +10,12 @@ import { Router, type Request, type Response } from 'express';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { replanPlan, confirmReplan, dismissReplan, REBASELINE_STEER } from '../services/replan.ts';
 import { startReplanRun } from '../services/replan-start.ts';
-import { launchPlanRun, planRunStage, readPlanRun } from '../services/plan-run.ts';
+import { launchPlanRun, planRunProgress, planRunStage, readPlanRun } from '../services/plan-run.ts';
 import { sendPlanReadyPush } from '../services/plan-ready-push.ts';
 import { enterEpisode } from '../services/episode.ts';
 import { getUser, setPendingProposal, setPlanRun } from '../repos/users.ts';
+import { confirmLock } from '../services/lock.ts';
+import { getActivePlan } from '../repos/plans.ts';
 import { BodyValidationError, parseBody, replanSteerBodySchema } from '../validation/body.ts';
 
 const router = Router();
@@ -159,6 +161,62 @@ router.post('/proposal/dismiss', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[POST /plan/proposal/dismiss]', err);
     res.status(500).json({ error: 'dismiss failed' });
+  }
+});
+
+/**
+ * POST /plan/lock — build and commit the FIRST week: the guardrail gate, the fan-out synthesis,
+ * the vet, and the commit, as a BACKGROUND run.
+ *
+ * It lived in routes/plan.ts and answered 200 with the committed plan, which meant holding one
+ * HTTP request open for the whole synthesis. That is the same shape this file was created to get
+ * away from, and onboarding was simply the last flow still doing it: measured across every
+ * synthesis on record a single phase spans 79s to 563s, so a median first build ran past the
+ * point any phone would keep the connection — and the client was left polling to find out whether
+ * a plan it could not see had happened.
+ *
+ * Always 202: {running:true}, plus joined:true when a run was already in flight (a second tap
+ * joins it rather than starting a second minutes-long build). GET /plan/build is the poll.
+ */
+router.post('/lock', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const outcome = await launchPlanRun(userId, 'first_plan', () =>
+      confirmLock(userId, undefined, planRunProgress(userId)),
+    );
+    res.status(202).json(outcome === 'joined' ? { running: true, joined: true } : { running: true });
+  } catch (err) {
+    console.error('[POST /plan/lock]', err);
+    res.status(500).json({ error: 'lock failed' });
+  }
+});
+
+/**
+ * GET /plan/build — the poll behind the first build. Exactly one of: { committed: true } (it
+ * landed; the plan itself is the answer) · { committed: false, running: {stage, startedAt,
+ * drafted} } · { committed: false, failed: {message} } · { committed: false } (nothing going on).
+ *
+ * The committed plan wins over the run record if both briefly exist, for the same reason the
+ * proposal does above: the artifact is the answer, the record only narrates the wait. `drafted`
+ * rides along because stages alone leave minutes unaccounted for — the per-goal fan-out is the
+ * only place inside the long stages with something real to count.
+ */
+router.get('/build', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    if (await getActivePlan(userId)) return void res.json({ committed: true });
+    const run = readPlanRun(await getUser(userId));
+    if (run?.status === 'running') {
+      return void res.json({
+        committed: false,
+        running: { stage: run.stage, startedAt: run.startedAt, ...(run.drafted ? { drafted: run.drafted } : {}) },
+      });
+    }
+    if (run?.status === 'failed') return void res.json({ committed: false, failed: { message: run.error } });
+    res.json({ committed: false });
+  } catch (err) {
+    console.error('[GET /plan/build]', err);
+    res.status(500).json({ error: 'failed to read build state' });
   }
 });
 
