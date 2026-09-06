@@ -27,6 +27,7 @@ struct CadenceWatchApp: App {
      impossible and let two faces each start a session.
      */
     @StateObject private var workout = WorkoutController()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Before any view builds a Font. A missing face degrades to the system one.
@@ -47,6 +48,12 @@ struct CadenceWatchApp: App {
                 // A workout the system kept alive while this app was killed. Nothing happens in
                 // the ordinary case; when there IS one, an hour-long run is not lost.
                 workout.recoverIfInterrupted()
+            }
+            // A wrist app is routinely suspended across midnight and raised the next morning
+            // without relaunching. The day-changed notification does not reach a suspended
+            // process, so the clock is re-read on every return to the front.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { store.refreshToday() }
             }
         }
     }

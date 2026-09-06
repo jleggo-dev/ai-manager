@@ -17,9 +17,9 @@ struct WeekView: View {
     var body: some View {
         List {
             ForEach(store.week.days) { day in
-                DayRow(day: day)
+                DayRow(day: day, isToday: store.isToday(day))
                     .listRowBackground(
-                        day.isToday
+                        store.isToday(day)
                             ? RoundedRectangle(cornerRadius: 12).fill(Theme.card)
                             : RoundedRectangle(cornerRadius: 12).fill(Color.clear)
                     )
@@ -53,8 +53,10 @@ struct WeekView: View {
      telling someone they are behind on work they were never yet asked to do.
      */
     private var showedUpLine: String {
-        let todayDate = store.week.today?.date
-        let due = store.week.days.filter { todayDate == nil || $0.date <= todayDate! }
+        // Due = on or before the clock's date. A held week that has fallen behind the clock is
+        // all due, which is what "so far" means once the week is over.
+        let todayDate = store.todayISO
+        let due = store.week.days.filter { $0.date <= todayDate }
         let sessions = due.flatMap(\.sessions)
         let done = sessions.filter(\.isDone).count
         guard !sessions.isEmpty else { return "Your week is clear so far." }
@@ -65,6 +67,8 @@ struct WeekView: View {
 /** One day: its name, its ring, and what is on it. */
 struct DayRow: View {
     let day: WatchDay
+    /** Decided by the store's clock, not the payload's flag — see `WatchStore.todayISO`. */
+    let isToday: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -73,8 +77,8 @@ struct DayRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(day.weekday)
-                    .font(Theme.display(13, day.isToday ? .bold : .semibold, relativeTo: .caption))
-                    .foregroundStyle(day.isToday ? Theme.linen : Theme.textMute)
+                    .font(Theme.display(13, isToday ? .bold : .semibold, relativeTo: .caption))
+                    .foregroundStyle(isToday ? Theme.linen : Theme.textMute)
                 Text(summary)
                     .font(Theme.display(11, .regular, relativeTo: .caption2))
                     .foregroundStyle(Theme.textDim)

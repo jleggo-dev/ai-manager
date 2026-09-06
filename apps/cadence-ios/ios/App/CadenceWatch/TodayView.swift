@@ -18,7 +18,8 @@ struct TodayView: View {
     /** A session recovered after a kill, pushed back onto the stack. */
     @State private var resumed: String?
 
-    private var today: WatchDay? { store.week.today }
+    /** Today by the watch's clock — see `WatchStore.todayISO` for why not the payload's flag. */
+    private var today: WatchDay? { store.today }
     private var sessions: [WatchSession] { today?.sessions ?? [] }
 
     var body: some View {
@@ -40,6 +41,18 @@ struct TodayView: View {
                     .foregroundStyle(Theme.textMute)
             }
             .listRowBackground(Color.clear)
+
+            if let line = freshnessLine {
+                // The honesty contract, on the face people actually open. It used to live only on
+                // the week face, so a watch showing its sample week — "Monday", on a Sunday —
+                // looked like a broken sync from the one screen anyone looks at.
+                Text(line)
+                    .font(Theme.display(11, .regular, relativeTo: .caption2))
+                    .foregroundStyle(Theme.textDim)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+            }
         }
         .navigationDestination(for: String.self) { id in
             if let session = sessions.first(where: { $0.occurrenceId == id }) {
@@ -68,7 +81,9 @@ struct TodayView: View {
                 SessionDestination(session: session)
             }
         }
-        .navigationTitle(today?.weekday ?? "Today")
+        // The clock names the day even when the week has no row for it: "Sunday" from the wrist
+        // itself, never "Monday" from a payload synced for a week that starts tomorrow.
+        .navigationTitle(today?.weekday ?? WatchCalendar.weekday())
         .toolbar {
             // Her presence, per the settled brief: the portrait anchors the header; the mark
             // stays the app icon.
@@ -80,10 +95,28 @@ struct TodayView: View {
     /** The rest-day board's one line about tomorrow — real if the week carries it, absent if not.
      *  Never invented: a promise about tomorrow that turns out wrong is worse than silence. */
     private var nextUpLine: String? {
-        guard let todayDate = today?.date,
-              let next = store.week.days.first(where: { $0.date > todayDate && !$0.sessions.isEmpty }),
+        // Against the clock's date, not today's row — a rest day the payload did not carry still
+        // has a tomorrow.
+        let todayDate = store.todayISO
+        guard let next = store.week.days.first(where: { $0.date > todayDate && !$0.sessions.isEmpty }),
               let first = next.sessions.first else { return nil }
         return "\(next.weekday): \(first.title)"
+    }
+
+    /**
+     What this face is drawing from, when that is not the phone's current week.
+
+     Sample data says so outright. A real week that does not reach today — the phone has not
+     synced since it rolled over — says when it last did, so a quiet rest day is never mistaken
+     for a sync that silently stopped.
+     */
+    private var freshnessLine: String? {
+        if store.isSample { return "Not synced yet — open Cadence on your phone." }
+        guard today == nil, !store.week.days.isEmpty else { return nil }
+        if let at = store.lastSyncedAt {
+            return "Last synced \(WatchCalendar.weekday(at)) — open Cadence on your phone."
+        }
+        return "Not synced today — open Cadence on your phone."
     }
 }
 

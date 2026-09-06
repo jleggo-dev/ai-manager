@@ -135,7 +135,44 @@ struct WatchWeekPayload: Codable, Hashable {
     static let currentVersion = 1
     static let empty = WatchWeekPayload(version: currentVersion, generatedAt: "", days: [])
 
-    var today: WatchDay? { days.first(where: \.isToday) }
+    /**
+     The row for one calendar day, by date.
+
+     The WATCH's clock decides which day is today (`WatchStore.todayISO`), not the payload:
+     `isToday` is the phone's opinion at the moment it synced, and it goes stale at midnight. A
+     week synced on Sunday evening used to keep saying "Sunday" all through Monday, until the
+     phone happened to open its Plan tab again — a wrist that names the wrong day is not a wrist
+     anyone glances at twice.
+     */
+    func day(on dateISO: String) -> WatchDay? { days.first { $0.date == dateISO } }
+}
+
+/**
+ The watch's own calendar, in the payload's terms.
+
+ `YYYY-MM-DD` in the watch's local zone — the same calendar-date reading `weekdayOf` in
+ `watch-week.ts` does on the phone, so a date string compares equal to the row it names.
+ */
+enum WatchCalendar {
+    static func iso(_ date: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    /** "Sunday" — the same spelling the payload carries, so a title built here matches a row. */
+    static func weekday(_ date: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEEE"
+        return f.string(from: date)
+    }
+
+    static func plusDays(_ days: Int, from date: Date = Date()) -> Date {
+        Calendar.current.date(byAdding: .day, value: days, to: date) ?? date
+    }
 }
 
 /**
@@ -146,12 +183,15 @@ struct WatchWeekPayload: Codable, Hashable {
  this only when neither exists. Kept walkable so every face can be developed in the simulator.
  */
 enum SampleWeek {
-    static let payload = WatchWeekPayload(
+    /** Dated from the watch's own clock, so the simulator's sample lands on today rather than
+     *  on the Monday it was written for. It once said "Monday" on a Sunday for exactly that
+     *  reason, and looked like a sync bug. */
+    static var payload: WatchWeekPayload { WatchWeekPayload(
         version: WatchWeekPayload.currentVersion,
         generatedAt: "",
         days: [
             WatchDay(
-                date: "2026-09-07", weekday: "Monday", isToday: true,
+                date: WatchCalendar.iso(), weekday: WatchCalendar.weekday(), isToday: true,
                 sessions: [
                     WatchSession(
                         occurrenceId: "11111111-2222-3333-4444-555555555555",
@@ -191,7 +231,11 @@ enum SampleWeek {
                     ),
                 ]
             ),
-            WatchDay(date: "2026-09-08", weekday: "Tuesday", isToday: false, sessions: []),
+            WatchDay(
+                date: WatchCalendar.iso(WatchCalendar.plusDays(1)),
+                weekday: WatchCalendar.weekday(WatchCalendar.plusDays(1)),
+                isToday: false, sessions: []
+            ),
         ]
-    )
+    ) }
 }

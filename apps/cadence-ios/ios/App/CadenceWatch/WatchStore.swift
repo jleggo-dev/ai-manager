@@ -33,6 +33,28 @@ final class WatchStore: NSObject, ObservableObject {
      choice replacing it is the point: the portrait is the user's, not ours.
      */
     @Published private(set) var portraitURL: URL?
+    /**
+     Which day the wrist is standing in — `YYYY-MM-DD`, from the WATCH's clock.
+
+     The payload's `isToday` was the phone's opinion when it synced, and it went stale at
+     midnight: a week pushed on Sunday evening kept the Today face on "Sunday" all of Monday until
+     the phone's Plan tab happened to open again. The clock is the only thing that knows what day
+     it is now, so every face asks it, and the phone's flag is not consulted at all.
+     */
+    @Published private(set) var todayISO: String = WatchCalendar.iso()
+
+    /** Today's row, if the held week has one. Nil means the week does not reach today — the faces
+     *  say so rather than drawing the wrong day as if it were this one. */
+    var today: WatchDay? { week.day(on: todayISO) }
+
+    func isToday(_ day: WatchDay) -> Bool { day.date == todayISO }
+
+    /** Re-read the clock. Called when the day changes under a running app and whenever the app
+     *  comes to the front — a wrist app is routinely suspended across midnight. */
+    func refreshToday() {
+        let now = WatchCalendar.iso()
+        if now != todayISO { todayISO = now }
+    }
 
     private static let fileName = "watch-week.json"
     private static let syncedAtKey = "cadence.week.syncedAt"
@@ -52,10 +74,18 @@ final class WatchStore: NSObject, ObservableObject {
         }
         portraitURL = Self.savedPortrait()
         super.init()
+        // Midnight under a running app. The system posts this on its own queue; the store is
+        // main-actor, so the hop is explicit.
+        NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshToday() }
+        }
     }
 
     /** Begin listening. Safe to call more than once; `activate()` on an active session is a no-op. */
     func start() {
+        refreshToday()
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         session.delegate = self

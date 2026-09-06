@@ -94,6 +94,20 @@ describe('GET /plan/watch', () => {
     expect(WATCH_DETAIL_DAYS).toBe(2);
   });
 
+  it("sends the phone's whole week — today first even when empty, rest days to the end", async () => {
+    // The Sunday bug: today had nothing on it and the plan started Monday, so the wrist got a week
+    // with no Sunday and no today. The route now names the view's window so the projection draws
+    // every day of it.
+    buildPlanView.mockResolvedValue({
+      week: [day(TODAY), day('2026-09-08', [occurrence('o1')]), day('2026-09-09'), day('2026-09-10')],
+      activities: [],
+    });
+    const { body } = await call('/plan/watch');
+    const days = (body as WatchWeekPayload).days;
+    expect(days.map((d) => d.date)).toEqual([TODAY, '2026-09-08', '2026-09-09', '2026-09-10']);
+    expect(days[0]).toMatchObject({ isToday: true, sessions: [] });
+  });
+
   it('answers an empty payload for a user with no week, not an error', async () => {
     buildPlanView.mockResolvedValue({ week: [], activities: [] });
     const { status, body } = await call('/plan/watch');

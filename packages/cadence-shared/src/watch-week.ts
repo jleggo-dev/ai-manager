@@ -154,6 +154,15 @@ export interface WatchWeekInput {
   /** Stamped by the caller. Passed in rather than read from the clock so the projection stays
    *  pure and its tests stay deterministic. */
   generatedAt: string;
+  /**
+   * The last day of the week the caller is showing — the plan view's own window edge.
+   *
+   * Without it the week ends on the last day that HAS a session, so a plan whose final sessions
+   * fall on Thursday hands the wrist a five-day week in which Friday and Saturday do not exist.
+   * Rest days are a designed face; they can only be drawn if they are sent. Optional because the
+   * projection is also built from bare occurrence lists (tests, the empty week).
+   */
+  throughISO?: string;
 }
 
 /* ── Classification ───────────────────────────────────────────────────────────────────────── */
@@ -463,16 +472,13 @@ export function buildWatchWeek(input: WatchWeekInput): WatchWeekPayload {
     byDate.set(occ.date, list);
   }
 
-  const dates = [...byDate.keys()].sort();
+  const { first, last } = windowOf(input, [...byDate.keys()].sort());
   // Fill the gaps so the week is contiguous — a day with nothing on it is a rest day, and the
   // watch draws it as one.
   const days: WatchDaySpec[] = [];
-  const first = dates[0];
-  const last = dates[dates.length - 1];
   if (first && last) {
     for (let offset = 0; offset <= daysBetween(first, last) && days.length < WATCH_MAX_DAYS; offset++) {
-      const [y, m, d] = first.split('-').map(Number);
-      const date = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + offset)).toISOString().slice(0, 10);
+      const date = addDays(first, offset);
       const ahead = daysBetween(input.todayISO, date);
       const detailed = ahead >= 0 && ahead < WATCH_DETAIL_DAYS;
       const sessions = (byDate.get(date) ?? [])
@@ -483,4 +489,45 @@ export function buildWatchWeek(input: WatchWeekInput): WatchWeekPayload {
   }
 
   return fitToBudget({ version: WATCH_PAYLOAD_VERSION, generatedAt: input.generatedAt, days });
+}
+
+function isDateISO(s: string | undefined): s is string {
+  return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function addDays(dateISO: string, days: number): string {
+  const [y, m, d] = dateISO.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * The first and last day the payload draws.
+ *
+ * **Today is always in it.** This used to run from the first day with a session to the last,
+ * which made the day the person is standing in vanish whenever it was empty: a plan committed on
+ * a Sunday for a week starting Monday reached the wrist with no Sunday row and no `isToday` at
+ * all — the Today face fell back to a bare "Today" title, the week face opened on Monday, and
+ * the rest-day board could not say what was next because it had no idea where it stood.
+ *
+ * So the window runs from today through `throughISO` when the caller names one (the plan view's
+ * own edge, so the wrist's week IS the phone's week, rest days and all), else through the last
+ * day that has a session. Days before today ride along only as far as the WATCH_MAX_DAYS cap
+ * leaves room once the week ahead is placed — a past day carries its outcome for the week face,
+ * but today and tomorrow are what a wrist can act on and they are never the ones squeezed out.
+ * A window that ends before today is not a week at all; it becomes today alone.
+ */
+function windowOf(input: WatchWeekInput, scheduled: string[]): { first?: string; last?: string } {
+  const today = input.todayISO;
+  const firstScheduled = scheduled[0];
+  const lastScheduled = scheduled[scheduled.length - 1];
+  if (!isDateISO(today)) return { first: firstScheduled, last: lastScheduled };
+
+  const through = isDateISO(input.throughISO) ? input.throughISO : lastScheduled;
+  let last = through && daysBetween(today, through) > 0 ? through : today;
+  if (daysBetween(today, last) >= WATCH_MAX_DAYS) last = addDays(today, WATCH_MAX_DAYS - 1);
+
+  const room = WATCH_MAX_DAYS - 1 - daysBetween(today, last);
+  const earliest = firstScheduled && daysBetween(firstScheduled, today) > 0 ? firstScheduled : today;
+  const back = Math.min(daysBetween(earliest, today), room);
+  return { first: addDays(today, -back), last };
 }
