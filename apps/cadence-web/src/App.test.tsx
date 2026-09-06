@@ -36,6 +36,10 @@ vi.mock('./lib/api.ts', () => ({
   // App now wraps the screen machine in CoachFaceProvider, which reads the picked portrait.
   getCoachFace: vi.fn(async () => ({ ok: true, faceId: null })),
   setCoachFace: vi.fn(async () => null),
+  // Warmed in the background once auth is up, so Settings opens finished rather than filling in
+  // (lib/query/useReview.ts). Nothing here awaits them; they are mocked so the prefetch is silent.
+  getReview: vi.fn(async () => ({ goals: [], equipment: [] })),
+  getConstraints: vi.fn(async () => []),
 }));
 
 vi.mock('./lib/supabase.ts', () => ({

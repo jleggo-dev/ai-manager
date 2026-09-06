@@ -4,7 +4,8 @@
  * one-unsettled-amount gate on the close, the close itself, and B3's offer — four quick adds,
  * offered once, never again after "Leave them".
  */
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 import type { Meal } from '../../../lib/api/meal-draft.ts';
 
 const openMealDraft = vi.fn();
@@ -31,7 +32,10 @@ vi.mock('../../../lib/api/meal-draft.ts', () => ({
 
 const invalidate = vi.fn();
 const useNutritionDay = vi.fn(() => ({ data: null }));
-vi.mock('../../../lib/query/index.ts', () => ({
+/** Partial: the stubs below stand in for the reads this suite drives; everything else — the food
+ *  library reads the screen now shares — runs through the real cached hooks onto the mocked API. */
+vi.mock('../../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/query/index.ts')>()),
   useInvalidateNutritionDay: () => invalidate,
   useNutritionDay: () => useNutritionDay(),
 }));
@@ -100,7 +104,7 @@ async function mount(props: Partial<Parameters<typeof MealScreen>[0]> = {}) {
   const onClose = vi.fn();
   const onExpressSingle = vi.fn();
   const onOpenDay = vi.fn();
-  render(<MealScreen onClose={onClose} onExpressSingle={onExpressSingle} onOpenDay={onOpenDay} {...props} />);
+  renderWithQuery(<MealScreen onClose={onClose} onExpressSingle={onExpressSingle} onOpenDay={onOpenDay} {...props} />);
   await waitFor(() => expect(getOpenMeal).toHaveBeenCalled());
   return { onClose, onExpressSingle, onOpenDay };
 }

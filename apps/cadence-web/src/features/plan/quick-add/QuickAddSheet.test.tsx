@@ -5,11 +5,15 @@
  * the server so it works in every state, and loading shows shapes, never typing dots.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 
 const usePlan = vi.fn();
 const useNutritionDay = vi.fn();
-vi.mock('../../../lib/query/index.ts', () => ({
+/** Partial: the stubs below stand in for the reads this suite drives; everything else — the food
+ *  library reads the screen now shares — runs through the real cached hooks onto the mocked API. */
+vi.mock('../../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/query/index.ts')>()),
   usePlan: () => usePlan(),
   useNutritionDay: () => useNutritionDay(),
   useInvalidateNutritionDay: () => vi.fn(),
@@ -133,7 +137,7 @@ function mount(
 ) {
   usePlan.mockReturnValue({ data: state.plan, error: state.planError ?? null });
   useNutritionDay.mockReturnValue({ data: state.day });
-  return render(
+  return renderWithQuery(
     <QuickAddSheet onClose={props.onClose ?? (() => {})} onLogged={props.onLogged ?? (() => {})} {...props} />,
   );
 }

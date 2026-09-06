@@ -78,6 +78,11 @@ export function KitchenRecipes({
     <div className="kt-list" role="region" aria-label="Your recipes">
       {status === 'unavailable' || status === 'error' ? (
         <div className="kt-msg">{"I can't reach your recipes just now — they're safe, try again in a moment."}</div>
+      ) : status === 'loading' && recipes.length === 0 ? (
+        // Not "nothing saved yet": we do not know that yet. Saying it while the read is still out
+        // tells the person the one thing that might not be true, and then takes it back — which is
+        // what the shelf did on every cold open before it was cached.
+        <div className="kt-msg">Reading your recipes…</div>
       ) : recipes.length === 0 ? (
         <div className="kt-msg">
           Nothing saved yet. Paste one in and I&apos;ll work out the per-serving numbers.

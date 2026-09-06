@@ -3,8 +3,10 @@
  * calls its endpoint, and the Erase gate stays dead until the exact phrase is typed — same
  * mocking idiom as `SettingsSheet.test.tsx`, the sheet this room replaces.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import type { QueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/query/keys.ts';
+import { makeTestQueryClient, renderWithQuery } from '../../test/withQuery.tsx';
 import { SettingsRoom } from './SettingsRoom.tsx';
 
 const api = {
@@ -144,13 +146,8 @@ vi.mock('../builder/ActivityBuilder.tsx', () => ({
   ),
 }));
 
-function renderRoom(email: string | null = 'you@example.com') {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <SettingsRoom email={email} onBack={() => {}} />
-    </QueryClientProvider>,
-  );
+function renderRoom(email: string | null = 'you@example.com', client: QueryClient = makeTestQueryClient()) {
+  return renderWithQuery(<SettingsRoom email={email} onBack={() => {}} />, client);
 }
 
 beforeEach(() => {
@@ -190,6 +187,46 @@ describe('SettingsRoom — the groups and their rows', () => {
 
   it('counts only non-abandoned goals as "on the plan"', async () => {
     renderRoom();
+    expect(await screen.findByText(/Rename or retire a goal · 2 on the plan/)).toBeInTheDocument();
+  });
+
+  /**
+   * The bug this screen was reported for: it opened with "Rename or retire a goal" and no count,
+   * and filled the number in a round trip later — every visit, because the fetch lived in a
+   * `useEffect` and the answer died with the screen. Through the shared cache the room opens
+   * finished. `getByText` rather than `findByText` is the whole assertion: no await, no act, no
+   * promise has resolved yet, and the row already says what it says.
+   */
+  it('paints the counts on the first frame from what is already cached', () => {
+    const client = makeTestQueryClient();
+    client.setQueryData(queryKeys.review.all, REVIEW);
+    client.setQueryData(queryKeys.constraints.all, [{ id: 'c1', label: 'bad knee' }]);
+
+    renderRoom('you@example.com', client);
+
+    expect(screen.getByText(/Rename or retire a goal · 2 on the plan/)).toBeInTheDocument();
+    expect(screen.getByText(/2 things · Kettlebell, Bands/)).toBeInTheDocument();
+    expect(screen.getByText(/bad knee · read-only here/)).toBeInTheDocument();
+    expect(screen.queryByText(/Loading…/)).not.toBeInTheDocument();
+  });
+
+  /** And the owner's own description of what SHOULD happen when the fact has moved: last launch's
+   *  number is on screen immediately, and it corrects itself when the server answers. */
+  it('paints a stale boot-cache count first, then corrects it', async () => {
+    const client = makeTestQueryClient();
+    client.setQueryData(
+      queryKeys.review.all,
+      { ...REVIEW, goals: [{ goal_id: 'g1', status: 'committed' }] },
+      {
+        // The time the server actually answered — how `seedBootCache` lands last launch's answers,
+        // so the entry is stale on arrival and revalidates on mount.
+        updatedAt: Date.now() - 60 * 60_000,
+      },
+    );
+
+    renderRoom('you@example.com', client);
+
+    expect(screen.getByText(/Rename or retire a goal · 1 on the plan/)).toBeInTheDocument();
     expect(await screen.findByText(/Rename or retire a goal · 2 on the plan/)).toBeInTheDocument();
   });
 

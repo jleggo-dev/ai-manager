@@ -19,7 +19,14 @@ import { PlanSkeleton } from './features/plan/PlanSkeleton.tsx';
 import { CoachFaceProvider } from './features/coach/CoachFaceProvider.tsx';
 import { setAuthToken, isDevMode, getHealthDigest, postHealthDigest, postWorkoutHistory } from './lib/api.ts';
 import { useQueryClient } from '@tanstack/react-query';
-import { bootPlanStage, clearBootCache, fetchPlanIntoCache, hasCachedPlan, queryKeys } from './lib/query/index.ts';
+import {
+  bootPlanStage,
+  clearBootCache,
+  fetchPlanIntoCache,
+  hasCachedPlan,
+  prefetchSettingsFacts,
+  queryKeys,
+} from './lib/query/index.ts';
 import { syncPlanLocalNotifications } from './lib/local-notifications-sync.ts';
 import { usePushRegistered } from './lib/usePushRegistered.ts';
 import { capabilities } from './lib/capability/index.ts';
@@ -201,6 +208,13 @@ function CoachApp({ session, authReady = true }: { session: Session | null; auth
   useEffect(() => {
     if (!authReady) return;
     loadPlan();
+    /**
+     * The facts Settings opens on, fetched now rather than when the room opens. The boot paint
+     * covers every launch after the first (lib/query/boot-cache.ts); this covers the first, and
+     * on later launches it is the same revalidate the room would have run anyway, moved off the
+     * moment somebody is looking at it. Nothing awaits it and a failure changes nothing.
+     */
+    void prefetchSettingsFacts(queryClient);
     // Silent Apple Health refresh (iOS shell, permission already granted): keeps the coach's
     // view of recent activity current without re-asking. Throttled + content-diffed inside.
     void maybeRefreshHealthDigest({

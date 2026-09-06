@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AXIS_LABEL, UNIT_AXES, UNIT_LABEL, axisOptions, type UnitAxis, type UnitPrefs } from '@cadence/shared';
-import { getUnits, setUnits } from '../../lib/api.ts';
-import { useInvalidateUnits } from '../../lib/query/index.ts';
+import { setUnits } from '../../lib/api.ts';
+import { useSetUnits, useUnits } from '../../lib/query/index.ts';
 
 /**
  * Units, one control per axis.
@@ -20,34 +20,24 @@ import { useInvalidateUnits } from '../../lib/query/index.ts';
  * to get wrong: an axis has two values and the change is instant and reversible.
  */
 export function UnitSettings() {
-  const [resolved, setResolved] = useState<Record<string, string> | null>(null);
+  // The same shared units entry the trail, the rows and the quiet-hours chip read the clock from
+  // (lib/query/useUnits.ts) — so these controls are on screen with the rest of Settings rather than
+  // a round trip after it, and a tap here reaches every one of those surfaces at once.
+  const { data } = useUnits();
+  const writeUnits = useSetUnits();
+  const resolved = data?.resolved ?? null;
   const [busy, setBusy] = useState<UnitAxis | null>(null);
   const [err, setErr] = useState('');
-  // The trail, the rows and the quiet-hours chip read the clock through the shared units query;
-  // a tap here has to reach them, so the save drops that cache (lib/query/useUnits.ts).
-  const invalidateUnits = useInvalidateUnits();
-
-  useEffect(() => {
-    let alive = true;
-    void getUnits().then((r) => {
-      if (alive && r) setResolved(r.resolved);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   async function choose(axis: UnitAxis, unit: string) {
     if (busy) return;
     setBusy(axis);
     setErr('');
     // Optimistic: the control is a toggle over two known values, so the answer is never a surprise.
-    setResolved((r) => ({ ...(r ?? {}), [axis]: unit }));
+    writeUnits((prev) => (prev ? { ...prev, resolved: { ...prev.resolved, [axis]: unit } } : prev));
     const out = await setUnits({ [axis]: unit } as Partial<UnitPrefs>);
-    if (out) {
-      setResolved(out.resolved);
-      void invalidateUnits();
-    } else setErr("That didn't save — try again in a moment.");
+    if (out) writeUnits(() => out);
+    else setErr("That didn't save — try again in a moment.");
     setBusy(null);
   }
 

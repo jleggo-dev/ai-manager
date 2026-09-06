@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 
 const api = vi.hoisted(() => ({
   getDietaryProfile: vi.fn(async () => ({
@@ -15,7 +16,12 @@ const query = vi.hoisted(() => ({
   useNutritionDay: vi.fn(),
   useInvalidateNutritionDay: vi.fn(() => vi.fn()),
 }));
-vi.mock('../../lib/query/index.ts', () => query);
+/** Partial: the nutrition DAY is stubbed (its own suite covers it), while the dietary profile runs
+ *  through the real cached hook — so these tests still exercise the read they are about. */
+vi.mock('../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/query/index.ts')>()),
+  ...query,
+}));
 
 const { SettingsNutrition } = await import('./SettingsNutrition.tsx');
 
@@ -30,7 +36,7 @@ describe('SettingsNutrition — daily target steppers', () => {
     query.useNutritionDay.mockReturnValue({
       data: { targets: { kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60 } },
     });
-    render(<SettingsNutrition onBack={() => {}} />);
+    renderWithQuery(<SettingsNutrition onBack={() => {}} />);
 
     fireEvent.click(await screen.findByLabelText('Increase Calories'));
     await waitFor(() =>
@@ -53,7 +59,7 @@ describe('SettingsNutrition — daily target steppers', () => {
     query.useNutritionDay.mockReturnValue({
       data: { targets: { kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60 } },
     });
-    render(<SettingsNutrition onBack={() => {}} />);
+    renderWithQuery(<SettingsNutrition onBack={() => {}} />);
     await screen.findByText('Calories');
     expect(screen.queryByText('Sodium')).not.toBeInTheDocument();
   });
@@ -62,7 +68,7 @@ describe('SettingsNutrition — daily target steppers', () => {
     query.useNutritionDay.mockReturnValue({
       data: { targets: { kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, sodium_mg: 2000 } },
     });
-    render(<SettingsNutrition onBack={() => {}} />);
+    renderWithQuery(<SettingsNutrition onBack={() => {}} />);
 
     expect(await screen.findByText('Sodium')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Increase Sodium'));
@@ -79,7 +85,7 @@ describe('SettingsNutrition — daily target steppers', () => {
 
   it('states the helper line about saving right away', async () => {
     query.useNutritionDay.mockReturnValue({ data: { targets: {} } });
-    render(<SettingsNutrition onBack={() => {}} />);
+    renderWithQuery(<SettingsNutrition onBack={() => {}} />);
     expect(
       await screen.findByText('Change a number and Cadence is told right away — next meals plan against it.'),
     ).toBeInTheDocument();
@@ -93,7 +99,7 @@ describe('SettingsNutrition — allergies & preferences', () => {
       status: 'ok',
       profile: { allergies: ['peanuts'], diet: null, dislikes: [], notes: null },
     });
-    render(<SettingsNutrition onBack={() => {}} />);
+    renderWithQuery(<SettingsNutrition onBack={() => {}} />);
 
     expect(await screen.findByText('peanuts')).toBeInTheDocument();
     expect(
@@ -108,7 +114,7 @@ describe('SettingsNutrition — allergies & preferences', () => {
       profile: { allergies: ['peanuts'], diet: null, dislikes: [], notes: null },
     });
     api.saveDietaryProfile.mockResolvedValueOnce({ allergies: [], diet: null, dislikes: [], notes: null });
-    render(<SettingsNutrition onBack={() => {}} />);
+    renderWithQuery(<SettingsNutrition onBack={() => {}} />);
 
     fireEvent.click(await screen.findByLabelText('Remove peanuts'));
     await waitFor(() =>

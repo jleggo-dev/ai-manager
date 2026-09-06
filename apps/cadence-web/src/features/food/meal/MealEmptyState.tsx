@@ -4,9 +4,8 @@
  * buttons rather than the main event. The one-food express lane and the way back out to the
  * greater Food screen (owner constraint) both live here.
  */
-import { useEffect, useState } from 'react';
-import type { MealKind, Recipe } from '@cadence/shared';
-import { listRecipes } from '../../../lib/api.ts';
+import type { MealKind } from '@cadence/shared';
+import { useRecipes } from '../../../lib/query/index.ts';
 import { FoodPickHead, FoodPickRow } from '../FoodPickRow.tsx';
 import { useUsualAtSlot } from '../useUsualAtSlot.ts';
 import { fmtKcal } from '../bracket/copy.ts';
@@ -21,16 +20,10 @@ export interface YoursRow {
 /** Saved one-portion recipes ("what a person would call a saved meal") + the slot's habits. */
 function useStartFromYours(kind: MealKind): YoursRow[] {
   const usual = useUsualAtSlot(kind);
-  const [saved, setSaved] = useState<Recipe[]>([]);
-  useEffect(() => {
-    let alive = true;
-    void listRecipes({ savedOnly: true }).then((r) => {
-      if (alive) setSaved(r.recipes.filter((rec) => rec.servings === 1));
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Shared with the cookbook shelf and the kitchen (lib/query/useFoodData.ts) — one read, and the
+  // rows are here as the empty state draws rather than a round trip into it.
+  const { data } = useRecipes(true);
+  const saved = (data?.recipes ?? []).filter((rec) => rec.servings === 1);
   const rows: YoursRow[] = usual
     .filter((u) => u.kind === 'recipe')
     .map((u) => ({ recipe_id: u.id, name: u.name, sub: u.serving_label ?? undefined, kcal: u.kcal ?? undefined }));

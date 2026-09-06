@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 
 const api = vi.hoisted(() => ({ getReview: vi.fn() }));
 const goalApi = vi.hoisted(() => ({ renameGoal: vi.fn(), retireGoal: vi.fn(), restoreGoal: vi.fn() }));
@@ -35,7 +36,7 @@ describe('SettingsGoals', () => {
     api.getReview.mockResolvedValueOnce({
       goals: [goal(), goal({ goal_id: 'g2', title: 'Still captured', status: 'captured' })],
     });
-    render(<SettingsGoals onBack={() => {}} />);
+    renderWithQuery(<SettingsGoals onBack={() => {}} />);
 
     expect(await screen.findByText('Reach a healthy weight')).toBeInTheDocument();
     expect(screen.queryByText('Still captured')).not.toBeInTheDocument();
@@ -45,7 +46,7 @@ describe('SettingsGoals', () => {
   it('renames a goal through the seam function', async () => {
     api.getReview.mockResolvedValueOnce({ goals: [goal()] });
     goalApi.renameGoal.mockResolvedValueOnce(true);
-    render(<SettingsGoals onBack={() => {}} />);
+    renderWithQuery(<SettingsGoals onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Rename'));
@@ -59,7 +60,7 @@ describe('SettingsGoals', () => {
 
   it('shows the retire confirm copy with the goal name, and "Keep it" calls nothing', async () => {
     api.getReview.mockResolvedValueOnce({ goals: [goal()] });
-    render(<SettingsGoals onBack={() => {}} />);
+    renderWithQuery(<SettingsGoals onBack={() => {}} />);
     await openMenu();
 
     fireEvent.click(screen.getByText('Retire…'));
@@ -78,7 +79,7 @@ describe('SettingsGoals', () => {
   it('"Retire it" calls retireGoal and drops the row on success', async () => {
     api.getReview.mockResolvedValueOnce({ goals: [goal()] });
     goalApi.retireGoal.mockResolvedValueOnce(true);
-    render(<SettingsGoals onBack={() => {}} />);
+    renderWithQuery(<SettingsGoals onBack={() => {}} />);
     await openMenu();
     fireEvent.click(screen.getByText('Retire…'));
     fireEvent.click(screen.getByText('Retire it'));
@@ -90,7 +91,7 @@ describe('SettingsGoals', () => {
   it('the coach door hands onCoach a note about wanting a goal to mean something different', async () => {
     api.getReview.mockResolvedValueOnce({ goals: [goal()] });
     const onCoach = vi.fn();
-    render(<SettingsGoals onBack={() => {}} onCoach={onCoach} />);
+    renderWithQuery(<SettingsGoals onBack={() => {}} onCoach={onCoach} />);
 
     fireEvent.click(await screen.findByText('Want a goal to mean something different?'));
     expect(onCoach).toHaveBeenCalledTimes(1);

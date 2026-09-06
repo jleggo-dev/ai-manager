@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Recipe } from '@cadence/shared';
-import { listRecipes } from '../../../lib/api.ts';
+import { useRecipes } from '../../../lib/query/index.ts';
 
 /**
  * The cookbook shelf (canvas S2, meal-logging rework P6) — the LOGGING-side picker behind the
@@ -22,24 +22,15 @@ export function CookbookShelf({
   onPick: (recipe: Recipe, servings: number) => void;
   onClose: () => void;
 }) {
-  const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading');
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  // The shelf the meal screen's empty state and the kitchen read too (lib/query/useFoodData.ts):
+  // opening the door twice costs one read, and the second time it opens on the shelf already.
+  const { data, isPending, isError } = useRecipes(true);
+  const recipes = useMemo(() => data?.recipes ?? [], [data]);
+  // 'unavailable' is an older server, not a failure — it reads as an honest empty shelf.
+  const status: 'loading' | 'ok' | 'error' = data ? 'ok' : isError ? 'error' : isPending ? 'loading' : 'ok';
   const [q, setQ] = useState('');
   const [picking, setPicking] = useState<Recipe | null>(null);
   const [n, setN] = useState(1);
-
-  useEffect(() => {
-    let alive = true;
-    void listRecipes({ savedOnly: true }).then((r) => {
-      if (!alive) return;
-      // 'unavailable' is an older server, not a failure — it reads as an honest empty shelf.
-      setStatus(r.status === 'error' ? 'error' : 'ok');
-      setRecipes(r.recipes);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();

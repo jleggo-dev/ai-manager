@@ -18,8 +18,13 @@
  */
 import { useEffect, useState } from 'react';
 import type { DietaryProfile } from '@cadence/shared';
-import { getDietaryProfile, saveDietaryProfile, setMacroTargets, type MealMacros } from '../../lib/api.ts';
-import { useInvalidateNutritionDay, useNutritionDay } from '../../lib/query/index.ts';
+import { saveDietaryProfile, setMacroTargets, type MealMacros } from '../../lib/api.ts';
+import {
+  useDietaryProfile,
+  useInvalidateNutritionDay,
+  useNutritionDay,
+  useSetDietaryProfile,
+} from '../../lib/query/index.ts';
 import '../../styles/settings-editors.css';
 
 type MacroKey = 'kcal' | 'protein_g' | 'carbs_g' | 'fat_g' | 'sodium_mg';
@@ -188,29 +193,24 @@ function StepperRow({
 }
 
 function AllergyPrefsCard() {
-  const [profile, setProfile] = useState<DietaryProfile | null>(null);
+  // The same profile the kitchen intake and the coach's food sheet read (lib/query/useFoodData.ts).
+  // An allergen is the one fact in this app that two surfaces must never disagree about, and it is
+  // now one cached answer rather than three fetches — on screen with the card around it.
+  const { data } = useDietaryProfile();
+  const writeProfile = useSetDietaryProfile();
+  const profile = data?.profile ?? null;
   const [busy, setBusy] = useState(false);
   const [allergyDraft, setAllergyDraft] = useState('');
   const [dislikeDraft, setDislikeDraft] = useState('');
 
-  useEffect(() => {
-    let alive = true;
-    getDietaryProfile().then((r) => {
-      if (alive) setProfile(r.profile);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   async function patch(next: Partial<DietaryProfile>) {
-    if (!profile || busy) return;
+    if (!profile || !data || busy) return;
     const updated = { ...profile, ...next };
-    setProfile(updated);
+    writeProfile({ ...data, profile: updated });
     setBusy(true);
     try {
       const saved = await saveDietaryProfile(updated);
-      if (saved) setProfile(saved);
+      if (saved) writeProfile({ ...data, profile: saved });
     } finally {
       setBusy(false);
     }

@@ -4,7 +4,8 @@
  * These pin that both shapes now surface, and that "also on your week" still dedupes sensibly
  * across a mix of the two.
  */
-import { renderHook, waitFor } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
+import { renderHookWithQuery } from '../../../test/withQuery.tsx';
 import { getCurrentMealPlan } from '../../../lib/api.ts';
 import { usePlannedMeal } from './usePlannedMeal.ts';
 
@@ -42,7 +43,7 @@ describe('usePlannedMeal', () => {
       },
     });
 
-    const { result } = renderHook(() => usePlannedMeal('dinner', '2026-08-26'));
+    const { result } = renderHookWithQuery(() => usePlannedMeal('dinner', '2026-08-26'));
 
     await waitFor(() => expect(result.current.planned).not.toBeNull());
     expect(result.current.planned).toEqual({
@@ -65,7 +66,7 @@ describe('usePlannedMeal', () => {
       },
     });
 
-    const { result } = renderHook(() => usePlannedMeal('dinner', '2026-08-26'));
+    const { result } = renderHookWithQuery(() => usePlannedMeal('dinner', '2026-08-26'));
 
     await waitFor(() => expect(result.current.planned).toEqual({ recipe_id: 'r1', name: 'Beef chili' }));
   });
@@ -76,7 +77,7 @@ describe('usePlannedMeal', () => {
       plan: { meal_plan_id: 'mp3', week_of: '2026-08-24', shopping_list: [], days: [] },
     });
 
-    const { result } = renderHook(() => usePlannedMeal('dinner', '2026-08-26'));
+    const { result } = renderHookWithQuery(() => usePlannedMeal('dinner', '2026-08-26'));
 
     await waitFor(() => expect(mockedGetCurrentMealPlan).toHaveBeenCalled());
     expect(result.current.planned).toBeNull();
@@ -104,7 +105,7 @@ describe('usePlannedMeal', () => {
       },
     });
 
-    const { result } = renderHook(() => usePlannedMeal('dinner', '2026-08-26'));
+    const { result } = renderHookWithQuery(() => usePlannedMeal('dinner', '2026-08-26'));
 
     await waitFor(() => expect(result.current.planned?.name).toBe('Salmon bowls'));
     const names = result.current.alsoThisWeek.map((m) => m.name);

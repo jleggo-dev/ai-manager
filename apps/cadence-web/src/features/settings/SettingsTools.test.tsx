@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQuery } from '../../test/withQuery.tsx';
 
 const api = vi.hoisted(() => ({
   getReview: vi.fn(),
@@ -32,7 +33,7 @@ afterEach(() => {
 describe('SettingsTools', () => {
   it('removes a chip by calling deleteEquipmentItem', async () => {
     api.getReview.mockResolvedValueOnce({ equipment: [equip()] });
-    render(<SettingsTools onBack={() => {}} />);
+    renderWithQuery(<SettingsTools onBack={() => {}} />);
 
     expect(await screen.findByText('Kettlebell')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Remove Kettlebell'));
@@ -44,7 +45,7 @@ describe('SettingsTools', () => {
   it('adds a chip with the neutral "other" category — the server requires one but the user never picks it', async () => {
     api.getReview.mockResolvedValueOnce({ equipment: [] });
     api.addEquipment.mockResolvedValueOnce(equip({ equipment_id: 'eq2', name: 'the park pull-up bar' }));
-    render(<SettingsTools onBack={() => {}} />);
+    renderWithQuery(<SettingsTools onBack={() => {}} />);
 
     await screen.findByPlaceholderText('e.g. "kettlebell"');
     fireEvent.change(screen.getByPlaceholderText('e.g. "kettlebell"'), {
@@ -61,7 +62,7 @@ describe('SettingsTools', () => {
   it('calls onBack from the header', async () => {
     api.getReview.mockResolvedValueOnce({ equipment: [] });
     const onBack = vi.fn();
-    render(<SettingsTools onBack={onBack} />);
+    renderWithQuery(<SettingsTools onBack={onBack} />);
     fireEvent.click(await screen.findByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });
@@ -69,7 +70,7 @@ describe('SettingsTools', () => {
   it('outside a detour, the gym photo card says so honestly instead of blaming the photo', async () => {
     api.getReview.mockResolvedValueOnce({ equipment: [] });
     api.sendGymPhotos.mockResolvedValueOnce({ ok: false });
-    render(<SettingsTools onBack={() => {}} />);
+    renderWithQuery(<SettingsTools onBack={() => {}} />);
 
     const file = new File(['x'], 'gym.jpg', { type: 'image/jpeg' });
     const input = (await screen.findByText('📷 Take a photo')).parentElement!.querySelector('input')!;

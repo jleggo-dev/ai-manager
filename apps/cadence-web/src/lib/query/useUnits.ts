@@ -25,6 +25,16 @@ export function useClockUnit(): ClockUnit {
   return asClockUnit(data?.resolved?.clock) ?? '24h';
 }
 
+/**
+ * Write the resolved units straight into the shared entry — what a per-axis tap does, so the trail,
+ * the rows and the quiet-hours chip change with the control instead of a round trip after it.
+ */
+export function useSetUnits() {
+  const queryClient = useQueryClient();
+  return (patch: (prev: UnitsResponse | null) => UnitsResponse | null) =>
+    queryClient.setQueryData<UnitsResponse | null>(queryKeys.units.all, (prev) => patch(prev ?? null));
+}
+
 /** After a units write: drop the cached answer so every reader picks up the new one. */
 export function useInvalidateUnits() {
   const queryClient = useQueryClient();

@@ -9,11 +9,10 @@
  * (`orderGroupItems`, `pieceQualifiers`) are read, never re-decided, so the coach and this screen
  * can never disagree about what a group holds or what order it reads in.
  */
-import { useCallback, useEffect, useState } from 'react';
-import type { RepertoireCollection, RepertoireItem, RepertoirePayload, RepertoireStatus } from '@cadence/shared';
+import { useCallback, useState } from 'react';
+import type { RepertoireItem, RepertoirePayload, RepertoireStatus } from '@cadence/shared';
 import { REPERTOIRE_GROUPS } from '@cadence/shared';
-import { useProgressRepertoire } from '../../lib/query/index.ts';
-import { getRepertoireListItems, type RepertoireCollisionGroup } from '../../lib/api/repertoire-list.ts';
+import { useProgressRepertoire, useRepertoireList } from '../../lib/query/index.ts';
 import { patchRepertoireItem } from '../../lib/api/repertoire-item.ts';
 import { headerCountLine, moveQueuedRank, orderGroupItems } from './repertoireListCopy.ts';
 import { RepertoireGroup } from './RepertoireGroup.tsx';
@@ -42,12 +41,26 @@ const CHAT_NOTE =
   "rather than typing it into a list. Ask what they'd like to add.";
 
 export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenProps) {
-  const [load, setLoad] = useState<Load>({ kind: 'loading' });
-  const [items, setItems] = useState<RepertoireItem[]>([]);
-  const [collisions, setCollisions] = useState<RepertoireCollisionGroup[]>([]);
-  // Every collection this person has, for the item screen's Collection picker. Read here rather
-  // than there because this screen already holds the list read that carries them.
-  const [collections, setCollections] = useState<RepertoireCollection[]>([]);
+  /**
+   * The room's one read, through the shared cache (lib/query/useRepertoireList.ts). It opened on
+   * "Reading your shelf…" every single time — including walking straight back from an item screen
+   * it had just pushed — because the fetch lived in a mount effect and the answer died with the
+   * screen. Now it opens on the shelf it had a moment ago and corrects itself behind the paint.
+   *
+   * `collections` rides along here rather than being read by the item screen's picker, because
+   * this read already carries them.
+   */
+  const { data, isPending, error, refetch } = useRepertoireList(goalId);
+  const items = data?.items ?? [];
+  const collisions = data?.collisions ?? [];
+  const collections = data?.collections ?? [];
+  // A fault keeps the API's own words (the hook throws with them) — never an empty shelf, which
+  // would tell the person the one thing that is not true.
+  const load: Load = data
+    ? { kind: 'ready' }
+    : isPending
+      ? { kind: 'loading' }
+      : { kind: 'fault', fault: error instanceof Error ? error.message : 'I could not read your list just now.' };
   const [actionError, setActionError] = useState('');
   const [openItem, setOpenItem] = useState<{ item: RepertoireItem; collidesWithLabel: string | null } | null>(null);
   const [seedCollection, setSeedCollection] = useState<string | null>(null);
@@ -57,20 +70,9 @@ export function ListScreen({ goalId, goalName, onBack, onOpenChat }: ListScreenP
   const [pendingGoalId, setPendingGoalId] = useState<string | null>(null);
   const { data: card } = useProgressRepertoire(goalId ?? undefined);
 
-  const refresh = useCallback(() => {
-    return getRepertoireListItems(goalId).then((res) => {
-      if (!res.ok) return setLoad({ kind: 'fault', fault: res.fault });
-      setItems(res.items);
-      setCollisions(res.collisions);
-      setCollections(res.collections);
-      setLoad({ kind: 'ready' });
-    });
-  }, [goalId]);
-
-  useEffect(() => {
-    setLoad({ kind: 'loading' });
-    void refresh();
-  }, [refresh]);
+  /** What every write on this screen calls when it lands. Re-reads rather than patching by hand:
+   *  the server decides groups, order and collisions, and this screen never re-decides them. */
+  const refresh = useCallback(() => refetch(), [refetch]);
 
   function openRow(item: RepertoireItem, collidesWithLabel: string | null) {
     setOpenItem({ item, collidesWithLabel });
