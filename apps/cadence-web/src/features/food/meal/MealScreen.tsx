@@ -115,6 +115,7 @@ export function MealScreen({ meal: initialMeal, openAt, onClose, onExpressSingle
             kind={kind}
             busy={draft.busy}
             onSearch={() => setDoor({ at: 'add' })}
+            onVoice={() => setDoor({ at: 'chat', listening: true })}
             onPhoto={(file) => {
               if (!file) return;
               void downscalePhoto(file).then((photo) => setDoor({ at: 'photo', photo }));

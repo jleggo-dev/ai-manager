@@ -6,7 +6,7 @@
  */
 import type { MealKind } from '@cadence/shared';
 import { useRecipes } from '../../../lib/query/index.ts';
-import { CameraIcon, ScanIcon } from '../captureIcons.tsx';
+import { CameraIcon, MicIcon, ScanIcon, SearchIcon } from '../captureIcons.tsx';
 import { FoodPickHead, FoodPickRow } from '../FoodPickRow.tsx';
 import { useUsualAtSlot } from '../useUsualAtSlot.ts';
 import { fmtKcal } from '../bracket/copy.ts';
@@ -48,6 +48,7 @@ export function MealEmptyState({
   kind,
   busy,
   onSearch,
+  onVoice,
   onPhoto,
   onBarcode,
   onRecents,
@@ -59,6 +60,8 @@ export function MealEmptyState({
   kind: MealKind;
   busy?: boolean;
   onSearch: () => void;
+  /** The mic on the field — the chat door, opened already listening (canvas 1b B1). */
+  onVoice: () => void;
   onPhoto: (file: File | undefined) => void;
   onBarcode: () => void;
   onRecents: () => void;
@@ -77,16 +80,25 @@ export function MealEmptyState({
       <p className="ms-empty-sub">
         {"One at a time or all in one sentence — it's the same meal either way. Nothing counts until you close it."}
       </p>
-      <button type="button" className="ms-field" onClick={onSearch}>
-        Search, or just describe it…
-      </button>
+      {/* The field keeps both halves of its own promise: tapping the words opens search, and the
+          mic beside them opens the same chat door already listening. It shipped as a bare text
+          button, so "or just describe it" had nothing behind it (canvas 1b B1 draws the row). */}
+      <div className="ms-field">
+        <button type="button" className="ms-field-open" onClick={onSearch}>
+          <SearchIcon />
+          <span>Search, or just describe it…</span>
+        </button>
+        <button type="button" className="ms-field-mic" aria-label="Say what you had" disabled={busy} onClick={onVoice}>
+          <MicIcon />
+        </button>
+      </div>
       {/* Small buttons, not the main event (1b B1). Picture and Barcode are the capture set's
           own drawings — the canvas uses the same path data, so the ◲ ▥ that shipped were the
           deviation. Recents and My meals stay glyphs because that is what the canvas draws:
           there is no clock or shelf in the capture set to be consistent WITH. */}
       <div className="ms-doors">
         <label className="ms-door">
-          <i aria-hidden="true">
+          <i aria-hidden="true" className="ms-door-picture">
             <CameraIcon />
           </i>
           Picture
@@ -103,19 +115,19 @@ export function MealEmptyState({
           />
         </label>
         <button type="button" className="ms-door" disabled={busy} onClick={onBarcode}>
-          <i aria-hidden="true">
+          <i aria-hidden="true" className="ms-door-barcode">
             <ScanIcon />
           </i>
           Barcode
         </button>
         <button type="button" className="ms-door" disabled={busy} onClick={onRecents}>
-          <i aria-hidden="true" className="ms-door-g">
+          <i aria-hidden="true" className="ms-door-g ms-door-recents">
             ◷
           </i>
           Recents
         </button>
         <button type="button" className="ms-door" disabled={busy} onClick={onMyMeals}>
-          <i aria-hidden="true" className="ms-door-g">
+          <i aria-hidden="true" className="ms-door-g ms-door-mine">
             ◍
           </i>
           My meals

@@ -9,9 +9,10 @@
  * travelled — the composer for chat, the scanner for barcode, the search field for search — plus
  * the negative that pins the bug: none of them lands on the meal's own picker.
  */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OccurrenceDetail } from '../../../lib/api.ts';
+import { renderWithQuery } from '../../../test/withQuery.tsx';
 
 const api = vi.hoisted(() => ({
   getFoodRecents: vi.fn(async () => ({ status: 'ok', foods: [] })),
@@ -34,7 +35,11 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock('../../../lib/api.ts', () => api);
 
-vi.mock('../../../lib/query/index.ts', () => ({
+/** Partial: only the reads this suite drives are stubbed. The rest — the shared food-library
+ *  hooks the screen picked up in `fix/screens-paint-from-cache` — run for real onto the mocked
+ *  API above, so this file does not go stale every time a component adopts another cached read. */
+vi.mock('../../../lib/query/index.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/query/index.ts')>()),
   useInvalidateNutritionDay: () => vi.fn(),
   useNutritionDay: () => ({ data: null }),
   localTodayIso: () => '2026-09-06',
@@ -93,7 +98,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function renderPanel() {
-  return render(<MealCapturePanel detail={DETAIL} setDetail={() => {}} />);
+  return renderWithQuery(<MealCapturePanel detail={DETAIL} setDetail={() => {}} />);
 }
 
 /** The tile, and the one thing that can only be on screen if the tapped method travelled. */
