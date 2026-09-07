@@ -1,235 +1,55 @@
-import { useState } from 'react';
-import type { MealMacros, MealPreview, OccurrenceDetail } from '../../../lib/api.ts';
+import type { OccurrenceDetail } from '../../../lib/api.ts';
+import { useNutritionDay } from '../../../lib/query/index.ts';
+import { localTodayIso } from '../../../lib/query/keys.ts';
 import { MealScreen } from '../../food/meal/MealScreen.tsx';
-import { doorForMethod } from '../../food/meal/methodDoor.ts';
-import { MealParseCard } from '../../food/MealParseCard.tsx';
-import { RecipeQuickLog } from '../../food/RecipeQuickLog.tsx';
-import { useUsualAtSlot } from '../../food/useUsualAtSlot.ts';
-import type { CaptureMethod } from '../../food/MethodTiles.tsx';
-import { MealCapturePhoto } from './MealCapturePhoto.tsx';
 import { MealCaptureRings } from './MealCaptureRings.tsx';
-import { MealDraftCard } from './MealDraftCard.tsx';
-import { MealPlateList } from './MealPlateList.tsx';
-import { QuickAddBody } from './QuickAddBody.tsx';
-import { fmtKcal, sumPlate } from './mealPlate.ts';
-import { useMealCapture } from './useMealCapture.ts';
-import { usePlannedMeal, type PlannedMeal } from './usePlannedMeal.ts';
+import { mealForNow, mealFromTitle } from './format.ts';
+import { usePlannedMeal } from './usePlannedMeal.ts';
 
 /**
- * The meal capture, from the trail — a *capture*, never a walkthrough. Today's two-tone rings sit
- * in context, and under them **quick add, scoped to this slot** (design 05a): what the week
- * planned for it, then what they usually have at it, counted. Every method is a tile, so nothing
- * here is a dead end — each one opens the full Log screen (05b), which needs no trail task at all.
+ * The meal capture, from the trail — the cart (owner, 2026-09-07). Today's ring sits in context
+ * showing only what is logged, and under it the meal IS the screen: what is in the cart, the
+ * doors as one row, the shelf of what they usually have at this slot, and "Log breakfast" pinned
+ * at the bottom. Nothing counts before that tap; after it, the same screen stays open to adds,
+ * which count as they land.
  *
- * One confirm writes the meal, ticks the task, and closes the sheet. Nothing counts before it.
+ * `detail` may still be on its way: the trail already knows the title and the day, and that is
+ * everything the meal needs to open (PERF-06 — the screen is real on the first frame, the plate
+ * never waits on a round trip it does not need). The detail is only for ticking the row.
  */
 export function MealCapturePanel({
   detail,
+  known,
   setDetail,
   onLogged,
   onClose,
   onOpenFood,
 }: {
-  detail: OccurrenceDetail;
+  detail: OccurrenceDetail | null;
+  known: { title: string; date?: string };
   setDetail: (d: OccurrenceDetail) => void;
   onLogged?: () => void;
   onClose?: () => void;
   /** Leave the capture for the Food screen — the day's whole read, and the way into Nutrients. */
   onOpenFood?: () => void;
 }) {
-  const cap = useMealCapture(detail, setDetail, { onLogged, onClose });
-  const { planned } = usePlannedMeal(cap.mealKind, detail.date);
-  const usual = useUsualAtSlot(cap.mealKind);
-  const [text, setText] = useState('');
-  /** Set while the composer is collecting ANOTHER thing for a meal already on the card. */
-  const [addingTo, setAddingTo] = useState<MealPreview | null>(null);
-  const [pending, setPending] = useState<MealMacros | null>(null);
-  /** The full Log screen, opened over the sheet by a method tile. */
-  const [logOpen, setLogOpen] = useState<CaptureMethod | null>(null);
-  /** MP24 — a one-tap "planned"/"usual" recipe row opens the portion confirm on this id, rather
-   *  than silently logging one serving of it. */
-  const [pendingRecipeId, setPendingRecipeId] = useState<string | null>(null);
+  const title = detail?.title ?? known.title;
+  const date = detail?.date ?? known.date ?? localTodayIso();
+  const mealKind = mealFromTitle(title) ?? mealForNow();
+  const { data: day } = useNutritionDay(date);
+  const { planned } = usePlannedMeal(mealKind, date);
 
-  const day = cap.day;
-  const eaten = day?.totals ?? {};
-  const plateMacros = sumPlate(cap.plate);
-  const alreadyLogged = (day?.meals ?? []).filter((m) => m.meal === cap.mealKind);
-  const pendingKcal = (plateMacros.kcal ?? 0) + (pending?.kcal ?? 0);
-
-  /** MP19 — a planned dish taps through here in either shape: a legacy recipe opens the confirm
-   *  (MP24); a composed meal logs its items directly, exactly as planned. */
-  function logPlanned(meal: PlannedMeal) {
-    if (meal.recipe_id) return setPendingRecipeId(meal.recipe_id);
-    if (meal.items?.length) void cap.logPlannedComposed(meal.items);
-  }
-
-  if (logOpen) {
-    // The meal is the screen (1b): the tile hands over to the slot's draft meal. The draft
-    // rejoins its own window, so a half-built breakfast from the Food screen is the SAME
-    // breakfast here. Closing lands back on the capture sheet with the occurrence ticked
-    // server-side by the close itself.
-    //
-    // The tile they already tapped rides along as the door to open in — without it every
-    // method landed on the meal's own picker and asked the same question a second time.
-    const door = doorForMethod(logOpen);
-    return (
-      <MealScreen
-        meal={cap.mealKind}
-        {...(door ? { openAt: door } : {})}
-        onClose={() => {
-          setLogOpen(null);
-          cap.markLogged();
-        }}
-        onExpressSingle={() => setLogOpen(null)}
-      />
-    );
-  }
-
-  if (pendingRecipeId) {
-    return (
-      <RecipeQuickLog
-        recipeId={pendingRecipeId}
-        initialMeal={cap.mealKind}
-        onCancel={() => setPendingRecipeId(null)}
-        onLogged={() => {
-          setPendingRecipeId(null);
-          cap.markLogged();
-        }}
-      />
-    );
-  }
+  /** The row ticks server-side when the meal closes; this keeps the sheet's own copy honest. */
+  const markLogged = () => {
+    if (detail && detail.status === 'pending') setDetail({ ...detail, status: 'done' });
+    onLogged?.();
+    onClose?.();
+  };
 
   return (
-    <div className="mc">
-      {/* Slice 2 extracted these rings; slice 3 made the ring the door out to the whole day. Both
-          survive: the component owns the layout, and `onOpenFood` carries the door through it. */}
-      <MealCaptureRings
-        eaten={eaten}
-        target={day?.targets ?? null}
-        pendingKcal={pendingKcal}
-        {...(onOpenFood ? { onOpenFood } : {})}
-      />
-
-      {cap.plate.length > 0 && (
-        <MealPlateList plate={cap.plate} busy={cap.busy} onQty={cap.setPlateQty} onRemove={cap.removePlateItem} />
-      )}
-
-      {cap.mealPreview ? (
-        <MealParseCard
-          preview={cap.mealPreview}
-          initialMeal={cap.mealKind}
-          onLogged={() => {
-            cap.setMealPreview(null);
-            setText('');
-            cap.markLogged();
-          }}
-          onNotAMeal={() => {
-            const words = cap.mealPreview?.raw_text ?? text;
-            cap.setMealPreview(null);
-            void cap.resolveText(words, { forceSingle: true });
-          }}
-          onCancel={() => cap.setMealPreview(null)}
-          onAskRead={() => void cap.checkPlate(cap.mealPreview?.raw_text)}
-          onAddAnother={() => {
-            setAddingTo(cap.mealPreview);
-            cap.setMealPreview(null);
-            setText('');
-          }}
-          advice={cap.plateAdvice}
-          advising={cap.advising}
-        />
-      ) : cap.draft ? (
-        <MealDraftCard
-          draft={cap.draft}
-          meal={cap.mealKind}
-          busy={cap.busy}
-          err={cap.logErr}
-          plateMode={cap.plate.length > 0}
-          onMacros={setPending}
-          onLog={cap.logDraft}
-          onAddAnother={(portion) => {
-            setPending(null);
-            void cap.addToPlate(portion);
-          }}
-          onBack={() => {
-            setPending(null);
-            cap.setDraft(null);
-          }}
-        />
-      ) : cap.photo ? (
-        <MealCapturePhoto
-          photo={cap.photo}
-          caption={text}
-          mealKind={cap.mealKind}
-          advising={cap.advising}
-          advice={cap.plateAdvice}
-          onClear={cap.clearPhoto}
-          onAskRead={() => void cap.checkPlate()}
-          onLogged={() => {
-            setText('');
-            void cap.afterPhotoLogged();
-          }}
-        />
-      ) : (
-        <>
-          {/* Already on this meal today. Someone who comes back to add a latte should SEE that
-              breakfast is already there and that they are adding to it, not wonder whether the
-              second tap did anything (owner, 2026-08-15 — "I added it by tapping the breakfast
-              button a second time… it's not showing"). */}
-          {alreadyLogged.length > 0 && (
-            <div className="mc-already">
-              <div className="mc-already-k">ALREADY ON THIS {cap.mealKind.toUpperCase()}</div>
-              {alreadyLogged.map((m) => (
-                <div className="mc-already-row" key={m.log_id}>
-                  <span>{m.items.map((i) => i.name).join(', ') || m.raw_text || 'logged'}</span>
-                  {m.macros?.kcal != null && <b>~{Math.round(m.macros.kcal)} kcal</b>}
-                </div>
-              ))}
-              <div className="mc-already-s">Anything you add now joins it.</div>
-            </div>
-          )}
-
-          {addingTo && (
-            <div className="mc-adding">
-              Adding to this {cap.mealKind} — {addingTo.items.length} thing
-              {addingTo.items.length === 1 ? '' : 's'} so far
-            </div>
-          )}
-
-          <QuickAddBody
-            mealKind={cap.mealKind}
-            planned={planned}
-            usual={usual}
-            busy={cap.busy}
-            onMethod={setLogOpen}
-            onPhoto={(file) => void cap.pickPhoto(file)}
-            onLogRecipe={(id) => setPendingRecipeId(id)}
-            onLogPlanned={logPlanned}
-            onAddFood={(id) => void cap.pickSaved(id)}
-          />
-
-          {cap.note && <div className="mc-note">{cap.note}</div>}
-          {cap.logErr && <div className="mc-err">{cap.logErr}</div>}
-
-          {cap.plate.length > 0 && (
-            <div className="mc-plate-foot">
-              <div className="mc-plate-tot">
-                <b>~{fmtKcal(plateMacros.kcal ?? 0)} kcal</b>
-                <span>
-                  P{Math.round(plateMacros.protein_g ?? 0)} · C{Math.round(plateMacros.carbs_g ?? 0)} · F
-                  {Math.round(plateMacros.fat_g ?? 0)}
-                </span>
-              </div>
-              {cap.logErr && <div className="mc-err">{cap.logErr}</div>}
-              <button className="mc-log" disabled={cap.busy} onClick={() => void cap.logPlate()}>
-                {cap.busy
-                  ? 'Writing it down…'
-                  : `Log ${cap.mealKind} · ${cap.plate.length} thing${cap.plate.length === 1 ? '' : 's'}`}
-              </button>
-            </div>
-          )}
-        </>
-      )}
+    <div className="mc mc-cart">
+      <MealCaptureRings day={day} {...(onOpenFood ? { onOpenFood } : {})} />
+      <MealScreen meal={mealKind} date={date} planned={planned} onClose={() => onClose?.()} onLogged={markLogged} />
     </div>
   );
 }

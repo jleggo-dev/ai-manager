@@ -152,6 +152,7 @@ export function MealDoors({
                 mealLabel={kind}
                 count={draft.items.length}
                 kcal={draft.total.kcal}
+                logged={draft.logged}
                 busy={draft.busy}
                 onUndo={() => void draft.undoLast()}
               />

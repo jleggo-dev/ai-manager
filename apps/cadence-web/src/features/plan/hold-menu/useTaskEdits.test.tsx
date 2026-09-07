@@ -65,7 +65,7 @@ describe('useTaskEdits — routing', () => {
   it('a tap on today opens the task; a tap on a future day opens the preview instead', () => {
     const h = mount();
     act(() => h.result.current.tap(TODAYS_SKIPPED, '2026-09-07'));
-    expect(h.openTask).toHaveBeenCalledWith(TODAYS_SKIPPED);
+    expect(h.openTask).toHaveBeenCalledWith(TODAYS_SKIPPED, '2026-09-07');
     expect(h.result.current.sheet).toBeNull();
 
     act(() => h.result.current.tap(occ(), '2026-09-08'));
@@ -97,7 +97,7 @@ describe('useTaskEdits — do it now', () => {
     expect(moveOccurrence).toHaveBeenCalledWith('o-tmrw', TODAY);
     expect(duplicateOccurrence).not.toHaveBeenCalled();
     expect(h.refresh).toHaveBeenCalled();
-    expect(h.openTask).toHaveBeenCalledWith(occ());
+    expect(h.openTask).toHaveBeenCalledWith(occ(), TODAY);
     expect(h.result.current.sheet).toBeNull();
   });
 
@@ -112,7 +112,7 @@ describe('useTaskEdits — do it now', () => {
     act(() => h.result.current.hold(occ(), '2026-09-08'));
     await act(() => h.result.current.doNow());
     expect(setOccurrence).toHaveBeenCalledWith('o-today', 'pending');
-    expect(h.openTask).toHaveBeenCalledWith({ ...TODAYS_SKIPPED, status: 'pending' });
+    expect(h.openTask).toHaveBeenCalledWith({ ...TODAYS_SKIPPED, status: 'pending' }, TODAY);
   });
 
   it('a failed move says so and keeps the sheet up', async () => {
@@ -131,7 +131,7 @@ describe('useTaskEdits — do it now', () => {
     await act(async () => h.result.current.open('o-today'));
     expect(setOccurrence).toHaveBeenCalledWith('o-today', 'pending');
     expect(h.refresh).toHaveBeenCalled();
-    expect(h.openTask).toHaveBeenCalledWith({ ...TODAYS_SKIPPED, status: 'pending' });
+    expect(h.openTask).toHaveBeenCalledWith({ ...TODAYS_SKIPPED, status: 'pending' }, TODAY);
   });
 
   it('opening a pending row touches nothing', async () => {
@@ -139,7 +139,7 @@ describe('useTaskEdits — do it now', () => {
     act(() => h.result.current.hold(occ(), '2026-09-08'));
     await act(async () => h.result.current.open('o-tmrw'));
     expect(setOccurrence).not.toHaveBeenCalled();
-    expect(h.openTask).toHaveBeenCalledWith(occ());
+    expect(h.openTask).toHaveBeenCalledWith(occ(), TODAY);
   });
 });
 

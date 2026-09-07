@@ -516,12 +516,29 @@
   flex-direction: column;
   min-height: 0;
 }
+/* A sheet hosting the chat is COMPOSING, like the one hosting the add panel (meal-screen.css):
+   it takes the whole visible height, keyboard included. At 78% with the keyboard up the thread
+   and the composer were squeezed out below the sheet's clip — on the phone there was a title and
+   nothing else to type into (owner, on device, 2026-09-07: "basically non-functional"). */
+.sheet:has(.fc) {
+  max-height: 100%;
+  min-height: 100%;
+  padding: 10px 0 0;
+}
+.sheet:has(.fc) .ss-head {
+  display: none;
+}
+/* The thread scrolls INSIDE itself and the composer is a fixed-height sibling below it — never
+   a sticky element inside the scroller, which the keyboard could push out of the clip. */
 .fc-thread {
   display: flex;
   flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   flex-direction: column;
   gap: 9px;
-  padding: 12px 16px 0;
+  padding: 12px 16px 12px;
 }
 .fc-said {
   align-self: flex-end;
@@ -546,17 +563,22 @@
   color: oklch(32% 0.02 150);
 }
 .fc-compose {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 9px;
   padding: 9px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  border-top: 1px solid oklch(93% 0.012 85);
   background: oklch(96% 0.025 76);
 }
+/* Room to write a whole meal: the field starts two lines tall and grows to its cap (the
+   textarea's own maxRows) before it scrolls. */
 .fc-compose .mc-cap-in {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 2.9em;
+  font-size: 15px;
+  line-height: 1.4;
 }
 .fc-send {
   display: flex;
@@ -620,10 +642,16 @@
   font-weight: 800;
   color: oklch(38% 0.02 150);
 }
+/* The pick WRAPS. A serving label is the food's own words — "1 Large (20cm To 22.5cm Long)
+   (136g)" is a real one — and as a non-shrinking flex item it pushed the whole sheet wider than
+   the phone (owner, on device, 2026-09-07: "a weird too horizontally big thing"). It shrinks,
+   wraps, and keeps its right edge; the field label beside it is the one that stays put. */
 .fd-pick {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   padding: 7px 11px;
   border: 1.5px solid oklch(91% 0.02 85);
@@ -632,8 +660,20 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 900;
+  line-height: 1.3;
   color: oklch(32% 0.02 150);
   cursor: pointer;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.fd-field-l {
+  flex: 0 0 auto;
+}
+/* Only the meal-kind select capitalizes — "breakfast" → "Breakfast". The serving label keeps its
+   own case: capitalizing it turned "(1.5 ml ea.)" into "(1.5 Ml Ea.)". */
+select.fd-pick {
+  flex: 0 0 auto;
   text-transform: capitalize;
 }
 .fd-pick.is-on {

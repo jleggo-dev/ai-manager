@@ -209,8 +209,8 @@ export function MealAddPanel({
           className="ms-search"
           type="text"
           value={query}
-          placeholder="Search foods…"
-          aria-label="Search foods"
+          placeholder="Find a food…"
+          aria-label="Find a food"
           autoFocus
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -263,6 +263,7 @@ export function MealAddPanel({
         mealLabel={kind}
         count={draft.items.length}
         kcal={draft.total.kcal}
+        logged={draft.logged}
         chips={chips}
         busy={draft.busy}
         onUndo={() => void undoLast()}
@@ -296,6 +297,7 @@ export function MealAddPanel({
                 mealLabel={kind}
                 count={draft.items.length}
                 kcal={draft.total.kcal}
+                logged={draft.logged}
                 chips={chips}
                 busy={draft.busy}
                 onUndo={() => void undoLast()}

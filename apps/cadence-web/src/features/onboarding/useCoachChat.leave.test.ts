@@ -84,7 +84,11 @@ describe('useCoachChat — leaving mid-turn', () => {
     if (restoredSession) {
       getCurrentCoach.mockResolvedValueOnce({ sessionId: restoredSession, messages: [], stale: false });
     }
-    const hook = renderHook(() => useCoachChat({ intent: 'ongoing' }));
+    // `delay` is the hook's seam for the recovery poll (coach-recovery.ts: 800ms × up to six
+    // attempts on REAL timers). Two failed turns in one case ran that poll for ~5s and tripped
+    // vitest's default timeout under a full parallel run (flaked 2026-09-07) — and none of it
+    // is what this file is about. Resolve at once: the timing is the poll's own tests' job.
+    const hook = renderHook(() => useCoachChat({ intent: 'ongoing', delay: () => Promise.resolve() }));
     await waitFor(() => expect(hook.result.current.restored).toBe(true));
     return hook;
   }

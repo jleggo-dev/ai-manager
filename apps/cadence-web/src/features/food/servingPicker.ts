@@ -159,6 +159,10 @@ export function compoundLabel(serving: FoodServing, servings: FoodServing[]): st
   const ref = servings.find((s) => s !== serving && classifyServingUnit(s.unit) === 'volume' && s.amount_g > 0);
   const noun = ref ? volumeNoun(ref.unit) : null;
   if (!ref || !noun) return serving.label;
+  // Only the household measures. A "100 ml" or "1 litre" serving is not ONE of its noun, so the
+  // ratio would be in hundreds-of-ml, not ml — which is how a banana read "1 Large … (1.5 ml
+  // ea.)" on device (owner, 2026-09-07). Cups and spoons are always one of themselves.
+  if (noun === 'ml' || noun === 'liter') return serving.label;
   const ratio = Math.round((serving.amount_g / ref.amount_g) * 4) / 4; // quarter-unit precision
   if (!(ratio > 0)) return serving.label;
   const word = ratio === 1 ? noun : VOLUME_NOUN_PLURAL[noun];

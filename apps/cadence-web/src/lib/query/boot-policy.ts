@@ -98,6 +98,10 @@ const FAMILIES: Record<string, BootPolicy> = {
   // here whose key is declared outside keys.ts (settings/notifications/useNotificationPrefs.ts) —
   // it is named anyway, because ranking it by hand beats letting the default decide a first paint.
   notificationPrefs: { ttlMs: 7 * DAY, rank: 22 },
+  // Her face. A month, like the units: it is a preference, it changes when someone changes it in
+  // Settings, and it is on the first screen beside the weather — which was already painting from
+  // disk while the avatar waited on the network (owner, on device, 2026-09-07).
+  coachFace: { ttlMs: 30 * DAY, rank: 23 },
   // Goals, tools, the baseline; and what we work around. A week, like the place they live and for
   // the same reason: these are the slowest-moving facts the app holds, and Settings exists to show
   // them rather than to act on them — the worst a stale one can do is name yesterday's count for
@@ -111,6 +115,9 @@ const FAMILIES: Record<string, BootPolicy> = {
   routines: { ttlMs: 7 * DAY, rank: 26 },
   dietaryProfile: { ttlMs: 7 * DAY, rank: 27 },
   recentMeals: { ttlMs: DAY, rank: 28 },
+  // What they usually have at each slot — the meal screen's one-tap list. Habits move slowly, and
+  // painting last launch's list beats opening breakfast on an empty shelf.
+  usualAtSlot: { ttlMs: 2 * DAY, rank: 31 },
   mealPlan: { ttlMs: 2 * DAY, rank: 29 },
   repertoireList: { ttlMs: 2 * DAY, rank: 32 },
   progress: { ttlMs: DAY, rank: 30 },

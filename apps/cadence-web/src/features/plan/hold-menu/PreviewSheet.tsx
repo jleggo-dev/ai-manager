@@ -15,10 +15,18 @@ import { dayName } from './holdMenuModel.ts';
  * here, or "today" stops meaning anything on the trail. The one door is "Do it now?", which
  * leads to the same move-to-today ask the hold menu owns.
  *
+ * A meal's door says what it actually does. "Do it now?" on Wednesday's snack read as nonsense
+ * (owner, same day: "it should say log today's snack?") — nobody moves a meal forward; they log
+ * the one they are eating. The host routes that tap to today's own row (TaskEditSheets).
+ *
  * Opening a session's preview also asks the server for its detail, which is what writes the
  * session on first open — so a look ahead warms the 30-60s write for free, and the day it comes
  * round the sheet opens instantly.
  */
+function doorLabel(shape: ReturnType<typeof taskOpener>, title: string): string {
+  if (shape !== 'meal') return 'Do it now?';
+  return `Log today’s ${mealFromTitle(title) ?? 'meal'}?`;
+}
 export function PreviewSheet({
   occ,
   date,
@@ -59,7 +67,7 @@ export function PreviewSheet({
 
         {onDoNow && (
           <button className="ss-btn ss-start" onClick={onDoNow}>
-            Do it now?
+            {doorLabel(shape, occ.title)}
           </button>
         )}
         <button className="adhoc-cancel" onClick={onClose}>

@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../lib/api.ts';
 import { MicButton } from '../../components/MicButton.tsx';
 import { MealParseCard } from './MealParseCard.tsx';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 
-/** What she says back while the card is being read — plain, and never about the food itself. */
-const READING = 'Reading that…';
+/**
+ * What she says back while the card is being read — plain, and about what is actually happening.
+ * It said "Reading that…", which named nothing (owner, 2026-09-07: "I don't know what reading
+ * that means, it should clearly say what it's doing").
+ */
+export const READING = 'Looking up the nutrition for that…';
+
+/** Lines before the composer stops growing and scrolls — a whole meal, dictated, fits. */
+const COMPOSER_MAX_ROWS = 10;
 
 /**
  * Log by chat (design 05c) — and by voice, because **they are one screen**. The mic never leaves
@@ -14,6 +21,10 @@ const READING = 'Reading that…';
  *
  * What comes back is the parse-and-confirm card, which carries the amounts rule: an amount they
  * said is kept, an amount they didn't is asked for. Nothing counts until they tap it.
+ *
+ * The thread keeps its newest line in view on its own: it is a scroller now (the sheet hosting
+ * it takes the whole height, food-capture.css), so a long card or a second message would
+ * otherwise land below the fold with the composer above it.
  */
 export function LogByChat({
   meal,
@@ -42,6 +53,12 @@ export function LogByChat({
   const [preview, setPreview] = useState<MealPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const thread = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = thread.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [said, busy, preview, err]);
 
   async function read() {
     const q = text.trim();
@@ -74,9 +91,13 @@ export function LogByChat({
         <span className="fc-slot">{meal}</span>
       </div>
 
-      <div className="fc-thread">
+      <div className="fc-thread" ref={thread}>
         {said && <div className="fc-said">{said}</div>}
-        {busy && <div className="fc-heard">{READING}</div>}
+        {busy && (
+          <div className="fc-heard" role="status">
+            {READING}
+          </div>
+        )}
         {preview && !busy && (
           <div className="fc-heard">
             Here&apos;s my read — an amount you gave I&apos;ve kept; anything you didn&apos;t, I&apos;ll ask.
@@ -102,8 +123,9 @@ export function LogByChat({
           value={text}
           onChange={setText}
           disabled={busy}
+          maxRows={COMPOSER_MAX_ROWS}
           ariaLabel="What did you have?"
-          placeholder={preview ? 'Or just say the amount…' : 'What did you have?'}
+          placeholder={preview ? 'Or just say the amount…' : 'What did you have? The whole meal is fine.'}
           onSubmit={() => void read()}
         />
         <MicButton value={text} onChange={setText} disabled={busy} autoStart={listening} />

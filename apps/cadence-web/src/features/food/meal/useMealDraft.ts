@@ -5,7 +5,12 @@
  * parts ops previewed through the bracket's own reducers, the visible window, and the close.
  * Server truth wins — every mutation returns the whole meal — but amounts and parts apply
  * optimistically first so a stepper tap never waits on the network. The engine (state, the
- * 409 reopen-and-retry-once rule, reconciliation) lives in `useDraftCore.ts`.
+ * open/rejoin, reconciliation) lives in `useDraftCore.ts`.
+ *
+ * Two modes since the cart ruling (owner, 2026-09-07). A meal is a cart until it is logged:
+ * nothing counts, the footer says "Log breakfast". Once logged it stays open to adds — a
+ * second coffee lands in the same breakfast and counts the moment it lands, with no second
+ * review — so every mutation on a LOGGED meal refreshes the day, where the close alone used to.
  */
 import { useCallback, useMemo } from 'react';
 import type { MealKind, Macros } from '@cadence/shared';
@@ -47,22 +52,40 @@ export interface ParsedAppendItem {
   food_id?: string;
 }
 
+/** A logged meal counts as it changes — the day is refreshed after any mutation on one. */
+function useRefreshIfLogged(core: DraftCore) {
+  const invalidateNutritionDay = useInvalidateNutritionDay();
+  const { mealRef } = core;
+  return useCallback(
+    (updated: Meal | null) => {
+      if (updated?.state === 'closed' || mealRef.current?.state === 'closed') void invalidateNutritionDay();
+    },
+    [invalidateNutritionDay, mealRef],
+  );
+}
+
 /** The append family — every door lands here; provenance rides along, display-only. */
 function useDraftAppends(core: DraftCore) {
   const { mutate, tagNew, prov, mealRef, setRawTexts } = core;
+  const refreshIfLogged = useRefreshIfLogged(core);
 
   const appendFood = useCallback(
     async (input: { food_id: string; serving_index?: number; quantity?: number }, tag?: DoorTag) => {
       const updated = await mutate((id) => apiAppendFood(id, input));
       if (updated && tag) tagNew(updated, 1, () => tag);
+      refreshIfLogged(updated);
       return updated;
     },
-    [mutate, tagNew],
+    [mutate, refreshIfLogged, tagNew],
   );
 
   const appendRecipe = useCallback(
-    (input: { recipe_id: string; servings?: number }) => mutate((id) => apiAppendRecipe(id, input)),
-    [mutate],
+    async (input: { recipe_id: string; servings?: number }) => {
+      const updated = await mutate((id) => apiAppendRecipe(id, input));
+      refreshIfLogged(updated);
+      return updated;
+    },
+    [mutate, refreshIfLogged],
   );
 
   /**
@@ -81,18 +104,20 @@ function useDraftAppends(core: DraftCore) {
         });
         if (rawText?.trim()) setRawTexts((rs) => [...rs, rawText.trim()]);
       }
+      refreshIfLogged(updated);
       return updated;
     },
-    [mutate, setRawTexts, tagNew],
+    [mutate, refreshIfLogged, setRawTexts, tagNew],
   );
 
   const removeItem = useCallback(
     async (index: number) => {
       const updated = await mutate((id) => removeDraftItem(id, index));
       if (updated) prov.current = shiftProvenance(prov.current, index);
+      refreshIfLogged(updated);
       return updated;
     },
-    [mutate, prov],
+    [mutate, prov, refreshIfLogged],
   );
 
   /** The strip's Undo — pull the last add straight back out. */
@@ -109,6 +134,7 @@ function useDraftAppends(core: DraftCore) {
 function useDraftEdits(core: DraftCore) {
   const { seq, setMealState, mealRef, setPending, setErr, withDraft, reconcile } = core;
   const invalidateNutritionDay = useInvalidateNutritionDay();
+  const refreshIfLogged = useRefreshIfLogged(core);
 
   const optimistic = useCallback(
     (apply: (m: Meal) => Meal, call: (logId: string) => Promise<Meal>) => {
@@ -121,11 +147,14 @@ function useDraftEdits(core: DraftCore) {
       });
       setPending((p) => p + 1);
       withDraft(call)
-        .then((server) => reconcile(my, server))
+        .then((server) => {
+          reconcile(my, server);
+          refreshIfLogged(server);
+        })
         .catch(() => setErr(CANT))
         .finally(() => setPending((p) => p - 1));
     },
-    [mealRef, reconcile, seq, setErr, setMealState, setPending, withDraft],
+    [mealRef, reconcile, refreshIfLogged, seq, setErr, setMealState, setPending, withDraft],
   );
 
   /** A stepper nudge — est scaled locally, reconciled to the server's rescale. */
@@ -224,8 +253,8 @@ function useDraftEdits(core: DraftCore) {
   return { setAmount, editParts, groupLoose, saveAs, close };
 }
 
-export function useMealDraft(initialMeal?: MealKind) {
-  const core = useDraftCore(initialMeal);
+export function useMealDraft(initialMeal?: MealKind, date?: string) {
+  const core = useDraftCore(initialMeal, date);
   const appends = useDraftAppends(core);
   const edits = useDraftEdits(core);
   const { meal, now, prov, mutate } = core;
@@ -246,7 +275,8 @@ export function useMealDraft(initialMeal?: MealKind) {
     [items],
   );
 
-  const closesAt = meal?.closes_at ? Date.parse(meal.closes_at) : null;
+  const logged = meal?.state === 'closed';
+  const closesAt = !logged && meal?.closes_at ? Date.parse(meal.closes_at) : null;
   const minsLeft = closesAt != null ? Math.max(0, Math.round((closesAt - now) / 60_000)) : null;
 
   return {
@@ -258,10 +288,18 @@ export function useMealDraft(initialMeal?: MealKind) {
     items,
     askedCount,
     total,
+    /** True once the meal has been logged: adds land in it directly and count at once. */
+    logged,
     rawTexts: core.rawTexts,
     provenance,
-    /** "OPEN", tightening to "OPEN · 50 MIN LEFT" inside the last hour. */
-    openLabel: meal ? (minsLeft != null && minsLeft <= 60 ? `OPEN · ${minsLeft} MIN LEFT` : 'OPEN') : null,
+    /** "OPEN", tightening to "OPEN · 50 MIN LEFT" inside the last hour; "LOGGED" once it is. */
+    openLabel: !meal
+      ? null
+      : logged
+        ? 'LOGGED'
+        : minsLeft != null && minsLeft <= 60
+          ? `OPEN · ${minsLeft} MIN LEFT`
+          : 'OPEN',
     /** "adds until 10:30" — the window is visible on-surface, never a silent rule. */
     addsUntil: closesAt != null ? `adds until ${clock(closesAt)}` : null,
     /** "07:08" — when the window opened (contract: closes_at − 3h). */

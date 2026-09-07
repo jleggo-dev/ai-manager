@@ -34,7 +34,12 @@ function tzHint(req: Request): string | null {
   return h && h.length < 64 ? h : null;
 }
 
-/** One error ladder for every draft route: validation/grammar → 400, missing → 404, window → 409. */
+/**
+ * One error ladder for every draft route: validation/grammar → 400, missing → 404, window → 409.
+ * The 409 rung is kept for older clients only: since the cart ruling (owner, 2026-09-07) a
+ * closed meal takes adds directly, so nothing in services/meal-draft.ts throws 'not open' any
+ * more — an expired EMPTY draft dissolves and reads as 404, a fed one closes and takes the add.
+ */
 function sendError(res: Response, err: unknown, label: string, fallback: string): void {
   if (err instanceof BodyValidationError || err instanceof PartOpError) {
     return void res.status(400).json({ error: err.message });

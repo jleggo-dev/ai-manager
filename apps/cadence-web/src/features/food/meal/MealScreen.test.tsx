@@ -1,8 +1,9 @@
 /**
  * The meal is the screen (1b), driven end to end with the data layer mocked at the module
- * boundary: rejoin, the empty state's promises (express lane, the way back to the day), the
- * one-unsettled-amount gate on the close, the close itself, and B3's offer — four quick adds,
- * offered once, never again after "Leave them".
+ * boundary: rejoin, the doors as one row (Find first), the usual shelf's one-tap adds, the
+ * one-unsettled-amount gate on the log, the log itself, a row's details, B3's offer — four quick
+ * adds, offered once, never again after "Leave them" — and the cart ruling (2026-09-07): a
+ * logged meal takes adds that count as they land.
  */
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithQuery } from '../../../test/withQuery.tsx';
@@ -122,12 +123,21 @@ it('shows the empty state and fires the express lane and the way back to the day
   expect(onOpenDay).toHaveBeenCalledTimes(1);
 });
 
-describe("the empty state's doors — each one opens its own surface", () => {
+it('a named slot opens THAT slot, not whatever happens to be open', async () => {
+  // Yesterday's missed breakfast must not land in today's open lunch.
+  getOpenMeal.mockResolvedValue(mkMeal({ log_id: 'lunch', meal: 'lunch', date: '2026-09-07' }));
+  openMealDraft.mockResolvedValue(mkMeal({ log_id: 'bfast', meal: 'breakfast', date: '2026-09-06' }));
+  await mount({ meal: 'breakfast', date: '2026-09-06' });
+  await waitFor(() => expect(openMealDraft).toHaveBeenCalledWith({ meal: 'breakfast', date: '2026-09-06' }));
+});
+
+describe('the doors — one row, Find first, each opening its own surface', () => {
   /** The door, and the one thing that can only be on screen if it opened the right surface. */
   const DOORS: Array<{ door: string; landmark: string; how: 'text' | 'label' }> = [
+    { door: 'Find', landmark: 'Find a food', how: 'label' },
+    { door: 'Chat', landmark: 'What did you have?', how: 'label' },
     { door: 'Barcode', landmark: 'barcode-door', how: 'text' },
-    { door: 'Recents', landmark: 'Search foods', how: 'label' },
-    { door: 'My meals', landmark: 'cookbook-shelf', how: 'text' },
+    { door: 'From your cookbook ›', landmark: 'cookbook-shelf', how: 'text' },
   ];
 
   it.each(DOORS)('$door', async ({ door, landmark, how }) => {
@@ -138,70 +148,142 @@ describe("the empty state's doors — each one opens its own surface", () => {
     expect(screen.queryByText('Add everything you had')).toBeNull();
   });
 
+  it('Find is the first tile in the row', async () => {
+    await mount();
+    await screen.findByText('Add everything you had');
+    const tiles = document.querySelectorAll('.fm-tile .fm-tile-l');
+    expect(Array.from(tiles).map((t) => t.textContent)).toEqual(['Find', 'Chat', 'Voice', 'Picture', 'Barcode']);
+  });
+
   it('Picture is a camera input, not a button — iOS only hands back a photo for a real label', async () => {
     await mount();
     await screen.findByText('Add everything you had');
-    const input = document.querySelector('.ms-door input[type="file"]');
+    const input = document.querySelector('.fm-tile input[type="file"]');
     expect(input).not.toBeNull();
     expect(input).toHaveAttribute('capture', 'environment');
   });
 
-  it('the field keeps both halves of its promise: the words open search, the mic opens chat LIVE', async () => {
-    // The field shipped as a bare text button, so "or just describe it" had nothing behind it —
-    // the canvas (1b B1) draws a search icon, the words, and a mic. This pins the mic.
+  it('Voice opens the same chat door, already listening', async () => {
     await mount();
-    await screen.findByText('Add everything you had');
-    fireEvent.click(screen.getByRole('button', { name: 'Say what you had' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Voice' }));
     expect(await screen.findByLabelText('What did you have?')).toBeInTheDocument();
-    // …and it arrived listening, rather than as the plain chat door.
     expect(screen.getByTestId('mic-live')).toBeInTheDocument();
-  });
-
-  it('the words still open search, unchanged', async () => {
-    await mount();
-    fireEvent.click(await screen.findByText('Search, or just describe it…'));
-    expect(await screen.findByLabelText('Search foods')).toBeInTheDocument();
   });
 });
 
-it('rejoins an open meal and draws its rows, window and totals', async () => {
+describe('the shelf — what they usually have, one tap each, no heading', () => {
+  it('lists the slot’s usual foods and recipes and adds one straight into the meal', async () => {
+    getUsualAtSlot.mockResolvedValue([
+      { kind: 'food', id: 'f-espresso', name: 'Espresso', serving_label: '1 capsule', kcal: 1, count: 2 },
+      { kind: 'recipe', id: 'r-bowl', name: 'Chia bowl', serving_label: '4 ingredients', kcal: 348, count: 3 },
+    ]);
+    appendFood.mockResolvedValue(mkMeal({ items: [item('Espresso', 1, 1)] }));
+    appendRecipe.mockResolvedValue(mkMeal({ items: [item('Espresso', 1, 1), item('Chia bowl', 1, 348)] }));
+    await mount({ meal: 'breakfast' });
+    fireEvent.click(await screen.findByRole('button', { name: /Espresso/ }));
+    await waitFor(() => expect(appendFood).toHaveBeenCalledWith('m1', { food_id: 'f-espresso' }));
+    expect(screen.queryByText(/YOU USUALLY HAVE/)).toBeNull();
+    expect(screen.queryByText(/logged 2 times/)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /Chia bowl/ }));
+    await waitFor(() => expect(appendRecipe).toHaveBeenCalledWith('m1', { recipe_id: 'r-bowl' }));
+  });
+
+  it('the shelf stays under the cart once there is something in it', async () => {
+    getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146)] }));
+    getUsualAtSlot.mockResolvedValue([
+      { kind: 'food', id: 'f-espresso', name: 'Espresso', serving_label: '1 capsule', kcal: 1, count: 2 },
+    ]);
+    await mount();
+    await screen.findByText('Greek yogurt');
+    expect(await screen.findByRole('button', { name: /Espresso/ })).toBeInTheDocument();
+  });
+});
+
+it('rejoins an open meal and draws its rows, window and totals — and the button says Log', async () => {
   getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146), item('Chia seeds', 1, 58)] }));
   await mount();
   expect(await screen.findByText('Greek yogurt')).toBeInTheDocument();
   expect(screen.getByText(/OPEN · 50 MIN LEFT/)).toBeInTheDocument();
   expect(screen.getByText(/adds until/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Close breakfast · 204 kcal/ })).toBeEnabled();
+  // The line under the title says only what the list cannot — no clock, no count of rows.
+  expect(screen.queryByText(/TWO THINGS/)).toBeNull();
+  expect(screen.getByRole('button', { name: /Log breakfast · 204 kcal/ })).toBeEnabled();
+  expect(screen.queryByText(/left today/)).toBeNull();
 });
 
-it('one unsettled amount holds the commit, and its chip settles it', async () => {
+it('one unsettled amount holds the log, and its chip settles it', async () => {
   getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146), item('Chia seeds', null, 58)] }));
   setDraftAmount.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146), item('Chia seeds', 1, 58)] }));
   await mount();
   expect(await screen.findByText('One amount to settle first')).toBeInTheDocument();
-  const closeBtn = screen.getByRole('button', { name: /Close breakfast/ });
-  expect(closeBtn).toBeDisabled();
+  const logBtn = screen.getByRole('button', { name: /Log breakfast/ });
+  expect(logBtn).toBeDisabled();
   // Asked as chips, never a keypad.
   expect(screen.getByText('how much?')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '1 cup' }));
   await waitFor(() => expect(setDraftAmount).toHaveBeenCalledWith('m1', 1, 1));
   await waitFor(() => expect(screen.queryByText('One amount to settle first')).toBeNull());
-  expect(screen.getByRole('button', { name: /Close breakfast/ })).toBeEnabled();
+  expect(screen.getByRole('button', { name: /Log breakfast/ })).toBeEnabled();
 });
 
-it('closing calls closeMeal, refreshes the day, and leaves the screen', async () => {
+it('logging calls closeMeal, refreshes the day, and hands off to onLogged', async () => {
   getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146)] }));
   closeMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146)], state: 'closed' }));
-  const { onClose } = await mount();
-  fireEvent.click(await screen.findByRole('button', { name: /Close breakfast/ }));
+  const onLogged = vi.fn();
+  const { onClose } = await mount({ onLogged });
+  fireEvent.click(await screen.findByRole('button', { name: /Log breakfast/ }));
   await waitFor(() => expect(closeMeal).toHaveBeenCalledWith('m1'));
   expect(invalidate).toHaveBeenCalledTimes(1);
-  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onLogged).toHaveBeenCalledTimes(1);
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+describe('a logged meal — the cart ruling', () => {
+  it('reads LOGGED, offers Done instead of Log, and an add counts the moment it lands', async () => {
+    openMealDraft.mockResolvedValue(mkMeal({ items: [item('Greek yogurt', 1, 146)], state: 'closed' }));
+    appendFood.mockResolvedValue(
+      mkMeal({ items: [item('Greek yogurt', 1, 146), item('Espresso', 1, 1)], state: 'closed' }),
+    );
+    getUsualAtSlot.mockResolvedValue([
+      { kind: 'food', id: 'f-espresso', name: 'Espresso', serving_label: '1 capsule', kcal: 1, count: 2 },
+    ]);
+    const onLogged = vi.fn();
+    await mount({ meal: 'breakfast', onLogged });
+    expect(await screen.findByText('LOGGED')).toBeInTheDocument();
+    expect(screen.getByText(/counts right away/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Log breakfast/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Espresso/ }));
+    await waitFor(() => expect(appendFood).toHaveBeenCalled());
+    // No second review: the day refreshed on the add itself.
+    await waitFor(() => expect(invalidate).toHaveBeenCalled());
+    expect(closeMeal).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onLogged).toHaveBeenCalledTimes(1);
+  });
+});
+
+it("a row's words open its details — the macro card, the amount, and a way out", async () => {
+  getOpenMeal.mockResolvedValue(
+    mkMeal({
+      items: [
+        { ...item('Greek yogurt', 1, 146), brand: 'Fage', est: { kcal: 146, protein_g: 18, carbs_g: 7, fat_g: 4 } },
+      ],
+    }),
+  );
+  await mount();
+  fireEvent.click(await screen.findByRole('button', { name: 'Details for Greek yogurt' }));
+  const sheet = screen.getByRole('dialog', { name: 'Greek yogurt' });
+  expect(within(sheet).getByText('Fage')).toBeInTheDocument();
+  expect(within(sheet).getByText('PROTEIN')).toBeInTheDocument();
+  expect(within(sheet).getByText('18 g')).toBeInTheDocument();
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
+  expect(screen.queryByRole('dialog', { name: 'Greek yogurt' })).toBeNull();
 });
 
 describe('B3 — four quick adds, offered once', () => {
   const foods = ['Greek yogurt', 'Chia seeds', 'Whey protein', 'Strawberries'];
 
-  /** Add four unambiguous foods through the add door, then come back to the meal. */
+  /** Add four unambiguous foods through the Find door, then come back to the meal. */
   async function addFourFast() {
     searchFoods.mockImplementation(async (q: string) => ({
       status: 'ok',
@@ -212,15 +294,15 @@ describe('B3 — four quick adds, offered once', () => {
       grown = [...grown, item(input.food_id.slice(2))];
       return mkMeal({ items: grown });
     });
-    fireEvent.click(screen.getByText('Search, or just describe it…'));
-    const input = await screen.findByLabelText('Search foods');
+    fireEvent.click(screen.getByRole('button', { name: 'Find' }));
+    const input = await screen.findByLabelText('Find a food');
     for (const f of foods) {
       fireEvent.change(input, { target: { value: f } });
       fireEvent.click(await screen.findByText(f, { selector: '.fq-row b' }));
       await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
     }
     fireEvent.click(screen.getByRole('button', { name: 'Done · back to breakfast' }));
-    await screen.findByText(/FOUR THINGS/);
+    await screen.findByText('Strawberries', { selector: '.fa-row-n b' });
   }
 
   it('offers the bracket after four fast adds; accepting groups them', async () => {
@@ -244,18 +326,27 @@ describe('B3 — four quick adds, offered once', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Leave them' }));
     expect(screen.queryByText('Four things, one after another. Do they go together?')).toBeNull();
     // A fifth quick add would re-qualify on the numbers — but the draft was declined.
-    fireEvent.click(screen.getByRole('button', { name: /Add another thing/ }));
-    const input = await screen.findByLabelText('Search foods');
+    fireEvent.click(screen.getByRole('button', { name: /Add more/ }));
+    const input = await screen.findByLabelText('Find a food');
     fireEvent.change(input, { target: { value: 'Oat latte' } });
     fireEvent.click(await screen.findByText('Oat latte', { selector: '.fq-row b' }));
     await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
     fireEvent.click(screen.getByRole('button', { name: 'Done · back to breakfast' }));
-    await screen.findByText(/FIVE THINGS/);
+    await screen.findByText('Oat latte', { selector: '.fa-row-n b' });
     expect(screen.queryByText(/Do they go together\?/)).toBeNull();
+  });
+
+  it('two loose things put "Group … into a recipe" on the surface, no gesture needed', async () => {
+    getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt'), item('Chia seeds')] }));
+    await mount();
+    await screen.findByText('Greek yogurt');
+    fireEvent.click(screen.getByRole('button', { name: /Group some of these into a recipe/ }));
+    // Select mode is up — the rows are tickable now.
+    expect(await screen.findByRole('dialog', { name: 'Group things' })).toBeInTheDocument();
   });
 });
 
-it('the ⋯ menu carries the boring twins, and "Close it now" closes', async () => {
+it('the ⋯ menu carries the boring twins, and "Log it now" logs', async () => {
   getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt'), item('Chia seeds')] }));
   closeMeal.mockResolvedValue(null);
   const { onClose } = await mount();
@@ -265,7 +356,7 @@ it('the ⋯ menu carries the boring twins, and "Close it now" closes', async () 
   expect(within(sheet).getByText('Save as a meal')).toBeInTheDocument();
   expect(within(sheet).getByText('Save as a recipe')).toBeInTheDocument();
   expect(within(sheet).getByText('Rename this meal')).toBeInTheDocument();
-  fireEvent.click(within(sheet).getByText('Close it now'));
+  fireEvent.click(within(sheet).getByText('Log it now'));
   await waitFor(() => expect(closeMeal).toHaveBeenCalledWith('m1'));
   expect(onClose).toHaveBeenCalled();
 });

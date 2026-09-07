@@ -43,6 +43,17 @@ orphan snack. Later food starts a new meal.
 4. **Scope: everything in one push**, including the Sunday sweep (S3) and the retroactive tidy
    (S4).
 
+### Owner ruling (2026-09-07) — the cart
+
+The meal screen is a cart: add foods to breakfast, review the cart, tap **Log breakfast**. After
+that tap, anything added to that breakfast lands directly in the logged meal and counts right
+away — no second review, no second meal. **One meal per date+slot is the unit**; `openDraft` for
+a slot that already holds a logged meal returns that meal (express writes create closed rows too,
+so this covers them). The 3-hour window still auto-closes an open draft that nobody logged, but
+it no longer starts a second meal for the same slot that day — this supersedes "later food starts
+a new meal" (4F above) for the same slot on the same day. Post-log adds teach recents/frequents
+exactly as closing does.
+
 ## Rulings ledger (from the canvas — binding)
 
 **The bracket grammar** (one mark, learned once, drawn identically in the meal, the diary, the
@@ -150,9 +161,11 @@ enforced (reads close overdue drafts; empty ones are deleted). Draft dates respe
 
 ### Contract addenda (P1, signed off at integration)
 
-- Draft mutations (append/remove/amount/slot) on a non-open meal → **409**; a touch past
-  `closes_at` enforces the window in place (closes or deletes) before refusing. Parts ops stay
-  legal on closed meals.
+- ~~Draft mutations (append/remove/amount/slot) on a non-open meal → **409**~~ — **superseded by
+  the cart ruling (2026-09-07)**: a closed meal takes those mutations directly; a touch past
+  `closes_at` still enforces the window in place (closes, or deletes an empty draft) and the
+  mutation then lands in the closed meal. The client's reopen-and-retry is gone; the route's 409
+  rung stays only for app builds older than this ruling. Parts ops were always legal on closed meals.
 - appendRecipe on a recipe with no per-ingredient numbers snapshots as ONE summary row inside the
   part (name, qty = servings, est from macros_per_serving) — the bracket never puts an uncounted
   meal on the day.

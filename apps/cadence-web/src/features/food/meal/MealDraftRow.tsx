@@ -22,6 +22,7 @@ function KeptRow({
   busy,
   onQty,
   onRemove,
+  onOpen,
 }: {
   item: MealItem;
   index: number;
@@ -29,6 +30,7 @@ function KeptRow({
   busy?: boolean;
   onQty: (i: number, q: number) => void;
   onRemove: (i: number) => void;
+  onOpen?: (i: number) => void;
 }) {
   const qty = item.qty ?? 1;
   const sub = [
@@ -38,15 +40,32 @@ function KeptRow({
   ]
     .filter(Boolean)
     .join(' · ');
+  const words = (
+    <>
+      <span className="fa-row-n">
+        <b>{item.name}</b>
+        {tag && <span className="ms-tag">{tag.toUpperCase()}</span>}
+      </span>
+      {sub && <span className="ms-row-sub">{sub}</span>}
+    </>
+  );
   return (
     <div className="fa-row ms-row">
-      <div className="fa-row-t">
-        <span className="fa-row-n">
-          <b>{item.name}</b>
-          {tag && <span className="ms-tag">{tag.toUpperCase()}</span>}
-        </span>
-        {sub && <span className="ms-row-sub">{sub}</span>}
-      </div>
+      {/* The words are the door into the item (owner, 2026-09-07: "dig into the details") — a
+          real button, so it is reachable without the gesture and reads as tappable to a screen
+          reader. The stepper and the × stay their own controls beside it. */}
+      {onOpen ? (
+        <button
+          type="button"
+          className="fa-row-t ms-row-open"
+          aria-label={`Details for ${item.name}`}
+          onClick={() => onOpen(index)}
+        >
+          {words}
+        </button>
+      ) : (
+        <div className="fa-row-t">{words}</div>
+      )}
       <div className="fa-step">
         <button
           type="button"
@@ -144,6 +163,8 @@ export function MealDraftRow(props: {
   busy?: boolean;
   onQty: (i: number, q: number) => void;
   onRemove: (i: number) => void;
+  /** Tap the words to open the item's details. */
+  onOpen?: (i: number) => void;
 }) {
   return props.item.qty == null ? <AskedRow {...props} /> : <KeptRow {...props} />;
 }

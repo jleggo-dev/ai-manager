@@ -258,7 +258,7 @@ d('meal draft lifecycle (DB)', () => {
     expect(row?.parts).toEqual([]);
   });
 
-  it('a mutation on a meal whose window ended is refused and the window is enforced', async () => {
+  it('a mutation on a meal whose window ended enforces the window and still lands in it', async () => {
     const oats = await seedFood('zzq draft oats', 380, 80);
     const meal = await draft.openDraft(USER, { meal: 'breakfast', date: today() });
     await draft.appendFood(USER, meal.log_id, { food_id: oats.food_id });
@@ -266,8 +266,83 @@ d('meal draft lifecycle (DB)', () => {
       update cadence.nutrition_logs set closes_at = now() - interval '1 minute'
       where user_id = ${USER} and log_id = ${meal.log_id}`;
 
-    await expect(draft.appendFood(USER, meal.log_id, { food_id: oats.food_id })).rejects.toThrow(/not open/);
-    // The touch itself enforced the clock: the meal is now honestly closed, food counted.
+    // The touch itself enforced the clock — the meal is honestly closed — and then the add went
+    // in anyway: one meal per date+slot, the late food counts in it (owner, 2026-09-07).
+    const after = await draft.appendFood(USER, meal.log_id, { food_id: oats.food_id });
+    expect(after.state).toBe('closed');
+    expect(after.items).toHaveLength(2);
+    expect(after.macros?.kcal).toBeCloseTo(608, 0);
     expect((await findNutritionLog(USER, meal.log_id))?.state).toBe('closed');
+  });
+
+  it('an expired EMPTY draft dissolves on touch — the add reads as meal not found', async () => {
+    const oats = await seedFood('zzq draft oats', 380, 80);
+    const meal = await draft.openDraft(USER, { meal: 'snack', date: today() });
+    await sql`
+      update cadence.nutrition_logs set closes_at = now() - interval '1 minute'
+      where user_id = ${USER} and log_id = ${meal.log_id}`;
+
+    await expect(draft.appendFood(USER, meal.log_id, { food_id: oats.food_id })).rejects.toThrow(/meal not found/);
+    expect(await findNutritionLog(USER, meal.log_id)).toBeNull();
+  });
+
+  /* ── The cart (owner, 2026-09-07): after "Log breakfast", adds land in the logged meal ──── */
+
+  it('appending to a logged meal lands directly: items grow, macros recompute, state stays closed', async () => {
+    const oats = await seedFood('zzq draft oats', 380, 80); // 304 kcal / serving
+    const milk = await seedFood('zzq draft milk', 60, 250, 'glass'); // 150 kcal / serving
+    const meal = await draft.openDraft(USER, { meal: 'breakfast', date: today() });
+    await draft.appendFood(USER, meal.log_id, { food_id: oats.food_id });
+    const logged = await draft.closeMeal(USER, meal.log_id);
+    expect(logged?.state).toBe('closed');
+
+    const after = await draft.appendFood(USER, meal.log_id, { food_id: milk.food_id });
+    expect(after.state).toBe('closed');
+    expect(after.items).toHaveLength(2);
+    expect(after.macros?.kcal).toBeCloseTo(454, 0);
+
+    // It counts right away — no second review, the day already reads the new total.
+    const day = await getNutritionDay(USER, today());
+    expect(day.totals.kcal).toBeCloseTo(454, 0);
+
+    // And the post-log add taught recents/frequents, just as close does for a draft's items.
+    const usage = await sql<{ n: string }[]>`
+      select count(*)::text as n from cadence.food_usage where user_id = ${USER} and food_id = ${milk.food_id}`;
+    expect(Number(usage[0]?.n)).toBe(1);
+  });
+
+  it("openDraft returns the slot's logged meal instead of opening a second one", async () => {
+    const oats = await seedFood('zzq draft oats', 380, 80);
+    const meal = await draft.openDraft(USER, { meal: 'breakfast', date: today() });
+    await draft.appendFood(USER, meal.log_id, { food_id: oats.food_id });
+    await draft.closeMeal(USER, meal.log_id);
+
+    const again = await draft.openDraft(USER, { meal: 'breakfast', date: today() });
+    expect(again.log_id).toBe(meal.log_id);
+    expect(again.state).toBe('closed');
+
+    // Still one row for the slot, and another slot still gets its own fresh draft.
+    const rows = await sql<{ n: string }[]>`
+      select count(*)::text as n from cadence.nutrition_logs
+      where user_id = ${USER} and date = ${today()} and meal = 'breakfast'`;
+    expect(Number(rows[0]?.n)).toBe(1);
+    const lunch = await draft.openDraft(USER, { meal: 'lunch', date: today() });
+    expect(lunch.log_id).not.toBe(meal.log_id);
+    expect(lunch.state).toBe('open');
+  });
+
+  it('removing an item from a logged meal works and recomputes its macros', async () => {
+    const oats = await seedFood('zzq draft oats', 380, 80);
+    const milk = await seedFood('zzq draft milk', 60, 250, 'glass');
+    const meal = await draft.openDraft(USER, { meal: 'breakfast', date: today() });
+    await draft.appendFood(USER, meal.log_id, { food_id: oats.food_id });
+    await draft.appendFood(USER, meal.log_id, { food_id: milk.food_id });
+    await draft.closeMeal(USER, meal.log_id);
+
+    const after = await draft.removeItem(USER, meal.log_id, 0);
+    expect(after.state).toBe('closed');
+    expect(after.items).toHaveLength(1);
+    expect(after.items[0]?.food_id).toBe(milk.food_id);
+    expect(after.macros?.kcal).toBeCloseTo(150, 0);
   });
 });

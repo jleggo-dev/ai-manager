@@ -19,6 +19,7 @@ export function DraftStrip({
   mealLabel,
   count,
   kcal,
+  logged = false,
   chips,
   busy,
   onUndo,
@@ -29,6 +30,8 @@ export function DraftStrip({
   mealLabel: string;
   count: number;
   kcal: number | undefined;
+  /** A logged meal counts its adds as they land (the cart ruling, 2026-09-07) — say so. */
+  logged?: boolean;
   /** The last few appends, newest last. */
   chips?: StripChip[];
   busy?: boolean;
@@ -48,7 +51,7 @@ export function DraftStrip({
             took another 13px off the list underneath. */}
         <div className="ms-strip-sum">
           <b>{`${label} · ${count} ${count === 1 ? 'thing' : 'things'}`}</b>
-          <span>{`${fmtKcal(kcal)} kcal · not counted yet`}</span>
+          <span>{`${fmtKcal(kcal)} kcal · ${logged ? 'counted' : 'not counted yet'}`}</span>
         </div>
         <button type="button" className="ms-strip-undo" disabled={busy || count === 0} onClick={onUndo}>
           Undo last
