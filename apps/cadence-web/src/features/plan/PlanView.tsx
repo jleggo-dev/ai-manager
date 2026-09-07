@@ -19,6 +19,8 @@ import { EndOfTrail } from './EndOfTrailCard.tsx';
 import { HorizonEndCap } from './HorizonEndCap.tsx';
 import { endEpisode, checkin, type PlanOccurrence, enterEpisode } from '../../lib/api.ts';
 import { useProposalAccept } from './useProposalAccept.ts';
+import { useTaskEdits } from './hold-menu/useTaskEdits.ts';
+import { TaskEditSheets } from './hold-menu/TaskEditSheets.tsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { setPlanData, usePlan, useWatchLogInbox, useWatchPortraitSync, useWatchSync } from '../../lib/query/index.ts';
 import { useCoachFace } from '../coach/coachFaceContext.ts';
@@ -117,6 +119,30 @@ export function PlanView({
 
   const refresh = () => void refetch();
   const bump = () => setReloadKey((k) => k + 1);
+
+  // A task's own sheet, by shape: captures (weigh-in, meals) open the minimal CaptureSheet; coach
+  // sessions the StartSheet walkthrough. Above the early returns — the edits hook below needs it.
+  const openTask = (occ: PlanOccurrence) => {
+    switch (taskOpener(occ)) {
+      case 'task':
+        return setStartOcc({ id: occ.occurrence_id, title: occ.title });
+      case 'cook':
+        return setCookOcc(occ.occurrence_id);
+      case 'shop':
+        return onOpenFood('shop');
+      default: // weigh + meal
+        return setCaptureOcc({ id: occ.occurrence_id, title: occ.title, time_of_day: occ.time_of_day });
+    }
+  };
+  // Tap vs. hold (2026-09-07): a tap opens (or, in the future, previews); a hold opens the menu.
+  const edits = useTaskEdits({
+    plan: data,
+    refresh: () => {
+      refresh();
+      bump();
+    },
+    openTask,
+  });
 
   // The proposal banner's accept lifecycle + this screen's pending-replan recovery (mount AND
   // foreground resume) — the whole story lives in useProposalAccept.ts, including the Phase 0
@@ -223,21 +249,6 @@ export function PlanView({
   // key off the same fact so exactly one of them can ever be on screen.
   const horizonReached = restEmpty || !!data.weekState?.checkin_due;
 
-  // Trail node tap → routed by task shape: captures (weigh-in, meals) open the minimal CaptureSheet;
-  // coach sessions open the StartSheet walkthrough.
-  const openTask = (occ: PlanOccurrence) => {
-    switch (taskOpener(occ)) {
-      case 'task':
-        return setStartOcc({ id: occ.occurrence_id, title: occ.title });
-      case 'cook':
-        return setCookOcc(occ.occurrence_id);
-      case 'shop':
-        return onOpenFood('shop');
-      default: // weigh + meal
-        return setCaptureOcc({ id: occ.occurrence_id, title: occ.title, time_of_day: occ.time_of_day });
-    }
-  };
-
   return (
     <>
       <TrailHeader streak={data.streak?.current ?? 0} xp={xp} />
@@ -303,7 +314,13 @@ export function PlanView({
         )}
         {note && <PlanAdjustNote note={note} onDismiss={() => setNote('')} />}
 
-        <TodayTrail plan={data} onOpen={openTask} onOpenFood={() => onOpenFood()} onCoach={onCoach} />
+        <TodayTrail
+          plan={data}
+          onOpen={edits.tap}
+          onHold={edits.hold}
+          onOpenFood={() => onOpenFood()}
+          onCoach={onCoach}
+        />
 
         <EndOfTrail
           show={horizonReached}
@@ -393,22 +410,30 @@ export function PlanView({
           Pre- and post-activity are user-initiated and mutually exclusive by construction; the
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
-      {!checkinSettled && !startOcc && !captureOcc && !cookOcc && !adjustOpen && !doorOpen && !detourEntry && (
-        <DailyCheckIn
-          // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
-          // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
-          // makes the change or puts up a card. No sheet, no direct synthesis.
-          onAdjust={(steer) => {
-            setCheckinSettled(true);
-            onSteerCoach(steer);
-          }}
-          onCoach={() => {
-            setCheckinSettled(true);
-            onCoach();
-          }}
-          onClose={() => setCheckinSettled(true)}
-        />
-      )}
+      <TaskEditSheets edits={edits} plan={data} />
+      {!checkinSettled &&
+        !startOcc &&
+        !captureOcc &&
+        !cookOcc &&
+        !adjustOpen &&
+        !doorOpen &&
+        !detourEntry &&
+        !edits.sheet && (
+          <DailyCheckIn
+            // A pick's preformed steer is a small ask — exactly what the coach's triage exists for
+            // (Phase 2). It goes to her as a visible send, in the pick's own user-voice words; she
+            // makes the change or puts up a card. No sheet, no direct synthesis.
+            onAdjust={(steer) => {
+              setCheckinSettled(true);
+              onSteerCoach(steer);
+            }}
+            onCoach={() => {
+              setCheckinSettled(true);
+              onCoach();
+            }}
+            onClose={() => setCheckinSettled(true)}
+          />
+        )}
       {doorOpen && (
         <DoorSheet
           onTempPlan={() => {

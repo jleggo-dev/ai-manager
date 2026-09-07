@@ -147,6 +147,13 @@ export {
 } from './api/occurrence.ts';
 
 export {
+  moveOccurrence,
+  duplicateOccurrence,
+  deleteOccurrence,
+  type OccurrenceEditOutcome,
+} from './api/occurrence-edit.ts';
+
+export {
   getNutritionDay,
   correctMealItem,
   enrichMeal,

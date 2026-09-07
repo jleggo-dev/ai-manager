@@ -269,6 +269,13 @@ export const didLogBodySchema = z
   })
   .transform((val) => ({ text: typeof val.text === 'string' ? val.text.trim() : '', date: val.date }));
 
+/** The hold menu's dated edits (move / duplicate): the one day the task should land on. */
+export const occurrenceDateBodySchema = z.object({
+  date: z
+    .string({ message: 'date must be YYYY-MM-DD' })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' }),
+});
+
 export const weighInBodySchema = z
   .object({
     weight: z.coerce.number({ message: 'weight (number) and unit (kg|lb) required' }),
