@@ -400,6 +400,7 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+  position: relative;
   background: var(--ink);
 }
 .ms-panel-head {
@@ -422,7 +423,19 @@
    nothing. Same ruling, reached from the meal's side because the sheet's owner cannot see which
    door is open. */
 .sheet:has(.ms-panel) {
-  max-height: 92%;
+  max-height: 100%;
+  /* The panel carries its own insets — head, field, list and cart all pad themselves — so the
+     sheet's 18px would only stack under the cart on top of its home-indicator inset. The grab
+     handle keeps the top padding it lives in. */
+  padding: 10px 0 0;
+}
+/* …and it stops repeating itself. Once the add panel is open, the capture sheet's own header
+   ("Log breakfast · CAPTURE · NOTHING COUNTS UNTIL YOU CONFIRM", 50px disc and two lines) says
+   nothing the panel head below it — "‹ Add to breakfast" — does not, and the strip already says
+   "not counted yet". On a small phone with the keyboard up that repetition was most of the room
+   the list had left. It comes straight back when you leave the panel. */
+.sheet:has(.ms-panel) .ss-head {
+  display: none;
 }
 
 /* The field sits between the head and the list, outside the scroller, so it cannot be scrolled
@@ -479,6 +492,25 @@
 .ms-ambig {
   font-size: 12px;
   color: var(--text-mute);
+}
+
+/* The add panel's cart FLOATS over the list — canvas B2 draws it absolute at the bottom of the
+   panel, with a rounded top and a shadow, and the rows scroll on underneath. Making it a flex
+   sibling instead is what starved the list: it took 108px off the top of an already short sheet,
+   so on a small phone with the keyboard up there was one row left to pick from. Only the add
+   panel's own strip; the scanner's and the serving sheet's ride in flow where they are.
+   The scroller keeps a matching bottom pad so the last row can always clear the cart. */
+.ms-panel > .ms-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -8px 24px rgba(44, 40, 32, 0.1);
+}
+.ms-panel:has(> .ms-strip) .ms-panel-scroll {
+  padding-bottom: 132px;
 }
 
 /* ── The strip — added is not logged ───────────────────────────────────────── */

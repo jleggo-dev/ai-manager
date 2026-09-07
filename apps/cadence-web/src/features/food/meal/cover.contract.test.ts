@@ -66,6 +66,18 @@ describe('.ms — the meal screen fits its host', () => {
     // And the sheet hosting the panel gets the compose height styles.css grants typing surfaces.
     expect(SOURCE).toMatch(/\.sheet:has\(\.ms-panel\)\s*\{[^}]*max-height/);
   });
+
+  it('the add panel’s cart floats over the list rather than taking its height', () => {
+    // Canvas B2 draws it absolute at the bottom with the rows scrolling underneath. As a flex
+    // sibling it took 108px off an already short sheet — one row left to pick from on a small
+    // phone with the keyboard up (owner, 2026-09-06: "it should work on any phone").
+    expect(ruleFor('.ms-panel > .ms-strip').position).toBe('absolute');
+    expect(ruleFor('.ms-panel').position).toBe('relative');
+    // …and the list pads itself so the last row can clear the cart instead of hiding under it.
+    expect(SOURCE).toMatch(/\.ms-panel:has\(>\s*\.ms-strip\)\s+\.ms-panel-scroll\s*\{[^}]*padding-bottom/);
+    // Only the add panel's. The scanner's and the serving sheet's stay in flow.
+    expect(rules.get('.ms-strip')?.position || 'static').not.toBe('absolute');
+  });
 });
 
 describe('.ms-cover — the surface that asks is drawn OVER, never after', () => {
