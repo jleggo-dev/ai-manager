@@ -33,10 +33,20 @@ describe('MetronomeSlot — who gets a dock, who gets an offer, who gets nothing
   const ROWS: Array<[string, StepArea | undefined, Partial<WalkthroughStep>, 'dock' | 'offer' | 'nothing']> = [
     ['a practice timer step the coach left plain', 'practice', {}, 'offer'],
     ['a practice read step (scales with no duration)', 'practice', { tool: { kind: 'read' } }, 'offer'],
-    ['a practice journal step — a practice log can have a beat', 'practice', { tool: { kind: 'journal', prompt: 'How did it go?', mode: 'either' } }, 'offer'],
+    [
+      'a practice journal step — a practice log can have a beat',
+      'practice',
+      { tool: { kind: 'journal', prompt: 'How did it go?', mode: 'either' } },
+      'offer',
+    ],
     ['a practice step the coach DID give a tempo', 'practice', { metronome: { bpm: 72, meter: 4 } }, 'dock'],
     ['a movement timer step — same tool, no offer (a plank is not played to a beat)', 'movement', {}, 'nothing'],
-    ['a movement step the coach gave a tempo (a row cadence) — hers still renders', 'movement', { metronome: { bpm: 60, meter: 1 } }, 'dock'],
+    [
+      'a movement step the coach gave a tempo (a row cadence) — hers still renders',
+      'movement',
+      { metronome: { bpm: 60, meter: 1 } },
+      'dock',
+    ],
     ['a mind step', 'mind', {}, 'nothing'],
     ['a step with no area at all (an ad-hoc routine)', undefined, {}, 'nothing'],
   ];

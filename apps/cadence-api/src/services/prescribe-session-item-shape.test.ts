@@ -30,12 +30,9 @@ describe('prescribe-session — the item shape carries the per-tool fields', () 
     expect(shapeLine).not.toBe('');
   });
 
-  it.each(['"metronome_bpm": number|null', '"metronome_meter": number|null'])(
-    'the shape line names %s',
-    (field) => {
-      expect(shapeLine).toContain(field);
-    },
-  );
+  it.each(['"metronome_bpm": number|null', '"metronome_meter": number|null'])('the shape line names %s', (field) => {
+    expect(shapeLine).toContain(field);
+  });
 
   it('the shape line points at the catalog for the rest, instead of closing the list', () => {
     expect(shapeLine).toContain('...the fields <tool_catalog> lists for the tool you chose');

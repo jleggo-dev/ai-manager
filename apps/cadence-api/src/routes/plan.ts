@@ -201,7 +201,12 @@ router.get('/occurrences/:id', async (req: Request, res: Response) => {
     // The goal's area rides along, as it does on the week's list rows (plan-view.ts): a practice
     // session lets the walkthrough offer a metronome on a step the coach left plain. Best-effort —
     // a goal that cannot be read costs the offer, never the session.
-    const area = detail.goal_id ? await getGoal(userId, detail.goal_id).then((g) => g?.area, () => undefined) : undefined;
+    const area = detail.goal_id
+      ? await getGoal(userId, detail.goal_id).then(
+          (g) => g?.area,
+          () => undefined,
+        )
+      : undefined;
     res.json(area ? { ...detail, area } : detail);
   } catch (err) {
     console.error('[GET /plan/occurrences/:id]', err);
