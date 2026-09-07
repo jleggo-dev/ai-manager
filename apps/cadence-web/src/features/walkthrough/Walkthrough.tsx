@@ -10,7 +10,7 @@ import { StepGrounding } from './tools/StepGrounding.tsx';
 import { StepFeelingLog } from './tools/StepFeelingLog.tsx';
 import { StepMeasure } from './tools/StepMeasure.tsx';
 import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
-import { Metronome } from './tools/Metronome.tsx';
+import { MetronomeSlot, type StepArea } from './tools/MetronomeSlot.tsx';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
@@ -31,12 +31,16 @@ export function Walkthrough({
   walkthrough,
   title,
   occurrenceId,
+  area,
   onClose,
   onComplete,
   onTalk,
 }: {
   walkthrough: WalkthroughData;
   title: string;
+  /** The session's goal area. A `practice` session lets the person add a metronome to a step the
+   *  coach left plain (MetronomeSlot); absent or any other area, only the coach attaches one. */
+  area?: StepArea;
   /** Ties the post-session answer to the session it belongs to. Absent for ad-hoc runs and
    *  previews — the answer is still worth keeping, it just has nothing to hang off. */
   occurrenceId?: string | null;
@@ -219,17 +223,14 @@ export function Walkthrough({
             {/* The metronome rides ALONGSIDE the tool rather than being one, so it is attached here
                 — once, under whatever card the step rendered — instead of inside each tool that
                 might want it. Circuits and intervals are the two that own their whole body and so
-                sit outside this branch; neither is a step anyone practises an instrument to. */}
-            {step.metronome && (
-              <div style={{ marginTop: 12 }}>
-                <Metronome
-                  key={step.id}
-                  spec={step.metronome}
-                  title={step.title}
-                  onSettle={(t) => setTempos((all) => ({ ...all, [step.title]: t }))}
-                />
-              </div>
-            )}
+                sit outside this branch; neither is a step anyone practises an instrument to. On a
+                practice-area step the slot also offers one where the coach attached none. */}
+            <MetronomeSlot
+              key={`m-${step.id}`}
+              step={step}
+              area={area}
+              onSettle={(t) => setTempos((all) => ({ ...all, [step.title]: t }))}
+            />
           </>
         )}
       </div>

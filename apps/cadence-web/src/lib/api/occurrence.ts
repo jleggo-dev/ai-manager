@@ -10,6 +10,9 @@ export interface OccurrenceDetail {
   title: string;
   kind: 'user' | 'system';
   category?: string | null;
+  /** The linked goal's area — a `practice` session lets the walkthrough offer a metronome on a
+   *  plain step. Absent when the activity carries no goal link, and from older servers. */
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
   /** `duration_min` is the effort itself, not the whole session — see `ActivitySchedule`. */
   schedule?: { recurrence: string; time_of_day?: string; duration_min?: number } | null;
   session?: OccurrenceSession | null;

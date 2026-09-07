@@ -20,14 +20,18 @@ export function Metronome({
   spec,
   title,
   onSettle,
+  defaultOpen = false,
 }: {
   spec: MetronomeSpec;
   title: string;
   /** Reports the tempo they settled on, so the piece can remember it and the coach can read it.
    *  Fires only once they have actually engaged with the dock — see `useMetronome`. */
   onSettle?: (tempo: MetronomeSpec) => void;
+  /** Open on first render — for a dock the person just asked for (MetronomeSlot), where a
+   *  collapsed pill would make them tap twice for the thing they tapped once to get. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const m = useMetronome(spec, title, onSettle);
 
   return (

@@ -192,6 +192,7 @@ export function StartSheet({
           walkthrough={run}
           title={detail.title}
           occurrenceId={detail.occurrence_id}
+          area={detail.area}
           onClose={() => setRun(null)}
           onComplete={handleComplete}
           onTalk={onTalk}

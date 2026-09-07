@@ -349,7 +349,10 @@ export function renderCoachToolCatalog(): string {
     `  "metronome_meter" is beats per bar, ${MIN_METER}-${MAX_METER} (default ${DEFAULT_METER}). Omit if unknown.`,
     '  It works on any step, whatever its tool — an instrument drill, a run or row cadence, a lifting tempo.',
     '  Where someone has settled on a tempo for a piece, get_repertoire has it on that item.',
-    '  e.g. {"name": "Hanon no. 1", "tool": "timer", "duration_min": 10, "metronome_bpm": 72}',
+    // The example names no real piece or method book: an example item is the one concrete thing the
+    // coach sees when <repertoire> is empty, and she copied "Hanon no. 1" into a session for someone
+    // who had never played Hanon (2026-09-06). The guard in tool-catalog.test.ts keeps it that way.
+    '  e.g. {"name": "Scales, hands together", "tool": "timer", "duration_min": 10, "metronome_bpm": 72}',
   );
   lines.push('', 'GROUNDING GAMES — the only values "grounding_game" accepts:');
   for (const g of GROUNDING_GAMES) lines.push(`  • ${g} — ${GROUNDING_NAMES[g]}`);

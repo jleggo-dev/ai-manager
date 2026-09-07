@@ -15,6 +15,7 @@ import { recordWeighIn, recordWeighInToday } from '../services/weigh-in.ts';
 import { buildEarlierDays, MAX_EARLIER_WEEKS } from '../services/plan-earlier.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
 import { setPendingPlan, getUser } from '../repos/users.ts';
+import { getGoal } from '../repos/goals.ts';
 import { setOccurrenceStatus, getOccurrenceWithActivity } from '../repos/occurrences.ts';
 import { recordCheckIn } from '../repos/check-ins.ts';
 import {
@@ -197,7 +198,16 @@ router.get('/occurrences/:id', async (req: Request, res: Response) => {
   try {
     const detail = await getOccurrenceDetail(userId, req.params.id as string);
     if (!detail) return void res.status(404).json({ error: 'occurrence not found' });
-    res.json(detail);
+    // The goal's area rides along, as it does on the week's list rows (plan-view.ts): a practice
+    // session lets the walkthrough offer a metronome on a step the coach left plain. Best-effort —
+    // a goal that cannot be read costs the offer, never the session.
+    const area = detail.goal_id
+      ? await getGoal(userId, detail.goal_id).then(
+          (g) => g?.area,
+          () => undefined,
+        )
+      : undefined;
+    res.json(area ? { ...detail, area } : detail);
   } catch (err) {
     console.error('[GET /plan/occurrences/:id]', err);
     res.status(500).json({ error: 'failed to load session' });
