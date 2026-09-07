@@ -155,7 +155,11 @@ describe('the boot paint persists what nobody listed', () => {
 
   it('refuses yesterday’s food day by name, however fresh the snapshot', async () => {
     signIn('user-a');
-    const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    // Local, like the policy it is testing. toISOString() is UTC, so west of Greenwich this
+    // resolved to the SAME string as localTodayIso() late in the evening — the test seeded one
+    // key twice and then asked it to be both undefined and {kcal:300}. CI runs at UTC+0 and
+    // never saw it; it failed on a developer's machine at 20:12 EDT (2026-09-06).
+    const yesterday = localTodayIso(new Date(Date.now() - 864e5));
     await snapshotKeys([
       [queryKeys.nutritionDay.day(yesterday), { kcal: 2100 }],
       [queryKeys.nutritionDay.day(localTodayIso()), { kcal: 300 }],

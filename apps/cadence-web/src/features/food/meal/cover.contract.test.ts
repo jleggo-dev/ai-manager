@@ -18,7 +18,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseStylesheet, readStyle } from '../../../test/css.ts';
 
-const { rules, declared } = parseStylesheet(readStyle('src/styles/meal-screen.css'));
+const SOURCE = readStyle('src/styles/meal-screen.css');
+const { rules, declared } = parseStylesheet(SOURCE);
 
 function ruleFor(selector: string): CSSStyleDeclaration {
   const found = rules.get(selector);
@@ -53,6 +54,29 @@ describe('.ms — the meal screen fits its host', () => {
   it('lets the panel scroll rather than the sheet', () => {
     expect(ruleFor('.ms-panel').minHeight).toBe('0px');
     expect(ruleFor('.ms-panel-scroll').overflowY).toBe('auto');
+    // Without this the scroller cannot shrink, so a short sheet pushes the strip over the field.
+    expect(ruleFor('.ms-panel-scroll').minHeight).toBe('0px');
+  });
+
+  it('keeps the search field out of the shrinking, and gives a composing sheet its height', () => {
+    // `flex: none` is what stops the field donating its height to its siblings when the keyboard
+    // shortens the sheet — it went to a 29px sliver on device before this (2026-09-06).
+    // jsdom does not expand the `flex` shorthand, so read what the file declares.
+    expect(SOURCE).toMatch(/\.ms-panel-field\s*\{[^}]*flex:\s*none/);
+    // And the sheet hosting the panel gets the compose height styles.css grants typing surfaces.
+    expect(SOURCE).toMatch(/\.sheet:has\(\.ms-panel\)\s*\{[^}]*max-height/);
+  });
+
+  it('the add panel’s cart floats over the list rather than taking its height', () => {
+    // Canvas B2 draws it absolute at the bottom with the rows scrolling underneath. As a flex
+    // sibling it took 108px off an already short sheet — one row left to pick from on a small
+    // phone with the keyboard up (owner, 2026-09-06: "it should work on any phone").
+    expect(ruleFor('.ms-panel > .ms-strip').position).toBe('absolute');
+    expect(ruleFor('.ms-panel').position).toBe('relative');
+    // …and the list pads itself so the last row can clear the cart instead of hiding under it.
+    expect(SOURCE).toMatch(/\.ms-panel:has\(>\s*\.ms-strip\)\s+\.ms-panel-scroll\s*\{[^}]*padding-bottom/);
+    // Only the add panel's. The scanner's and the serving sheet's stay in flow.
+    expect(rules.get('.ms-strip')?.position || 'static').not.toBe('absolute');
   });
 });
 

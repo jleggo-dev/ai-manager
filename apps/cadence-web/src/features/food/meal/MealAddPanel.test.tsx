@@ -158,6 +158,43 @@ it('an ambiguous food opens the repriced sheet — "Add to breakfast" — and re
   expect((input as HTMLInputElement).value).toBe('');
 });
 
+it('an empty draft draws no cart at all — nothing to report, and ‹ is already the way back', async () => {
+  // REGRESSION (2026-09-06, on device). The strip sat there saying "0 things" with a disabled
+  // Undo and a Done that goes where ‹ goes, costing 108px — which with the keyboard up was the
+  // difference between seeing the search field and seeing a sliver of it. Owner: "isn't it a bit
+  // like a shopping cart… esp. since I have to be able to add multiple items."
+  await openPanel();
+  expect(screen.queryByText(/not counted yet/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Done · back to breakfast' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Undo last' })).toBeNull();
+  // The way out is still there.
+  expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+});
+
+it('the cart appears with the first thing in it', async () => {
+  searchFoods.mockResolvedValue({
+    status: 'ok',
+    foods: [{ food_id: 'f-yog', name: 'Greek yogurt', brand: null, serving_label: '1 cup', ambiguous: false }],
+  });
+  appendFood.mockResolvedValue(
+    mkMeal({ items: [{ name: 'Greek yogurt', qty: 1, unit: 'cup', est: { kcal: 146 }, food_id: 'f-yog' }] }),
+  );
+  const input = await openPanel();
+  expect(screen.queryByText(/not counted yet/)).toBeNull();
+  fireEvent.change(input, { target: { value: 'yog' } });
+  fireEvent.click(await screen.findByText('Greek yogurt'));
+  expect(await screen.findByText(/146 kcal · not counted yet/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Done · back to breakfast' })).toBeInTheDocument();
+});
+
+it('the search field is pinned, not part of the scrolling list', async () => {
+  // Inside the scroller it was squeezed to 29px with the keyboard up, and it cannot keep the
+  // promise "focus never leaves search between adds" if it can scroll away.
+  const input = await openPanel();
+  expect(input.closest('.ms-panel-scroll')).toBeNull();
+  expect(input.closest('.ms-panel-field')).not.toBeNull();
+});
+
 it('Undo pulls the last add straight back out', async () => {
   getOpenMeal.mockResolvedValue(mkMeal({ items: [{ name: 'Chia seeds', qty: 1, unit: 'tbsp', est: { kcal: 58 } }] }));
   removeDraftItem.mockResolvedValue(mkMeal({ items: [] }));

@@ -199,7 +199,11 @@ export function MealAddPanel({
         </button>
         <h2>{`Add to ${kind}`}</h2>
       </div>
-      <div className="ms-panel-scroll">
+      {/* The field is pinned, not part of the list. Inside the scroller it was squeezed to a
+          29px sliver the moment the keyboard came up — you could not see what you were typing
+          (owner, on device, 2026-09-06). It is also the promise "focus never leaves search
+          between adds", which a control that can scroll away cannot keep. */}
+      <div className="ms-panel-field">
         <input
           ref={inputRef}
           className="ms-search"
@@ -210,6 +214,8 @@ export function MealAddPanel({
           autoFocus
           onChange={(e) => setQuery(e.target.value)}
         />
+      </div>
+      <div className="ms-panel-scroll">
         {justAdded.length > 0 && (
           <div>
             <FoodPickHead label="JUST ADDED · TAP TO ADJUST" />

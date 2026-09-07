@@ -2,6 +2,11 @@
  * The strip — "added is not logged" made visible (canvas turn-3 B1/B2). Items land in the open
  * meal; the meal is what commits, so the strip's exact phrase is "not counted yet". Undo lives
  * here (pull the last add straight back out), and the last few adds ride as chips with an ×.
+ *
+ * An empty draft draws NO strip. It has nothing to report — "0 things", a disabled Undo, and a
+ * Done that goes where ‹ already goes — while costing the height the search field needs with the
+ * keyboard up (owner, 2026-09-06: "isn't it a bit like a shopping cart… esp. since I have to be
+ * able to add multiple items"). The cart shows up once there is something in it.
  */
 import { fmtKcal } from '../bracket/copy.ts';
 
@@ -33,6 +38,7 @@ export function DraftStrip({
   doneLabel?: string;
   onDone?: () => void;
 }) {
+  if (count === 0) return null;
   const label = mealLabel.charAt(0).toUpperCase() + mealLabel.slice(1);
   return (
     <div className="ms-strip">
