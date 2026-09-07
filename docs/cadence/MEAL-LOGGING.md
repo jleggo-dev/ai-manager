@@ -161,9 +161,11 @@ enforced (reads close overdue drafts; empty ones are deleted). Draft dates respe
 
 ### Contract addenda (P1, signed off at integration)
 
-- Draft mutations (append/remove/amount/slot) on a non-open meal → **409**; a touch past
-  `closes_at` enforces the window in place (closes or deletes) before refusing. Parts ops stay
-  legal on closed meals.
+- ~~Draft mutations (append/remove/amount/slot) on a non-open meal → **409**~~ — **superseded by
+  the cart ruling (2026-09-07)**: a closed meal takes those mutations directly; a touch past
+  `closes_at` still enforces the window in place (closes, or deletes an empty draft) and the
+  mutation then lands in the closed meal. The client's reopen-and-retry is gone; the route's 409
+  rung stays only for app builds older than this ruling. Parts ops were always legal on closed meals.
 - appendRecipe on a recipe with no per-ingredient numbers snapshots as ONE summary row inside the
   part (name, qty = servings, est from macros_per_serving) — the bracket never puts an uncounted
   meal on the day.

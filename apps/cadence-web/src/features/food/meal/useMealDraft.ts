@@ -5,7 +5,7 @@
  * parts ops previewed through the bracket's own reducers, the visible window, and the close.
  * Server truth wins — every mutation returns the whole meal — but amounts and parts apply
  * optimistically first so a stepper tap never waits on the network. The engine (state, the
- * 409 reopen-and-retry-once rule, reconciliation) lives in `useDraftCore.ts`.
+ * open/rejoin, reconciliation) lives in `useDraftCore.ts`.
  *
  * Two modes since the cart ruling (owner, 2026-09-07). A meal is a cart until it is logged:
  * nothing counts, the footer says "Log breakfast". Once logged it stays open to adds — a

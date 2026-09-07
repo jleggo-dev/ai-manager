@@ -1,7 +1,8 @@
 /**
  * The draft client's contract (P4): rejoin-before-open, provenance on appends, the optimistic
- * stepper, the close invalidating the day — and the 409 rule from the P1 addendum: a window
- * that shut under us reopens once and retries once, then the error is surfaced plainly.
+ * stepper, the close invalidating the day — and a failed mutation surfaced plainly, once. (The
+ * 409 reopen-and-retry rule retired with the cart ruling, 2026-09-07: the server no longer
+ * refuses an add to a closed meal, so there is nothing to retry from.)
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Meal } from '../../../lib/api/meal-draft.ts';
@@ -105,35 +106,19 @@ describe('appends and provenance', () => {
   });
 });
 
-describe('the 409 window rule', () => {
-  it('reopens and retries the append exactly once', async () => {
-    appendFood
-      .mockRejectedValueOnce(new Error('POST /nutrition/meals/m1/items → 409'))
-      .mockResolvedValueOnce(mkMeal({ log_id: 'm2', items: [yogurt] }));
-    openMealDraft.mockResolvedValueOnce(mkMeal()).mockResolvedValueOnce(mkMeal({ log_id: 'm2' }));
-    const { result } = await mount('breakfast');
-    await act(async () => {
-      await result.current.appendFood({ food_id: 'f1' }, 'searched');
-    });
-    expect(appendFood).toHaveBeenNthCalledWith(1, 'm1', { food_id: 'f1' });
-    expect(appendFood).toHaveBeenNthCalledWith(2, 'm2', { food_id: 'f1' });
-    expect(result.current.meal?.log_id).toBe('m2');
-    expect(result.current.items).toHaveLength(1);
-    expect(result.current.err).toBe('');
-  });
-
-  it('surfaces the error when the retry fails too', async () => {
-    appendFood
-      .mockRejectedValueOnce(new Error('POST /nutrition/meals/m1/items → 409'))
-      .mockRejectedValueOnce(new Error('POST /nutrition/meals/m2/items → 500'));
-    openMealDraft.mockResolvedValueOnce(mkMeal()).mockResolvedValueOnce(mkMeal({ log_id: 'm2' }));
+describe('a failed mutation', () => {
+  it('is surfaced plainly, once — no reopen, no retry', async () => {
+    appendFood.mockRejectedValueOnce(new Error('POST /nutrition/meals/m1/items → 500'));
     const { result } = await mount('breakfast');
     let out: Meal | null = mkMeal();
     await act(async () => {
       out = await result.current.appendFood({ food_id: 'f1' }, 'searched');
     });
     expect(out).toBeNull();
-    expect(appendFood).toHaveBeenCalledTimes(2);
+    expect(appendFood).toHaveBeenCalledTimes(1);
+    // The one draft opened on mount is the only one — a failure never mints a second meal.
+    expect(openMealDraft).toHaveBeenCalledTimes(1);
+    expect(result.current.meal?.log_id).toBe('m1');
     expect(result.current.err).not.toBe('');
   });
 });

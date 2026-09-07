@@ -1,8 +1,12 @@
 /**
  * The draft engine under useMealDraft (meal-logging rework P4) — state, the open/rejoin, and
  * the one mutation rule every operation shares: server truth wins (each call returns the whole
- * meal and the newest response reconciles), and a 409 means the window closed under us — reopen
- * via `openMealDraft` (a fresh draft for the slot) and retry exactly once (P1 addendum).
+ * meal and the newest response reconciles).
+ *
+ * There used to be a second rule here — a 409 meant the window had closed under us, so reopen
+ * the slot and retry once (P1 addendum). The cart ruling (owner, 2026-09-07) retired it: a
+ * closed meal takes adds directly, the server no longer refuses one, and a retry that can never
+ * fire is a rule the next reader would build on. Any failure now surfaces plainly, once.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MealKind } from '@cadence/shared';
@@ -15,8 +19,6 @@ export type DoorTag = 'searched' | 'scanned' | 'heard' | 'typed' | 'assumed';
 export const CANT = "Couldn't reach your meal just now — try again in a moment.";
 /** Contract: closes_at = opened_at + 3h (MEAL-LOGGING.md), so the opened clock derives from it. */
 export const WINDOW_MS = 3 * 60 * 60 * 1000;
-
-const is409 = (e: unknown): boolean => e instanceof Error && /\s409$/.test(e.message);
 
 export const clock = (t: number): string =>
   new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -111,27 +113,12 @@ export function useDraftCore(initialMeal?: MealKind, date?: string) {
     return () => clearInterval(id);
   }, []);
 
-  /**
-   * Run one draft mutation. On a 409 the window closed under us: reopen the slot (a fresh
-   * draft, whose provenance and raw words start clean) and retry exactly once.
-   */
-  const withDraft = useCallback(
-    async <T>(fn: (logId: string) => Promise<T>): Promise<T> => {
-      const current = mealRef.current;
-      if (!current) throw new Error('no draft open');
-      try {
-        return await fn(current.log_id);
-      } catch (e) {
-        if (!is409(e)) throw e;
-        const fresh = await openMealDraft({ meal: current.meal, date: current.date });
-        prov.current = new Map();
-        setRawTexts([]);
-        adopt(fresh);
-        return await fn(fresh.log_id);
-      }
-    },
-    [adopt],
-  );
+  /** Run one draft mutation against the meal on screen. */
+  const withDraft = useCallback(async <T>(fn: (logId: string) => Promise<T>): Promise<T> => {
+    const current = mealRef.current;
+    if (!current) throw new Error('no draft open');
+    return fn(current.log_id);
+  }, []);
 
   /** Reconcile to a server response unless a newer mutation has since started. */
   const reconcile = useCallback(
