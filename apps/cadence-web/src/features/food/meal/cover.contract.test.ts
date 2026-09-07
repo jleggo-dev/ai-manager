@@ -78,6 +78,26 @@ describe('.ms — the meal screen fits its host', () => {
     // Only the add panel's. The scanner's and the serving sheet's stay in flow.
     expect(rules.get('.ms-strip')?.position || 'static').not.toBe('absolute');
   });
+
+  it('Done is FOREST, whatever the canvas says — green is complete in this app', () => {
+    // Canvas B2 draws this button amber. It is not a drift to fix: the owner ruled the colour
+    // on 2026-09-06 — "dark green is the right color for done, green=complete in our world" —
+    // so a later pass that matches the canvas more faithfully would be making it worse. The
+    // rest of the canvas's treatment (radius, weight, the raised lip) IS matched.
+    expect(SOURCE).toMatch(/\.ms-strip-done\s*\{[^}]*background:\s*var\(--forest\)/);
+    const done = ruleFor('.ms-strip-done');
+    expect(done.boxShadow).toBeTruthy();
+    expect(done.fontWeight).toBe('900');
+  });
+
+  it('Undo is a pill, not a link', () => {
+    // Underlined, it read as body text you might have written rather than as the one control on
+    // the cart that takes something back.
+    const undo = ruleFor('.ms-strip-undo');
+    expect(undo.borderRadius).toBe('999px');
+    expect(undo.textDecorationLine || 'none').not.toBe('underline');
+    expect(undo.backgroundColor || undo.background).toBeTruthy();
+  });
 });
 
 describe('.ms-cover — the surface that asks is drawn OVER, never after', () => {
