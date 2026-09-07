@@ -43,8 +43,13 @@ export function DraftStrip({
   return (
     <div className="ms-strip">
       <div className="ms-strip-line">
-        <b>{`${label} · ${count} ${count === 1 ? 'thing' : 'things'}`}</b>
-        <span>{`${fmtKcal(kcal)} kcal · not counted yet`}</span>
+        {/* The count and the kcal stack, with Undo beside them — canvas B2's shape. Left as three
+            siblings in one wrapping row, the pill dropped to a line of its own on a phone and
+            took another 13px off the list underneath. */}
+        <div className="ms-strip-sum">
+          <b>{`${label} · ${count} ${count === 1 ? 'thing' : 'things'}`}</b>
+          <span>{`${fmtKcal(kcal)} kcal · not counted yet`}</span>
+        </div>
         <button type="button" className="ms-strip-undo" disabled={busy || count === 0} onClick={onUndo}>
           Undo last
         </button>
