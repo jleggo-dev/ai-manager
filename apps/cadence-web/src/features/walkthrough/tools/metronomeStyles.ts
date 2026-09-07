@@ -167,3 +167,22 @@ export const caption: CSSProperties = {
   textTransform: 'uppercase',
   color: TONE.sub,
 };
+
+/** The "Add a metronome" offer on a practice step with no dock — the pill's quiet cousin: same
+ *  shape, dashed rather than solid, so it reads as an empty slot rather than a running control. */
+export const addPill: CSSProperties = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  border: '1px dashed oklch(84% 0.03 85)',
+  borderRadius: 16,
+  background: 'transparent',
+  padding: '10px 14px',
+  cursor: 'pointer',
+  font: 'inherit',
+  fontSize: 12.5,
+  fontWeight: 800,
+  color: TONE.sub,
+};

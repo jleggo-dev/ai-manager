@@ -91,4 +91,23 @@ describe('tool catalog', () => {
     expect(rendered).toContain('EMOM = 10 × 1:00');
     expect(rendered).toMatch(/bounds: work 5-600s/);
   });
+
+  /**
+   * No example names a real piece, composer or method book. The catalog rides every
+   * prescribe-session call, and when <repertoire> is empty its examples are the only concrete
+   * material the coach can see — she copied "Hanon no. 1" straight from the metronome example into
+   * a session for someone who had never played Hanon (2026-09-06). A neutral step ("Scales, hands
+   * together") teaches the field shape just as well and cannot be mistaken for the person's shelf.
+   * Titles here are the ones a music example reaches for first; extend the list before adding one.
+   */
+  it('names no real repertoire anywhere in the render — an example must not read as their shelf', () => {
+    const rendered = renderCoachToolCatalog();
+    const REAL_REPERTOIRE =
+      /b(Hanon|Czerny|Clementi|Burgm[üu]ller|Kuhlau|Bach|Chopin|Mozart|Beethoven|Schumann|Debussy|Satie|Für Elise|Gymnop[ée]die|Minuet|Sonatina|Invention|Nocturne|Prelude|Étude|Etude)b/i;
+    expect(rendered).not.toMatch(REAL_REPERTOIRE);
+    for (const kind of SESSION_TOOL_KINDS) {
+      const name = String((COACH_TOOLS[kind].example as { name?: unknown }).name ?? '');
+      expect(name, `${kind} example names no real piece`).not.toMatch(REAL_REPERTOIRE);
+    }
+  });
 });
