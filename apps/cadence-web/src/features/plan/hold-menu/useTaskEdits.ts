@@ -8,6 +8,7 @@ import {
   moveOccurrence,
   type OccurrenceEditOutcome,
 } from '../../../lib/api/occurrence-edit.ts';
+import { setOccurrence } from '../../../lib/api/plan.ts';
 import { localTodayIso } from '../../../lib/query/keys.ts';
 import { dayRelation } from './holdMenuModel.ts';
 import type { HoldScreen } from './TaskHoldMenu.tsx';
@@ -68,14 +69,28 @@ export function useTaskEdits({
     if (sheet) setSheet({ kind: 'menu', occ: sheet.occ, date: sheet.date, screen: 'do-now' });
   };
 
-  /** A row by id, from the week on screen — else the held row wearing the id, which is enough
-   *  for the sheets (they fetch by id) and right for the title. */
-  function rowById(id: string, fallback: PlanOccurrence): PlanOccurrence {
+  /** A row by id, from the week on screen — else the held row wearing the id (and the status the
+   *  server named, when it did), which is enough for the sheets (they fetch by id) and right for
+   *  the title. */
+  function rowById(id: string, fallback: PlanOccurrence, status?: PlanOccurrence['status']): PlanOccurrence {
     for (const d of plan?.week ?? []) {
       const hit = d.occurrences.find((o) => o.occurrence_id === id);
       if (hit) return hit;
     }
-    return { ...fallback, occurrence_id: id };
+    return { ...fallback, occurrence_id: id, ...(status ? { status } : {}) };
+  }
+
+  /**
+   * Open a row to DO it. A skipped or missed row is still doable (owner, 2026-09-07: skipped is
+   * not finished) — but the start sheet only starts a PENDING row and says "already marked
+   * skipped" to anything else, so "do it now" sets it back to pending first. Best-effort: if the
+   * reset does not land, the sheet still opens and says what it sees.
+   */
+  async function openDoable(occ: PlanOccurrence) {
+    if (occ.status !== 'skipped' && occ.status !== 'missed') return openTask(occ);
+    await setOccurrence(occ.occurrence_id, 'pending').catch(() => undefined);
+    refresh();
+    openTask({ ...occ, status: 'pending' });
   }
 
   async function run<T>(work: () => Promise<T>, fallback: T): Promise<T> {
@@ -121,20 +136,21 @@ export function useTaskEdits({
     if (r.ok) {
       close();
       refresh();
-      return openTask(occ);
+      return openDoable(occ);
     }
     if (r.reason === 'already_there') {
       close();
-      return openTask(rowById(r.existing_occurrence_id, occ));
+      return openDoable(rowById(r.existing_occurrence_id, occ, r.existing_status as PlanOccurrence['status']));
     }
     setError(editFailureLine(r, occ.title));
   }
 
+  /** "Do it now" on today's own row, or on the twin already sitting on today. */
   function open(id: string) {
     if (!sheet) return;
     const occ = rowById(id, sheet.occ);
     close();
-    openTask(occ);
+    void openDoable(occ);
   }
 
   return { sheet, busy, error, todayIso, tap, hold, askDoNow, close, move, duplicate, remove, doNow, open };
