@@ -11,6 +11,7 @@ import { TrailFoodStrip } from '../nutrition/TrailFoodStrip.tsx';
 import { glyphOf } from './glyphs.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
 import { useKeepScrollOnPrepend } from './useKeepScrollOnPrepend.ts';
+import { useLongPress } from './useLongPress.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 
 /**
@@ -149,23 +150,30 @@ function ringStroke(done: boolean, darkSky: boolean): string {
 
 function TrailNode({
   occ,
+  date,
   i,
   n,
   d,
   onOpen,
+  onHold,
   nodeRef,
   clock,
 }: {
   occ: PlanOccurrence;
+  /** The day this node sits on — the list row carries no date of its own. */
+  date: string;
   i: number;
   n: number;
   d: number;
-  onOpen: (occ: PlanOccurrence) => void;
+  onOpen: (occ: PlanOccurrence, date: string) => void;
+  /** Press-and-hold → the hold menu (2026-09-07). Absent, the node only taps. */
+  onHold?: (occ: PlanOccurrence, date: string) => void;
   /** Set on the one node the trail opens scrolled to — see `useLandOnNow`. */
   nodeRef?: RefObject<HTMLButtonElement>;
   /** How the time under the disc is written (Settings → Units → Clock). */
   clock: ClockUnit;
 }) {
+  const hold = useLongPress(onHold ? () => onHold(occ, date) : undefined);
   // The goal's AREA is authoritative for the family when present (piano wore the exercise glyph
   // for want of it, 2026-08-31); the title picks the specific glyph within it (glyphs.ts).
   const glyph = glyphOf(occ.title, occ.area);
@@ -198,7 +206,8 @@ function TrailNode({
       ref={nodeRef}
       className="trail-node"
       style={{ transform: `translateX(${crescentX(i, n, d)}px)` }}
-      onClick={() => onOpen(occ)}
+      {...hold}
+      onClick={() => onOpen(occ, date)}
       aria-label={warming ? `${occ.title} — still being written` : occ.title}
     >
       {warming && (
@@ -258,11 +267,15 @@ function TrailNode({
 export function TodayTrail({
   plan,
   onOpen,
+  onHold,
   onOpenFood,
   onCoach,
 }: {
   plan: PlanViewData;
-  onOpen: (occ: PlanOccurrence) => void;
+  /** A tap, with the day it landed on — the caller decides what a future day's tap means. */
+  onOpen: (occ: PlanOccurrence, date: string) => void;
+  /** A press-and-hold, same shape. Optional: with none wired the nodes only tap. */
+  onHold?: (occ: PlanOccurrence, date: string) => void;
   onOpenFood: () => void;
   onCoach: () => void;
 }) {
@@ -348,10 +361,12 @@ export function TodayTrail({
                 <TrailNode
                   key={o.occurrence_id}
                   occ={o}
+                  date={day.date}
                   i={i}
                   n={day.occurrences.length}
                   d={daySide(day.date)}
                   onOpen={onOpen}
+                  onHold={onHold}
                   nodeRef={di === nowDay && i === nowNode ? nowRef : undefined}
                   clock={clock}
                 />

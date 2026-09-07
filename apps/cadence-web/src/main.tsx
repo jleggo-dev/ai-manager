@@ -20,6 +20,9 @@ import './styles/bracket.css';
 // The diary's bracket wrappers and the cookbook shelf (.cs-*, P6) — placement around the mark,
 // never the mark itself, so it loads after bracket.css and leans on it.
 import './styles/shelf.css';
+// The trail's hold menu and the future-task preview (.hm-*, .pv-*) — leans on styles.css's sheet
+// chrome and the start sheet's buttons, so it loads after both.
+import './styles/hold-menu.css';
 // The meal screen (.ms-*, meal-logging rework P4) — the draft surface. After bracket.css and
 // food-capture.css because it composes around both families without restating either.
 import './styles/meal-screen.css';
