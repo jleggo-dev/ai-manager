@@ -1,52 +1,28 @@
 /**
- * The meal's header (canvas 1b B1–B3): ‹ back, the OPEN chip, ⋯, the meal-kind chip
+ * The meal's header (canvas 1b B1–B3): ‹ back, the OPEN / LOGGED chip, ⋯, the meal-kind chip
  * (inferred from the clock, changeable in one tap, asked once — the "change ⌄" hint retires
- * after the first change), and the window line — visible on-surface, never a silent rule.
+ * after the first change), and one quiet line under it.
+ *
+ * That line used to read "08:02 · ONE THING · ADDS UNTIL 11:02" — the opened clock and a count
+ * of rows the eye can see right below (owner, 2026-09-07: "superfluous text"). It now says the
+ * one thing the list cannot: the window while the cart is open ("adds until 11:02"), that adds
+ * count at once when the meal is logged, and "nothing in it yet" when it is empty.
  */
 import { useState } from 'react';
 import { MEAL_KINDS, type MealKind } from '@cadence/shared';
 
-function windowLine(opts: {
-  empty: boolean;
-  date?: string;
-  openedClock: string | null;
-  count: number;
-  addsUntil: string | null;
-}): string {
-  const { empty, date, openedClock, count, addsUntil } = opts;
-  if (empty) {
-    const day = date
-      ? new Date(`${date}T12:00:00`)
-          .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-          .toUpperCase()
-      : null;
-    return [day, openedClock, 'nothing in it yet'].filter(Boolean).join(' · ');
-  }
-  const WORDS = [
-    'ZERO',
-    'ONE',
-    'TWO',
-    'THREE',
-    'FOUR',
-    'FIVE',
-    'SIX',
-    'SEVEN',
-    'EIGHT',
-    'NINE',
-    'TEN',
-    'ELEVEN',
-    'TWELVE',
-  ];
-  const things = `${WORDS[count] ?? count} ${count === 1 ? 'THING' : 'THINGS'}`;
-  return [openedClock, things, addsUntil].filter(Boolean).join(' · ');
+function windowLine(opts: { empty: boolean; logged: boolean; addsUntil: string | null }): string {
+  const { empty, logged, addsUntil } = opts;
+  if (logged) return 'logged · anything you add counts right away';
+  if (empty) return [addsUntil, 'nothing in it yet'].filter(Boolean).join(' · ');
+  return addsUntil ?? '';
 }
 
 export function MealHeader({
   kind,
-  date,
   count,
+  logged,
   openLabel,
-  openedClock,
   addsUntil,
   busy,
   onBack,
@@ -54,10 +30,9 @@ export function MealHeader({
   onMenu,
 }: {
   kind: MealKind;
-  date?: string;
   count: number;
+  logged: boolean;
   openLabel: string | null;
-  openedClock: string | null;
   addsUntil: string | null;
   busy?: boolean;
   onBack: () => void;
@@ -65,13 +40,14 @@ export function MealHeader({
   onMenu: () => void;
 }) {
   const [changed, setChanged] = useState(false);
+  const line = windowLine({ empty: count === 0, logged, addsUntil });
   return (
     <div className="ms-head">
       <div className="ms-head-row">
         <button type="button" className="ms-back" aria-label="Back" onClick={onBack}>
           ‹
         </button>
-        {openLabel && <span className="ms-open">{openLabel}</span>}
+        {openLabel && <span className={`ms-open${logged ? ' ms-open-logged' : ''}`}>{openLabel}</span>}
         <span className="ms-head-space" />
         <button type="button" className="ms-menu-btn" aria-label="More for this meal" onClick={onMenu}>
           ⋯
@@ -79,11 +55,11 @@ export function MealHeader({
       </div>
       <span className="ms-kind">
         <span className="ms-kind-name">{kind}</span>
-        {!changed && <span className="ms-kind-change">change ⌄</span>}
+        {!changed && !logged && <span className="ms-kind-change">change ⌄</span>}
         <select
           aria-label="Meal"
           value={kind}
-          disabled={busy}
+          disabled={busy || logged}
           onChange={(e) => {
             setChanged(true);
             onKind(e.target.value as MealKind);
@@ -96,7 +72,7 @@ export function MealHeader({
           ))}
         </select>
       </span>
-      <div className="ms-window">{windowLine({ empty: count === 0, date, openedClock, count, addsUntil })}</div>
+      {line && <div className="ms-window">{line}</div>}
     </div>
   );
 }

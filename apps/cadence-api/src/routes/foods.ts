@@ -16,7 +16,7 @@ import { isUsdaConfigured, searchUsdaFoods, UsdaConfigError, UsdaHttpError } fro
 import { loadResolveShared, resolveFoods } from '../services/food-resolver.ts';
 import { withAmbiguousFlag } from '../services/food-serving-axis.ts';
 import { isMeal, usageSlot } from '../services/nutrition-parse.ts';
-import { usualAtSlot } from '../services/food-usual-slot.ts';
+import { USUAL_MAX, usualAtSlot } from '../services/food-usual-slot.ts';
 import { BodyValidationError, parseBody } from '../validation/body.ts';
 import {
   createFoodBodySchema,
@@ -32,10 +32,10 @@ import {
 const router = Router();
 router.use(requireCadenceUser);
 
-function limitFromQuery(raw: unknown, fallback = 20): number {
+function limitFromQuery(raw: unknown, fallback = 20, max = 50): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
-  return Math.min(50, Math.max(1, Math.trunc(n)));
+  return Math.min(max, Math.max(1, Math.trunc(n)));
 }
 
 function photoErrorStatus(err: unknown): number | null {
@@ -128,14 +128,16 @@ router.get('/frequents', async (req: Request, res: Response) => {
 
 /**
  * GET /nutrition/foods/usual?meal=&limit= — what they usually have AT THAT SLOT, counted.
- * Recents are day-wide; this is the quick-add sheet's slot-aware list (design 05a).
+ * Recents are day-wide; this is the quick-add sheet's slot-aware list (design 05a). The cap is
+ * wider than the other lists': this one is the meal screen's shelf and is meant to scroll a few
+ * pages (owner, 2026-09-07 — "the list is too short").
  */
 router.get('/usual', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const meal = req.query.meal;
   if (!isMeal(meal)) return res.status(400).json({ error: 'meal must be a meal kind' });
   try {
-    res.json({ items: await usualAtSlot(userId, meal, limitFromQuery(req.query.limit, 6)) });
+    res.json({ items: await usualAtSlot(userId, meal, limitFromQuery(req.query.limit, 6, USUAL_MAX)) });
   } catch (err) {
     console.error('[GET /nutrition/foods/usual]', err);
     res.status(500).json({ error: 'failed to list usual foods' });

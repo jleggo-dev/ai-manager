@@ -123,4 +123,17 @@ describe('compoundLabel — MP39', () => {
     const cup: FoodServing = { label: '1 cup', unit: 'cup', amount_g: 235 };
     expect(compoundLabel(grams, [grams, cup])).toBe('250 g');
   });
+
+  /**
+   * Regression (owner, on device, 2026-09-07): a banana's "1 large (136g)" read "(1.5 ml ea.)"
+   * because its volume sibling was "100 ml" — one serving of it is a hundred millilitres, not one,
+   * so the ratio was in the wrong unit. Millilitre and litre servings never make a compound.
+   */
+  it('does not express a count serving in millilitres', () => {
+    const large: FoodServing = { label: '1 large (136g)', unit: 'large', amount_g: 136 };
+    const ml: FoodServing = { label: '100 ml', unit: '100 ml', amount_g: 100 };
+    expect(compoundLabel(large, [large, ml])).toBe('1 large (136g)');
+    const litre: FoodServing = { label: '1 litre', unit: 'litre', amount_g: 1000 };
+    expect(compoundLabel(large, [large, litre])).toBe('1 large (136g)');
+  });
 });

@@ -116,3 +116,14 @@ export function doNowStep(
     twin: twin ? { occurrence_id: twin.occurrence_id, status: twin.status } : null,
   };
 }
+
+/**
+ * Today's row wearing the same title as a future one — the twin. A meal previewed on Wednesday
+ * is "logged today" by opening TODAY's breakfast, not by moving Wednesday's onto today (owner,
+ * 2026-09-07: "log today's snack?"); a twin that is already done still opens, since a logged
+ * breakfast takes adds. Exact title, never a contains-match: "Log snacks" is not "Log snack".
+ */
+export function todaysTwin(week: readonly PlanDay[], todayIso: string, occ: PlanOccurrence): PlanOccurrence | null {
+  const today = week.find((d) => d.date === todayIso || d.isToday);
+  return today?.occurrences.find((o) => o.title === occ.title) ?? null;
+}

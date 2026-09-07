@@ -3,6 +3,11 @@
  * gesture set and every gesture's boring twin behind each part's ⋯. Row content is the
  * amounts idiom (MealDraftRow); the B3 offer surfaces inline at the bottom after several
  * quick adds — a preview of the mark, not a dialog.
+ *
+ * Since the cart ruling (owner, 2026-09-07) two things are on the surface that used to hide
+ * behind a gesture: a row's words open its details, and "Group into a recipe" sits under the
+ * list whenever there are two loose things to bracket — the long-press still works, but nobody
+ * should have to find it.
  */
 import { useMemo, useState } from 'react';
 import { BracketList } from '../bracket/BracketList.tsx';
@@ -13,25 +18,27 @@ import { membersOf, looseItems, orderedRows, partLabel, partTotal } from '../bra
 import { useBracketGestures } from '../bracket/useBracketGestures.ts';
 import { nameChips } from './nameChips.ts';
 import { MealDraftRow } from './MealDraftRow.tsx';
+import { MealItemSheet } from './MealItemSheet.tsx';
 import type { MealDraft } from './useMealDraft.ts';
 
 type Picker =
   | { kind: 'menu'; part: string }
   | { kind: 'select'; mode: 'group' | 'takeOut'; part?: string }
-  | { kind: 'name'; part: string };
+  | { kind: 'name'; part: string }
+  | { kind: 'item'; index: number };
 
 export function MealBody({
   draft,
   offerVisible,
   onOfferAccept,
   onOfferDecline,
-  onAddAnother,
+  onAddMore,
 }: {
   draft: MealDraft;
   offerVisible: boolean;
   onOfferAccept: (name: string | null) => void;
   onOfferDecline: () => void;
-  onAddAnother: () => void;
+  onAddMore: () => void;
 }) {
   const { items } = draft;
   const parts = useMemo(() => draft.meal?.parts ?? [], [draft.meal]);
@@ -49,6 +56,7 @@ export function MealBody({
 
   const menuPart = picker?.kind === 'menu' ? parts.find((p) => p.key === picker.part) : null;
   const namePart = picker?.kind === 'name' ? parts.find((p) => p.key === picker.part) : null;
+  const openItem = picker?.kind === 'item' ? items[picker.index] : null;
   const loose = looseItems(items, parts);
 
   return (
@@ -68,16 +76,27 @@ export function MealBody({
             busy={draft.busy}
             onQty={draft.setAmount}
             onRemove={(i) => void draft.removeItem(i)}
+            onOpen={(i) => setPicker({ kind: 'item', index: i })}
           />
         )}
       />
-      <button type="button" className="ms-add-another" onClick={onAddAnother}>
+      <button type="button" className="ms-add-another" onClick={onAddMore}>
         <span className="ms-add-plus" aria-hidden="true">
           ＋
         </span>
-        <b>Add another thing</b>
-        <span>search · say · scan</span>
+        <b>Add more</b>
+        <span>find · say · scan</span>
       </button>
+      {loose.length >= 2 && (
+        <button
+          type="button"
+          className="ms-express ms-group-link"
+          disabled={draft.busy}
+          onClick={() => setPicker({ kind: 'select', mode: 'group' })}
+        >
+          Group some of these into a recipe ›
+        </button>
+      )}
       {offerVisible && (
         <NamePartCard
           variant="offer"
@@ -106,7 +125,7 @@ export function MealBody({
           onRename={() => setPicker({ kind: 'name', part: menuPart.key })}
           onAddTo={() => {
             setPicker(null);
-            onAddAnother();
+            onAddMore();
           }}
           onTakeOut={() => setPicker({ kind: 'select', mode: 'takeOut', part: menuPart.key })}
           onUngroup={() => {
@@ -142,6 +161,17 @@ export function MealBody({
           draft={draft}
           partKey={namePart.key}
           initialName={namePart.name ?? undefined}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {openItem && picker?.kind === 'item' && (
+        <MealItemSheet
+          item={openItem}
+          index={picker.index}
+          tag={draft.provenance(picker.index)}
+          busy={draft.busy}
+          onQty={draft.setAmount}
+          onRemove={(i) => void draft.removeItem(i)}
           onClose={() => setPicker(null)}
         />
       )}

@@ -2,17 +2,21 @@ import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { isFoodRow } from './occurrence/format.ts';
 import { MealCapturePanel } from './occurrence/MealCapturePanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
-import { MealCaptureSkeleton, WeighInSkeleton } from './SheetSkeletons.tsx';
+import { WeighInSkeleton } from './SheetSkeletons.tsx';
 import { GLYPH } from '../today/glyphs.ts';
-import { isWeighTitle } from '../../components/occurrence-mod.ts';
+import { isFoodTitle, isWeighTitle } from '../../components/occurrence-mod.ts';
 
 /**
  * The **capture sheet** (REQ8 task shapes) — a weigh-in or a meal is one data entry, so it opens
- * minimal: a clean redesign header + the capture, and nothing else. No "start", no step summary, no
- * "I have less time" — there's nothing to walk through or shorten. The weigh-in is a deterministic
- * number; the meal is the redesigned two-tone-ring capture (say / snap / type, resolver draft card,
- * quantities, two-tap recents), pre-selecting the meal the task names. Sessions keep the StartSheet
- * walkthrough.
+ * minimal. No "start", no step summary, no "I have less time" — there's nothing to walk through
+ * or shorten.
+ *
+ * A weigh-in keeps the disc-and-title header over a deterministic number. A meal has no header
+ * of its own any more: the meal screen underneath names itself ("Breakfast"), and the band that
+ * sat above it — "Log breakfast · 08:00 · CAPTURE · NOTHING COUNTS UNTIL YOU CONFIRM" — said
+ * the same thing twice and cost the cart its room (owner, on device, 2026-09-07). The meal also
+ * opens on the FIRST frame from what the trail already knows (title, day), rather than waiting
+ * for `/plan/occurrences/:id` — the detail only ticks the row afterwards (PERF-06).
  */
 export function CaptureSheet({
   occurrenceId,
@@ -23,16 +27,16 @@ export function CaptureSheet({
 }: {
   occurrenceId: string;
   /**
-   * What the trail ALREADY knows about this row at the moment it was tapped — its title and time
-   * of day, both carried in the plan the trail is drawn from.
+   * What the trail ALREADY knows about this row at the moment it was tapped — its title, time of
+   * day and the day it sits on, all carried in the plan the trail is drawn from.
    *
-   * This is the difference between a placeholder header and a real one. The sheet used to render
+   * This is the difference between a placeholder and a real screen. The sheet used to render
    * nothing at all until `/plan/occurrences/:id` came back, so tapping "Log breakfast" opened a
    * blank sheet with the coach's typing dots in it, and only then did the words "Log breakfast"
    * appear — data the phone had been holding the whole time (owner, 2026-08-20: "Show the Log
-   * breakfast screen"). With this, the header is real on the first frame and only the plate waits.
+   * breakfast screen"). With this, the meal is real on the first frame.
    */
-  known?: { title: string; time_of_day?: string };
+  known?: { title: string; time_of_day?: string; date?: string };
   onClose: () => void;
   onLogged?: () => void;
   /** Leave the capture for the Food screen — the meal ring is the door (device report, 2026-08-20). */
@@ -44,6 +48,8 @@ export function CaptureSheet({
   const time = detail?.schedule?.time_of_day ?? known?.time_of_day ?? null;
   /** The header can paint before the fetch lands; the body cannot invent a plate. */
   const headable = !!detail || !!known;
+  /** A meal from the trail — the title says so before the detail does (the shared matcher). */
+  const isMeal = detail ? isFoodRow(detail) : !!known && !isWeigh && isFoodTitle(known.title);
 
   return (
     <>
@@ -54,6 +60,15 @@ export function CaptureSheet({
           <div className="sheet-msg">This one moved with your new plan — close and take a fresh look at your week.</div>
         ) : state === 'error' || (state === 'ready' && !detail) ? (
           <div className="sheet-msg">{"Couldn't open this just now — close and tap it again in a moment."}</div>
+        ) : isMeal && headable ? (
+          <MealCapturePanel
+            detail={detail}
+            known={{ title, ...(known?.date ? { date: known.date } : {}) }}
+            setDetail={setDetail}
+            onLogged={onLogged}
+            onClose={onClose}
+            onOpenFood={onOpenFood}
+          />
         ) : (
           <>
             {headable && (
@@ -65,11 +80,7 @@ export function CaptureSheet({
                 </div>
                 <div className="ss-headt">
                   <b>{title}</b>
-                  <span>
-                    {isWeigh
-                      ? (time ?? 'weekly')
-                      : [time, 'CAPTURE · NOTHING COUNTS UNTIL YOU CONFIRM'].filter(Boolean).join(' · ')}
-                  </span>
+                  <span>{isWeigh ? (time ?? 'weekly') : time}</span>
                 </div>
               </div>
             )}
@@ -77,11 +88,7 @@ export function CaptureSheet({
             {!detail ? (
               // Still reading. The header above is already real; this is the body's shape only —
               // shapes, never numbers (components/Skeleton.tsx).
-              isWeigh ? (
-                <WeighInSkeleton />
-              ) : (
-                <MealCaptureSkeleton />
-              )
+              <WeighInSkeleton />
             ) : isWeigh ? (
               detail.status === 'pending' ? (
                 <WeighInPanel detail={detail} setDetail={setDetail} onLogged={onLogged} />
@@ -90,14 +97,6 @@ export function CaptureSheet({
                   <b>Logged:</b> {detail.log?.summary ?? 'done'}
                 </div>
               )
-            ) : isFoodRow(detail) ? (
-              <MealCapturePanel
-                detail={detail}
-                setDetail={setDetail}
-                onLogged={onLogged}
-                onClose={onClose}
-                onOpenFood={onOpenFood}
-              />
             ) : (
               <div className="sheet-msg">Tap it done when it happens.</div>
             )}

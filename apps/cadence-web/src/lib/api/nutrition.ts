@@ -25,6 +25,9 @@ export interface Meal {
   macros?: MealMacros; // AI-documented estimates (or the user's correction)
   ai_confidence?: number | null;
   provisional?: boolean; // low-confidence estimate — listed, but outside totals until confirmed
+  /** `open` while a draft is still taking adds (meal-logging rework 1b); absent on legacy rows,
+   *  which are closed. The capture's rings subtract open meals: only logged food shows there. */
+  state?: 'open' | 'closed';
 }
 
 export interface NutritionDayData {

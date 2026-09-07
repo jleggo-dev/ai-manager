@@ -16,6 +16,10 @@ import { tallyUsual } from './coach-food-usual-tally.ts';
  *  forget a phase someone has moved on from. */
 const WINDOW_DAYS = 45;
 
+/** The most rows one read will hydrate. Sixty is a few pages of a phone — the meal screen's shelf
+ *  is meant to scroll (owner, 2026-09-07); each row costs a food/recipe read, so it is not open. */
+export const USUAL_MAX = 60;
+
 export interface UsualAtSlot {
   kind: 'food' | 'recipe';
   /** `food_id` or `recipe_id` — whichever `kind` says. */
@@ -38,7 +42,7 @@ function isoDaysAgo(days: number): { from: string; to: string } {
 
 /** Most-logged foods and recipes for one meal slot, newest window, counted. */
 export async function usualAtSlot(userId: string, meal: MealKind, limit = 6): Promise<UsualAtSlot[]> {
-  const capped = Math.min(20, Math.max(1, limit));
+  const capped = Math.min(USUAL_MAX, Math.max(1, limit));
   const { from, to } = isoDaysAgo(WINDOW_DAYS);
   const tallied = tallyUsual(await listNutritionLogs(userId, from, to), meal).slice(0, capped);
 

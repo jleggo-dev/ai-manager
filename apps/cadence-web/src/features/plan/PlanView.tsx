@@ -97,7 +97,12 @@ export function PlanView({
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
   // meant the sheet had to re-learn the row's own title from the server before it could draw its
   // header — a round trip to render words the phone was already holding (PERF-06).
-  const [captureOcc, setCaptureOcc] = useState<{ id: string; title: string; time_of_day?: string } | null>(null);
+  const [captureOcc, setCaptureOcc] = useState<{
+    id: string;
+    title: string;
+    time_of_day?: string;
+    date?: string;
+  } | null>(null);
   const [cookOcc, setCookOcc] = useState<string | null>(null); // cook walkthrough (menu-derived cook task)
   const [detourSheet, setDetourSheet] = useState(false); // the live detour's state sheet
   const [doorOpen, setDoorOpen] = useState(false); // the door's fork: temporary plan vs. a tweak
@@ -122,7 +127,9 @@ export function PlanView({
 
   // A task's own sheet, by shape: captures (weigh-in, meals) open the minimal CaptureSheet; coach
   // sessions the StartSheet walkthrough. Above the early returns — the edits hook below needs it.
-  const openTask = (occ: PlanOccurrence) => {
+  // `date` is the day the row sits on, when the caller knows it — a meal opens on it at once,
+  // without waiting for the detail to say which day a missed breakfast belongs to.
+  const openTask = (occ: PlanOccurrence, date?: string) => {
     switch (taskOpener(occ)) {
       case 'task':
         return setStartOcc({ id: occ.occurrence_id, title: occ.title });
@@ -131,7 +138,12 @@ export function PlanView({
       case 'shop':
         return onOpenFood('shop');
       default: // weigh + meal
-        return setCaptureOcc({ id: occ.occurrence_id, title: occ.title, time_of_day: occ.time_of_day });
+        return setCaptureOcc({
+          id: occ.occurrence_id,
+          title: occ.title,
+          time_of_day: occ.time_of_day,
+          ...(date ? { date } : {}),
+        });
     }
   };
   // Tap vs. hold (2026-09-07): a tap opens (or, in the future, previews); a hold opens the menu.
@@ -384,7 +396,7 @@ export function PlanView({
       {captureOcc && (
         <CaptureSheet
           occurrenceId={captureOcc.id}
-          known={{ title: captureOcc.title, time_of_day: captureOcc.time_of_day }}
+          known={{ title: captureOcc.title, time_of_day: captureOcc.time_of_day, date: captureOcc.date }}
           onClose={() => setCaptureOcc(null)}
           onLogged={() => {
             refresh();

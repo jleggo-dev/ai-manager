@@ -9,7 +9,9 @@ const META: Record<CaptureMethod, { label: string; hint: string; icon: () => Rea
   voice: { label: 'Voice', hint: 'same chat, mic live', icon: MicIcon },
   picture: { label: 'Picture', hint: 'one photo', icon: CameraIcon },
   barcode: { label: 'Barcode', hint: 'off the packet', icon: ScanIcon },
-  search: { label: 'Search', hint: 'the whole list', icon: SearchIcon },
+  // "Find", not "Search", and first wherever the row is drawn: it is the fastest and most exact
+  // way in, so it gets the spot the thumb lands on (owner, 2026-09-07).
+  search: { label: 'Find', hint: 'the whole list', icon: SearchIcon },
 };
 
 /**

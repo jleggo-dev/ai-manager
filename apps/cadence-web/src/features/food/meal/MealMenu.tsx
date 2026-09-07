@@ -32,18 +32,21 @@ function Row({
 
 export function MealMenu({
   canSave,
+  logged = false,
   onSaveMeal,
   onSaveRecipe,
   onRename,
-  onCloseNow,
+  onLogNow,
   onClose,
 }: {
   /** Save-as needs at least a bracketable meal — two things, or an existing bracket. */
   canSave: boolean;
+  /** A logged meal has no "log it now" — it already is. */
+  logged?: boolean;
   onSaveMeal: () => void;
   onSaveRecipe: () => void;
   onRename: () => void;
-  onCloseNow: () => void;
+  onLogNow: () => void;
   onClose: () => void;
 }) {
   return (
@@ -67,7 +70,9 @@ export function MealMenu({
             onPress={onSaveRecipe}
           />
           <Row icon="✎" title="Rename this meal" disabled={!canSave} onPress={onRename} />
-          <Row icon="◷" title="Close it now" sub="anything later starts a new meal" onPress={onCloseNow} />
+          {!logged && (
+            <Row icon="◷" title="Log it now" sub="anything you add later still joins it" onPress={onLogNow} />
+          )}
         </div>
       </div>
     </div>

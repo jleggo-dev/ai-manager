@@ -149,6 +149,25 @@ export async function findOpenMealForSlot(
   return rows[0] ?? null;
 }
 
+/**
+ * The latest CLOSED meal for one (date, slot) — openDraft's second lookup (owner, 2026-09-07:
+ * one meal per date+slot; adds after "Log breakfast" land in the logged meal). Newest first
+ * because the express writes (logMeal / logMealFromFood / …) insert closed rows directly and
+ * nothing stops a day from holding two of them for the same slot.
+ */
+export async function findClosedMealForSlot(
+  userId: string,
+  date: string,
+  meal: NutritionLog['meal'],
+): Promise<NutritionLog | null> {
+  const rows = await sql<NutritionLog[]>`
+    select ${COLS} from cadence.nutrition_logs
+    where user_id = ${userId} and state = 'closed' and date = ${date} and meal = ${meal}
+    order by created_at desc
+    limit 1`;
+  return rows[0] ?? null;
+}
+
 /** Open meals whose window has ended — what the lazy expiry sweep closes or deletes. */
 export async function listOverdueOpenMeals(userId: string): Promise<NutritionLog[]> {
   return sql<NutritionLog[]>`

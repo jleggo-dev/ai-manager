@@ -1,5 +1,5 @@
 /**
- * PERF-06 — the meal capture sheet paints before its fetch lands.
+ * PERF-06 — the capture sheet paints before its fetch lands.
  *
  * The owner's report, on device, 2026-08-20: *"I click Log breakfast, I get the 3 loading dots.
  * You know, we shouldn't show this. I think we're probably loading the data? Show the Log
@@ -9,10 +9,11 @@
  * is `kind: 'system'`, so `getOccurrenceDetail`'s generate gate is false and no model is involved
  * anywhere in it. The typing dots were the coach's thinking animation, shown over a database read.
  *
- * What these pin is the fix and the honesty constraint together: the header is REAL immediately
- * (the trail already knew the title), the body is a skeleton rather than the dots, and the
- * skeleton draws no numbers — because a placeholder "0 kcal" and a true "0 kcal" are the same
- * pixels, and only one of them is an answer.
+ * Since the cart (2026-09-07) a meal goes further than a real header: the whole meal screen mounts
+ * on the first frame from what the trail already knows (title, day), and the detail only ticks
+ * the row afterwards. The weigh-in keeps the header-then-skeleton shape, and the skeleton draws
+ * no numbers — a placeholder "0 kcal" and a true "0 kcal" are the same pixels, and only one of
+ * them is an answer.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
@@ -21,7 +22,13 @@ const getOccurrenceDetail = vi.fn();
 vi.mock('../../lib/api.ts', () => ({ getOccurrenceDetail: (...a: unknown[]) => getOccurrenceDetail(...a) }));
 
 // The loaded panels own their own fetches and tests; stubs keep this about the wait.
-vi.mock('./occurrence/MealCapturePanel.tsx', () => ({ MealCapturePanel: () => <div>meal-panel</div> }));
+const mealPanel = vi.fn();
+vi.mock('./occurrence/MealCapturePanel.tsx', () => ({
+  MealCapturePanel: (props: Record<string, unknown>) => {
+    mealPanel(props);
+    return <div>meal-panel</div>;
+  },
+}));
 vi.mock('./occurrence/WeighInPanel.tsx', () => ({ WeighInPanel: () => <div>weigh-panel</div> }));
 
 const { CaptureSheet } = await import('./CaptureSheet.tsx');
@@ -44,7 +51,7 @@ function mount(props: Record<string, unknown> = {}) {
   return render(
     <CaptureSheet
       occurrenceId="o1"
-      known={{ title: 'Log breakfast', time_of_day: 'morning' }}
+      known={{ title: 'Log breakfast', time_of_day: 'morning', date: '2026-08-20' }}
       onClose={() => {}}
       {...props}
     />,
@@ -57,17 +64,22 @@ afterEach(() => {
 });
 
 describe('CaptureSheet — structure first, numbers after', () => {
-  it('shows the tapped row’s own title while the detail fetch is still in flight', () => {
+  it('a meal is the meal screen on the first frame, with the day the trail knew', () => {
     getOccurrenceDetail.mockImplementation(hang);
-    mount();
-    // The words were on the phone the whole time; they must not wait for a round trip.
-    expect(screen.getByText('Log breakfast')).toBeTruthy();
-    expect(screen.getByText(/CAPTURE · NOTHING COUNTS UNTIL YOU CONFIRM/)).toBeTruthy();
+    const { container } = mount();
+    // The words were on the phone the whole time; the meal must not wait for a round trip.
+    expect(screen.getByText('meal-panel')).toBeTruthy();
+    expect(mealPanel).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: null, known: { title: 'Log breakfast', date: '2026-08-20' } }),
+    );
+    // …and no band above it: the meal names itself, and the old "nothing counts" line is gone.
+    expect(container.querySelector('.ss-head')).toBeNull();
+    expect(screen.queryByText(/CAPTURE · NOTHING COUNTS/)).toBeNull();
   });
 
   it('never shows the coach’s typing dots over a deterministic read', () => {
     getOccurrenceDetail.mockImplementation(hang);
-    const { container } = mount();
+    const { container } = mount({ known: { title: 'Weekly weigh-in' } });
     expect(container.querySelector('.typing')).toBeNull();
     expect(container.querySelector('.sheet-loading')).toBeNull();
     expect(container.querySelector('[aria-busy="true"]')).toBeTruthy();
@@ -75,10 +87,10 @@ describe('CaptureSheet — structure first, numbers after', () => {
 
   it('draws shapes, never numbers — nothing in the placeholder can be read as data', () => {
     getOccurrenceDetail.mockImplementation(hang);
-    const { container } = mount();
+    const { container } = mount({ known: { title: 'Weekly weigh-in' } });
     const skeleton = container.querySelector('[aria-busy="true"]')!;
-    // A "0" here would be indistinguishable from a real zero the moment it became 740.
-    expect(skeleton.textContent?.replace(/\s/g, '')).toBe('Openingyourcapture.');
+    // A "0" here would be indistinguishable from a real zero the moment it became 74.
+    expect(skeleton.textContent).not.toMatch(/\d/);
     expect(container.querySelectorAll('.sk').length).toBeGreaterThan(0);
   });
 
@@ -89,10 +101,20 @@ describe('CaptureSheet — structure first, numbers after', () => {
     expect(container.querySelector('.ss-disc-weigh')).toBeTruthy();
   });
 
-  it('swaps the skeleton for the real capture once the detail lands', async () => {
+  it('hands the meal its detail once it lands, so the row can be ticked', async () => {
     getOccurrenceDetail.mockResolvedValue(detail());
-    const { container } = mount();
-    await waitFor(() => expect(screen.getByText('meal-panel')).toBeTruthy());
+    mount();
+    await waitFor(() =>
+      expect(mealPanel).toHaveBeenLastCalledWith(
+        expect.objectContaining({ detail: expect.objectContaining({ occurrence_id: 'o1' }) }),
+      ),
+    );
+  });
+
+  it('swaps the skeleton for the real weigh-in once the detail lands', async () => {
+    getOccurrenceDetail.mockResolvedValue(detail({ title: 'Weekly weigh-in', category: 'body' }));
+    const { container } = mount({ known: { title: 'Weekly weigh-in' } });
+    await waitFor(() => expect(screen.getByText('weigh-panel')).toBeTruthy());
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
@@ -116,5 +138,6 @@ describe('CaptureSheet — structure first, numbers after', () => {
     const { container } = mount({ known: undefined });
     expect(container.querySelector('.ss-head')).toBeNull();
     expect(container.querySelector('.typing')).toBeNull();
+    expect(screen.queryByText('meal-panel')).toBeNull();
   });
 });

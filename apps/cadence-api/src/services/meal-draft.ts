@@ -8,6 +8,12 @@
  * trace. The express writes (logMeal / logMealFromFood / logMealFromItems / logMealFromRecipe)
  * are untouched: they stay the one-shot closed writes.
  *
+ * The cart (owner, 2026-09-07): logging is add → review → "Log breakfast". After that tap the
+ * meal is CLOSED, but it is still the one meal for that date+slot — anything added to breakfast
+ * afterwards lands in the logged meal directly and counts right away, with no second review.
+ * That supersedes the earlier "later food starts a new meal" rule for the same slot on the same
+ * day: the window still auto-closes an open draft, it just no longer opens a second one.
+ *
  * Numbers: every mutation recomputes the meal's macros as the sum of item estimates
  * (`sumItemNutrients`, micros included) — the same arithmetic the pricing path already uses —
  * so an open meal's total is always exactly what its rows say.
@@ -15,6 +21,7 @@
 import { isMacrosSource, type Macros, type MealKind, type NutritionLog } from '@cadence/shared';
 import {
   deleteNutritionLog,
+  findClosedMealForSlot,
   findNutritionLog,
   findOpenMeal,
   findOpenMealForSlot,
@@ -114,9 +121,13 @@ export async function expireOverdueMeals(userId: string): Promise<void> {
 }
 
 /**
- * Open (or rejoin) the draft for a slot — idempotent per (date, meal): while a draft for that
+ * Open (or rejoin) the meal for a slot — idempotent per (date, meal). While a draft for that
  * slot is inside its window, the same one comes back, which is how the 09:40 latte joins
- * breakfast instead of becoming an orphan snack.
+ * breakfast instead of becoming an orphan snack. When the slot already holds a CLOSED meal —
+ * the user tapped "Log breakfast", the window expired it, or an express write (logMeal /
+ * logMealFromFood / …) put a closed row there directly — that meal comes back instead: one meal
+ * per date+slot, and later adds land in it (owner, 2026-09-07). A fresh open draft is only
+ * inserted when the slot holds nothing at all.
  */
 export async function openDraft(
   userId: string,
@@ -126,7 +137,7 @@ export async function openDraft(
   await expireOverdueMeals(userId);
   const date = input.date ?? localDate(tz);
   const meal: MealKind = input.meal && isMeal(input.meal) ? input.meal : inferMealKind(tz);
-  const existing = await findOpenMealForSlot(userId, date, meal);
+  const existing = (await findOpenMealForSlot(userId, date, meal)) ?? (await findClosedMealForSlot(userId, date, meal));
   if (existing) return existing;
   return insertNutritionLog(userId, {
     date,
@@ -158,19 +169,42 @@ async function requireMeal(userId: string, logId: string): Promise<NutritionLog>
 }
 
 /**
- * A draft mutation needs a meal that is still accepting adds. A meal whose window ended but
- * which no read has expired yet is expired right here — the window is a rule about time, not
- * about who happened to look first. Later food starts a new meal.
+ * A mutation needs a meal that can take it — and since the cart ruling (owner, 2026-09-07)
+ * that is every meal that still exists: a closed meal is addable as-is (the add lands in the
+ * logged meal and counts right away), and so is an open draft inside its window. An open draft
+ * whose window ended but which no read has expired yet is expired right here — the window is a
+ * rule about time, not about who happened to look first — and then the mutation carries on
+ * into the now-closed row rather than being refused: an empty one dissolves (`meal not found`),
+ * a fed one is closed by the clock and handed back so the add lands in it.
  */
-async function requireOpenMeal(userId: string, logId: string): Promise<NutritionLog> {
+async function requireAddableMeal(userId: string, logId: string): Promise<NutritionLog> {
   const meal = await requireMeal(userId, logId);
-  if (meal.state !== 'open') throw new Error('meal is not open');
+  if (meal.state !== 'open') return meal;
   if (meal.closes_at && Date.parse(meal.closes_at) < Date.now()) {
-    if ((meal.items ?? []).length === 0) await deleteNutritionLog(userId, meal.log_id);
-    else await closeMealRow(userId, meal);
-    throw new Error('meal is not open');
+    if ((meal.items ?? []).length === 0) {
+      await deleteNutritionLog(userId, meal.log_id);
+      throw new Error('meal not found');
+    }
+    return closeMealRow(userId, meal);
   }
   return meal;
+}
+
+/**
+ * An add to an already-logged meal never passes through close, which is where a draft's items
+ * teach recents/frequents — so the post-log add teaches them here, same slot, same best-effort
+ * stance as closeMealRow (warn, never fail the write). An open draft's items wait for close.
+ */
+async function learnPostLogAdds(userId: string, meal: NutritionLog, appended: NutritionLog['items']): Promise<void> {
+  if (meal.state !== 'closed') return;
+  for (const item of appended) {
+    if (!item.food_id) continue;
+    try {
+      await touchFoodUsage(userId, item.food_id, usageSlot(meal.date, meal.meal));
+    } catch (e) {
+      console.warn('[meal-draft] food_usage touch failed:', e);
+    }
+  }
 }
 
 /** Write items(+parts) and the recomputed running total. `{}` macros = an honest empty draft. */
@@ -192,12 +226,14 @@ export async function appendFood(
   logId: string,
   input: { food_id: string; serving_index?: number; quantity?: number },
 ): Promise<NutritionLog> {
-  const meal = await requireOpenMeal(userId, logId);
+  const meal = await requireAddableMeal(userId, logId);
   const food = await getFood(userId, input.food_id);
   if (!food) throw new Error('food not found');
   // The same serving math the plate write uses — one item composed, then appended.
   const { items: composed } = composePlate([food], [{ serving_index: input.serving_index, quantity: input.quantity }]);
-  return writeItems(userId, meal.log_id, [...(meal.items ?? []), ...composed], meal.parts);
+  const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...composed], meal.parts);
+  await learnPostLogAdds(userId, meal, composed);
+  return row;
 }
 
 /**
@@ -209,7 +245,7 @@ export async function appendRecipe(
   logId: string,
   input: { recipe_id: string; servings?: number },
 ): Promise<NutritionLog> {
-  const meal = await requireOpenMeal(userId, logId);
+  const meal = await requireAddableMeal(userId, logId);
   const recipe = await getRecipe(userId, input.recipe_id);
   if (!recipe) throw new Error('recipe not found');
   const servingsLogged = input.servings && input.servings > 0 ? input.servings : 1;
@@ -248,7 +284,9 @@ export async function appendRecipe(
     servings_logged: servingsLogged,
     source: 'user' as const,
   };
-  return writeItems(userId, meal.log_id, [...(meal.items ?? []), ...members], [...(meal.parts ?? []), part]);
+  const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...members], [...(meal.parts ?? []), part]);
+  await learnPostLogAdds(userId, meal, members);
+  return row;
 }
 
 export interface ParsedDraftItem {
@@ -266,7 +304,7 @@ export interface ParsedDraftItem {
  * sanitizer every client-supplied estimate passes.
  */
 export async function appendParsed(userId: string, logId: string, parsed: ParsedDraftItem[]): Promise<NutritionLog> {
-  const meal = await requireOpenMeal(userId, logId);
+  const meal = await requireAddableMeal(userId, logId);
   const appended: NutritionLog['items'] = parsed
     .filter((i) => i && typeof i.name === 'string' && i.name.trim())
     .slice(0, 20)
@@ -282,15 +320,18 @@ export async function appendParsed(userId: string, logId: string, parsed: Parsed
         ...(i.food_id ? { food_id: i.food_id } : {}),
       };
     });
-  return writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts);
+  const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts);
+  await learnPostLogAdds(userId, meal, appended);
+  return row;
 }
 
 /**
- * Take an item back out (the strip's Undo, a row's ×). Part membership is fixed up — a part left
- * below two members dissolves — and an emptied draft STAYS open: only close/expiry deletes it.
+ * Take an item back out (the strip's Undo, a row's ×) — on an open draft or a logged meal alike.
+ * Part membership is fixed up — a part left below two members dissolves — and an emptied draft
+ * STAYS open: only close/expiry deletes it.
  */
 export async function removeItem(userId: string, logId: string, index: number): Promise<NutritionLog> {
-  const meal = await requireOpenMeal(userId, logId);
+  const meal = await requireAddableMeal(userId, logId);
   const items = meal.items ?? [];
   if (!Number.isInteger(index) || index < 0 || index >= items.length) {
     throw new Error('index is not an item on this meal');
@@ -312,7 +353,7 @@ export function scaleEstForAmount(est: Macros | undefined, factor: number): Macr
 
 /** A stepper nudge — set one item's quantity; its estimate rescales proportionally. */
 export async function setAmount(userId: string, logId: string, index: number, qty: number): Promise<NutritionLog> {
-  const meal = await requireOpenMeal(userId, logId);
+  const meal = await requireAddableMeal(userId, logId);
   const items = [...(meal.items ?? [])];
   if (!Number.isInteger(index) || index < 0 || index >= items.length) {
     throw new Error('index is not an item on this meal');
@@ -325,9 +366,9 @@ export async function setAmount(userId: string, logId: string, index: number, qt
   return writeItems(userId, meal.log_id, items, meal.parts);
 }
 
-/** Move the draft to another slot — the header chip, asked once, changeable in one tap. */
+/** Move the meal to another slot — the header chip, asked once, changeable in one tap. */
 export async function setSlot(userId: string, logId: string, meal: MealKind): Promise<NutritionLog> {
-  const row = await requireOpenMeal(userId, logId);
+  const row = await requireAddableMeal(userId, logId);
   const out = await updateNutritionLog(userId, row.log_id, { meal });
   if (!out) throw new Error('meal not found');
   return out;

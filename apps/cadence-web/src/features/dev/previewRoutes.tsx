@@ -11,6 +11,7 @@ import { FreeWritePreview } from './FreeWritePreview.tsx';
 import { IntervalPreview } from './IntervalPreview.tsx';
 import { MetronomePreview } from './MetronomePreview.tsx';
 import { CoachMomentsPreview } from './CoachMomentsPreview.tsx';
+import { MealCapturePreview } from './MealCapturePreview.tsx';
 import { PlanCardPreview } from './PlanCardPreview.tsx';
 import { SkeletonPreview } from './SkeletonPreview.tsx';
 import { WidgetsPreview } from './WidgetsPreview.tsx';
@@ -47,6 +48,8 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   collections: () => <CollectionsScreenPreview />,
   // `&draft=held` opens minimized with a draft already on disk — a launch after a force-quit.
   builder: () => <ActivityBuilderPreview />,
+  // `&state=full` | `&state=logged` — the trail's meal capture (the cart) against a fixture draft.
+  meal: () => <MealCapturePreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {

@@ -57,7 +57,7 @@ export function shiftProvenance(map: Map<number, DoorTag>, removed: number): Map
   return out;
 }
 
-export function useDraftCore(initialMeal?: MealKind) {
+export function useDraftCore(initialMeal?: MealKind, date?: string) {
   const [meal, setMealState] = useState<Meal | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(0);
@@ -74,13 +74,25 @@ export function useDraftCore(initialMeal?: MealKind) {
     setMealState(m);
   }, []);
 
-  /** Open, or rejoin the one open window — the 09:40 latte joins breakfast. */
+  /**
+   * Open, or rejoin. With no slot named (the Food room's "log something"), the one open window
+   * is where the 09:40 latte belongs. With a slot named — the trail's "Log breakfast" — it is
+   * THAT slot's meal, on that date: the open draft if there is one, else the meal already logged
+   * there (adds land in it directly — the cart ruling, 2026-09-07), else a fresh draft. Rejoining
+   * whatever happened to be open used to land yesterday's missed breakfast in today's lunch.
+   */
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const open = await getOpenMeal();
-        const m = open ?? (await openMealDraft(initialMeal ? { meal: initialMeal } : {}));
+        let m: Meal | null = null;
+        if (initialMeal) {
+          const open = await getOpenMeal();
+          const sameSlot = open && open.meal === initialMeal && (!date || open.date === date);
+          m = sameSlot ? open : await openMealDraft({ meal: initialMeal, ...(date ? { date } : {}) });
+        } else {
+          m = (await getOpenMeal()) ?? (await openMealDraft({}));
+        }
         if (alive) adopt(m);
       } catch {
         if (alive) setErr("Couldn't open this meal just now — try again in a moment.");
@@ -111,7 +123,7 @@ export function useDraftCore(initialMeal?: MealKind) {
         return await fn(current.log_id);
       } catch (e) {
         if (!is409(e)) throw e;
-        const fresh = await openMealDraft({ meal: current.meal });
+        const fresh = await openMealDraft({ meal: current.meal, date: current.date });
         prov.current = new Map();
         setRawTexts([]);
         adopt(fresh);

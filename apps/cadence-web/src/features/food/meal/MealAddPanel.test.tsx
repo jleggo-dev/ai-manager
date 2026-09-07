@@ -94,7 +94,7 @@ beforeEach(() => {
 
 async function openPanel() {
   render(<Harness />);
-  return await screen.findByLabelText('Search foods');
+  return await screen.findByLabelText('Find a food');
 }
 
 it('＋ adds an unambiguous food at its default serving — no sheet, field cleared, focus kept', async () => {
@@ -145,7 +145,7 @@ it('an ambiguous food opens the repriced sheet — "Add to breakfast" — and re
   expect(addBtn.closest('.ms-cover')).not.toBeNull();
   expect(screen.getByText("You'll come straight back here for the next one.")).toBeInTheDocument();
   // …and the panel behind it stays mounted, which is what lets the field keep its focus.
-  expect(screen.getByLabelText('Search foods')).toBeInTheDocument();
+  expect(screen.getByLabelText('Find a food')).toBeInTheDocument();
   // The draft owns the slot — the sheet asks no meal question.
   expect(screen.queryByLabelText('Meal')).toBeNull();
   fireEvent.click(addBtn);

@@ -151,6 +151,21 @@ export const queryKeys = {
   planEarlier: {
     weeks: (n: number) => ['plan', 'earlier', n] as const,
   },
+  /**
+   * `/me/coach-face` — which portrait she wears. Through the cache since 2026-09-07 for the boot
+   * paint, not the request count: the pick lived in a plain React context, so every cold launch
+   * drew the brand mark until the read came back while the weather beside it was already painted
+   * from disk (owner, on device). The value is `{ face_id }`, never a bare id — a stored `null`
+   * ("hasn't picked") has to stay distinguishable from "nothing cached".
+   */
+  coachFace: {
+    all: ['coachFace'] as const,
+  },
+  /** `/nutrition/foods/usual?meal=&limit=` — what they usually have at one slot, counted. Keyed
+   *  by slot and limit; persisted so the meal opens on the list, not on a round trip. */
+  usualAtSlot: {
+    scoped: (meal: string, limit: number) => ['usualAtSlot', meal, limit] as const,
+  },
 } as const;
 
 /**

@@ -48,8 +48,9 @@ export function useTaskEdits({
 }: {
   plan: PlanViewData | undefined;
   refresh: () => void;
-  /** The task's own sheet — StartSheet, CaptureSheet, CookSheet — by the same router a tap uses. */
-  openTask: (occ: PlanOccurrence) => void;
+  /** The task's own sheet — StartSheet, CaptureSheet, CookSheet — by the same router a tap uses.
+   *  `date` is the day the row sits on, so a meal can open on it without waiting for its detail. */
+  openTask: (occ: PlanOccurrence, date?: string) => void;
 }) {
   const [sheet, setSheet] = useState<EditSheet | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,7 +63,7 @@ export function useTaskEdits({
   }
 
   const tap = (occ: PlanOccurrence, date: string) =>
-    dayRelation(date, todayIso) === 'future' ? setSheet({ kind: 'preview', occ, date }) : openTask(occ);
+    dayRelation(date, todayIso) === 'future' ? setSheet({ kind: 'preview', occ, date }) : openTask(occ, date);
   const hold = (occ: PlanOccurrence, date: string) => setSheet({ kind: 'menu', occ, date, screen: 'menu' });
   /** The preview's one door: straight to the hold menu's "move it to today" ask. */
   const askDoNow = () => {
@@ -87,10 +88,11 @@ export function useTaskEdits({
    * reset does not land, the sheet still opens and says what it sees.
    */
   async function openDoable(occ: PlanOccurrence) {
-    if (occ.status !== 'skipped' && occ.status !== 'missed') return openTask(occ);
+    // Everything "done now" is done on today's row — the move landed it there, or the twin is.
+    if (occ.status !== 'skipped' && occ.status !== 'missed') return openTask(occ, todayIso);
     await setOccurrence(occ.occurrence_id, 'pending').catch(() => undefined);
     refresh();
-    openTask({ ...occ, status: 'pending' });
+    openTask({ ...occ, status: 'pending' }, todayIso);
   }
 
   async function run<T>(work: () => Promise<T>, fallback: T): Promise<T> {

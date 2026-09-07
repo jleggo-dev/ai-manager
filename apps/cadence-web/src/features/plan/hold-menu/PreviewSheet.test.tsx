@@ -100,6 +100,31 @@ describe('PreviewSheet', () => {
     expect(screen.getByText('Nothing on the menu for this one yet.')).toBeTruthy();
   });
 
+  /**
+   * The door names what it does (owner, 2026-09-07): a future meal is logged TODAY, never moved.
+   * A table, because this is a title router — each meal kind, plus the near-miss that must keep
+   * the plain door.
+   */
+  it.each([
+    ['Log snack', 'Log today’s snack?'],
+    ['Log breakfast', 'Log today’s breakfast?'],
+    ['Log lunch', 'Log today’s lunch?'],
+    ['Log dinner', 'Log today’s dinner?'],
+  ])('%s → the door reads "%s"', (title, label) => {
+    const onDoNow = vi.fn();
+    mount(occ({ title, kind: 'system' }), onDoNow);
+    expect(screen.queryByText('Do it now?')).toBeNull();
+    fireEvent.click(screen.getByText(label));
+    expect(onDoNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('a session keeps the plain door — "Do it now?" is for things that can be moved forward', () => {
+    getOccurrenceDetail.mockResolvedValue({ occurrence_id: 'o1', title: 'Easy run', status: 'pending', session: null });
+    mount(occ(), vi.fn());
+    expect(screen.getByText('Do it now?')).toBeTruthy();
+    expect(screen.queryByText(/Log today/)).toBeNull();
+  });
+
   it('a weigh-in is one line', () => {
     mount(occ({ title: 'Weigh-in', kind: 'system' }));
     expect(screen.getByText(/step on the scale/)).toBeTruthy();

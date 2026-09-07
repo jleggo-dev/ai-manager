@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { isCoachFaceId } from '@cadence/shared';
+import { makeTestQueryClient } from '../../test/withQuery.tsx';
 import { CoachFaceProvider } from './CoachFaceProvider.tsx';
 import { useEnsureCoachFace } from './useEnsureCoachFace.ts';
 
@@ -12,7 +14,12 @@ vi.mock('../../lib/api.ts', () => ({
   setCoachFace: (...a: unknown[]) => setCoachFace(...a),
 }));
 
-const wrapper = ({ children }: { children: ReactNode }) => <CoachFaceProvider>{children}</CoachFaceProvider>;
+// The provider reads and writes the query cache (the boot paint), so it needs a client around it.
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={makeTestQueryClient()}>
+    <CoachFaceProvider>{children}</CoachFaceProvider>
+  </QueryClientProvider>
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -83,7 +90,9 @@ describe('useEnsureCoachFace', () => {
   it('does not read until authReady', async () => {
     getCoachFace.mockResolvedValue({ ok: true, faceId: null });
     const gated = ({ children }: { children: ReactNode }) => (
-      <CoachFaceProvider authReady={false}>{children}</CoachFaceProvider>
+      <QueryClientProvider client={makeTestQueryClient()}>
+        <CoachFaceProvider authReady={false}>{children}</CoachFaceProvider>
+      </QueryClientProvider>
     );
     renderHook(() => useEnsureCoachFace(false), { wrapper: gated });
 
