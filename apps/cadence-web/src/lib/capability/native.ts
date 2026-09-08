@@ -312,8 +312,11 @@ export const nativeCapabilities: Capabilities = {
       try {
         const { decorated } = await CoachIdentity.scheduleWithIdentity({ notifications: specs });
         if (decorated) return specs.length;
-      } catch {
-        /* plugin absent → the ordinary path below */
+      } catch (err) {
+        // Plugin absent → the ordinary path below. Said out loud rather than swallowed: this
+        // catch hid a bridge that had never registered the plugin at all ("not implemented on
+        // ios") for a month of device rounds — see ios/App/App/CadenceBridgeViewController.swift.
+        console.warn('[reminders] portrait path unavailable, scheduling plain:', err);
       }
       await LocalNotifications.schedule({ notifications: specs.map(toNotification) });
       return specs.length;
@@ -363,9 +366,13 @@ export const nativeCapabilities: Capabilities = {
     donate: async ({ senderName, avatarBase64 }) => {
       try {
         return (await CoachIdentity.donate({ senderName, avatarBase64 })).donated;
-      } catch {
+      } catch (err) {
         // Plugin absent, or iOS refused the donation. The notification still goes out with the
-        // app icon, which is what shipped before the portrait existed.
+        // app icon, which is what shipped before the portrait existed — but say WHICH, where
+        // Safari's Web Inspector can see it on the device that failed. A quiet fallback is right
+        // for the web build; on the device it was written for, it hid an unregistered plugin
+        // (2026-09-07, "I still don't see the coach's avatar").
+        console.warn('[coach-identity] donate failed (falling back to the app icon):', err);
         return false;
       }
     },
