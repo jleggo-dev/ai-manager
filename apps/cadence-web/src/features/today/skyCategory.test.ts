@@ -1,10 +1,10 @@
 /**
- * The sky router (daySky.ts) decides which of eleven skies a day is drawn under, and a router
+ * The sky router (skyCategory.ts) decides which of eleven skies a day is drawn under, and a router
  * that decides behaviour ships with positives AND near-misses: the wrong sky never throws, it
  * just quietly draws a blizzard over a dusting. Inputs are the API's humanized strings — WeatherKit
  * codes de-cased ("partly cloudy", "sun flurries") and OpenWeatherMap descriptions as they come.
  */
-import { SKY_CATEGORIES, daySkies, skyCategory, type SkyCategory } from './daySky.ts';
+import { SKY_CATEGORIES, daySkies, skyCategory, type SkyCategory } from './skyCategory.ts';
 
 describe('skyCategory', () => {
   const table: [string, SkyCategory][] = [

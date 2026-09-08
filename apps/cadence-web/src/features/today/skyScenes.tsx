@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { SkyCategory } from './daySky.ts';
+import type { SkyCategory } from './skyCategory.ts';
 import { bolt, cloud, fog, hail, leaf, rain, snow, wind } from './skyArt.tsx';
 
 /**

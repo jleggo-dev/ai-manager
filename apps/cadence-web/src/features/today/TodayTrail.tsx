@@ -15,7 +15,7 @@ import { useLongPress } from './useLongPress.ts';
 import { isLockedDay } from './trailLock.ts';
 import { LockedTrailDay } from './LockedTrailDay.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
-import type { SkyCategory } from './daySky.ts';
+import type { SkyCategory } from './skyCategory.ts';
 import { DaySky } from './DaySky.tsx';
 import { SKY_SCENES } from './skyScenes.tsx';
 
@@ -298,7 +298,7 @@ export function TodayTrail({
    *  no check-in behaviour. Placed just before the first locked day (or at the end of the trail
    *  when nothing is locked), so the check-in sits where the week actually ends. */
   wall?: ReactNode;
-  /** The forecast, one sky per date (daySky.ts; PlanView reads it from the header's own weather
+  /** The forecast, one sky per date (skyCategory.ts; PlanView reads it from the header's own weather
    *  and forecast queries). A day with no entry is `'clear'` — the untouched Linen sky. */
   skies?: Record<string, SkyCategory>;
 }) {

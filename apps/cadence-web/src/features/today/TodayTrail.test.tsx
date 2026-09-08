@@ -10,7 +10,7 @@
  */
 import { fireEvent, render } from '@testing-library/react';
 import { TodayTrail } from './TodayTrail.tsx';
-import type { SkyCategory } from './daySky.ts';
+import type { SkyCategory } from './skyCategory.ts';
 import type { MealMacros, NutritionDayData, PlanOccurrence, PlanViewData } from '../../lib/api.ts';
 
 /** Today's nutrition, as the trail's calorie card sees it. Reset to "nothing loaded" per test. */

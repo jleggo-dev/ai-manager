@@ -9,7 +9,7 @@ import type { Forecast, WeatherNow } from '../../lib/api.ts';
  * an OpenWeatherMap description as it comes ("overcast clouds", "thunderstorm with heavy rain",
  * "light intensity drizzle"). Eleven categories cover every word either provider uses; the router
  * decides which one, and a router that decides behaviour ships with a table of positives AND
- * near-misses (`daySky.test.ts`) — "light snow" must never land on the heavy-snow sky, and
+ * near-misses (`skyCategory.test.ts`) — "light snow" must never land on the heavy-snow sky, and
  * "thunderstorm with heavy rain" must land on the storm, not the rain.
  */
 export type SkyCategory =

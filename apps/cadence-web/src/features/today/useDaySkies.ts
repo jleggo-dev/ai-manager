@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getWeather, type WeatherNow } from '../../lib/api.ts';
 import { AMBIENT_STALE_MS, queryKeys, useForecast } from '../../lib/query/index.ts';
-import { daySkies, type SkyCategory, type SkyDay } from './daySky.ts';
+import { daySkies, type SkyCategory, type SkyDay } from './skyCategory.ts';
 
 /**
  * The trail's skies, from the two ambient reads the header already makes — no request of its own.

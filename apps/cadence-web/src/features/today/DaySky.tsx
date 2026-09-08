@@ -1,4 +1,4 @@
-import type { SkyCategory } from './daySky.ts';
+import type { SkyCategory } from './skyCategory.ts';
 import { SKY_SCENES } from './skyScenes.tsx';
 
 /**

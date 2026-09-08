@@ -18,11 +18,11 @@ seed; the web port reproduces them rather than re-drawing.
 
 ## The categories
 
-`skyCategory(conditions)` in `apps/cadence-web/src/features/today/daySky.ts` routes the API's
+`skyCategory(conditions)` in `apps/cadence-web/src/features/today/skyCategory.ts` routes the API's
 humanized condition string — a WeatherKit code CamelCase-split and lowercased
 (`humanizeConditionCode`), or an OpenWeatherMap description as it comes — to one of eleven skies.
 Checks run most-specific first (a storm outranks the rain it carries; hail outranks snow and rain;
-heavy before light), and `daySky.test.ts` tables the positives and the near-misses.
+heavy before light), and `skyCategory.test.ts` tables the positives and the near-misses.
 
 | Category        | Conditions                                                                                        | Wash | Sun  | Dark type |
 | --------------- | ------------------------------------------------------------------------------------------------- | ---- | ---- | --------- |
