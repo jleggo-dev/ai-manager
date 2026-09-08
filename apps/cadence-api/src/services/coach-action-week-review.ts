@@ -1,6 +1,8 @@
 import { getActivePlan } from '../repos/plans.ts';
 import { setPendingWeekReview } from '../repos/users.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
+import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
+import { weekStartMs } from './week-clock.ts';
 
 /**
  * `open_week_review` — puts the week up on the user's own screen, the way a check-in should:
@@ -17,9 +19,10 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * user now has a card" true (TOOL-HARNESS.md §5) — there is no second step, no tag, nothing else
  * that has to also happen for the card to exist.
  *
- * The window is the PLAN week, not a user-chosen range: `from` is the day the active plan was
- * generated, `to` is seven days later, capped at today so a week still in progress does not claim
- * days that have not happened yet. A windowed `review_period(from, to)` for "look back at last
+ * The window is the PLAN week, not a user-chosen range: `from` is the day the active plan's
+ * current week began (the week clock, 0058 — not `generated_at`, which every mid-week edit
+ * refreshes), `to` is the plan's own horizon later, capped at today so a week still in progress
+ * does not claim days that have not happened yet. A windowed `review_period(from, to)` for "look back at last
  * month" is a later tool; this one answers "let's do my check-in" — the ordinary case.
  */
 export const OPEN_WEEK_REVIEW: CoachActionTool = {
@@ -33,12 +36,16 @@ export const OPEN_WEEK_REVIEW: CoachActionTool = {
       return 'They have no active plan yet, so there is no week to review — say so plainly and offer to build one (the build card) instead.';
     }
 
-    // The plan week: `generated_at` may arrive as a Date rather than the string the type promises
-    // (the exact mismatch TOOL-HARNESS.md is written around), so route it through `new Date(...)`
-    // rather than string-slicing it directly — that works whichever shape postgres handed back.
-    const genMs = new Date(plan.generated_at).getTime();
-    const from = new Date(genMs).toISOString().slice(0, 10);
-    const weekEnd = new Date(genMs + 7 * 86_400_000).toISOString().slice(0, 10);
+    // The plan week: the week CLOCK (week-clock.ts, 0058 — `week_started_at`, which an ordinary
+    // commit carries forward, not `generated_at`, which every commit refreshes) through the
+    // plan's own horizon. `weekStartMs` routes the column through `new Date(...)` because it may
+    // arrive as a Date rather than the string the type promises (the exact mismatch
+    // TOOL-HARNESS.md is written around) — that works whichever shape postgres handed back.
+    const startMs = weekStartMs(plan);
+    const from = new Date(startMs).toISOString().slice(0, 10);
+    const weekEnd = new Date(startMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
     const to = weekEnd < today ? weekEnd : today;
 

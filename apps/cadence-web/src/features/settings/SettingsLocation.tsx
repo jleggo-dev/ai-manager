@@ -26,6 +26,7 @@ import { browserTimezone, clearHomeLocation, saveHomeLocation, type HomeLocation
 import { useHomeLocation, useSetHomeLocation } from '../../lib/query/index.ts';
 import { capabilities } from '../../lib/capability/index.ts';
 import { readSource, setLocationOff, writeSource, type Source } from './location-source.ts';
+import { saveCityPlace } from './save-city.ts';
 
 function formatPlace(loc: HomeLocation): string {
   const label = loc.label?.trim();
@@ -74,7 +75,7 @@ export function SettingsLocation() {
       writePlace(saved);
       setLocationOff(false); // asking for a place is how the off switch is turned back on
       setFlow(false);
-      setMsg('Got it — outdoor sessions can use the weather near you.');
+      setMsg('Got it.');
     } catch {
       setMsg("That didn't save — try again in a moment.");
     } finally {
@@ -86,20 +87,16 @@ export function SettingsLocation() {
     if (busy || !city.trim()) return;
     setBusy(true);
     setMsg('');
-    try {
-      const tz = browserTimezone();
-      const saved = await saveHomeLocation({ city: city.trim(), label: city.trim(), ...(tz ? { timezone: tz } : {}) });
-      writeSource('city');
-      writePlace(saved);
-      setLocationOff(false);
+    // The save itself lives in save-city.ts — the weather sheet's CHANGE runs the same one.
+    const ok = await saveCityPlace(city, writePlace);
+    if (ok) {
       setFlow(false);
       setCity('');
-      setMsg('Got it — outdoor sessions can use the weather near that city.');
-    } catch {
+      setMsg('Got it.');
+    } else {
       setMsg("Couldn't find that city — try another spelling, or share from this device.");
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   async function forget() {
@@ -132,7 +129,6 @@ export function SettingsLocation() {
         <div className="room-row room-row-toggle" role="switch" aria-checked="true">
           <span className="room-row-text">
             <b>{"Use this device's location"}</b>
-            <span>For weather on outdoor sessions</span>
           </span>
           <span className="room-toggle is-on" aria-hidden>
             <span className="room-toggle-knob" />
@@ -149,7 +145,7 @@ export function SettingsLocation() {
         <button type="button" className="room-row" onClick={() => setFlow(true)} disabled={busy}>
           <span className="room-row-text">
             <b>Location</b>
-            <span>Off — no weather-aware outdoor tips yet</span>
+            <span>Off</span>
           </span>
           <span className="room-loc-set">Set</span>
         </button>
@@ -186,7 +182,7 @@ export function SettingsLocation() {
           >
             <span className="room-row-text">
               <b>{"Use this device's location"}</b>
-              <span>{geoOk ? 'For weather on outdoor sessions' : "Location isn't available in this browser"}</span>
+              {!geoOk && <span>{"Location isn't available in this browser"}</span>}
             </span>
             <span className={`room-toggle${useDevice && geoOk ? ' is-on' : ''}`} aria-hidden>
               <span className="room-toggle-knob" />
@@ -219,7 +215,6 @@ export function SettingsLocation() {
         </div>
       )}
 
-      <p className="room-row-pointer">Forget clears it — no weather until a place is set.</p>
       {msg && <div className="auth-notice">{msg}</div>}
     </div>
   );

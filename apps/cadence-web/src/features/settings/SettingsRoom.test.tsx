@@ -3,7 +3,7 @@
  * calls its endpoint, and the Erase gate stays dead until the exact phrase is typed — same
  * mocking idiom as `SettingsSheet.test.tsx`, the sheet this room replaces.
  */
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/query/keys.ts';
 import { makeTestQueryClient, renderWithQuery } from '../../test/withQuery.tsx';
@@ -187,7 +187,7 @@ describe('SettingsRoom — the groups and their rows', () => {
 
   it('counts only non-abandoned goals as "on the plan"', async () => {
     renderRoom();
-    expect(await screen.findByText(/Rename or retire a goal · 2 on the plan/)).toBeInTheDocument();
+    expect(await screen.findByText('2 on the plan')).toBeInTheDocument();
   });
 
   /**
@@ -204,9 +204,8 @@ describe('SettingsRoom — the groups and their rows', () => {
 
     renderRoom('you@example.com', client);
 
-    expect(screen.getByText(/Rename or retire a goal · 2 on the plan/)).toBeInTheDocument();
-    expect(screen.getByText(/2 things · Kettlebell, Bands/)).toBeInTheDocument();
-    expect(screen.getByText(/bad knee · read-only here/)).toBeInTheDocument();
+    expect(screen.getByText('2 on the plan')).toBeInTheDocument();
+    expect(screen.getByText('bad knee')).toBeInTheDocument();
     expect(screen.queryByText(/Loading…/)).not.toBeInTheDocument();
   });
 
@@ -226,18 +225,39 @@ describe('SettingsRoom — the groups and their rows', () => {
 
     renderRoom('you@example.com', client);
 
-    expect(screen.getByText(/Rename or retire a goal · 1 on the plan/)).toBeInTheDocument();
-    expect(await screen.findByText(/Rename or retire a goal · 2 on the plan/)).toBeInTheDocument();
+    expect(screen.getByText('1 on the plan')).toBeInTheDocument();
+    expect(await screen.findByText('2 on the plan')).toBeInTheDocument();
   });
 
-  it('previews the equipment list on the tools row', async () => {
+  it('labels the equipment door "Tools" — a label, no preview line (owner, 2026-09-07)', async () => {
     renderRoom();
-    expect(await screen.findByText(/2 things · Kettlebell, Bands/)).toBeInTheDocument();
+    const tools = await screen.findByRole('button', { name: 'Tools' });
+    expect(tools.textContent).toMatch(/^Tools/);
+    expect(screen.queryByText(/working with/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Kettlebell, Bands/)).not.toBeInTheDocument();
+  });
+
+  it('carries no descriptive sub-lines on the root list', async () => {
+    renderRoom();
+    await screen.findByText('2 on the plan');
+    for (const gone of [
+      /Rename or retire/,
+      /what you've built/,
+      /Targets, allergies/,
+      /set however you talk/,
+      /plan and history stay put/,
+      /read-only here/,
+      /All photos live in Progress/,
+      /Forget clears it/,
+      /dated & weight-stamped/,
+    ]) {
+      expect(screen.queryByText(gone)).not.toBeInTheDocument();
+    }
   });
 
   it('shows constraints read-only, with no door to edit them', async () => {
     renderRoom();
-    expect(await screen.findByText(/bad knee · read-only here/)).toBeInTheDocument();
+    expect(await screen.findByText('bad knee')).toBeInTheDocument();
     // A static row, not a button — nothing to tap.
     expect(screen.queryByRole('button', { name: /bad knee/ })).not.toBeInTheDocument();
   });
@@ -269,10 +289,28 @@ describe('SettingsRoom — doors navigate, and back returns', () => {
 
   it('opens Notifications with LIVE tier/quiet-hours values in its own row', async () => {
     renderRoom();
-    expect(await screen.findByText(/Moderate · quiet 21:30 – 07:00/)).toBeInTheDocument();
+    expect(await screen.findByText('Moderate · quiet 21:30–07:00')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Notifications/ }));
-    expect(await screen.findByRole('radio', { name: /Moderate/ })).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: 'Moderate' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Off' })).toBeInTheDocument();
+  });
+
+  it('says only "Off" in the Notifications row when push is disabled', async () => {
+    api.getNotificationPrefs.mockResolvedValue({ ...PREFS, enabled: false });
+    renderRoom();
+    const row = await screen.findByRole('button', { name: /Notifications/ });
+    await waitFor(() => expect(within(row).getByText('Off')).toBeInTheDocument());
+    expect(within(row).queryByText(/quiet/)).not.toBeInTheDocument();
+  });
+
+  it('opens the Tools door from its row and back returns', async () => {
+    renderRoom();
+    fireEvent.click(await screen.findByRole('button', { name: 'Tools' }));
+    expect(await screen.findByPlaceholderText('e.g. "kettlebell"')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('You & your coach')).toBeInTheDocument();
   });
 
   it('opens the coach-face door already expanded — no second tap to reveal the grid', async () => {
@@ -293,9 +331,10 @@ describe('SettingsRoom — Progress photos toggle', () => {
     expect(await screen.findByRole('switch', { name: /Progress photos/ })).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('points at Progress for the actual photos', async () => {
+  it('is a label and a switch — nothing under it', async () => {
     renderRoom();
-    expect(await screen.findByText('All photos live in Progress')).toBeInTheDocument();
+    const toggle = await screen.findByRole('switch', { name: /Progress photos/ });
+    expect(toggle.textContent).toBe('Progress photos');
   });
 });
 

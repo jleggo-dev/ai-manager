@@ -1,27 +1,31 @@
 /**
  * The dial is a promise about what will and will not arrive on someone's lock screen, so the
- * tests here are about the promise: that the card names what the tier LEAVES OUT as well as what
- * it includes, that the closing reassurance is present at every tier, and that no channel is
- * offered which nothing sends on.
+ * tests here are the dial's table (owner, 2026-09-01: every button gets one): four positions,
+ * Off forgets this device, an amount picked from Off registers it first, the active position is a
+ * no-op, and nothing is offered on a channel nothing sends on.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NotificationSettings } from './NotificationSettings.tsx';
+import { PUSH_TOKEN_KEY } from './notifications/enablePush.ts';
 
 const getPrefs = vi.fn();
 const savePrefs = vi.fn();
+const registerToken = vi.fn();
+const removeToken = vi.fn();
+const pushRegister = vi.fn();
 
 vi.mock('../../lib/api.ts', () => ({
   getNotificationPrefs: (...a: unknown[]) => getPrefs(...a),
   saveNotificationPrefs: (...a: unknown[]) => savePrefs(...a),
-  registerPushToken: vi.fn().mockResolvedValue(true),
-  removePushToken: vi.fn().mockResolvedValue(true),
+  registerPushToken: (...a: unknown[]) => registerToken(...a),
+  removePushToken: (...a: unknown[]) => removeToken(...a),
   getUnits: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../../lib/capability/index.ts', () => ({
   capabilities: {
-    push: { isAvailable: () => true, register: async () => 'tok-1' },
+    push: { isAvailable: () => true, register: (...a: unknown[]) => pushRegister(...a) },
   },
 }));
 
@@ -44,68 +48,126 @@ function renderSettings() {
   );
 }
 
+const radio = (name: string) => screen.findByRole('radio', { name });
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
   getPrefs.mockResolvedValue({ ...PREFS });
   savePrefs.mockImplementation(async (patch: Record<string, unknown>) => ({ ...PREFS, ...patch }));
+  registerToken.mockResolvedValue(true);
+  removeToken.mockResolvedValue(true);
+  pushRegister.mockResolvedValue('tok-1');
 });
 
-describe('NotificationSettings', () => {
-  it('opens by saying who is in charge of the volume', async () => {
+describe('NotificationSettings — the dial', () => {
+  it('offers Off plus three amounts and marks the one in force', async () => {
     renderSettings();
-    expect(await screen.findByText(/I'll only say what's useful\. You set how much I say\./)).toBeTruthy();
+    expect((await radio('Moderate')).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Off' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('radio', { name: 'Few' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('radio', { name: 'Lots' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
   });
 
-  it('offers three amounts and marks the one in force', async () => {
+  it('shows Off as the position in force when push is disabled', async () => {
+    getPrefs.mockResolvedValue({ ...PREFS, enabled: false });
     renderSettings();
-    const moderate = await screen.findByRole('radio', { name: /Moderate/ });
-    expect(moderate.getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('radio', { name: /Few/ }).getAttribute('aria-checked')).toBe('false');
-    expect(screen.getByRole('radio', { name: /Lots/ }).getAttribute('aria-checked')).toBe('false');
+    expect((await radio('Off')).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Moderate' }).getAttribute('aria-checked')).toBe('false');
   });
 
-  it('names what the tier includes AND what it leaves out', async () => {
+  it('carries no gloss, no "MEANS" card and no closing paragraph — labels only', async () => {
     renderSettings();
-    expect(await screen.findByText('MODERATE MEANS')).toBeTruthy();
-    expect(screen.getByText(/Shortly before something you set a time for/)).toBeTruthy();
-    // The half that makes this a setting rather than a sales page.
-    expect(screen.getByText('AND NOT')).toBeTruthy();
-    expect(screen.getByText(/weather argues with an outdoor session/)).toBeTruthy();
+    await radio('Moderate');
+    expect(screen.queryByText(/MEANS/)).toBeNull();
+    expect(screen.queryByText(/AND NOT/)).toBeNull();
+    expect(screen.queryByText(/only what happened/)).toBeNull();
+    expect(screen.queryByText(/broken-streak/)).toBeNull();
+    expect(screen.queryByText(/You set how much I say/)).toBeNull();
   });
 
-  it('states the day’s ceiling in words a person would use', async () => {
+  /** The dial's table: what each press does, from each position. */
+  describe('presses', () => {
+    it('Off, from an amount: forgets this device’s token and saves enabled: false', async () => {
+      window.localStorage.setItem(PUSH_TOKEN_KEY, 'tok-old');
+      renderSettings();
+      fireEvent.click(await radio('Off'));
+
+      await waitFor(() => expect(savePrefs).toHaveBeenCalledWith({ enabled: false }));
+      expect(removeToken).toHaveBeenCalledWith('tok-old');
+      expect(window.localStorage.getItem(PUSH_TOKEN_KEY)).toBeNull();
+      expect(pushRegister).not.toHaveBeenCalled();
+      expect((await radio('Off')).getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('an amount, from Off: registers this device FIRST, then saves enabled: true with the tier', async () => {
+      getPrefs.mockResolvedValue({ ...PREFS, enabled: false });
+      renderSettings();
+      fireEvent.click(await radio('Lots'));
+
+      await waitFor(() => expect(savePrefs).toHaveBeenCalledWith({ enabled: true, tier: 'lots' }));
+      expect(pushRegister).toHaveBeenCalled();
+      expect(registerToken).toHaveBeenCalledWith('tok-1');
+      expect(window.localStorage.getItem(PUSH_TOKEN_KEY)).toBe('tok-1');
+      expect(pushRegister.mock.invocationCallOrder[0]).toBeLessThan(savePrefs.mock.invocationCallOrder[0]!);
+      expect((await radio('Lots')).getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('an amount, from Off, when iOS says no: stays Off and says so', async () => {
+      getPrefs.mockResolvedValue({ ...PREFS, enabled: false });
+      pushRegister.mockResolvedValue(null);
+      renderSettings();
+      fireEvent.click(await radio('Few'));
+
+      expect(await screen.findByText(/iOS said no/)).toBeTruthy();
+      expect(savePrefs).not.toHaveBeenCalled();
+      expect((await radio('Off')).getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('another amount, from an amount: saves ONLY the tier and shows the server’s answer', async () => {
+      renderSettings();
+      fireEvent.click(await radio('Lots'));
+
+      await waitFor(() => expect(savePrefs).toHaveBeenCalledWith({ tier: 'lots' }));
+      expect(pushRegister).not.toHaveBeenCalled();
+      expect(removeToken).not.toHaveBeenCalled();
+      expect((await radio('Lots')).getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('the active amount: a no-op', async () => {
+      renderSettings();
+      fireEvent.click(await radio('Moderate'));
+      await radio('Moderate');
+      expect(savePrefs).not.toHaveBeenCalled();
+      expect(pushRegister).not.toHaveBeenCalled();
+    });
+
+    it('Off, from Off: a no-op', async () => {
+      getPrefs.mockResolvedValue({ ...PREFS, enabled: false });
+      renderSettings();
+      fireEvent.click(await radio('Off'));
+      await radio('Off');
+      expect(savePrefs).not.toHaveBeenCalled();
+      expect(removeToken).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('NotificationSettings — the rest of the screen', () => {
+  it('shows the quiet window as a value, with no wind-down sentence', async () => {
     renderSettings();
-    expect(await screen.findByText('At most one a day.')).toBeTruthy();
+    expect(await screen.findByText('Quiet hours')).toBeTruthy();
+    expect(screen.getByText('21:30–07:00')).toBeTruthy();
+    expect(screen.queryByText(/wind-down/)).toBeNull();
   });
 
-  it('saves a tier change and shows the SERVER’s answer', async () => {
+  it('offers no separate push switch and no channel nothing sends on', async () => {
     renderSettings();
-    fireEvent.click(await screen.findByRole('radio', { name: /Lots/ }));
-    await waitFor(() => expect(savePrefs).toHaveBeenCalledWith({ tier: 'lots' }));
-    expect(await screen.findByText('LOTS MEANS')).toBeTruthy();
-  });
-
-  it('shows the quiet window and calls its start a wind-down', async () => {
-    renderSettings();
-    expect(await screen.findByText(/Quiet hours · 21:30 to 07:00/)).toBeTruthy();
-    expect(screen.getByText('I treat the start as your wind-down')).toBeTruthy();
-  });
-
-  it('offers PUSH and nothing else — no toggle for a channel nothing sends on', async () => {
-    renderSettings();
-    expect(await screen.findByRole('switch', { name: /Push/ })).toBeTruthy();
+    await radio('Moderate');
+    expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.queryByText(/email/i)).toBeNull();
     expect(screen.queryByText(/text message|sms/i)).toBeNull();
-  });
-
-  it('closes on the promise that holds at every tier', async () => {
-    renderSettings();
-    expect(
-      await screen.findByText(
-        /no broken-streak alarms, nothing about falling behind, and going quiet never costs you anything/,
-      ),
-    ).toBeTruthy();
   });
 
   it('renders nothing where push does not exist — the web build is untouched', async () => {

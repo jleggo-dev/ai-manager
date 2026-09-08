@@ -114,8 +114,6 @@ export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach
         <b className="fh-title">Goals</b>
       </div>
       <div className="fh-body">
-        <div className="se-kicker">Rename or retire a goal</div>
-
         <div className="se-card">
           {loadErr && <div className="se-note">{"Couldn't load your goals just now — try again shortly."}</div>}
           {goals === null && !loadErr && <div className="se-empty">Loading…</div>}
@@ -148,7 +146,6 @@ export function SettingsGoals({ onBack, onCoach }: { onBack: () => void; onCoach
         {onCoach && (
           <button className="se-coach-door" onClick={() => onCoach(COACH_NOTE)}>
             <b>Want a goal to mean something different?</b>
-            <span>Talk it through with the coach — tapping this drafts the message in your words.</span>
           </button>
         )}
       </div>

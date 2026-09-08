@@ -10,6 +10,7 @@
  */
 import { fireEvent, render } from '@testing-library/react';
 import { TodayTrail } from './TodayTrail.tsx';
+import type { SkyCategory } from './skyCategory.ts';
 import type { MealMacros, NutritionDayData, PlanOccurrence, PlanViewData } from '../../lib/api.ts';
 
 /** Today's nutrition, as the trail's calorie card sees it. Reset to "nothing loaded" per test. */
@@ -250,6 +251,198 @@ describe('TodayTrail earlier days', () => {
       <TodayTrail plan={twoDays()} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} />,
     );
     expect(getByText(/Couldn.t load that week/)).toBeTruthy();
+  });
+});
+
+/**
+ * The wall (owner, 2026-09-07; trailLock.ts): once the check-in is due, the days past the week's
+ * end are still drawn — dimmed, with nothing pressable on them — and the check-in card stands
+ * between today and the first of them, not at the bottom of a scrollable next week.
+ */
+describe('TodayTrail — the wall', () => {
+  /** Today plus two future days, each with a tappable node. */
+  function threeDays(): PlanViewData {
+    const base = plan(occ({ occurrence_id: 'o-today' }));
+    return {
+      ...base,
+      week: [
+        ...base.week,
+        {
+          date: '2026-08-17',
+          weekday: 'Mon',
+          dayNum: 17,
+          isToday: false,
+          occurrences: [occ({ occurrence_id: 'o-mon', title: 'Long run' })],
+        },
+        {
+          date: '2026-08-18',
+          weekday: 'Tue',
+          dayNum: 18,
+          isToday: false,
+          occurrences: [occ({ occurrence_id: 'o-tue', title: 'Morning sit' })],
+        },
+      ],
+    };
+  }
+
+  it('locks every day from lockedFrom on: the is-locked class, no node buttons, no hold, the quiet line', () => {
+    const onOpen = vi.fn();
+    const onHold = vi.fn();
+    const { container, getByText, getAllByText } = render(
+      <TodayTrail
+        plan={threeDays()}
+        onOpen={onOpen}
+        onHold={onHold}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        lockedFrom="2026-08-17"
+        wall={<div data-testid="wall">Week wraps up</div>}
+      />,
+    );
+    const sections = [...container.querySelectorAll('.trail-day')];
+    expect(sections.map((s) => s.classList.contains('is-locked'))).toEqual([false, true, true]);
+    // Nothing on a locked day is a button — the two exits live on the wall card, nowhere else.
+    for (const s of sections.slice(1)) {
+      expect(s.querySelector('button')).toBeNull();
+      expect(s.querySelector('.trail-node')).toBeNull();
+    }
+    expect(getAllByText('After your check-in')).toHaveLength(2);
+    // The day's shape is still readable — the owner is fine seeing the horizon.
+    expect(getByText('Long run')).toBeTruthy();
+    fireEvent.click(getByText('Long run'));
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onHold).not.toHaveBeenCalled();
+    // Today is untouched: its node still taps.
+    fireEvent.click(getByText('Easy run'));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('stands the wall card between the last open day and the first locked one', () => {
+    const { container } = render(
+      <TodayTrail
+        plan={threeDays()}
+        onOpen={() => {}}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        lockedFrom="2026-08-17"
+        wall={<div data-testid="wall">Week wraps up</div>}
+      />,
+    );
+    const order = [...container.querySelectorAll('.trail-day, .trail-wall')].map((el) =>
+      el.classList.contains('trail-wall') ? 'wall' : el.classList.contains('is-locked') ? 'locked' : 'open',
+    );
+    expect(order).toEqual(['open', 'wall', 'locked', 'locked']);
+  });
+
+  it('with no lockedFrom nothing is locked and the wall (if any) sits at the end', () => {
+    const { container } = render(
+      <TodayTrail
+        plan={threeDays()}
+        onOpen={() => {}}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        wall={<div data-testid="wall">Week wraps up</div>}
+      />,
+    );
+    expect(container.querySelector('.is-locked')).toBeNull();
+    expect(container.querySelectorAll('.trail-node')).toHaveLength(3);
+    const order = [...container.querySelectorAll('.trail-day, .trail-wall')].map((el) =>
+      el.classList.contains('trail-wall') ? 'wall' : 'day',
+    );
+    expect(order).toEqual(['day', 'day', 'day', 'wall']);
+  });
+
+  it('renders no wall slot at all when none is given', () => {
+    const { container } = render(
+      <TodayTrail
+        plan={threeDays()}
+        onOpen={() => {}}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        lockedFrom="2026-08-17"
+      />,
+    );
+    expect(container.querySelector('.trail-wall')).toBeNull();
+    expect(container.querySelectorAll('.is-locked')).toHaveLength(2);
+  });
+});
+
+/**
+ * Weather skies (owner, 2026-09-07; DESIGN-weather-skies.md): a day is drawn under the sky the
+ * forecast names. The class marks are what the stylesheet and `skyTint` key off, the dark flag is
+ * what flips the type, and a clear day — or a day the forecast never reached — must render
+ * exactly what the trail drew before: no layer at all.
+ */
+describe('TodayTrail weather skies', () => {
+  const twoDays = (): PlanViewData => ({
+    ...plan(occ()),
+    week: [
+      { date: '2026-08-16', weekday: 'Sun', dayNum: 16, isToday: true, occurrences: [occ()] },
+      { date: '2026-08-17', weekday: 'Mon', dayNum: 17, isToday: false, occurrences: [occ({ occurrence_id: 'o2' })] },
+    ],
+  });
+  const drawWith = (skies?: Record<string, SkyCategory>) =>
+    render(<TodayTrail plan={twoDays()} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} skies={skies} />);
+  const labelColour = (day: Element) => (day.querySelector('.trail-label') as HTMLElement).style.color;
+  /** TrailNode's two label colours: the night stop's light type, and the day's dark type. */
+  const LIGHT_TYPE = /^oklch\((97%|0\.97) 0\.01 265\)$/;
+  const DARK_TYPE = /^oklch\((30%|0\.3) 0\.04 250\)$/;
+
+  it('marks a heavy-rain day with its sky class, the dark flag, and draws the art', () => {
+    const { container } = drawWith({ '2026-08-16': 'heavy-rain', '2026-08-17': 'clear' });
+    const [today, tomorrow] = [...container.querySelectorAll('.trail-day')] as HTMLElement[];
+    expect(today!.classList.contains('is-sky-heavy-rain')).toBe(true);
+    expect(today!.classList.contains('is-dark-sky')).toBe(true);
+    expect(today!.style.getPropertyValue('--sky-sun')).toBe('0');
+    expect(today!.querySelector('.trail-sky svg')).not.toBeNull();
+    expect(today!.querySelector('.trail-sky-wash')).not.toBeNull();
+    // The layer sits between the stars and the day label, under everything that reads.
+    expect(today!.querySelector('.trail-sky')?.previousElementSibling?.className).toBe('trail-stars');
+    expect(today!.querySelector('.trail-sky')?.nextElementSibling?.className).toBe('trail-daylabel');
+    // Light type on the node under the wash — the night stop's own colours (jsdom writes the
+    // lightness back as a fraction, so both spellings are accepted).
+    expect(labelColour(today!)).toMatch(LIGHT_TYPE);
+    // The clear day beside it is untouched.
+    expect(tomorrow!.classList.contains('is-sky-clear')).toBe(true);
+    expect(tomorrow!.classList.contains('is-dark-sky')).toBe(false);
+    expect(tomorrow!.querySelector('.trail-sky')).toBeNull();
+    expect(labelColour(tomorrow!)).toMatch(DARK_TYPE);
+  });
+
+  it('keeps a bright sky bright: partly cloudy draws clouds but flips nothing', () => {
+    const { container } = drawWith({ '2026-08-16': 'partly-cloudy' });
+    const today = container.querySelector('.trail-day')!;
+    expect(today.classList.contains('is-sky-partly-cloudy')).toBe(true);
+    expect(today.classList.contains('is-dark-sky')).toBe(false);
+    expect(today.querySelector('.trail-sky svg')).not.toBeNull();
+    expect(today.querySelector('.trail-sky-wash')).toBeNull(); // no wash on a bright day
+    expect(labelColour(today)).toMatch(DARK_TYPE);
+  });
+
+  it('with no skies at all every day is clear — no layer, the sun at full', () => {
+    const { container } = drawWith(undefined);
+    expect(container.querySelector('.trail-sky')).toBeNull();
+    for (const day of container.querySelectorAll('.trail-day')) {
+      expect(day.classList.contains('is-sky-clear')).toBe(true);
+      expect((day as HTMLElement).style.getPropertyValue('--sky-sun')).toBe('1');
+    }
+  });
+
+  it('a locked day keeps its sky — the lock dims on top of it', () => {
+    const { container } = render(
+      <TodayTrail
+        plan={twoDays()}
+        onOpen={() => {}}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        lockedFrom="2026-08-17"
+        skies={{ '2026-08-17': 'thunderstorm' }}
+      />,
+    );
+    const locked = container.querySelector('.trail-day.is-locked')!;
+    expect(locked.classList.contains('is-sky-thunderstorm')).toBe(true);
+    expect(locked.classList.contains('is-dark-sky')).toBe(true);
+    expect(locked.querySelector('.trail-sky svg')).not.toBeNull();
   });
 });
 

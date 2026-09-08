@@ -9,7 +9,8 @@ import type { UserConstraint } from '../../lib/api.ts';
  * `ConstraintsSettings.tsx`) — without re-opening a second surface that can edit the same rows the
  * coach edits through her own, more careful, path.
  *
- * A plain `<div>`, not a `<button>`: no chevron, nothing to tap.
+ * A plain `<div>`, not a `<button>`: no chevron, nothing to tap. The sub-line is the value itself
+ * and nothing else (owner, 2026-09-07).
  */
 export function SettingsConstraintsRow({ constraints }: { constraints: UserConstraint[] | null }) {
   const summary =
@@ -25,7 +26,7 @@ export function SettingsConstraintsRow({ constraints }: { constraints: UserConst
   return (
     <div className="room-row room-row-static">
       <b>What we work around</b>
-      <span>{summary} · read-only here</span>
+      <span>{summary}</span>
     </div>
   );
 }

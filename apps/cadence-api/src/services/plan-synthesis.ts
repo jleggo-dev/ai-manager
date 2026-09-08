@@ -11,13 +11,14 @@ import { cadenceConfig } from '../config.ts';
 import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 import { diffCommittedActivities } from './plan-commit-diff.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
+import { carriedWeekStart } from './week-clock.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
 import { runInBackground } from './background.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
 import { readDensity, densityRepairSteer } from './plan-density.ts';
-import type { Activity, Goal, PendingPlanActivity, PlanRunStage, PlanVetResult } from '@cadence/shared';
+import type { Activity, Goal, PendingPlanActivity, Plan, PlanRunStage, PlanVetResult } from '@cadence/shared';
 
 const COMPLETION_SOURCES = new Set(['self_report', 'healthkit', 'reply', 'auto']);
 
@@ -405,6 +406,20 @@ export async function commitActivities(
     steer?: string;
     goalIds: string[];
     occurrenceDays?: number;
+    /**
+     * This commit STARTS the next week (0058) — `week_started_at` resets to now instead of being
+     * carried forward from the version being superseded. Set by exactly the two check-in exits
+     * ("Just build my week" in week-build.ts; "Confirm my week" resets the clock on its own route
+     * since it may commit nothing). Every other caller — proposals, Adjust, routines, replan, the
+     * fan-out — leaves it unset, which is the whole fix: editing the week no longer restarts it.
+     */
+    startsNewWeek?: boolean;
+    /**
+     * Who this version is by (see `Plan.generated_by`). Default 'coach' — a build. The Apply
+     * funnel passes 'apply' and "Just build my week" passes 'roll_forward', so the monthly
+     * rebuild checkpoint can tell a redesign from a week that merely moved on.
+     */
+    generatedBy?: Plan['generated_by'];
   },
 ): Promise<CommitResult> {
   const occurrenceDays = opts.occurrenceDays ?? DEFAULT_HORIZON_DAYS;
@@ -454,8 +469,12 @@ export async function commitActivities(
         goal_ids: opts.goalIds,
         version: v,
         status: 'active',
+        generated_by: opts.generatedBy ?? 'coach',
         rationale: opts.rationale || null,
         steer: opts.steer || null,
+        // The week clock (week-clock.ts): carried forward from `old`, or null → now() when this
+        // commit starts a week (a check-in exit, or the first plan ever).
+        week_started_at: carriedWeekStart(old, opts.startsNewWeek === true),
       },
       tx,
     );

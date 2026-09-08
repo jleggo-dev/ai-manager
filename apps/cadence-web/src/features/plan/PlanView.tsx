@@ -17,6 +17,8 @@ import { DetourDayCards } from './DetourDayCards.tsx';
 import { isWeeklyCheckin } from './occurrence/format.ts';
 import { EndOfTrail } from './EndOfTrailCard.tsx';
 import { HorizonEndCap } from './HorizonEndCap.tsx';
+import { lockedFromDate } from '../today/trailLock.ts';
+import { useDaySkies } from '../today/useDaySkies.ts';
 import { endEpisode, checkin, type PlanOccurrence, enterEpisode } from '../../lib/api.ts';
 import { useProposalAccept } from './useProposalAccept.ts';
 import { useTaskEdits } from './hold-menu/useTaskEdits.ts';
@@ -93,6 +95,9 @@ export function PlanView({
   // bundled stand-in. Sent on change only — a portrait changes approximately never.
   const { faceId: coachFaceId } = useCoachFace();
   useWatchPortraitSync(coachFaceId);
+  // The trail's weather (DESIGN-weather-skies.md): one sky per date from the header's own weather
+  // and forecast queries — no request of its own; before the plan lands every day draws clear.
+  const skies = useDaySkies(data?.week);
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
   // meant the sheet had to re-learn the row's own title from the server before it could draw its
@@ -260,6 +265,26 @@ export function PlanView({
   // One name for "the horizon has been reached" — the end-of-trail card and the mid-week end-cap
   // key off the same fact so exactly one of them can ever be on screen.
   const horizonReached = restEmpty || !!data.weekState?.checkin_due;
+  // The wall (owner, 2026-09-07; trailLock.ts): once the check-in is due, the days past the
+  // week's end stay visible but locked, and the card stands BETWEEN them and today rather than
+  // at the bottom of a scrollable next week. Keys off `checkin_due` + `ends_on` only — `restEmpty`
+  // still shows the card, but an empty week is not a wall.
+  const lockedFrom = lockedFromDate(data.weekState, data.week.find((d) => d.isToday)?.date ?? data.week[0]?.date);
+  const endOfTrail = (
+    <EndOfTrail
+      show={horizonReached}
+      version={data.version}
+      endsOn={data.weekState?.ends_on}
+      // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md), but a VISIBLE one:
+      // MainTabs' `onStartCheckIn` switches to the Coach tab and sends it through the same
+      // path the composer's own Send uses, not a whispered note (check-in rebuild, step 4).
+      onStartCheckIn={onStartCheckIn}
+      onBuilt={() => {
+        refresh();
+        bump();
+      }}
+    />
+  );
 
   return (
     <>
@@ -332,21 +357,14 @@ export function PlanView({
           onHold={edits.hold}
           onOpenFood={() => onOpenFood()}
           onCoach={onCoach}
+          lockedFrom={lockedFrom ?? undefined}
+          wall={lockedFrom ? endOfTrail : undefined}
+          skies={skies}
         />
 
-        <EndOfTrail
-          show={horizonReached}
-          version={data.version}
-          endsOn={data.weekState?.ends_on}
-          // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md), but a VISIBLE one:
-          // MainTabs' `onStartCheckIn` switches to the Coach tab and sends it through the same
-          // path the composer's own Send uses, not a whispered note (check-in rebuild, step 4).
-          onStartCheckIn={onStartCheckIn}
-          onBuilt={() => {
-            refresh();
-            bump();
-          }}
-        />
+        {/* No wall (mid-week, or a week that simply ran out of content): the card keeps its old
+            place at the bottom of the trail. */}
+        {!lockedFrom && endOfTrail}
 
         {/* Mid-week the horizon is a marker, not a card: the check-in is named where it will
             land, and seeing further is an ask to the coach. Quiet during a detour — the paused

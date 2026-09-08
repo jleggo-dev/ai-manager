@@ -1,6 +1,6 @@
 import type { PendingProposal, SituationAssessResult, Tripwire } from '@cadence/shared';
 import { getUser, setPendingProposal, touchAssessedAt } from '../repos/users.ts';
-import { getActivePlan } from '../repos/plans.ts';
+import { getActivePlan, getLatestCoachBuild } from '../repos/plans.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { listOccurrences, getLastDoneOccurrenceDate } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
@@ -162,7 +162,13 @@ export async function assessIfDue(userId: string): Promise<void> {
   // been evolving a deterministic-mode plan on its own — offer a coach rebuild for the next block.
   // Reuses the pending_proposal → accept-runs-replan machinery; the pending guard above stops it
   // re-firing until acted on (re-offers the following week if dismissed while still a month in).
-  const planAgeDays = (Date.now() - new Date(plan.generated_at).getTime()) / 86_400_000;
+  // Measured from the last version the COACH built, never from the active version: every Apply
+  // and every "Just build my week" supersedes the plan with a fresh generated_at, so an engaged
+  // user's "month" restarted weekly and this never fired for them (the same defect the week clock
+  // fixed for the check-in, 0058). A missing build row (pre-dating the column's meaning) falls
+  // back to the active plan, which is what this always measured.
+  const built = (await getLatestCoachBuild(userId).catch(() => null)) ?? plan;
+  const planAgeDays = (Date.now() - new Date(built.generated_at).getTime()) / 86_400_000;
   if (planAgeDays >= 28) {
     const goals = await listGoalsByStatus(userId, ['committed']);
     if (goals.some((g) => g.plan_mode === 'deterministic')) {

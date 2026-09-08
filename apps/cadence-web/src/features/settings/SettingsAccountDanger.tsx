@@ -66,11 +66,9 @@ export function SettingsAccountDanger({ email }: { email: string | null }) {
           <>
             <button className="room-row" onClick={sendReset} disabled={busy || !email}>
               <b>Change password</b>
-              <span>{"We'll email you a secure reset link"}</span>
             </button>
             <button className="room-row" onClick={() => supabase.auth.signOut()}>
               <b>Sign out</b>
-              <span>Your data stays put for next time</span>
             </button>
           </>
         )}
@@ -100,7 +98,6 @@ export function SettingsAccountDanger({ email }: { email: string | null }) {
           >
             {busy ? 'Erasing…' : 'Erase it all'}
           </button>
-          <p className="room-danger-foot">{"The server checks the phrase again — the button alone can't do it."}</p>
         </div>
       </section>
     </>

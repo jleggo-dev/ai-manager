@@ -32,7 +32,7 @@ Warm words in the UI; boring stable words in schema/prompts. A brand refresh nev
 
 | Canonical (code/DB/prompts)                                                                 | User-facing                                                                                                               |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `equipment` (never `tools` in schema/prompts)                                               | "Tools — what you're working with"                                                                                        |
+| `equipment` (never `tools` in schema/prompts)                                               | "Tools"                                                                                                                   |
 | `constraints` (replaces `injuries`; keep `plan_around`)                                     | "What we work around"                                                                                                     |
 | `area: movement\|nourishment\|mind\|practice` (replaces goal `category`; `weight` deleted)  | copy names the goal, not the area                                                                                         |
 | `plan.status: draft → committed` (replaces `locked`)                                        | "Set your rhythm"                                                                                                         |

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { capabilities } from '../../lib/capability/index.ts';
+import { writeSource } from '../settings/location-source.ts';
 import {
   clearCurrentLocation,
   saveCurrentLocation,
@@ -29,6 +30,8 @@ import {
 } from './placeDwell.ts';
 
 export type TodayHeader = {
+  /** After a place was saved elsewhere (the weather sheet's CHANGE): re-read city and sky together. */
+  relocate: () => Promise<void>;
   weather: WeatherNow | null;
   city: string | null;
   locating: boolean;
@@ -45,8 +48,6 @@ export type TodayHeader = {
   needsLocation: boolean;
   /** Set where you LIVE — first-run auto-detect, and Settings-grade "this is my place". */
   requestLocation: () => void;
-  /** Say where you ARE, right now, deliberately — the weather sheet's CHANGE (A21). */
-  setHereNow: () => void;
 };
 
 /**
@@ -105,7 +106,7 @@ export function useTodayHeader(): TodayHeader {
     if (w.available && w.label) setCity(w.label);
     // The sheet behind the chip, read now rather than at the tap — and only once there IS a sky,
     // since the chip (and so the sheet) is not drawn without one. Not awaited: the header's own
-    // line must never wait on a fortnight it is not showing.
+    // line must never wait on ten days it is not showing.
     if (w.available) void prefetchForecast(queryClient);
   }, [queryClient]);
 
@@ -155,6 +156,11 @@ export function useTodayHeader(): TodayHeader {
         lon: Number(pos.lon.toFixed(2)),
         timezone: browserTimezone(),
       });
+      // Record HOW the place got there. Settings reads this to draw its three states, and the
+      // weather sheet reads it to decide whether CHANGE belongs (a device-set city has none) —
+      // and a device fix comes back reverse-geocoded WITH a label, which the fallback heuristic
+      // would otherwise read as a typed city.
+      writeSource('device');
       forgetWeather(queryClient); // new coordinates — the cached sky is the wrong one
       await refreshWeatherAndCity();
     } finally {
@@ -183,30 +189,11 @@ export function useTodayHeader(): TodayHeader {
     [refreshWeatherAndCity],
   );
 
-  /**
-   * "I'm here now", said out loud by tapping the city in the weather sheet. Same decision
-   * function, with the two gates satisfied by construction: a tap IS the dwell — the user has
-   * just told us they have arrived, so there is nothing left to wait for.
-   */
-  const setHereNow = useCallback(async () => {
-    if (!capabilities.location.isAvailable()) return;
-    setLocating(true);
-    try {
-      const pos = await capabilities.location.getCoarseLocation();
-      if (!pos) return;
-      await applyDecision(
-        decidePlace({
-          ...place.current,
-          reading: pos,
-          candidate: { lat: pos.lat, lon: pos.lon, firstSeenMs: 0 },
-          lastSavedMs: null,
-          nowMs: Date.now(),
-        }),
-      );
-    } finally {
-      setLocating(false);
-    }
-  }, [applyDecision]);
+  // There is no "I'm here now" any more. The weather sheet's city used to be a button labelled
+  // CHANGE that fed a tap through the same gates with the dwell satisfied by construction; the
+  // owner's reading was that a CHANGE which changes nothing you can see is a door painted on a
+  // wall (2026-09-07). The silent dwell check below is the only thing that moves the current
+  // position now; Settings is the only thing that moves home.
 
   useEffect(() => {
     let alive = true;
@@ -256,6 +243,6 @@ export function useTodayHeader(): TodayHeader {
     // they know where the setting is; nagging them from the header is what they switched off.
     needsLocation: hasLocation === false && !isLocationOff() && capabilities.location.isAvailable(),
     requestLocation,
-    setHereNow,
+    relocate: refreshWeatherAndCity,
   };
 }

@@ -86,6 +86,12 @@ export async function buildNextWeek(userId: string): Promise<WeekBuildResult> {
     activities: activities.map(toPendingPlanActivity),
     note: 'Kept your rhythm — building your next week.',
     goalIds: plan.goal_ids,
+    // One of the two check-in exits (0058): this commit STARTS the next week, so the week clock
+    // resets to now. An ordinary commit would carry the ended week's clock forward and the wall
+    // on the trail would stay up.
+    startsNewWeek: true,
+    // The same rhythm, rolled forward — not a build (situation.ts measures its month from builds).
+    generatedBy: 'roll_forward',
   });
 
   // "Week N is ready" — fire-and-forget, deliberately: unlike first-lock and replan (services/

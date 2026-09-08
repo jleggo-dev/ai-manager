@@ -96,7 +96,7 @@ allowed to differ — that's the pattern working, not an inconsistency.
 
 | Concept | Canonical (code/DB/prompts) | User-facing label | Notes |
 |---|---|---|---|
-| Equipment | `equipment` (NEVER `tools` in schema/prompts) | **Tools — what you're working with** | "tools" collides with LLM tool-calling vocabulary; UI-only |
+| Equipment | `equipment` (NEVER `tools` in schema/prompts) | **Tools** | "tools" collides with LLM tool-calling vocabulary; UI-only |
 | Injuries | `constraints` `{ label, kind?: physical\|life\|other, plan_around }` | **What we work around** | burnout, grief, night shifts fit; `plan_around` is the kernel to keep |
 | Goal categories | `area: movement \| nourishment \| mind \| practice` (extensible: craft, spirit, learning) | Areas — but copy names the goal ("your 5k"), not the area | `weight` deleted as category — a weight target is `measure.target` on a goal |
 | Goal types | `milestone \| target \| recurring` (unchanged) | Milestone (a day you're aiming at) / Target (a number you're moving toward) / Ongoing (something you keep doing) | mechanism words; never rename for brand |

@@ -1,10 +1,11 @@
 /**
  * The whole design is that this fires exactly ONCE per stalled week and can never accumulate: the
  * candidate query bounds eligibility structurally (see notify-candidates.ts), and `target` is
- * derived from a plan column (`generated_at`) that does not move while the plan stays active. These
- * tests pin the two things that would silently break that: the target staying IDENTICAL across
- * repeated ticks (the property the dedupe key relies on), and the producer trusting the query's
- * bound rather than re-deriving it.
+ * derived from the week clock (`week_started_at`, 0058 — a column an ordinary commit carries
+ * forward and only a check-in exit resets) that does not move while the check-in goes undone.
+ * These tests pin the two things that would silently break that: the target staying IDENTICAL
+ * across repeated ticks (the property the dedupe key relies on), and the producer trusting the
+ * query's bound rather than re-deriving it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -15,10 +16,10 @@ vi.mock('../../../repos/notify-candidates.ts', () => ({
 
 const { checkinDueProducer } = await import('./checkin-due.ts');
 
-const row = (generatedAt: string, over: Record<string, unknown> = {}) => ({
+const row = (weekStartedAt: string, over: Record<string, unknown> = {}) => ({
   user_id: 'u1',
   timezone: 'Europe/London',
-  generated_at: generatedAt,
+  week_started_at: weekStartedAt,
   horizon_days: 7,
   ...over,
 });
@@ -33,7 +34,7 @@ beforeEach(() => {
 });
 
 describe('checkin_due — the target', () => {
-  it('targets generated_at + 7, not the day the tick happens to run', async () => {
+  it('targets the week clock + 7, not the day the tick happens to run', async () => {
     listCandidates.mockResolvedValue([row('2026-08-03')]);
     const [req] = await checkinDueProducer.produce(MORNING);
     expect(req).toMatchObject({ userId: 'u1', kind: 'weekly_checkin', target: '2026-08-10' });
@@ -55,7 +56,7 @@ describe('checkin_due — the target', () => {
     expect(req?.target).toBe('2026-08-17');
   });
 
-  it('gives a later plan (a different generated_at) its own target', async () => {
+  it('gives a later week (a reset week clock) its own target', async () => {
     listCandidates.mockResolvedValue([row('2026-08-03')]);
     const [first] = await checkinDueProducer.produce(MORNING);
     listCandidates.mockResolvedValue([row('2026-11-03')]);
@@ -70,7 +71,7 @@ describe('checkin_due — trusts the candidate bound', () => {
     expect(await checkinDueProducer.produce(MORNING)).toEqual([]);
   });
 
-  it('proposes for every row the query hands back, without filtering by generated_at itself', async () => {
+  it('proposes for every row the query hands back, without filtering by the week clock itself', async () => {
     listCandidates.mockResolvedValue([row('2026-08-03', { user_id: 'u1' }), row('2026-01-01', { user_id: 'u2' })]);
     const out = await checkinDueProducer.produce(MORNING);
     expect(out.map((r) => r.userId).sort()).toEqual(['u1', 'u2']);

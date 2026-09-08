@@ -5,7 +5,14 @@
 export interface Plan {
   plan_id: string;
   goal_ids: string[];
-  generated_by: 'coach';
+  /**
+   * Who produced this VERSION. 'coach' is a build — the first plan, a replan, a rebuild — and is
+   * what the monthly rebuild checkpoint measures its month from. 'apply' is the Apply funnel
+   * (proposals, Adjust, the Changes sheet) and 'roll_forward' is "Just build my week": both keep
+   * the rhythm the coach last built, so neither restarts that month. Same lesson as
+   * `week_started_at` — a version is not a rhythm.
+   */
+  generated_by: 'coach' | 'apply' | 'roll_forward';
   generated_at: string;
   version: number;
   status: 'active' | 'superseded' | 'draft';
@@ -22,6 +29,12 @@ export interface Plan {
    *  the week's end from it. Optional only for rows read before the migration; the column
    *  defaults to 7. */
   horizon_days?: number;
+  /** When this plan's CURRENT week began (0058) — the clock `computeWeekState` reads instead of
+   *  `generated_at`, which every ordinary commit refreshes. `commitActivities` carries it forward
+   *  from the superseded version; only the two check-in exits ("Just build my week", "Confirm my
+   *  week") reset it. Null/absent only for rows read before the migration — readers fall back to
+   *  `generated_at`, the behaviour the app had before the column existed. */
+  week_started_at?: string | null;
 }
 
 export interface ActivitySchedule {

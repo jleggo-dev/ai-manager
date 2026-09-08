@@ -139,6 +139,35 @@ describe('the check-in fact — once the week is due', () => {
 
     expect(listOccurrences).toHaveBeenCalledWith('u1', '2026-08-09', '2026-08-16');
   });
+
+  /** The week clock (0058): a plan edited on the 20th whose week began on the 9th is a week that
+   *  ended on the 16th — the line and the window both follow `week_started_at`. */
+  it('follows the week clock, not generated_at, for both the line and the window', async () => {
+    getActivePlan.mockResolvedValue({
+      plan_id: 'p1',
+      generated_at: '2026-08-20T00:00:00.000Z',
+      week_started_at: '2026-08-09T00:00:00.000Z',
+    });
+    listOccurrences.mockResolvedValue([{ status: 'done' }]);
+
+    await ensureDateStamped('u1', 's1');
+
+    expect(injectedText()).toContain('Their plan week ended 10 days ago; check-in not yet done.');
+    expect(listOccurrences).toHaveBeenCalledWith('u1', '2026-08-09', '2026-08-16');
+  });
+
+  it('stays silent when the week clock is fresh, however old the plan row is', async () => {
+    getActivePlan.mockResolvedValue({
+      plan_id: 'p1',
+      generated_at: '2026-08-01T00:00:00.000Z',
+      week_started_at: '2026-08-24T00:00:00.000Z',
+    });
+
+    await ensureDateStamped('u1', 's1');
+
+    expect(injectedText()).not.toContain('check-in');
+    expect(listOccurrences).not.toHaveBeenCalled();
+  });
 });
 
 describe('the check-in fact — the empty week', () => {

@@ -4,6 +4,7 @@ import { useClockUnit, useForecast } from '../../lib/query/index.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { QuietHoursChip } from './QuietHoursChip.tsx';
 import { WeatherSheet } from './WeatherSheet.tsx';
+import { useCitySetter } from './useCitySetter.ts';
 import { isNightHour, useSkyTint } from './skyTint.ts';
 import { useQuietChipUp } from './useQuietChipUp.ts';
 import { wxEmoji, wxLine } from './weatherCopy.ts';
@@ -19,8 +20,8 @@ import { wxEmoji, wxLine } from './weatherCopy.ts';
  * through the chrome, which is worse than the seam it was meant to solve.
  *
  * What it carries is now four things: the coach mark, one line of weather, the quiet-hours chip
- * from early evening, and streak + XP. Location, city and CHANGE moved into the weather sheet the
- * chip opens — they were four lines of text to say one thing.
+ * from early evening, and streak + XP. Location and city moved into the weather sheet the chip
+ * opens — they were four lines of text to say one thing.
  *
  * The Apple Weather trademark stays HERE, under the temperature, even though the link to Apple's
  * data-source page moved into the sheet: Apple asks for the mark wherever WeatherKit data is
@@ -38,7 +39,9 @@ import { wxEmoji, wxLine } from './weatherCopy.ts';
  * the sky is unknown and the place is not, the header now says nothing, which is the truth.
  */
 export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; xp: number; now?: Date }) {
-  const { weather, city, locating, needsLocation, requestLocation, setHereNow } = useTodayHeader();
+  const { weather, city, locating, needsLocation, requestLocation, relocate } = useTodayHeader();
+  // CHANGE in the sheet, only while the device is not setting the place (useCitySetter.ts).
+  const citySetter = useCitySetter(relocate);
   const head = useRef<HTMLDivElement>(null);
   const night = isNightHour(now.getHours());
   const dark = useSkyTint(head, night);
@@ -100,7 +103,7 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
           forecast={forecast}
           clock={clock}
           now={now}
-          onHereNow={setHereNow}
+          citySetter={citySetter}
           onClose={() => setOpen(false)}
         />
       )}

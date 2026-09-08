@@ -26,6 +26,7 @@ import { Router, type Request, type Response } from 'express';
 import type { PendingWeekReview } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { getUser, setPendingWeekReview } from '../repos/users.ts';
+import { restartActiveWeek } from '../repos/plans.ts';
 import { buildWeekReviewFacts } from '../services/week-review-facts.ts';
 import { confirmSession, toggleMealSlot, toggleMindStep } from '../services/week-review-write.ts';
 import { writeRecapForReview } from '../services/recap-write.ts';
@@ -183,6 +184,15 @@ router.post('/week-review/recap', async (req: Request, res: Response) => {
     if (!review) return void res.status(404).json({ error: 'no review pending' });
     const unit: 'kg' | 'lb' = user?.baseline?.weight_unit === 'lbs' ? 'lb' : 'kg';
     await writeRecapForReview(userId, review, unit, line);
+    // The week clock (0058): "Confirm my week" is one of the two check-in exits, and the only
+    // one that may commit NOTHING — a confirmed week the coach has no changes for never reaches
+    // `commitActivities`, so the wall on the trail would stay up forever. This route is the
+    // confirm-only call (the sheet's `dismiss` is shared with "Not now"), so the reset lives
+    // here; a change the coach then proposes and the user applies carries this fresh clock
+    // forward like any other commit. Best effort AFTER the recap: a missed reset shows up as
+    // the wall still standing, which the next confirm or "Just build my week" clears — never
+    // as a lost recap.
+    await restartActiveWeek(userId).catch((e) => console.error('[POST /plan/week-review/recap] week clock', e));
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });

@@ -74,7 +74,7 @@ export function WeighInSettings() {
     return (
       <button className="set-row" onClick={() => setOpen(true)}>
         <b>Weigh-ins</b>
-        <span>{cadence === 'daily' ? 'Daily — you see the trend, not the day' : 'Once a week'}</span>
+        <span>{cadence === 'daily' ? 'Daily' : 'Once a week'}</span>
       </button>
     );
   }
@@ -95,11 +95,6 @@ export function WeighInSettings() {
           </button>
         ))}
       </div>
-
-      <p className="set-help">
-        Whichever you pick, what I show you is the <b>trend</b> — never the morning&apos;s number on its own. Weighing
-        daily just lets the trend settle sooner; weighing weekly is a perfectly good way to do this.
-      </p>
 
       {cadence === 'daily' && (
         <div className="logbox" style={{ borderTop: 'none' }}>

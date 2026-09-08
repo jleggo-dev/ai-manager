@@ -5,6 +5,7 @@
  */
 import {
   DARK_SKY_L,
+  DARK_WASH_L,
   FIRST_SKY_L,
   LATER_SKY_L,
   isNightHour,
@@ -64,6 +65,23 @@ describe('the sky under the header', () => {
 
   it('ignores a day that has not been laid out yet', () => {
     expect(skyLightnessUnder(500, [{ top: 0, height: 0, first: true }])).toBeNull();
+  });
+
+  /**
+   * A dark weather wash (heavy rain, thunderstorm, hail — DESIGN-weather-skies.md) covers the
+   * whole day, so the Linen gradient underneath is not what is on screen. The band must read
+   * the wash, not the gradient: cream chrome on a storm is the seam all over again.
+   */
+  it('counts a dark weather wash as night, wherever in the day the header sits', () => {
+    const stormy = [{ top: 0, height: 1000, first: true, dark: true }];
+    // The brightest stretch of today, which without the wash reads well above the seam.
+    expect(skyLightnessUnder(200, bands)!).toBeGreaterThan(DARK_SKY_L);
+    expect(skyLightnessUnder(200, stormy)!).toBeLessThan(DARK_SKY_L);
+    expect(skyLightnessUnder(200, stormy)!).toBe(DARK_WASH_L);
+    // The night stretch is already darker than the wash — it stays what it was.
+    expect(skyLightnessUnder(950, stormy)!).toBeCloseTo(skyLightnessUnder(950, bands)!);
+    // A day WITHOUT the flag is untouched, so the flag is the only thing that flips it.
+    expect(skyLightnessUnder(200, [{ top: 0, height: 1000, first: true, dark: false }])!).toBeGreaterThan(DARK_SKY_L);
   });
 });
 

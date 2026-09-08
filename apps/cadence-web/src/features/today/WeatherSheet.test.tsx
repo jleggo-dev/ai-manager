@@ -1,7 +1,7 @@
 /**
- * The weather sheet, on its own: what each tab draws, and what it shows when there is less to
- * draw than the tab promised. The header's side — that the forecast is read before the tap — is
- * pinned in TrailHeader.test.tsx.
+ * The weather sheet, on its own: what each tab draws, and that the days tab is named for what is
+ * under it — never more. The header's side — that the forecast is read before the tap — is pinned
+ * in TrailHeader.test.tsx.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { WeatherSheet } from './WeatherSheet.tsx';
@@ -54,7 +54,6 @@ function open(props: Partial<Parameters<typeof WeatherSheet>[0]> = {}) {
       forecast={forecast()}
       clock="24h"
       now={NOW}
-      onHereNow={() => {}}
       onClose={() => {}}
       {...props}
     />,
@@ -64,13 +63,14 @@ function open(props: Partial<Parameters<typeof WeatherSheet>[0]> = {}) {
 const tab = (name: string) => screen.getByRole('tab', { name });
 
 describe('the sheet opens on the forecast', () => {
-  it('leads with the reading, then the three ranges, on the hourly strip', () => {
+  it('leads with the reading, then the two ranges, on the hourly strip', () => {
     const { container } = open();
     expect(container.querySelector('.wxsheet-now')!.textContent).toContain('Clear · 19°');
     expect(screen.getByRole('tablist', { name: 'Forecast range' })).toBeTruthy();
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
     expect(tab('Hourly').getAttribute('aria-selected')).toBe('true');
-    expect(tab('7 days').getAttribute('aria-selected')).toBe('false');
-    expect(tab('14 days').getAttribute('aria-selected')).toBe('false');
+    expect(tab('10 days').getAttribute('aria-selected')).toBe('false');
+    expect(screen.queryByRole('tab', { name: /14 days/ })).toBeNull(); // nobody forecasts fourteen
     expect(container.querySelectorAll('.wxsheet-hour')).toHaveLength(24);
   });
 
@@ -92,38 +92,51 @@ describe('the sheet opens on the forecast', () => {
 });
 
 describe('the days ahead', () => {
-  it('shows a week on the 7-day tab, from Today, without a horizon line', () => {
+  it('shows all ten of Apple’s days on a tab that says ten, from Today', () => {
     const { container } = open();
-    fireEvent.click(tab('7 days'));
-    expect(tab('7 days').getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(tab('10 days'));
+    expect(tab('10 days').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tabpanel', { name: '10 days' })).toBeTruthy();
     const rows = container.querySelectorAll('.wxsheet-day');
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(10);
     expect(rows[0]!.querySelector('.wxsheet-day-when')!.textContent).toBe('Today');
     expect(rows[1]!.querySelector('.wxsheet-day-when')!.textContent).toBe('Tomorrow');
     expect(rows[2]!.querySelector('.wxsheet-day-when')!.textContent).toBe('Thu 20');
     expect(rows[2]!.querySelector('.wxsheet-day-cond')!.textContent).toBe('Heavy rain');
     expect(rows[2]!.querySelector('.wxsheet-day-precip')!.textContent).toBe('80%');
     expect(rows[0]!.querySelector('.wxsheet-day-range')!.textContent).toBe('14° 25°');
-    expect(container.querySelector('.wxsheet-horizon')).toBeNull();
+    expect(container.querySelector('.wxsheet-horizon')).toBeNull(); // nothing to apologise for
     expect(container.querySelector('.wxsheet-hours')).toBeNull();
   });
 
-  it('shows what there is on the 14-day tab, and says how far she got', () => {
-    const { container } = open();
-    fireEvent.click(tab('14 days'));
-    expect(container.querySelectorAll('.wxsheet-day')).toHaveLength(10); // Apple sees ten
-    expect(container.querySelector('.wxsheet-horizon')!.textContent).toBe(
-      "That's as far ahead as I can see — 10 days.",
-    );
+  /** The tab is a router over the count — the table for the label itself is in forecastCopy.test.ts. */
+  it.each([
+    [7, '7 days'],
+    [5, '5 days'], // OpenWeatherMap
+    [1, '1 day'],
+    [14, '10 days'], // more than Apple's ten is never promised
+  ])('%s days from the provider is a "%s" tab with exactly that many rows', (days, label) => {
+    const { container } = open({ forecast: forecast(days) });
+    fireEvent.click(tab(label));
+    expect(container.querySelectorAll('.wxsheet-day')).toHaveLength(Math.min(days, 10));
+    expect(container.querySelector('.wxsheet-horizon')).toBeNull();
   });
 
-  it('never pads a short series — five days from OpenWeatherMap is five rows on either tab', () => {
+  it('never pads a short series — five days from OpenWeatherMap is five rows and a five-day tab', () => {
     const { container } = open({ forecast: { ...forecast(5, 8), source: 'openweathermap', attribution: null } });
-    fireEvent.click(tab('7 days'));
+    expect(screen.queryByRole('tab', { name: '7 days' })).toBeNull();
+    fireEvent.click(tab('5 days'));
     expect(container.querySelectorAll('.wxsheet-day')).toHaveLength(5);
-    expect(container.querySelector('.wxsheet-horizon')!.textContent).toContain('5 days');
     fireEvent.click(tab('Hourly'));
     expect(container.querySelectorAll('.wxsheet-hour')).toHaveLength(8); // three-hourly slots, as given
+  });
+
+  it('offers no days tab — and nothing to switch between — when the provider gave only hours', () => {
+    const { container } = open({ forecast: forecast(0, 12) });
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('tab', { name: /days?$/ })).toBeNull();
+    expect(container.querySelectorAll('.wxsheet-hour')).toHaveLength(12);
+    expect(container.querySelector('.wxsheet-day')).toBeNull();
   });
 });
 
@@ -145,13 +158,36 @@ describe('when there is less to show', () => {
     expect(container.querySelector('.wxsheet-hour')).toBeNull();
   });
 
-  it('keeps the city, CHANGE, and the coach’s line whatever the forecast did', () => {
+  it('keeps the city and the coach’s line whatever the forecast did', () => {
     const { container } = open({ weather: { ...CLEAR, precip_chance: 0.4 }, forecast: { available: false } });
-    expect(container.textContent).toContain('Montreal');
-    expect(container.textContent).toContain('CHANGE');
+    expect(container.querySelector('.thead-loc')!.textContent).toContain('Montreal');
     expect(container.querySelector('.wxsheet-coach')!.textContent).toBe(
       'Clear and 19° right now — about a 40% chance of rain later on.',
     );
+  });
+});
+
+describe('the city line', () => {
+  /**
+   * It used to be a button labelled CHANGE that moved the transient position — and nothing here
+   * ever let anyone change their location, which lives in Settings. Owner, 2026-09-07: a CHANGE
+   * that changes nothing you can see comes out. Now it is a fact, not a door.
+   */
+  it('is plain text with the pin — not a button, and never CHANGE', () => {
+    const { container } = open();
+    const loc = container.querySelector('.thead-loc')!;
+    expect(loc.tagName).not.toBe('BUTTON');
+    expect(loc.textContent).toContain('📍');
+    expect(loc.textContent).toContain('Montreal');
+    expect(container.textContent).not.toContain('CHANGE');
+    // The only buttons in the sheet are the tabs and Close — no location control of any kind.
+    const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
+    expect(buttons).toEqual(['×', 'Hourly', '10 days']);
+  });
+
+  it('says "Weather nearby" when the city is not known yet', () => {
+    const { container } = open({ city: null });
+    expect(container.querySelector('.thead-loc')!.textContent).toContain('Weather nearby');
   });
 });
 

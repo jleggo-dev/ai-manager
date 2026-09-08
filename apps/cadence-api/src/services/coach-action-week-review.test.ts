@@ -65,6 +65,29 @@ describe('open_week_review', () => {
     expect(review.to).toBe('2026-08-08');
   });
 
+  /** The week clock (0058): the review window is the week the user LIVED, which an edit on the
+   *  5th did not restart — `week_started_at` carries the 1st forward, `generated_at` does not. */
+  it('opens the week from the week clock, not from the re-generated row', async () => {
+    getActivePlan.mockResolvedValue({
+      generated_at: '2026-08-05T00:00:00.000Z',
+      week_started_at: '2026-08-01T00:00:00.000Z',
+    });
+    await OPEN_WEEK_REVIEW.run('u1', {});
+
+    const [, review] = setPendingWeekReview.mock.calls[0]!;
+    expect(review.from).toBe('2026-08-01');
+    expect(review.to).toBe('2026-08-08');
+  });
+
+  it("runs an extended week to the plan's own horizon, capped at today", async () => {
+    getActivePlan.mockResolvedValue({ generated_at: '2026-08-01T00:00:00.000Z', horizon_days: 14 });
+    await OPEN_WEEK_REVIEW.run('u1', {});
+
+    const [, review] = setPendingWeekReview.mock.calls[0]!;
+    expect(review.from).toBe('2026-08-01');
+    expect(review.to).toBe('2026-08-15');
+  });
+
   /**
    * The exact bug TOOL-HARNESS.md is written around: a row type declared `generated_at: string`,
    * postgres handed back a `Date`, and a direct `.slice()` threw — read as "nothing on file" by

@@ -73,6 +73,8 @@ describe('confirmPendingPlan — wire-compat when every item is enabled (today, 
     expect(preview).not.toHaveBeenCalled();
     expect(getActivePlan).not.toHaveBeenCalled(); // no disabled items — never reads the active plan
     expect(commitActivities).toHaveBeenCalledTimes(1);
+    // The Apply funnel edits the coach's last build; it is not a build of its own.
+    expect(commitActivities.mock.calls[0]?.[1]).toMatchObject({ generatedBy: 'apply' });
     const [userArg, opts] = commitActivities.mock.calls[0]!;
     expect(userArg).toBe(USER);
     expect(opts.activities).toBe(pending.activities); // same reference — zero transformation

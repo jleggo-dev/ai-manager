@@ -72,6 +72,7 @@ vi.mock('./DetourSetup.tsx', () => ({ DetourSetup: () => null }));
 vi.mock('./EndOfTrailCard.tsx', () => ({ EndOfTrail: () => null }));
 vi.mock('./HorizonEndCap.tsx', () => ({ HorizonEndCap: () => null }));
 vi.mock('../today/TodayTrail.tsx', () => ({ TodayTrail: () => null }));
+vi.mock('../today/useDaySkies.ts', () => ({ useDaySkies: () => ({}) }));
 vi.mock('../today/TrailHeader.tsx', () => ({ TrailHeader: () => null }));
 
 function renderPlan(onSteerCoach = vi.fn()) {

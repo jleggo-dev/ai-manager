@@ -83,17 +83,16 @@ describe('SettingsNutrition — daily target steppers', () => {
     );
   });
 
-  it('states the helper line about saving right away', async () => {
+  it('carries no helper copy under the targets (owner, 2026-09-07)', async () => {
     query.useNutritionDay.mockReturnValue({ data: { targets: {} } });
     renderWithQuery(<SettingsNutrition onBack={() => {}} />);
-    expect(
-      await screen.findByText('Change a number and Cadence is told right away — next meals plan against it.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Daily targets')).toBeInTheDocument();
+    expect(screen.queryByText(/told right away/)).not.toBeInTheDocument();
   });
 });
 
 describe('SettingsNutrition — allergies & preferences', () => {
-  it('carries the asymmetry line: Cadence can add an allergy, never remove one', async () => {
+  it('lists the allergies as chips, with no explainer line under them', async () => {
     query.useNutritionDay.mockReturnValue({ data: { targets: {} } });
     api.getDietaryProfile.mockResolvedValueOnce({
       status: 'ok',
@@ -102,9 +101,8 @@ describe('SettingsNutrition — allergies & preferences', () => {
     renderWithQuery(<SettingsNutrition onBack={() => {}} />);
 
     expect(await screen.findByText('peanuts')).toBeInTheDocument();
-    expect(
-      screen.getByText('Cadence can add one if she spots it in conversation — she can never remove one.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/never remove one/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/hard stops/)).not.toBeInTheDocument();
   });
 
   it('the user CAN remove an allergy chip themselves', async () => {

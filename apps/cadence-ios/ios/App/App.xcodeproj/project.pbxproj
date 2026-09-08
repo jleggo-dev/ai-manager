@@ -27,6 +27,7 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		CAD0C0DE2FE4000200EA8C5F /* CadenceBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE4000100EA8C5F /* CadenceBridgeViewController.swift */; };
 		CAD0C0DE2FE0000200EA8C5F /* CadenceCoachIdentityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */; };
 		CAD0C0DE2FE0000400EA8C5F /* CadenceWorkoutPlanPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */; };
 		CAD0C0DE2FE1001100EA8C5F /* CadenceWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE1000100EA8C5F /* CadenceWatchApp.swift */; };
@@ -91,6 +92,7 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE4000100EA8C5F /* CadenceBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CadenceBridgeViewController.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceCoachIdentityPlugin.swift; path = CadenceCoachIdentity/CadenceCoachIdentityPlugin.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceWorkoutPlanPlugin.swift; path = CadenceWorkoutPlan/CadenceWorkoutPlanPlugin.swift; sourceTree = "<group>"; };
@@ -274,6 +276,7 @@
 			isa = PBXGroup;
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
+				CAD0C0DE2FE4000100EA8C5F /* CadenceBridgeViewController.swift */,
 				CAD0C0DE2FE0000100EA8C5F /* CadenceCoachIdentityPlugin.swift */,
 				CAD0C0DE2FE0000300EA8C5F /* CadenceWorkoutPlanPlugin.swift */,
 				CAD0C0DE2FE0000500EA8C5F /* CadenceWatchSyncPlugin.swift */,
@@ -525,6 +528,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				CAD0C0DE2FE4000200EA8C5F /* CadenceBridgeViewController.swift in Sources */,
 				CAD0C0DE2FE0000200EA8C5F /* CadenceCoachIdentityPlugin.swift in Sources */,
 				CAD0C0DE2FE0000400EA8C5F /* CadenceWorkoutPlanPlugin.swift in Sources */,
 				CAD0C0DE2FE0000600EA8C5F /* CadenceWatchSyncPlugin.swift in Sources */,

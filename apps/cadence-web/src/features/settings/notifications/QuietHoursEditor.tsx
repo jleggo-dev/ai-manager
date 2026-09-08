@@ -47,11 +47,6 @@ export function QuietHoursEditor() {
           }}
         />
       </label>
-      <p className="quiet-edit-note">
-        {
-          'Nothing reaches you between these — not a reminder, not a check-in, nothing. If you set both the same, there are no quiet hours at all.'
-        }
-      </p>
     </div>
   );
 }

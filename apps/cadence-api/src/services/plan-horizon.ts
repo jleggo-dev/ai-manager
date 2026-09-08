@@ -6,6 +6,7 @@ import { listSettledCommitmentDates } from '../repos/commitment-dates.ts';
 import { expandRecurrence } from './scheduling.ts';
 import { localMinutes } from './notify/policy.ts';
 import { localDayIso, localDayIsoPlus } from './plan-day.ts';
+import { weekStartMs } from './week-clock.ts';
 
 /**
  * The horizon IS the view window (check-in rebuild, step 6) — 7, not 14. A plan used to
@@ -142,15 +143,17 @@ export async function extendHorizon(userId: string, days: number): Promise<Exten
 
   const asked = Math.min(Math.max(Math.trunc(days), 1), MAX_HORIZON_DAYS);
   const current = plan.horizon_days ?? DEFAULT_HORIZON_DAYS;
-  const generatedMs = new Date(plan.generated_at).getTime();
-  const endsOn = (h: number) => new Date(generatedMs + h * 86_400_000).toISOString().slice(0, 10);
+  // The week clock (0058) — the same start `computeWeekState` counts from, so the end this
+  // reports back is the day the card and the push will actually name.
+  const startMs = weekStartMs(plan);
+  const endsOn = (h: number) => new Date(startMs + h * 86_400_000).toISOString().slice(0, 10);
   if (asked <= current) return { status: 'unchanged', horizonDays: current, endsOn: endsOn(current) };
 
   await setPlanHorizon(plan.plan_id, asked);
   // ensureHorizon counts from TODAY; the grant is anchored to the week's start. Convert so the
-  // materialized span ends at generated_at + asked, mid-week or not — never today + asked, which
+  // materialized span ends at week start + asked, mid-week or not — never today + asked, which
   // would quietly overshoot the very edge the check-in is timed to.
-  const fromToday = Math.ceil((generatedMs + asked * 86_400_000 - Date.now()) / 86_400_000);
+  const fromToday = Math.ceil((startMs + asked * 86_400_000 - Date.now()) / 86_400_000);
   const materialized = fromToday > 0 ? await ensureHorizon(userId, fromToday) : 0;
   return { status: 'extended', horizonDays: asked, endsOn: endsOn(asked), materialized };
 }

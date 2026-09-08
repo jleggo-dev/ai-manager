@@ -5,12 +5,10 @@ import { QuietHoursEditor } from './QuietHoursEditor.tsx';
 import { useNotificationPrefs } from './useNotificationPrefs.ts';
 
 /**
- * The quiet-hours row in Settings: the window, and what the start of it means.
- *
- * The subtitle earns its place. "I treat the start as your wind-down" is the difference between a
- * user setting 9:30 to mean "stop buzzing me" and understanding that everything else in the app
- * counts backward from it too. Without that sentence the before-quiet-hours nudge arrives as a
- * surprise from a setting they thought only silenced things.
+ * The quiet-hours row in Settings: the label, and the live window under it. Tapping opens the
+ * editor in place. The start of the window is also the bedtime signal the before-quiet-hours
+ * nudge counts back from — that used to be a sentence here; now it is only a fact in the code
+ * (owner, 2026-09-07).
  */
 export function QuietHoursRow() {
   const { data: prefs } = useNotificationPrefs();
@@ -21,10 +19,10 @@ export function QuietHoursRow() {
   return (
     <div className="quiet-row">
       <button type="button" className="set-row" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <b>
-          Quiet hours · {minutesToClock(prefs.quietStartMin, clock)} to {minutesToClock(prefs.quietEndMin, clock)}
-        </b>
-        <span>{'I treat the start as your wind-down'}</span>
+        <b>Quiet hours</b>
+        <span>
+          {minutesToClock(prefs.quietStartMin, clock)}–{minutesToClock(prefs.quietEndMin, clock)}
+        </span>
       </button>
       {open && <QuietHoursEditor />}
     </div>

@@ -55,14 +55,11 @@ export function SettingsNutrition({ onBack, onCoach }: { onBack: () => void; onC
         <b className="fh-title">Nutrition</b>
       </div>
       <div className="fh-body">
-        <div className="se-kicker">Targets · allergies · preferences</div>
-
         <TargetsCard />
 
         {onCoach && (
           <button className="se-coach-door" onClick={() => onCoach(RETARGET_NOTE)}>
             <b>Not sure what these should be?</b>
-            <span>Ask the coach to re-look.</span>
           </button>
         )}
 
@@ -143,7 +140,6 @@ function TargetsCard() {
           onStep={(d) => void step('sodium_mg', d * SODIUM_STEP)}
         />
       )}
-      <div className="se-note">Change a number and Cadence is told right away — next meals plan against it.</div>
       {note && <div className="se-note">{note}</div>}
     </div>
   );
@@ -222,7 +218,6 @@ function AllergyPrefsCard() {
     <>
       <div className="se-card">
         <div className="se-group-t">Allergies</div>
-        <div className="se-group-h">hard stops — only you can clear one</div>
         {profile.allergies.length > 0 && (
           <div className="se-chips">
             {profile.allergies.map((a) => (
@@ -253,12 +248,10 @@ function AllergyPrefsCard() {
             setAllergyDraft('');
           }}
         />
-        <div className="se-note">Cadence can add one if she spots it in conversation — she can never remove one.</div>
       </div>
 
       <div className="se-card">
         <div className="se-group-t">Rather skip</div>
-        <div className="se-group-h">soft — I&apos;ll steer around them</div>
         {profile.dislikes.length > 0 && (
           <div className="se-chips">
             {profile.dislikes.map((d) => (

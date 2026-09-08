@@ -5,7 +5,7 @@ import { useProgressPhotosStatus, useSetProgressPhotosStatus } from '../../lib/q
 /**
  * "Progress photos" — an INLINE TOGGLE, not a door (design owner-approved 2026-08-31). The full
  * photo library lives in Progress; this row is only the opt-in switch, wired to the existing
- * `PUT /progress/photos/enabled`.
+ * `PUT /progress/photos/enabled`. Label and switch, nothing else (owner, 2026-09-07).
  *
  * Optimistic with rollback, like `UnitSettings`' per-axis toggle: a plain on/off with nothing to
  * lose either direction, so the only failure that matters is the save itself not landing.
@@ -48,13 +48,11 @@ export function SettingsProgressPhotos() {
       >
         <span className="room-row-text">
           <b>Progress photos</b>
-          <span>One photo every 4 weeks · dated & weight-stamped</span>
         </span>
         <span className={`room-toggle${enabled ? ' is-on' : ''}`} aria-hidden>
           <span className="room-toggle-knob" />
         </span>
       </button>
-      <p className="room-row-pointer">All photos live in Progress</p>
       {err && <p className="room-row-pointer room-row-err">{err}</p>}
     </div>
   );

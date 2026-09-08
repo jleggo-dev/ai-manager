@@ -45,10 +45,6 @@ export function UnitSettings() {
 
   return (
     <section className="set-block" aria-label="Units">
-      <h3 className="set-h">Units</h3>
-      {/* Canonical copy (Settings Room, owner-approved 2026-08-31) — lifted verbatim. */}
-      <p className="set-note">Set these however you actually talk — most people mix them.</p>
-
       {UNIT_AXES.map((axis) => {
         const [metric, imperial] = axisOptions(axis);
         const current = resolved[axis];

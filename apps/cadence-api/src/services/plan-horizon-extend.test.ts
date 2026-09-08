@@ -80,4 +80,16 @@ describe('extendHorizon', () => {
     const r = await extendHorizon('u1', 14);
     expect(r.status).toBe('extended');
   });
+
+  /** The week clock (0058): the end reported back must be the one `computeWeekState` will name —
+   *  counted from `week_started_at`, not from the (re-generated) row's own `generated_at`. */
+  it('counts the extended end from the week clock, not from generated_at', async () => {
+    const weekStart = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    getActivePlan.mockResolvedValue(plan(0, { week_started_at: weekStart }));
+    const r = await extendHorizon('u1', 14);
+    expect(r.status).toBe('extended');
+    if (r.status !== 'extended') return;
+    const want = new Date(Date.now() - 5 * 86_400_000 + 14 * 86_400_000).toISOString().slice(0, 10);
+    expect(r.endsOn).toBe(want);
+  });
 });

@@ -10,10 +10,14 @@ import express from 'express';
 
 const getUser = vi.fn();
 const writeRecapForReview = vi.fn();
+const restartActiveWeek = vi.fn();
 
 vi.mock('../repos/users.ts', () => ({
   getUser: (...a: unknown[]) => getUser(...a),
   setPendingWeekReview: vi.fn(async (..._a: unknown[]) => {}),
+}));
+vi.mock('../repos/plans.ts', () => ({
+  restartActiveWeek: (...a: unknown[]) => restartActiveWeek(...a),
 }));
 vi.mock('../services/week-review-facts.ts', () => ({ buildWeekReviewFacts: vi.fn() }));
 vi.mock('../services/week-review-write.ts', () => ({
@@ -62,6 +66,38 @@ beforeEach(() => {
   vi.clearAllMocks();
   getUser.mockResolvedValue({ pending_week_review: REVIEW, baseline: {} });
   writeRecapForReview.mockResolvedValue({ id: 'r1' });
+  restartActiveWeek.mockResolvedValue(true);
+});
+
+/**
+ * The week clock (0058): this route is the confirm-only server call — `dismiss` is shared with
+ * "Not now" — so it is where "Confirm my week" starts the next week when there is nothing to
+ * commit. The wall on the trail clears because of this line, and only this line.
+ */
+describe('POST /plan/week-review/recap — starts the next week', () => {
+  it('resets the active plan week clock once the recap is written', async () => {
+    const r = await post({ line: 'A steady week.' });
+    expect(r.status).toBe(200);
+    expect(restartActiveWeek).toHaveBeenCalledWith('u1');
+  });
+
+  it('never resets the clock when nothing is pending — a 404 is not a confirmed week', async () => {
+    getUser.mockResolvedValue({ pending_week_review: null, baseline: {} });
+    await post();
+    expect(restartActiveWeek).not.toHaveBeenCalled();
+  });
+
+  it('never resets the clock when the recap itself fails — the confirm did not land', async () => {
+    writeRecapForReview.mockRejectedValue(new Error('db down'));
+    await post();
+    expect(restartActiveWeek).not.toHaveBeenCalled();
+  });
+
+  it('still confirms (200) when the clock reset fails — the recap is the record, the wall can be cleared again', async () => {
+    restartActiveWeek.mockRejectedValue(new Error('db down'));
+    const r = await post();
+    expect(r.status).toBe(200);
+  });
 });
 
 describe('POST /plan/week-review/recap', () => {
