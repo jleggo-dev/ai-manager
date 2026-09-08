@@ -54,6 +54,40 @@ it no longer starts a second meal for the same slot that day — this supersedes
 a new meal" (4F above) for the same slot on the same day. Post-log adds teach recents/frequents
 exactly as closing does.
 
+### Owner rulings (2026-09-08) — the cart with the keyboard up, naming, and the words
+
+1. **The cart folds while the keyboard is up.** With the search field focused the strip is ONE
+   line — "2 things · 76 kcal" and Undo — with no Done and no chips, and the JUST
+   ADDED steppers wait. The keyboard's own ✓ (or Return) ends typing; the full cart is back the
+   moment it goes. "Keyboard up" is read from the field's focus (a blur has to stand ~120ms so a
+   row tap's blur/refocus never flashes the cart; row taps also `preventDefault` on mousedown so
+   focus never leaves the field).
+2. **The chips are the whole cart.** They come from the draft's items (server truth), newest
+   last, capped at four with "+N more" — never from the panel's own memory of its adds, which is
+   why "2 things" once sat over a single chip.
+3. **An unnamed bracket asks to be named.** In the meal, the pill reads **"Name this recipe ›"**
+   instead of "2 things" and opens the name card; a named pill opens the ⋯ menu, so the whole
+   head is a door. The diary keeps the plain count (it passes no `onName`).
+4. **A name saves.** Naming a bracket from the pill, the ⋯'s "Rename it", or the B3 offer goes
+   through `savePartAsRecipe` — the card already promised "Saves as a meal"; the shelf and the
+   cookbook re-read afterwards, and the server's usual-at-slot tally counts a saved bracket as a
+   recipe (its members are not counted again as loose foods). A part already in the cookbook, or
+   a cleared name, is a rename of the part alone. "Grouping is not saving" still holds — it is
+   NAMING that saves.
+5. **The header's one line** leads with "drag things together to make a recipe" whenever two or
+   more rows are loose — one sentence, the window "adds until 11:02" yields to it.
+   "logged · anything you add counts right away" is gone — the LOGGED chip says it.
+6. **Spell the macros out.** "5g protein · 7g carbs · 3g fat", never "5P 7C 3F" / "P32" —
+   rows, footers, cards, the kitchen's per-serving line, the diary's column heads and the
+   amount rows' labels. One formatter (`macroLineProteinFirst`, amounts.ts) feeds the bracket's
+   `macroLine`; `recipeMacroHint` in lib/api matches it.
+
+The daily check-in (not a meal surface, ruled the same day): one button under the list — "Not
+now — take me to today" with nothing picked, "Done" for a mood or "Keep the week as is", "Next"
+for "Make it lighter" (the steer goes to the coach); nothing is sent on a tap; no sub-lines under
+the options; "Shift evenings earlier" is no longer offered (a static guess, never read from the
+week — its code stays accepted for stored rows).
+
 ## Rulings ledger (from the canvas — binding)
 
 **The bracket grammar** (one mark, learned once, drawn identically in the meal, the diary, the

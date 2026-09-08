@@ -8,6 +8,7 @@ import {
   RPE_CODES,
   SKIP_REASON_CHIPS,
   SKIP_REASON_CODES,
+  isCheckinAdjustment,
 } from './session-feedback.ts';
 
 describe('session feedback vocabulary', () => {
@@ -38,12 +39,20 @@ describe('session feedback vocabulary', () => {
   });
 
   it('makes "keep as is" the only adjustment that does not open a preview', () => {
-    // The other two carry a steer, and a steer means the ordinary suggest→preview→confirm flow.
-    // Nothing in the check-in may move a plan without showing it first.
+    // Every other offer carries a steer, and a steer means the ordinary suggest→preview→confirm
+    // flow. Nothing in the check-in may move a plan without showing it first.
     const keep = CHECKIN_ADJUSTMENT_OPTIONS.find((o) => o.code === 'keep');
     expect(keep?.steer).toBe('');
+    expect(keep?.commit).toBe('Done');
     for (const opt of CHECKIN_ADJUSTMENT_OPTIONS.filter((o) => o.code !== 'keep')) {
       expect(opt.steer.trim().length).toBeGreaterThan(0);
+      expect(opt.commit).toBe('Next');
     }
+  });
+
+  it('no longer offers "Shift evenings earlier" — a static guess, never read from the week', () => {
+    // Owner, 2026-09-08. The code stays accepted for rows already stored.
+    expect(CHECKIN_ADJUSTMENT_OPTIONS.map((o) => o.code)).toEqual(['keep', 'lighter']);
+    expect(isCheckinAdjustment('earlier')).toBe(true);
   });
 });

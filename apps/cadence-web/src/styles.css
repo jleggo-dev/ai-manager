@@ -7161,7 +7161,9 @@ html[data-native] .sheet-body {
    No colour anywhere: nothing here is high or over, it is what was eaten. */
 .fh-item-head {
   display: grid;
-  grid-template-columns: 1fr repeat(4, 3.1em);
+  /* Fixed px, the same in the head and every row, so the columns line up whatever each
+     line's font-size is; sized to the spelled-out heads — KCAL · PROTEIN · CARBS · FAT. */
+  grid-template-columns: 1fr 38px 52px 40px 30px;
   gap: 0 6px;
   padding: 6px 0 2px;
   font-size: 8.5px;
@@ -7211,7 +7213,9 @@ html[data-native] .sheet-body {
 }
 .fh-item-nums {
   display: grid;
-  grid-template-columns: 1fr repeat(4, 3.1em);
+  /* Fixed px, the same in the head and every row, so the columns line up whatever each
+     line's font-size is; sized to the spelled-out heads — KCAL · PROTEIN · CARBS · FAT. */
+  grid-template-columns: 1fr 38px 52px 40px 30px;
   gap: 0 6px;
   text-align: right;
 }

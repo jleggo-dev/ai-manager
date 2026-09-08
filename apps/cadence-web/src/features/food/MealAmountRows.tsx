@@ -33,9 +33,10 @@ function KeptRow({
     typeof v === 'number' ? String(Math.round((v * qty) / row.baseQty)) : '—';
   const macros = [
     { k: 'kcal', v: scaled(row.est?.kcal) },
-    { k: 'P', v: scaled(row.est?.protein_g) },
-    { k: 'C', v: scaled(row.est?.carbs_g) },
-    { k: 'F', v: scaled(row.est?.fat_g) },
+    // Spelled out, never P/C/F (owner, 2026-09-08).
+    { k: 'protein', v: scaled(row.est?.protein_g) },
+    { k: 'carbs', v: scaled(row.est?.carbs_g) },
+    { k: 'fat', v: scaled(row.est?.fat_g) },
   ];
   const sub = [qty, row.unit].filter(Boolean).join(' ');
   return (

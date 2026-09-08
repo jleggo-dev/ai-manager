@@ -31,6 +31,7 @@ vi.mock('../../../lib/api/meal-draft.ts', () => ({
 vi.mock('../../../lib/query/index.ts', () => ({
   useInvalidateNutritionDay: () => vi.fn(),
   useNutritionDay: () => ({ data: null }),
+  useInvalidateFoodLibrary: () => vi.fn(),
 }));
 
 const searchFoods = vi.fn();
@@ -117,7 +118,10 @@ it('＋ adds an unambiguous food at its default serving — no sheet, field clea
   // The field clears, the keyboard stays.
   await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
   expect(document.activeElement).toBe(input);
-  // …and the add morphed into a stepper in place.
+  // While the keyboard is up the steppers wait (owner, 2026-09-08) — the list keeps the room…
+  expect(screen.queryByText('JUST ADDED · TAP TO ADJUST')).toBeNull();
+  // …and the add morphs into a stepper in place the moment typing ends.
+  fireEvent.blur(input);
   expect(await screen.findByText('JUST ADDED · TAP TO ADJUST')).toBeInTheDocument();
   expect(screen.getByLabelText('More Greek yogurt, plain 2%')).toBeInTheDocument();
 });
@@ -183,8 +187,59 @@ it('the cart appears with the first thing in it', async () => {
   expect(screen.queryByText(/not counted yet/)).toBeNull();
   fireEvent.change(input, { target: { value: 'yog' } });
   fireEvent.click(await screen.findByText('Greek yogurt'));
+  // The field kept focus, so the keyboard is up: the cart is ONE line, with no Done and no chips
+  // (owner, on device, 2026-09-08: "the Done panel takes up far too much space").
+  expect(await screen.findByText('1 thing · 146 kcal')).toBeInTheDocument();
+  expect(screen.getByText('1 thing · 146 kcal').closest('.ms-strip')).toHaveClass('ms-strip--compact');
+  expect(screen.queryByRole('button', { name: 'Done · back to breakfast' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Remove Greek yogurt' })).toBeNull();
+  // Undo is the one control that stays.
+  expect(screen.getByRole('button', { name: 'Undo last' })).toBeInTheDocument();
+  // The keyboard goes (its ✓, or Return) and the full cart is back.
+  fireEvent.blur(input);
   expect(await screen.findByText(/146 kcal · not counted yet/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Done · back to breakfast' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove Greek yogurt' })).toBeInTheDocument();
+});
+
+it('Return ends typing — it never submits anything', async () => {
+  getOpenMeal.mockResolvedValue(mkMeal({ items: [{ name: 'Chia seeds', qty: 1, unit: 'tbsp', est: { kcal: 58 } }] }));
+  const input = await openPanel();
+  expect(await screen.findByText('1 thing · 58 kcal')).toBeInTheDocument();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  // jsdom does not blur on Return by itself — the handler does, and the blur unfolds the cart.
+  fireEvent.blur(input);
+  expect(await screen.findByRole('button', { name: 'Done · back to breakfast' })).toBeInTheDocument();
+  expect(appendFood).not.toHaveBeenCalled();
+});
+
+it('the chips are the whole cart, not just what this panel added', async () => {
+  // REGRESSION (owner, 2026-09-08, IMG 2321): the strip said "2 things" over ONE chip, because
+  // the chips came from the panel's own memory of its adds and the count from the server.
+  getOpenMeal.mockResolvedValue(
+    mkMeal({
+      items: [
+        { name: 'Milk', qty: 1, unit: 'cup', est: { kcal: 122 } },
+        { name: 'Coffee', qty: 1, unit: 'cup', est: { kcal: 2 } },
+      ],
+    }),
+  );
+  const input = await openPanel();
+  fireEvent.blur(input);
+  expect(await screen.findByText('Breakfast · 2 things')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove Milk' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove Coffee' })).toBeInTheDocument();
+});
+
+it('past four things the chips say how many more', async () => {
+  const names = ['Milk', 'Coffee', 'Oats', 'Banana', 'Honey', 'Walnuts'];
+  getOpenMeal.mockResolvedValue(mkMeal({ items: names.map((name) => ({ name, qty: 1, est: { kcal: 50 } })) }));
+  const input = await openPanel();
+  fireEvent.blur(input);
+  expect(await screen.findByText('+2 more')).toBeInTheDocument();
+  // The newest four are the chips; the oldest two are the count.
+  expect(screen.getByRole('button', { name: 'Remove Walnuts' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Remove Milk' })).toBeNull();
 });
 
 it('the search field is pinned, not part of the scrolling list', async () => {
@@ -206,7 +261,8 @@ it('Undo pulls the last add straight back out', async () => {
 
 it('the strip says exactly "not counted yet" — added is not logged', async () => {
   getOpenMeal.mockResolvedValue(mkMeal({ items: [{ name: 'Chia seeds', qty: 1, unit: 'tbsp', est: { kcal: 58 } }] }));
-  await openPanel();
-  expect(screen.getByText(/58 kcal · not counted yet/)).toBeInTheDocument();
+  const input = await openPanel();
+  fireEvent.blur(input);
+  expect(await screen.findByText(/58 kcal · not counted yet/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Done · back to breakfast' })).toBeInTheDocument();
 });

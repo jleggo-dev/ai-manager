@@ -40,8 +40,11 @@ describe('recipes client parsers', () => {
     expect(parseRecipeDraft({ name: '' })).toBeNull();
   });
 
-  it('formats macro hints without shame', () => {
-    expect(recipeMacroHint({ kcal: 320.4, protein_g: 28.2 })).toBe('~320 kcal · P28');
+  it('formats macro hints without shame — and spelled out, never "P28" (owner, 2026-09-08)', () => {
+    expect(recipeMacroHint({ kcal: 320.4, protein_g: 28.2 })).toBe('~320 kcal · 28g protein');
+    expect(recipeMacroHint({ kcal: 520, protein_g: 32, carbs_g: 41.6, fat_g: 18 })).toBe(
+      '~520 kcal · 32g protein · 42g carbs · 18g fat',
+    );
   });
 });
 

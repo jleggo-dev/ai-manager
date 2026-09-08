@@ -97,7 +97,9 @@ export function useSetDietaryProfile() {
   return (next: DietaryProfileResult) => queryClient.setQueryData(queryKeys.dietaryProfile.all, next);
 }
 
-/** A recipe minted or deleted, a week saved: drop the cookbook and the week so both re-read. */
+/** A recipe minted or deleted, a week saved: drop the cookbook and the week so both re-read —
+ *  and the meal screen's shelf, which lists saved one-portion recipes (owner, 2026-09-08: a
+ *  recipe named at breakfast has to be on the shelf the next time breakfast opens). */
 export function useInvalidateFoodLibrary() {
   const queryClient = useQueryClient();
   return () =>
@@ -105,5 +107,6 @@ export function useInvalidateFoodLibrary() {
       queryClient.invalidateQueries({ queryKey: ['recipes'] }),
       queryClient.invalidateQueries({ queryKey: ['mealPlan'] }),
       queryClient.invalidateQueries({ queryKey: ['recentMeals'] }),
+      queryClient.invalidateQueries({ queryKey: ['usualAtSlot'] }),
     ]);
 }

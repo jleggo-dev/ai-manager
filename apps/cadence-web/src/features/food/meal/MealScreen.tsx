@@ -23,7 +23,7 @@ import { useState } from 'react';
 import type { MealKind } from '@cadence/shared';
 import type { PlannedMeal } from '../../plan/occurrence/usePlannedMeal.ts';
 import { NamePartCard } from '../bracket/NamePartCard.tsx';
-import { membersOf, partTotal } from '../bracket/partModel.ts';
+import { looseItems, membersOf, partTotal } from '../bracket/partModel.ts';
 import { nameChips } from './nameChips.ts';
 import { MealBody } from './MealBody.tsx';
 import { MealDoors, type MealDoor } from './MealDoors.tsx';
@@ -145,6 +145,7 @@ export function MealScreen({
       <MealHeader
         kind={kind}
         count={draft.items.length}
+        loose={looseItems(draft.items, draft.meal?.parts ?? []).length}
         logged={draft.logged}
         openLabel={draft.openLabel}
         addsUntil={draft.addsUntil}
@@ -165,10 +166,16 @@ export function MealScreen({
             draft={draft}
             offerVisible={offer.shouldOffer(draft.meal)}
             onOfferAccept={(name) => {
-              void draft.groupLoose(
-                draft.items.map((_, i) => i),
-                name,
-              );
+              // "Yes, together" with a name is a save, same as naming from the pill — a bracket
+              // named and never in the cookbook is one the shelf can never offer back.
+              void draft
+                .groupLoose(
+                  draft.items.map((_, i) => i),
+                  name,
+                )
+                .then((key) => {
+                  if (key && name) void draft.saveAs({ part: key, name });
+                });
             }}
             onOfferDecline={() => {
               if (logId) offer.decline(logId);

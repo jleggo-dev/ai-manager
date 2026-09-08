@@ -79,6 +79,19 @@ describe('.ms — the meal screen fits its host', () => {
     expect(rules.get('.ms-strip')?.position || 'static').not.toBe('absolute');
   });
 
+  it('a compact cart gives the list its room back', () => {
+    // With the keyboard up the cart is one line (owner, 2026-09-08); the scroller's bottom pad has
+    // to shrink with it, or the last rows still hide under 132px of nothing.
+    const full = SOURCE.match(
+      /\.ms-panel:has\(>\s*\.ms-strip\)\s+\.ms-panel-scroll\s*\{[^}]*padding-bottom:\s*(\d+)px/,
+    );
+    const compact = SOURCE.match(
+      /\.ms-panel:has\(>\s*\.ms-strip--compact\)\s+\.ms-panel-scroll\s*\{[^}]*padding-bottom:\s*(\d+)px/,
+    );
+    expect(full && compact).toBeTruthy();
+    expect(Number(compact![1])).toBeLessThan(Number(full![1]) / 2);
+  });
+
   it('Done is FOREST, whatever the canvas says — green is complete in this app', () => {
     // Canvas B2 draws this button amber. It is not a drift to fix: the owner ruled the colour
     // on 2026-09-06 — "dark green is the right color for done, green=complete in our world" —

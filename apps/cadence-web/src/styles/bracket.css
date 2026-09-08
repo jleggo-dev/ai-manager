@@ -109,6 +109,23 @@
   background: oklch(93% 0.03 78);
   color: oklch(42% 0.09 62);
 }
+/* The pill as a button — drawn exactly as the pill is, so the head reads the same whether or not
+   the host wired it. */
+button.mb-pill {
+  border: 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  cursor: pointer;
+}
+/* "Name this recipe ›" — the ask an unnamed bracket carries (owner, 2026-09-08). Dashed, so it
+   reads as a blank to fill, in the same forest as the name it will become. */
+.mb-pill--name {
+  background: var(--surface);
+  border: 1.5px dashed oklch(60% 0.08 152) !important;
+  color: oklch(36% 0.08 152);
+  padding: 3px 10px;
+}
 .mb-head-kcal {
   font-size: 10.5px;
   font-weight: 800;

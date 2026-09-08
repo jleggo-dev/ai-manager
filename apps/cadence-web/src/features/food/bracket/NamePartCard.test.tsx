@@ -27,7 +27,7 @@ describe('the name variant', () => {
   it('asks with the ruled words and sums the bracket', () => {
     render(<NamePartCard {...cardProps()} />);
     expect(screen.getByText('Four things together')).toBeInTheDocument();
-    expect(screen.getByText('348 kcal · 47P 22C 9F')).toBeInTheDocument();
+    expect(screen.getByText('348 kcal · 47g protein · 22g carbs · 9g fat')).toBeInTheDocument();
     expect(screen.getByLabelText('What do you call this?')).toBeInTheDocument();
     expect(screen.getByText("Skip the name if you'd rather.")).toBeInTheDocument();
   });
@@ -84,7 +84,7 @@ describe('the offer variant (B3)', () => {
     expect(screen.getByText('Four things, one after another. Do they go together?')).toBeInTheDocument();
     expect(screen.getByText('These four, as one thing')).toBeInTheDocument();
     expect(screen.getByText(/yogurt · chia · whey · strawberries/)).toBeInTheDocument();
-    expect(screen.getByText(/348 kcal · 47P 22C 9F/)).toBeInTheDocument();
+    expect(screen.getByText(/348 kcal · 47g protein · 22g carbs · 9g fat/)).toBeInTheDocument();
     expect(
       screen.getByText("Leave them and nothing is lost — I'll ask again on Sunday if it keeps happening."),
     ).toBeInTheDocument();

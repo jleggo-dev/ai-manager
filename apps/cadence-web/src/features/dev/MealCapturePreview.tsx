@@ -259,6 +259,8 @@ export function MealCapturePreview() {
     };
 
     const reply = () => json({ meal });
+    /** Recipes minted in this session by "Name this recipe" — the cookbook and the shelf read them. */
+    const savedRecipes: Array<Record<string, unknown> & { recipe_id: string; name: string; servings: number }> = [];
     const orig = window.fetch;
     window.fetch = (async (u: RequestInfo | URL, o?: RequestInit) => {
       const url = String(u);
@@ -325,6 +327,30 @@ export function MealCapturePreview() {
             const p = meal.parts.find((x) => x.key === body.part);
             if (p) p.name = body.name as string;
           }
+        } else if (verb === 'save-part') {
+          // Naming saves (owner, 2026-09-08): the part gets its name and a recipe_id, and the
+          // recipe joins the cookbook and the shelf — the same round trip the server makes.
+          const p = meal.parts.find((x) => x.key === body.part);
+          if (p) {
+            const members = (meal.items as (Item & { part?: string })[]).filter((it) => it.part === p.key);
+            const recipe = {
+              recipe_id: `r-saved-${p.key}`,
+              name: String(body.name),
+              servings: (body.yield_servings as number | undefined) ?? 1,
+              ingredients: members.map((m) => ({ name: m.name, qty: m.qty ?? 1, ...(m.unit ? { unit: m.unit } : {}) })),
+              steps: [],
+              macros_per_serving: sum(members),
+              tags: [],
+              saved: true,
+              source: 'user',
+            };
+            p.name = recipe.name;
+            p.recipe_id = recipe.recipe_id;
+            p.yield_servings = recipe.servings;
+            p.servings_logged = p.servings_logged ?? recipe.servings;
+            savedRecipes.push(recipe);
+            return json({ recipe, meal });
+          }
         }
         meal.macros = sum(meal.items);
         if (meal.state === 'closed') dayLogged.splice(0, dayLogged.length, meal);
@@ -333,6 +359,14 @@ export function MealCapturePreview() {
       if (path.startsWith('/nutrition/foods/usual')) {
         return json({
           items: [
+            ...savedRecipes.map((r) => ({
+              kind: 'recipe',
+              id: r.recipe_id,
+              name: r.name,
+              serving_label: `${(r.ingredients as unknown[]).length} ingredients`,
+              kcal: (r.macros_per_serving as { kcal?: number }).kcal ?? null,
+              count: 1,
+            })),
             { kind: 'recipe', id: 'r-bowl', name: 'Chia bowl', serving_label: '3 ingredients', kcal: 284, count: 6 },
             ...[
               'f-espresso',
@@ -401,7 +435,7 @@ export function MealCapturePreview() {
           default_serving: 0,
         });
       }
-      if (path.startsWith('/nutrition/recipes')) return json({ status: 'ok', recipes: [] });
+      if (path.startsWith('/nutrition/recipes')) return json({ status: 'ok', recipes: savedRecipes });
       if (path.startsWith('/nutrition/meal-plans')) return json({ status: 'ok', plan: null });
       if (path === '/nutrition/meals/preview') {
         return json({

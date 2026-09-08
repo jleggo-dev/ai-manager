@@ -4,6 +4,7 @@
  * en-US grouping ("348", "1,152") — these keep every surface saying it the same way.
  */
 import type { Macros } from '@cadence/shared';
+import { macroLineProteinFirst } from '../amounts.ts';
 
 const WORDS = [
   'zero',
@@ -37,12 +38,12 @@ export function fmtKcal(v: number | undefined): string {
   return typeof v === 'number' ? Math.round(v).toLocaleString('en-US') : '—';
 }
 
-/** The compact macro line the canvas draws everywhere: "47P 22C 9F". Missing macros are skipped. */
+/**
+ * The macro line every bracket surface draws: "47g protein · 22g carbs · 9g fat". Missing macros
+ * are skipped. Spelled out, never "47P 22C 9F" — the canvas's shorthand went with the rule that
+ * nothing in the product abbreviates a word the user has to decode (owner, 2026-09-08); the one
+ * format lives in amounts.ts so a row, a footer and a card can never drift apart.
+ */
 export function macroLine(est: Macros | undefined): string {
-  if (!est) return '';
-  const parts: string[] = [];
-  if (typeof est.protein_g === 'number') parts.push(`${Math.round(est.protein_g)}P`);
-  if (typeof est.carbs_g === 'number') parts.push(`${Math.round(est.carbs_g)}C`);
-  if (typeof est.fat_g === 'number') parts.push(`${Math.round(est.fat_g)}F`);
-  return parts.join(' ');
+  return macroLineProteinFirst(est ?? null);
 }

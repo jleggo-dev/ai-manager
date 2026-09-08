@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { macrosForLog, type Food, type FoodServing } from '@cadence/shared';
 import type { MealKind, MealMacros } from '../../../lib/api.ts';
+import { macroLineProteinFirst } from '../../food/amounts.ts';
 import { draftBrand, draftName, type FoodDraft } from '../../food/foodDraft.ts';
 import { compoundLabel, orderServingIndices } from '../../food/servingPicker.ts';
 import type { DraftPortion } from './useMealCapture.ts';
@@ -14,17 +15,12 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** "~380 kcal · 17g protein · 34g carbs · 13g fat" — spelled out, the one format amounts.ts owns. */
 function macroLine(m: MealMacros): string {
   const bits: string[] = [];
   if (m.kcal != null) bits.push(`~${Math.round(m.kcal)} kcal`);
-  const pcf = [
-    m.protein_g != null ? `P${Math.round(m.protein_g)}` : '',
-    m.carbs_g != null ? `C${Math.round(m.carbs_g)}` : '',
-    m.fat_g != null ? `F${Math.round(m.fat_g)}` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  if (pcf) bits.push(pcf);
+  const macros = macroLineProteinFirst(m);
+  if (macros) bits.push(macros);
   return bits.join(' · ');
 }
 

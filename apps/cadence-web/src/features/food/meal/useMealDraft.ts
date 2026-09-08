@@ -27,7 +27,7 @@ import {
   type Meal,
   type MealPartOp,
 } from '../../../lib/api/meal-draft.ts';
-import { useInvalidateNutritionDay } from '../../../lib/query/index.ts';
+import { useInvalidateFoodLibrary, useInvalidateNutritionDay } from '../../../lib/query/index.ts';
 import { amountSource, scaleMacros } from '../amounts.ts';
 import { sumEst } from '../bracket/partModel.ts';
 import {
@@ -134,6 +134,7 @@ function useDraftAppends(core: DraftCore) {
 function useDraftEdits(core: DraftCore) {
   const { seq, setMealState, mealRef, setPending, setErr, withDraft, reconcile } = core;
   const invalidateNutritionDay = useInvalidateNutritionDay();
+  const invalidateFoodLibrary = useInvalidateFoodLibrary();
   const refreshIfLogged = useRefreshIfLogged(core);
 
   const optimistic = useCallback(
@@ -212,7 +213,8 @@ function useDraftEdits(core: DraftCore) {
     [mealRef, reconcile, seq, setErr, setPending, withDraft],
   );
 
-  /** Naming into the cookbook — naming and saving are the same act. */
+  /** Naming into the cookbook — naming and saving are the same act. The cookbook and the shelf
+   *  re-read afterwards, so the new recipe is a one-tap row the next time this slot opens. */
   const saveAs = useCallback(
     async (input: { part: string; name: string; yield_servings?: number }): Promise<boolean> => {
       const my = ++seq.current;
@@ -221,6 +223,7 @@ function useDraftEdits(core: DraftCore) {
       try {
         const r = await withDraft((id) => savePartAsRecipe(id, input));
         reconcile(my, r.meal);
+        void invalidateFoodLibrary();
         return true;
       } catch {
         setErr(CANT);
@@ -229,7 +232,7 @@ function useDraftEdits(core: DraftCore) {
         setPending((p) => p - 1);
       }
     },
-    [reconcile, seq, setErr, setPending, withDraft],
+    [invalidateFoodLibrary, reconcile, seq, setErr, setPending, withDraft],
   );
 
   /** The commit. An empty draft closes to nothing. The day cache refreshes here, not per add. */
