@@ -1,20 +1,14 @@
 import type { ReviewData, UserConstraint } from '../../lib/api.ts';
 import { SettingsConstraintsRow } from './SettingsConstraintsRow.tsx';
 
-/** "N things · kettlebell, bands, a bike…" — a short preview, not the whole inventory. */
-function toolsSummary(equipment: ReviewData['equipment']): string {
-  if (equipment.length === 0) return "Nothing on file yet — tell your coach what you've got";
-  const names = equipment.map((e) => e.name);
-  const preview = names.slice(0, 3).join(', ');
-  const noun = equipment.length === 1 ? 'thing' : 'things';
-  return `${equipment.length} ${noun} · ${preview}${names.length > 3 ? '…' : ''}`;
-}
-
 /**
  * "YOU & YOUR COACH" (design owner-approved 2026-08-31). `review` is fetched once by
  * `SettingsRoom` (the same `getReview()` call `WeighInSettings` already uses) and
- * handed down here so goal/equipment counts and the sub-screens' underlying data can never
+ * handed down here so the goal count and the sub-screens' underlying data can never
  * disagree about what is "on the plan" right now.
+ *
+ * Labels only (owner, 2026-09-07: "we have way too much text in this app"). The one sub-line
+ * left is the goals count — a live value, not a description of what the door does.
  *
  * Goals and equipment are DOORS (SR-4/SR-5, other Settings Room parcels); constraints are a
  * read-only row (SR-3's own — see `SettingsConstraintsRow`).
@@ -46,7 +40,7 @@ export function SettingsYouGroup({
       <button type="button" className="room-row" onClick={onOpenGoals}>
         <span className="room-row-text">
           <b>Your goals</b>
-          <span>Rename or retire a goal{onPlan != null ? ` · ${onPlan} on the plan` : ''}</span>
+          {onPlan != null && <span>{`${onPlan} on the plan`}</span>}
         </span>
         <i className="room-chevron" aria-hidden>
           ›
@@ -55,7 +49,6 @@ export function SettingsYouGroup({
       <button type="button" className="room-row" onClick={onOpenActivities}>
         <span className="room-row-text">
           <b>Your activities</b>
-          <span>{"Run, rename, duplicate, or delete what you've built"}</span>
         </span>
         <i className="room-chevron" aria-hidden>
           ›
@@ -63,8 +56,7 @@ export function SettingsYouGroup({
       </button>
       <button type="button" className="room-row" onClick={onOpenTools}>
         <span className="room-row-text">
-          <b>{"What you're working with"}</b>
-          <span>{review ? toolsSummary(review.equipment) : 'Loading…'}</span>
+          <b>Tools</b>
         </span>
         <i className="room-chevron" aria-hidden>
           ›
@@ -73,7 +65,6 @@ export function SettingsYouGroup({
       <button type="button" className="room-row" onClick={onOpenNutrition}>
         <span className="room-row-text">
           <b>Nutrition</b>
-          <span>Targets, allergies, things to skip</span>
         </span>
         <i className="room-chevron" aria-hidden>
           ›

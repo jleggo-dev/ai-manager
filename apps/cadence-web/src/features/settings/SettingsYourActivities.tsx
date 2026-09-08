@@ -142,8 +142,6 @@ export function SettingsYourActivities({
         <b className="fh-title">Your activities</b>
       </div>
       <div className="fh-body">
-        <div className="se-kicker">Built by you. The coach can schedule them, never edit them.</div>
-
         <div className="se-card">
           {loadErr && <div className="se-note">{LOAD_ERROR}</div>}
           {routines === null && !loadErr && <div className="se-empty">Loading…</div>}

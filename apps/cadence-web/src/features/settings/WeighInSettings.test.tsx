@@ -37,14 +37,6 @@ describe('WeighInSettings', () => {
     expect(await screen.findByText('Once a week')).toBeInTheDocument();
   });
 
-  it('states the promise that makes daily safe to offer', async () => {
-    api.getReview.mockResolvedValueOnce(review());
-    await openPanel();
-    expect(screen.getByText(/never the morning's number on its own/)).toBeInTheDocument();
-    // And it does not imply weekly is the lesser choice.
-    expect(screen.getByText(/perfectly good way to do this/)).toBeInTheDocument();
-  });
-
   it('offers somewhere to enter a number only once daily is chosen', async () => {
     api.getReview.mockResolvedValueOnce(review());
     await openPanel();

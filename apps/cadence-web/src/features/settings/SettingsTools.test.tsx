@@ -59,6 +59,15 @@ describe('SettingsTools', () => {
     expect(await screen.findByText('the park pull-up bar')).toBeInTheDocument();
   });
 
+  it('is titled "Tools" and carries no intro or footer copy (owner, 2026-09-07)', async () => {
+    api.getReview.mockResolvedValueOnce({ equipment: [] });
+    renderWithQuery(<SettingsTools onBack={() => {}} />);
+    expect(await screen.findByText('Tools')).toBeInTheDocument();
+    expect(screen.queryByText(/working with/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/drive your success/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/that's my job/)).not.toBeInTheDocument();
+  });
+
   it('calls onBack from the header', async () => {
     api.getReview.mockResolvedValueOnce({ equipment: [] });
     const onBack = vi.fn();

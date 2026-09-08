@@ -40,7 +40,7 @@ const row = (label: string) => screen.getByRole('group', { name: label });
 describe('UnitSettings', () => {
   it('shows every axis at the unit the server resolved', async () => {
     renderWithQuery(<UnitSettings />);
-    await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
+    await waitFor(() => expect(row('Your weight')).toBeInTheDocument());
 
     expect(within(row('Your weight')).getByRole('button', { name: 'pounds' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(row('Food weight')).getByRole('button', { name: 'grams' })).toHaveAttribute('aria-pressed', 'true');
@@ -53,7 +53,7 @@ describe('UnitSettings', () => {
   it('sends ONLY the axis that changed — the rest are not asserted', async () => {
     const user = userEvent.setup();
     renderWithQuery(<UnitSettings />);
-    await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
+    await waitFor(() => expect(row('Your weight')).toBeInTheDocument());
 
     await user.click(within(row('Food volume')).getByRole('button', { name: 'millilitres' }));
     expect(api.setUnits).toHaveBeenCalledWith({ food_volume: 'ml' });
@@ -64,7 +64,7 @@ describe('UnitSettings', () => {
   it('leaves the other axes alone', async () => {
     const user = userEvent.setup();
     renderWithQuery(<UnitSettings />);
-    await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
+    await waitFor(() => expect(row('Your weight')).toBeInTheDocument());
 
     await user.click(within(row('Food volume')).getByRole('button', { name: 'millilitres' }));
 
@@ -81,7 +81,7 @@ describe('UnitSettings', () => {
     api.setUnits.mockResolvedValue(null);
     const user = userEvent.setup();
     renderWithQuery(<UnitSettings />);
-    await waitFor(() => expect(screen.getByText('Units')).toBeInTheDocument());
+    await waitFor(() => expect(row('Your weight')).toBeInTheDocument());
 
     await user.click(within(row('Distance')).getByRole('button', { name: 'miles' }));
     expect(await screen.findByText(/didn't save/i)).toBeInTheDocument();

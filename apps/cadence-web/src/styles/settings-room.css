@@ -153,6 +153,18 @@
 .room-row-wrap .room-row {
   margin-bottom: 0;
 }
+/* A wrap holding two rows (Apple Health's toggle + its Workouts door) keeps the list's rhythm. */
+.room-row-wrap .room-row + .room-row {
+  margin-top: 8px;
+}
+/* A label with no sub-line (most rows now — owner, 2026-09-07) still sits on the row's centre:
+   the row is `align-items: center` and the text column has no fixed height, so a lone <b> is
+   centred by construction; the min-height only keeps a bare row the same height as one whose
+   sub-line is a live value, so the list does not ripple as those values arrive. */
+.room-row-text {
+  justify-content: center;
+  min-height: 22px;
+}
 .room-row-pointer {
   font-size: 11.5px;
   color: var(--text-mute);

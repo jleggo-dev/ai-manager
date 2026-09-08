@@ -126,8 +126,10 @@ export function SettingsRoom({
     );
   }
   if (screen === 'health') {
+    // The "Workouts" door under the Apple Health toggle (owner, 2026-09-07) — the toggle itself
+    // lives on the root list; this screen is only the import list.
     return (
-      <SettingsSubScreen title="Apple Health" onBack={goRoot}>
+      <SettingsSubScreen title="Workouts" onBack={goRoot}>
         <AppleHealthSettings />
       </SettingsSubScreen>
     );
@@ -150,7 +152,6 @@ export function SettingsRoom({
       <div className="room-body">
         <button type="button" className="room-facecard" onClick={() => setScreen('coachFace')}>
           <span className="room-facecard-t">Cadence</span>
-          <span className="room-facecard-s">{"Change the coach's face — plan and history stay put"}</span>
         </button>
 
         <SettingsYouGroup

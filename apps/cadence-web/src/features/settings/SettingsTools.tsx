@@ -1,10 +1,11 @@
 /**
- * Settings Room 1b — "What you're working with" (SR-4). The chip-grid replacement for the July
- * review wizard's four-select Tools step (deleted with the wizard): no category picker,
- * no per-item form, just a flat list of removable chips plus a type-to-add. The server still wants
- * a category on every row (`addEquipment` requires one) — this screen passes 'other', the same
- * neutral default the old wizard's "+ Add a tool" button always used, and never surfaces a picker
- * for it. The user never chooses one; that sorting is Cadence's job, not theirs (footer line).
+ * Settings Room 1b — "Tools" (SR-4; renamed from "What you're working with", owner 2026-09-07).
+ * The chip-grid replacement for the July review wizard's four-select Tools step (deleted with the
+ * wizard): no category picker, no per-item form, no intro or footer copy — just a flat list of
+ * removable chips plus a type-to-add. The server still wants a category on every row
+ * (`addEquipment` requires one) — this screen passes 'other', the same neutral default the old
+ * wizard's "+ Add a tool" button always used, and never surfaces a picker for it. The user never
+ * chooses one; that sorting is Cadence's job, not theirs.
  *
  * Reads the shared review out of the query cache (`lib/query/useReview.ts`) and takes only
  * onBack/onCoach, so the Settings Room parcel can mount it without knowing anything about review
@@ -64,13 +65,6 @@ export function SettingsTools({ onBack }: { onBack: () => void; onCoach?: (note:
         <b className="fh-title">Tools</b>
       </div>
       <div className="fh-body">
-        <div className="se-kicker">Tools · yours to edit</div>
-        <div className="se-intro">
-          {
-            "Workout equipment, books, kitchen appliances — list the tools that drive your success. Remove anything that's gone."
-          }
-        </div>
-
         <div className="se-card">
           {loadErr && <div className="se-note">{"Couldn't load your tools just now — try again shortly."}</div>}
           {equipment === null && !loadErr && <div className="se-empty">Loading…</div>}
@@ -117,12 +111,6 @@ export function SettingsTools({ onBack }: { onBack: () => void; onCoach?: (note:
         </div>
 
         <GymPhotoCard />
-
-        <div className="se-footer">
-          {
-            'You don\'t file these under anything — that\'s my job. "Kettlebell" and "the park pull-up bar" both just go on the list.'
-          }
-        </div>
       </div>
     </div>
   );
@@ -162,7 +150,6 @@ function GymPhotoCard() {
   return (
     <div className="se-card">
       <div className="se-card-t">Snap the gym</div>
-      <div className="se-card-sub">One photo — I&apos;ll work out what&apos;s there</div>
       <label className="se-photo-btn">
         {busy ? 'Looking…' : '📷 Take a photo'}
         <input
