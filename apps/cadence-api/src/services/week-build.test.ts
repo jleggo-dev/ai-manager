@@ -102,6 +102,8 @@ describe('buildNextWeek — the commit', () => {
     await buildNextWeek(USER);
 
     expect(listActivities).toHaveBeenCalledWith('p1');
+    // A roll-forward is not a build: the checkpoint in situation.ts must not count it as one.
+    expect(commitActivities.mock.calls[0]?.[1]).toMatchObject({ startsNewWeek: true, generatedBy: 'roll_forward' });
     expect(commitActivities).toHaveBeenCalledTimes(1);
     const [userArg, opts] = commitActivities.mock.calls[0]!;
     expect(userArg).toBe(USER);

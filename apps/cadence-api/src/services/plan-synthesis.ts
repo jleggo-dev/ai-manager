@@ -18,7 +18,7 @@ import { toRRule, describeRecurrence } from './scheduling.ts';
 import { matchGoal } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
 import { readDensity, densityRepairSteer } from './plan-density.ts';
-import type { Activity, Goal, PendingPlanActivity, PlanRunStage, PlanVetResult } from '@cadence/shared';
+import type { Activity, Goal, PendingPlanActivity, Plan, PlanRunStage, PlanVetResult } from '@cadence/shared';
 
 const COMPLETION_SOURCES = new Set(['self_report', 'healthkit', 'reply', 'auto']);
 
@@ -414,6 +414,12 @@ export async function commitActivities(
      * fan-out — leaves it unset, which is the whole fix: editing the week no longer restarts it.
      */
     startsNewWeek?: boolean;
+    /**
+     * Who this version is by (see `Plan.generated_by`). Default 'coach' — a build. The Apply
+     * funnel passes 'apply' and "Just build my week" passes 'roll_forward', so the monthly
+     * rebuild checkpoint can tell a redesign from a week that merely moved on.
+     */
+    generatedBy?: Plan['generated_by'];
   },
 ): Promise<CommitResult> {
   const occurrenceDays = opts.occurrenceDays ?? DEFAULT_HORIZON_DAYS;
@@ -463,6 +469,7 @@ export async function commitActivities(
         goal_ids: opts.goalIds,
         version: v,
         status: 'active',
+        generated_by: opts.generatedBy ?? 'coach',
         rationale: opts.rationale || null,
         steer: opts.steer || null,
         // The week clock (week-clock.ts): carried forward from `old`, or null → now() when this

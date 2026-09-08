@@ -5,7 +5,14 @@
 export interface Plan {
   plan_id: string;
   goal_ids: string[];
-  generated_by: 'coach';
+  /**
+   * Who produced this VERSION. 'coach' is a build — the first plan, a replan, a rebuild — and is
+   * what the monthly rebuild checkpoint measures its month from. 'apply' is the Apply funnel
+   * (proposals, Adjust, the Changes sheet) and 'roll_forward' is "Just build my week": both keep
+   * the rhythm the coach last built, so neither restarts that month. Same lesson as
+   * `week_started_at` — a version is not a rhythm.
+   */
+  generated_by: 'coach' | 'apply' | 'roll_forward';
   generated_at: string;
   version: number;
   status: 'active' | 'superseded' | 'draft';

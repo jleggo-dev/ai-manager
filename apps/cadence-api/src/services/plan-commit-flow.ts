@@ -43,6 +43,9 @@ export async function confirmPendingPlan(
     steer: pending.steer,
     goalIds: pending.goal_ids,
     occurrenceDays,
+    // An applied change edits the rhythm the coach last built; it is not a new build, so the
+    // monthly rebuild checkpoint keeps counting from that build (situation.ts).
+    generatedBy: 'apply',
   });
   if (r.status === 'committed') await onCommitted(pending);
   return r;

@@ -7,6 +7,8 @@ const getUser = vi.fn();
 const setPendingProposal = vi.fn();
 const touchAssessedAt = vi.fn();
 const getActivePlan = vi.fn();
+const getLatestCoachBuild = vi.fn();
+const listGoalsByStatus = vi.fn();
 const listOccurrences = vi.fn();
 const getLastDoneOccurrenceDate = vi.fn();
 const getActiveEpisode = vi.fn();
@@ -22,6 +24,10 @@ vi.mock('../repos/users.ts', () => ({
 }));
 vi.mock('../repos/plans.ts', () => ({
   getActivePlan: (...a: unknown[]) => getActivePlan(...a),
+  getLatestCoachBuild: (...a: unknown[]) => getLatestCoachBuild(...a),
+}));
+vi.mock('../repos/goals.ts', () => ({
+  listGoalsByStatus: (...a: unknown[]) => listGoalsByStatus(...a),
 }));
 vi.mock('../repos/occurrences.ts', () => ({
   listOccurrences: (...a: unknown[]) => listOccurrences(...a),
@@ -77,6 +83,8 @@ describe('assessIfDue', () => {
     rollingConsistency.mockReturnValue({ kept: 5, window: 7 });
     listOccurrences.mockResolvedValue([]);
     getActivePlan.mockResolvedValue({ plan_id: 'p1' });
+    getLatestCoachBuild.mockResolvedValue(null);
+    listGoalsByStatus.mockResolvedValue([]);
     getActiveEpisode.mockResolvedValue(null);
     getLastDoneOccurrenceDate.mockResolvedValue(null);
     getLastCheckInDate.mockResolvedValue(null);
@@ -111,6 +119,45 @@ describe('assessIfDue', () => {
     await assessIfDue(USER);
     expect(getActivePlan).not.toHaveBeenCalled();
     expect(touchAssessedAt).not.toHaveBeenCalled();
+  });
+
+  describe('the monthly rebuild checkpoint measures from the last COACH build', () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+    const NEXT_BLOCK = expect.objectContaining({ suggested_levers: ['Build my next block'] });
+
+    beforeEach(() => {
+      getUser.mockResolvedValue({ pending_proposal: null, last_assessed_at: null, steer_back: null });
+      detectTripwires.mockReturnValue([]);
+      listGoalsByStatus.mockResolvedValue([{ plan_mode: 'deterministic' }]);
+    });
+
+    it('fires when the coach built the rhythm a month ago, even though an Apply refreshed the version this week', async () => {
+      getActivePlan.mockResolvedValue({ plan_id: 'p9', generated_at: daysAgo(2), generated_by: 'apply' });
+      getLatestCoachBuild.mockResolvedValue({ plan_id: 'p1', generated_at: daysAgo(30), generated_by: 'coach' });
+      await assessIfDue(USER);
+      expect(setPendingProposal).toHaveBeenCalledWith(USER, NEXT_BLOCK);
+    });
+
+    it('stays quiet when the coach rebuilt three days ago, however old the roll-forward chain looks', async () => {
+      getActivePlan.mockResolvedValue({ plan_id: 'p9', generated_at: daysAgo(30), generated_by: 'roll_forward' });
+      getLatestCoachBuild.mockResolvedValue({ plan_id: 'p8', generated_at: daysAgo(3), generated_by: 'coach' });
+      await assessIfDue(USER);
+      expect(setPendingProposal).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the active plan when no build row exists', async () => {
+      getActivePlan.mockResolvedValue({ plan_id: 'p1', generated_at: daysAgo(30), generated_by: 'coach' });
+      getLatestCoachBuild.mockResolvedValue(null);
+      await assessIfDue(USER);
+      expect(setPendingProposal).toHaveBeenCalledWith(USER, NEXT_BLOCK);
+    });
+
+    it('never fires for a coach-led plan, whatever its age', async () => {
+      getActivePlan.mockResolvedValue({ plan_id: 'p1', generated_at: daysAgo(30), generated_by: 'coach' });
+      listGoalsByStatus.mockResolvedValue([{ plan_mode: 'coach' }]);
+      await assessIfDue(USER);
+      expect(setPendingProposal).not.toHaveBeenCalled();
+    });
   });
 
   it('advances the gate without Broker when no tripwires fire', async () => {

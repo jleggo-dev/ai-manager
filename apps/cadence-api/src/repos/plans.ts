@@ -13,6 +13,19 @@ export async function getActivePlan(userId: string, db: SqlExecutor = sql): Prom
 }
 
 /**
+ * The newest version the COACH built (any status) — the rhythm's own birthday, as opposed to the
+ * active version's. Apply and roll-forward commits supersede a plan without redesigning it, so the
+ * monthly rebuild checkpoint (situation.ts) measures from this row, not from `getActivePlan`.
+ */
+export async function getLatestCoachBuild(userId: string, db: SqlExecutor = sql): Promise<Plan | null> {
+  const [row] = await db<Plan[]>`
+    select * from cadence.plans
+    where user_id = ${userId} and generated_by = 'coach'
+    order by version desc limit 1`;
+  return row ?? null;
+}
+
+/**
  * `week_started_at` (0058): the week clock. Omitted/null → `now()`, i.e. this version STARTS a
  * week (a first-ever plan, or one of the two check-in exits). `commitActivities` passes the
  * superseded version's value for every ordinary commit so the week keeps running — see
