@@ -3738,6 +3738,48 @@ html[data-native] .sheet-body {
   padding: 6px 0;
 }
 
+/* The wall (trailLock.ts, owner 2026-09-07): the check-in card stands between today and the
+   days past the week's end. `.trail` is full-bleed (margin 0 -20px), so the card gets the page
+   gutter back here. */
+.trail-wall {
+  padding: 12px 20px 0;
+}
+/* Behind the wall: the horizon still shows, dimmed, and nothing on it is pressable. */
+.trail-day.is-locked {
+  opacity: 0.55;
+  filter: saturate(0.6);
+  pointer-events: none;
+}
+.trail-locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 12px;
+  text-align: center;
+}
+.trail-locked-line {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: oklch(45% 0.03 250);
+}
+.trail-locked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.trail-locked-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: oklch(38% 0.03 250);
+}
+
 .trail-node {
   position: relative;
   display: flex;
@@ -4131,6 +4173,56 @@ html[data-native] .sheet-body {
   animation-name: twinkle;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
+}
+
+/* Weather skies (DaySky.tsx; docs/cadence/DESIGN-weather-skies.md, owner 2026-09-07). The
+   layer sits over the sun / moon / stars (same z-index, later in the DOM) and under everything
+   that reads or presses: the label and food strip (z 1-2), the nodes (z 1), the bay (z 3). The
+   Linen gradient itself is untouched — the wash is a tint over it, the art is one SVG on the
+   artboards' 390×560 canvas pinned to the day's top and scaled to its width. */
+.trail-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.trail-sky-wash {
+  position: absolute;
+  inset: 0;
+}
+.trail-sky-art {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+/* The sunrise glow fades with the cloud: `--sky-sun` is the scene's `sun`, set on the section. */
+.trail-sun,
+.trail-horizon,
+.trail-sundisc {
+  opacity: var(--sky-sun, 1);
+}
+/* The dim washes (heavy rain, thunderstorm, hail): light type wherever the day itself writes.
+   Node labels flip in TrailNode (they are inline styles); these are the day's own words. */
+.trail-day.is-dark-sky .trail-daylabel i {
+  background: oklch(90% 0.01 250 / 0.35);
+}
+.trail-day.is-dark-sky .trail-daylabel span {
+  color: oklch(92% 0.02 80);
+}
+.trail-day.is-dark-sky .trail-empty {
+  color: oklch(88% 0.02 250);
+}
+.trail-day.is-dark-sky .trail-locked-line {
+  color: oklch(85% 0.02 250);
+}
+.trail-day.is-dark-sky .trail-locked-title {
+  color: oklch(94% 0.01 250);
+}
+/* A locked day's plain-text list is static, so without this the sky layer would paint over it. */
+.trail-locked {
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Redesign task start sheet (StartSheet) ── */
@@ -6430,7 +6522,7 @@ html[data-native] .sheet-body {
 }
 
 /* ── The weather sheet (WeatherSheet.tsx) ──
-   What the header stopped carrying: the hours, the city, CHANGE, and Apple's data-source link. */
+   What the header stopped carrying: the hours, the city, and Apple's data-source link. */
 .wxsheet-now {
   font-size: 21px;
   font-weight: 800;
@@ -6440,7 +6532,46 @@ html[data-native] .sheet-body {
   margin-top: 3px;
   font-size: 12px;
 }
-/* The three ranges — Hourly | 7 days | 14 days — a pill toggle like the Today|Week segment. */
+/* CHANGE opened: the city field, in place of the city line. Save is the forest button the Set
+   flow in Settings uses; Cancel is quiet text. */
+.wxsheet-city {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wxsheet-city-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wxsheet-city-go {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
+  background: var(--forest);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.wxsheet-city-go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.wxsheet-city-cancel {
+  padding: 8px 6px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+/* The two ranges — Hourly | N days, N being what the provider gave — a pill toggle like the
+   Today|Week segment. Absent when there is only the strip to show. */
 .wxsheet-seg {
   display: flex;
   gap: 4px;
@@ -6555,13 +6686,6 @@ html[data-native] .sheet-body {
 }
 .wxsheet-day-range i {
   font-style: normal;
-  font-weight: 700;
-  color: var(--text-mute);
-}
-/* What the coach says under a list shorter than its tab — never rows nobody forecast. */
-.wxsheet-horizon {
-  margin: 4px 0 12px;
-  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-mute);
 }

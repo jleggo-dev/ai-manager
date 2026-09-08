@@ -1,4 +1,4 @@
-import { type CSSProperties, type RefObject, useState } from 'react';
+import { Fragment, type CSSProperties, type ReactNode, type RefObject, useState } from 'react';
 import type { ClockUnit } from '@cadence/shared';
 import { type PlanViewData, type PlanOccurrence } from '../../lib/api.ts';
 import { formatClock } from '../../lib/clock.ts';
@@ -12,7 +12,12 @@ import { glyphOf } from './glyphs.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
 import { useKeepScrollOnPrepend } from './useKeepScrollOnPrepend.ts';
 import { useLongPress } from './useLongPress.ts';
+import { isLockedDay } from './trailLock.ts';
+import { LockedTrailDay } from './LockedTrailDay.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
+import type { SkyCategory } from './daySky.ts';
+import { DaySky } from './DaySky.tsx';
+import { SKY_SCENES } from './skyScenes.tsx';
 
 /**
  * The Visual Today — the redesign's sky-trail (REQ8 handoff `docs/cadence/design/redesign-today-trail`).
@@ -158,6 +163,7 @@ function TrailNode({
   onHold,
   nodeRef,
   clock,
+  darkSky,
 }: {
   occ: PlanOccurrence;
   /** The day this node sits on — the list row carries no date of its own. */
@@ -172,6 +178,8 @@ function TrailNode({
   nodeRef?: RefObject<HTMLButtonElement>;
   /** How the time under the disc is written (Settings → Units → Clock). */
   clock: ClockUnit;
+  /** The day sits under a dim weather wash (DaySky): light type on every stop, not just night's. */
+  darkSky: boolean;
 }) {
   const hold = useLongPress(onHold ? () => onHold(occ, date) : undefined);
   // The goal's AREA is authoritative for the family when present (piano wore the exercise glyph
@@ -198,8 +206,10 @@ function TrailNode({
     ? `linear-gradient(168deg, oklch(${main}) 0%, oklch(${deep}) 52%)`
     : `linear-gradient(168deg, oklch(${light}) 0%, oklch(${main}) 52%)`;
   const discStyle = { '--face': face, '--edge': `oklch(${deep})` } as CSSProperties;
-  const labelStyle: CSSProperties = ramp.dark ? { color: 'oklch(97% 0.01 265)' } : { color: 'oklch(30% 0.04 250)' };
-  const metaStyle: CSSProperties = ramp.dark ? { color: 'oklch(80% 0.03 265)' } : { color: 'oklch(48% 0.03 250)' };
+  // Light type under a night stop OR a dark weather sky — the same two colours either way.
+  const dark = ramp.dark || darkSky;
+  const labelStyle: CSSProperties = dark ? { color: 'oklch(97% 0.01 265)' } : { color: 'oklch(30% 0.04 250)' };
+  const metaStyle: CSSProperties = dark ? { color: 'oklch(80% 0.03 265)' } : { color: 'oklch(48% 0.03 250)' };
 
   return (
     <button
@@ -218,7 +228,7 @@ function TrailNode({
             r="47"
             fill="none"
             pathLength={100}
-            stroke={ringStroke(false, ramp.dark)}
+            stroke={ringStroke(false, dark)}
             strokeWidth={3}
             strokeLinecap="round"
             strokeDasharray="2 5"
@@ -234,7 +244,7 @@ function TrailNode({
             r="47"
             fill="none"
             pathLength={100}
-            stroke={ringStroke(done, ramp.dark)}
+            stroke={ringStroke(done, dark)}
             strokeWidth={4}
             strokeLinecap="round"
             strokeDasharray={`${100 / occ.steps - 4} 4`}
@@ -270,6 +280,9 @@ export function TodayTrail({
   onHold,
   onOpenFood,
   onCoach,
+  lockedFrom,
+  wall,
+  skies,
 }: {
   plan: PlanViewData;
   /** A tap, with the day it landed on — the caller decides what a future day's tap means. */
@@ -278,6 +291,16 @@ export function TodayTrail({
   onHold?: (occ: PlanOccurrence, date: string) => void;
   onOpenFood: () => void;
   onCoach: () => void;
+  /** The wall (trailLock.ts): every day from this YYYY-MM-DD on renders locked — dimmed, no tap,
+   *  no hold. Absent, nothing is locked. PlanView derives it from `weekState`. */
+  lockedFrom?: string;
+  /** What stands AT the wall — the end-of-trail card, rendered by the caller so this file owns
+   *  no check-in behaviour. Placed just before the first locked day (or at the end of the trail
+   *  when nothing is locked), so the check-in sits where the week actually ends. */
+  wall?: ReactNode;
+  /** The forecast, one sky per date (daySky.ts; PlanView reads it from the header's own weather
+   *  and forecast queries). A day with no entry is `'clear'` — the untouched Linen sky. */
+  skies?: Record<string, SkyCategory>;
 }) {
   // The synthesized "Weekly check-in" system row is retired from the trail (check-in rebuild, step
   // 7): the new end-of-trail card is its replacement, and the two must not compete on the same
@@ -302,6 +325,9 @@ export function TodayTrail({
   const nowDay = days.findIndex((d) => d.isToday);
   const nowNode = nowDay === -1 ? -1 : currentNodeIndex(days[nowDay]!.occurrences);
   const nowRef = useLandOnNow();
+  // Where the wall goes: before the first locked day, else after the last day.
+  const firstLocked = days.findIndex((d) => isLockedDay(d.date, lockedFrom));
+  const wallAt = firstLocked === -1 ? days.length : firstLocked;
 
   return (
     <div className="trail" ref={trailRef}>
@@ -320,71 +346,92 @@ export function TodayTrail({
         )}
         {earlier.failed && <span className="trail-earlier-end">Couldn&rsquo;t load that week — try again.</span>}
       </div>
-      {days.map((day, di) => (
-        <section
-          key={day.date}
-          className={`trail-day${di > 0 ? ' is-later' : ''}`}
-          style={{ background: di === 0 ? FIRST_SKY : LATER_SKY }}
-        >
-          {di === 0 ? (
-            <div className="trail-sun" aria-hidden />
-          ) : (
-            <>
-              <div className="trail-horizon" aria-hidden />
-              <div className="trail-sundisc" aria-hidden />
-            </>
-          )}
-          <div className="trail-moon" aria-hidden />
-          <div className="trail-stars" aria-hidden>
-            {STARS.map((s, si) => (
-              <span
-                key={si}
-                className="trail-star"
-                style={{ left: s.left, top: s.top, width: s.size, height: s.size, animationDuration: s.dur }}
-              />
-            ))}
-          </div>
-          <div className="trail-daylabel">
-            <i />
-            <span>{dayLabel(day, di, nowDay)}</span>
-            <i />
-          </div>
-          {/* Food on the trail (Food Journey 01/3B): one ring, three bars, the day's meal count —
+      {days.map((day, di) => {
+        // Behind the wall (trailLock.ts)? Locked days keep their sky and label; the rest differs.
+        const locked = isLockedDay(day.date, lockedFrom);
+        // The day's weather (DESIGN-weather-skies.md): a class per sky, `is-dark-sky` for the dim
+        // washes (skyTint reads it; the labels flip to light type), and the sunrise glow's opacity
+        // as a variable the sun rules pick up. A locked day keeps its sky — the lock dims on top.
+        const sky = skies?.[day.date] ?? 'clear';
+        const darkSky = SKY_SCENES[sky].dark;
+        return (
+          <Fragment key={day.date}>
+            {di === wallAt && wall && <div className="trail-wall">{wall}</div>}
+            <section
+              className={`trail-day${di > 0 ? ' is-later' : ''}${locked ? ' is-locked' : ''} is-sky-${sky}${darkSky ? ' is-dark-sky' : ''}`}
+              style={
+                { background: di === 0 ? FIRST_SKY : LATER_SKY, '--sky-sun': SKY_SCENES[sky].sun } as CSSProperties
+              }
+            >
+              {di === 0 ? (
+                <div className="trail-sun" aria-hidden />
+              ) : (
+                <>
+                  <div className="trail-horizon" aria-hidden />
+                  <div className="trail-sundisc" aria-hidden />
+                </>
+              )}
+              <div className="trail-moon" aria-hidden />
+              <div className="trail-stars" aria-hidden>
+                {STARS.map((s, si) => (
+                  <span
+                    key={si}
+                    className="trail-star"
+                    style={{ left: s.left, top: s.top, width: s.size, height: s.size, animationDuration: s.dur }}
+                  />
+                ))}
+              </div>
+              <DaySky category={sky} />
+              <div className="trail-daylabel">
+                <i />
+                <span>{dayLabel(day, di, nowDay)}</span>
+                <i />
+              </div>
+              {/* Food on the trail (Food Journey 01/3B): one ring, three bars, the day's meal count —
               full width at the top of today, IN the day (2a: a per-day number belongs to the day),
               and absent entirely when food is idle. The bay stays her line and her face. */}
-          {day.isToday && <TrailFoodStrip date={day.date} onOpen={onOpenFood} />}
-          <div className="trail-nodes">
-            {day.occurrences.length === 0 ? (
-              <div className="trail-empty">A clear day — rest counts too.</div>
-            ) : (
-              day.occurrences.map((o, i) => (
-                <TrailNode
-                  key={o.occurrence_id}
-                  occ={o}
-                  date={day.date}
-                  i={i}
-                  n={day.occurrences.length}
-                  d={daySide(day.date)}
-                  onOpen={onOpen}
-                  onHold={onHold}
-                  nodeRef={di === nowDay && i === nowNode ? nowRef : undefined}
-                  clock={clock}
-                />
-              ))
-            )}
-          </div>
-          {day.occurrences.length > 0 && (
-            /* Top to bottom: her line, then her face. The day's food reads full-width at the
+              {day.isToday && <TrailFoodStrip date={day.date} onOpen={onOpenFood} />}
+              {/* Behind the wall: the day's shape as plain text, nothing pressable. */}
+              {locked ? (
+                <LockedTrailDay day={day} />
+              ) : (
+                <div className="trail-nodes">
+                  {day.occurrences.length === 0 ? (
+                    <div className="trail-empty">A clear day — rest counts too.</div>
+                  ) : (
+                    day.occurrences.map((o, i) => (
+                      <TrailNode
+                        key={o.occurrence_id}
+                        occ={o}
+                        date={day.date}
+                        i={i}
+                        n={day.occurrences.length}
+                        d={daySide(day.date)}
+                        onOpen={onOpen}
+                        onHold={onHold}
+                        nodeRef={di === nowDay && i === nowNode ? nowRef : undefined}
+                        clock={clock}
+                        darkSky={darkSky}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+              {day.occurrences.length > 0 && !locked && (
+                /* Top to bottom: her line, then her face. The day's food reads full-width at the
                top of today (TrailFoodStrip) — the 134px bay could never hold three bars. */
-            <div className={`trail-bay ${daySide(day.date) === 0 ? 'is-left' : 'is-right'}`}>
-              <button className="trail-bay-bubble" onClick={onCoach}>
-                {COACH_TEXTS[di % COACH_TEXTS.length]}
-              </button>
-              <CoachFace size={58} className="trail-bay-mark" />
-            </div>
-          )}
-        </section>
-      ))}
+                <div className={`trail-bay ${daySide(day.date) === 0 ? 'is-left' : 'is-right'}`}>
+                  <button className="trail-bay-bubble" onClick={onCoach}>
+                    {COACH_TEXTS[di % COACH_TEXTS.length]}
+                  </button>
+                  <CoachFace size={58} className="trail-bay-mark" />
+                </div>
+              )}
+            </section>
+          </Fragment>
+        );
+      })}
+      {wallAt === days.length && wall && <div className="trail-wall">{wall}</div>}
     </div>
   );
 }

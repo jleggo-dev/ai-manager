@@ -60,8 +60,17 @@ export const LATER_SKY_L: readonly SkyStop[] = [
  */
 export const DARK_SKY_L = 0.62;
 
-/** One day's sky as measured on screen: its band, and which gradient it is drawn with. */
-export type SkyBand = { top: number; height: number; first: boolean };
+/**
+ * What a day under a dark weather wash reads as (DESIGN-weather-skies.md). The heavy-rain,
+ * thunderstorm and hail skies lay a dim tint over the whole day and flip its type to light — and
+ * the header must follow the type, not the gradient underneath the tint, or it would sit as a
+ * cream band on a storm. Below the seam by construction; the exact value is never displayed.
+ */
+export const DARK_WASH_L = 0.5;
+
+/** One day's sky as measured on screen: its band, which gradient it is drawn with, and whether a
+ *  dark weather wash sits over it (`.is-dark-sky`). */
+export type SkyBand = { top: number; height: number; first: boolean; dark?: boolean };
 
 /** Lightness at `fraction` down a gradient — linear between the two stops it falls between. */
 export function skyLightnessAt(stops: readonly SkyStop[], fraction: number): number {
@@ -87,7 +96,9 @@ export function skyLightnessUnder(probeY: number, bands: readonly SkyBand[]): nu
     if (band.height > 0 && probeY >= band.top) under = band;
   }
   if (!under) return null;
-  return skyLightnessAt(under.first ? FIRST_SKY_L : LATER_SKY_L, (probeY - under.top) / under.height);
+  const sampled = skyLightnessAt(under.first ? FIRST_SKY_L : LATER_SKY_L, (probeY - under.top) / under.height);
+  // A dark wash covers the whole day, so the sampled gradient is never what is actually on screen.
+  return under.dark ? Math.min(sampled, DARK_WASH_L) : sampled;
 }
 
 /**
@@ -110,7 +121,13 @@ function bandsIn(scroller: Element): SkyBand[] {
     const rect = day.getBoundingClientRect();
     // `.is-later` is the trail's own mark for "drawn with LATER_SKY" — read the class rather than
     // the index, so a trail that ever renders days in another order still samples the right ramp.
-    return { top: rect.top, height: rect.height, first: !day.classList.contains('is-later') };
+    return {
+      top: rect.top,
+      height: rect.height,
+      first: !day.classList.contains('is-later'),
+      // `.is-dark-sky` is the trail's mark for a dim weather wash over the day (DaySky.tsx).
+      dark: day.classList.contains('is-dark-sky'),
+    };
   });
 }
 
