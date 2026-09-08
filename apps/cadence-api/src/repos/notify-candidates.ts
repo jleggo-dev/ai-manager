@@ -95,7 +95,9 @@ export async function listReEntryCandidates(): Promise<ReEntryCandidate[]> {
 export interface CheckinDueCandidate {
   user_id: string;
   timezone: string | null;
-  generated_at: string;
+  /** YYYY-MM-DD the plan's CURRENT week began — the week clock (0058): `week_started_at`, or
+   *  `generated_at` for a row from before the column existed. */
+  week_started_at: string;
   /** The plan's own week length (0050) — 7 unless the coach granted an extension. */
   horizon_days: number;
 }
@@ -104,27 +106,31 @@ export interface CheckinDueCandidate {
  * Users whose ACTIVE plan's week has already run out.
  *
  * The bound is the SAME fact `computeWeekState` (plan-view.ts) reports to the app as
- * `checkin_due` — `generated_at + horizon_days <= now()` — read the same way, so the push
- * and the in-app affordance can never disagree about which day it started being true. The bound
- * is the plan's OWN `horizon_days` column (0050): 7 by default, further out when the coach
- * granted a "plan two weeks ahead" ask — an extended week must not be nudged to check in on
- * day 7 of 14.
+ * `checkin_due` — `coalesce(week_started_at, generated_at) + horizon_days <= now()` — read the
+ * same way (services/week-clock.ts is the TypeScript twin of that coalesce), so the push and the
+ * in-app affordance can never disagree about which day it started being true. `generated_at`
+ * alone could never be the clock: every ordinary commit refreshes it, which is why an engaged
+ * user never got this push (owner, 2026-09-07). The bound is the plan's OWN `horizon_days`
+ * column (0050): 7 by default, further out when the coach granted a "plan two weeks ahead" ask —
+ * an extended week must not be nudged to check in on day 7 of 14.
  *
  * No upper bound, unlike `listReEntryCandidates`'s day-9 ceiling — there is nothing here to decay
- * away from. An ignored check-in never supersedes the active plan, so `generated_at` (and the
- * `target` the producer derives from it) never changes; the SAME row keeps coming back on every
- * tick until the user actually commits a next week, which is exactly what makes the producer's
- * one-shot-per-week guarantee hold (see checkin-due.ts).
+ * away from. An ignored check-in never resets the week clock — a commit carries it forward, and
+ * only the two check-in exits reset it — so `week_started_at` (and the `target` the producer
+ * derives from it) never changes; the SAME row keeps coming back on every tick until the user
+ * actually does the check-in, which is exactly what makes the producer's one-shot-per-week
+ * guarantee hold (see checkin-due.ts).
  */
 export async function listCheckinDueCandidates(): Promise<CheckinDueCandidate[]> {
   return sql<CheckinDueCandidate[]>`
-    select u.id as user_id, u.timezone, to_char(pl.generated_at, 'YYYY-MM-DD') as generated_at,
+    select u.id as user_id, u.timezone,
+      to_char(coalesce(pl.week_started_at, pl.generated_at), 'YYYY-MM-DD') as week_started_at,
       pl.horizon_days
     from cadence.notification_prefs p
     join cadence.users u on u.id = p.user_id
     join cadence.plans pl on pl.user_id = u.id and pl.status = 'active'
     where p.enabled
-      and pl.generated_at <= now() - make_interval(days => pl.horizon_days)`;
+      and coalesce(pl.week_started_at, pl.generated_at) <= now() - make_interval(days => pl.horizon_days)`;
 }
 
 export interface WeatherMoveCandidate {

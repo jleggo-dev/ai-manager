@@ -18,13 +18,10 @@ import { getUser } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { computeWeekState } from './plan-view.ts';
+import { weekStartIso } from './week-clock.ts';
 import { formatWeatherLine, getWeatherForUser, localDateIso, localTimeLabel } from './weather/weather.ts';
 
 const lastStamped = new Map<string, string>();
-
-/** Date-only slice, the same defensive cast plan-view.ts's own `iso()` uses: a driver can hand
- *  `generated_at` back as a `Date` rather than the string the type promises. */
-const toIsoDate = (d: string | Date): string => new Date(d).toISOString().slice(0, 10);
 
 /**
  * "Their plan week ended N days ago" — `computeWeekState` (plan-view.ts) already reports this to
@@ -51,9 +48,10 @@ async function checkinStateLine(userId: string): Promise<string> {
   const when = daysLate <= 0 ? 'ended today' : `ended ${daysLate} day${daysLate === 1 ? '' : 's'} ago`;
   const parts = [`Their plan week ${when}; check-in not yet done.`];
 
-  // Same window the review card itself would show (generated_at through the due date) — "empty"
-  // means there is nothing on the card to look at, not merely that nobody has looked yet.
-  const occ = await listOccurrences(userId, toIsoDate(plan.generated_at), state.ends_on).catch(() => []);
+  // Same window the review card itself would show (the week's start through the due date —
+  // the week clock, 0058, not `generated_at`) — "empty" means there is nothing on the card to
+  // look at, not merely that nobody has looked yet.
+  const occ = await listOccurrences(userId, weekStartIso(plan), state.ends_on).catch(() => []);
   if (!occ.some((o) => o.status === 'done')) parts.push('Last week has no logged activity.');
 
   return parts.join(' ');

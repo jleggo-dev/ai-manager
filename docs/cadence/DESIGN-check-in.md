@@ -64,8 +64,10 @@ already lived. That gap is what v3 closes.
 
 ### The trail's end (step 6)
 `computeWeekState` (plan-view.ts) returns `weekState: {ends_on, checkin_due}` — due iff the active
-plan's `generated_at` is ≥7 days old and no newer version exists. **Any commit IS the week being
-handled**; nothing else is tracked, nothing can be "overdue." Two independent layers render it
+plan's week clock is ≥7 days old and no newer version exists. ~~**Any commit IS the week being
+handled**~~ — superseded 2026-09-07 (see *The week clock and the wall* below): the clock is
+`week_started_at`, carried forward by ordinary commits and reset only by the check-in exits.
+Nothing else is tracked, nothing can be "overdue." Two independent layers render it
 (`EndOfTrailCard.tsx`): a hard-to-break plain fallback, and the rich card ("Week {version} wraps up
 today" — past tense once ≥2 days by) inside an error boundary whose fallback IS layer 1. A bug in
 the nice card degrades to a plain button, never to a blank week.
@@ -112,8 +114,9 @@ as brittle, since say-texts are editable by design.
 ### The knock (step 8)
 A push producer (`notify/producers/checkin-due.ts`), not the old ungated local nudge (removed in
 the same change — it had no "already done" suppression and locals can't be server-cancelled).
-Candidate: active plan ≥7 days old, no newer version; dedupe `target = generated_at + 7` — which
-never changes while ignored, so it fires **once per stalled week-end and structurally cannot nag**.
+Candidate: active plan's week clock ≥ `horizon_days` old (`week_started_at` since 2026-09-07 — see
+the ruling below; it was `generated_at`); dedupe `target = week clock + horizon` — which never
+changes while ignored, so it fires **once per stalled week-end and structurally cannot nag**.
 Normal `notify()` path: quiet hours, caps, opt-in.
 
 ### Late, and the week nobody logged (edge cases)
@@ -124,6 +127,41 @@ one warm line, two picks ("Run through last week" → `open_week_review`; "Just 
 review of zeroes — one question, three answers ("Fine — I just didn't log" → `build_next_week`;
 "Rough, honestly" → talk, then `propose_plan_change`; "Life got busy" → the existing detour).
 Persona changes reach **new sessions only** (AI Admin snapshots at open).
+
+### The week clock and the wall (owner ruling, 2026-09-07)
+
+Owner: *"I still have never been prompted for a weekly check-in… I'm okay showing an endless
+horizon, just as long as the check-in is static and we can't really move past it without doing so
+explicitly."*
+
+**What was wrong.** §4's "any commit IS the week being handled" timed the check-in off the active
+plan's `generated_at` — and every commit inserts a new version with a fresh one: accepting a
+proposal, an Adjust, adding a routine, a replan, the fan-out. An engaged user who touched their
+plan at all restarted their week each time and never reached `checkin_due`. The push producer and
+the coach's date line read the same column, so all three were quiet together.
+
+**The clock (migration 0058, `services/week-clock.ts`).** `cadence.plans.week_started_at` is the
+clock; `computeWeekState`, `extendHorizon`, the weekly_checkin candidate SQL
+(`coalesce(week_started_at, generated_at)`), `open_week_review`'s window and date-context all read
+it through one helper, so they cannot drift apart again. `commitActivities` **carries it forward**
+from the version it supersedes; only the two check-in exits reset it to now: `buildNextWeek`
+("Just build my week", `startsNewWeek: true`) and `POST /plan/week-review/recap` — the confirm-only
+server call "Confirm my week" makes (`dismiss` is shared with "Not now", so it must not reset).
+A confirm may commit nothing, which is why the route resets rather than a commit; a change the
+coach then proposes and the user applies carries the fresh clock forward like any other commit.
+A first-ever plan starts its week at its own commit. Backfill: `week_started_at = generated_at`.
+Every commit still materializes `DEFAULT_HORIZON_DAYS` from today — the horizon stays visible,
+which the owner is fine with; only the clock stopped moving.
+
+**The wall (`features/today/trailLock.ts`, `LockedTrailDay.tsx`).** When `checkin_due` is true
+the trail is a wall, not a card at the bottom of a scrollable next week: days through the later of
+`ends_on` and today render normally, the `EndOfTrail` card stands right after them (TodayTrail's
+`wall` slot), and every day from there on is **locked** — dimmed, `pointer-events: none`, the
+day's titles as plain text under one line ("After your check-in"), no discs, no bay, no "A clear
+day". The only ways past are the card's own "Start check-in" and "Just build my week", both
+unchanged. `restEmpty` still shows the card for a week that ran out of content, but an empty week
+is not a wall — locking keys off `checkin_due` + `ends_on` only, and fails open on any date it
+cannot read.
 
 ---
 

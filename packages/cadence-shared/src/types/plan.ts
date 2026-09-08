@@ -22,6 +22,12 @@ export interface Plan {
    *  the week's end from it. Optional only for rows read before the migration; the column
    *  defaults to 7. */
   horizon_days?: number;
+  /** When this plan's CURRENT week began (0058) — the clock `computeWeekState` reads instead of
+   *  `generated_at`, which every ordinary commit refreshes. `commitActivities` carries it forward
+   *  from the superseded version; only the two check-in exits ("Just build my week", "Confirm my
+   *  week") reset it. Null/absent only for rows read before the migration — readers fall back to
+   *  `generated_at`, the behaviour the app had before the column existed. */
+  week_started_at?: string | null;
 }
 
 export interface ActivitySchedule {

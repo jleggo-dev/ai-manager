@@ -125,6 +125,46 @@ describe('buildNextWeek — the commit', () => {
     expect(opts.activities[0].cadence).toEqual(expect.any(String));
   });
 
+  /**
+   * The week clock (0058): "Just build my week" is one of the two check-in exits, so its commit
+   * must START the next week. Without this flag commitActivities carries the ended week's
+   * `week_started_at` forward and the wall on the trail never clears — the user would be asked
+   * to check in on a week they just built.
+   */
+  it('marks the commit as starting a new week — the week clock resets, the wall clears', async () => {
+    getActivePlan.mockResolvedValue({ ...DUE_PLAN, week_started_at: DUE_PLAN.generated_at });
+    listActivities.mockResolvedValue([activity()]);
+    commitActivities.mockResolvedValue({ status: 'committed', planId: 'p2', version: 4 });
+
+    await buildNextWeek(USER);
+
+    const [, opts] = commitActivities.mock.calls[0]!;
+    expect(opts.startsNewWeek).toBe(true);
+  });
+
+  it('is gated by the week CLOCK, not generated_at: a plan edited today whose week began 8 days ago is due', async () => {
+    getActivePlan.mockResolvedValue({
+      ...FRESH_PLAN,
+      week_started_at: new Date(Date.now() - 8 * 86_400_000).toISOString(),
+    });
+    listActivities.mockResolvedValue([activity()]);
+    commitActivities.mockResolvedValue({ status: 'committed', planId: 'p2', version: 4 });
+
+    const r = await buildNextWeek(USER);
+
+    expect(r.status).toBe('committed');
+    expect(commitActivities).toHaveBeenCalledTimes(1);
+  });
+
+  it('still declines when the week clock is fresh, however old the plan row is', async () => {
+    getActivePlan.mockResolvedValue({ ...DUE_PLAN, week_started_at: new Date().toISOString() });
+
+    const r = await buildNextWeek(USER);
+
+    expect(r).toEqual({ status: 'not_due' });
+    expect(commitActivities).not.toHaveBeenCalled();
+  });
+
   it('excludes off-plan/episode/menu buckets from what gets recommitted, same as the plan view', async () => {
     getActivePlan.mockResolvedValue(DUE_PLAN);
     listActivities.mockResolvedValue([

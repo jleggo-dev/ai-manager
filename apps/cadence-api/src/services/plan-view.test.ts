@@ -259,3 +259,55 @@ describe('computeWeekState (the week ends where the horizon does — step 6)', (
     expect(computeWeekState({ generated_at, horizon_days: 14 })?.checkin_due).toBe(true);
   });
 });
+
+/**
+ * The week clock (0058, owner 2026-09-07: "I still have never been prompted for a weekly
+ * check-in"). Every commit refreshes `generated_at`, so a plan the user keeps editing was never
+ * 7 days old. `week_started_at` is what the commit carries forward; it — not `generated_at` —
+ * is the clock. Each row: the two columns disagree, and the state must follow the clock.
+ */
+describe('computeWeekState — the week clock beats generated_at', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+
+  it.each([
+    // [week_started_at, generated_at, horizon, due?] — the case that was broken: edited today, week began 8 days ago
+    ['carried clock 8 days old, plan re-generated today → due', daysAgo(8), daysAgo(0), 7, true],
+    ['carried clock exactly 7 days old → due', daysAgo(7), daysAgo(0), 7, true],
+    [
+      'carried clock 6 days old, generated 20 days ago → not due (the clock, not the row, decides)',
+      daysAgo(6),
+      daysAgo(20),
+      7,
+      false,
+    ],
+    ['fresh clock (a check-in exit just reset it) → not due even on an old row', daysAgo(0), daysAgo(30), 7, false],
+    ['extended week: clock 10 days old on a 14-day horizon → not due', daysAgo(10), daysAgo(0), 14, false],
+    ['extended week: clock 14 days old on a 14-day horizon → due', daysAgo(14), daysAgo(0), 14, true],
+  ])('%s', (_label, week_started_at, generated_at, horizon_days, due) => {
+    expect(computeWeekState({ week_started_at, generated_at, horizon_days })?.checkin_due).toBe(due);
+  });
+
+  it('ends_on counts from the week clock, never from generated_at', () => {
+    const state = computeWeekState({
+      week_started_at: '2026-08-01T12:00:00.000Z',
+      generated_at: '2026-08-05T09:00:00.000Z',
+    });
+    expect(state?.ends_on).toBe('2026-08-08');
+  });
+
+  it.each([
+    ['null (a row from before 0058) falls back to generated_at', null],
+    ['undefined (a partial plan object) falls back to generated_at', undefined],
+  ])('%s', (_label, week_started_at) => {
+    const state = computeWeekState({ week_started_at, generated_at: '2026-08-01T12:00:00.000Z' });
+    expect(state?.ends_on).toBe('2026-08-08');
+  });
+
+  it('survives the clock arriving as a Date rather than the string the type promises', () => {
+    const state = computeWeekState({
+      week_started_at: new Date('2026-08-01T12:00:00.000Z') as unknown as string,
+      generated_at: '2026-08-05T09:00:00.000Z',
+    });
+    expect(state?.ends_on).toBe('2026-08-08');
+  });
+});

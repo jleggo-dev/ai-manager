@@ -11,6 +11,7 @@ import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
 import { planDayBase } from './plan-day.ts';
+import { weekStartMs, type WeekClockPlan } from './week-clock.ts';
 
 export const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -107,11 +108,16 @@ export const iso = (d: string | Date): string => new Date(d).toISOString().slice
 
 /**
  * "Your week ends → you say so → she pulls the review" (DESIGN-check-in.md). `checkin_due` is the
- * ONE fact that loop needs, read fresh on every load — no new column, no notification involved (a
- * later step owns the push; this is deliberately silent). Any commit IS the week being handled: the
- * active plan `getActivePlan` returns is by construction the newest version (every commit
- * supersedes the one before it), so "no newer version exists" needs no extra query — it's already
- * true of whatever this reads.
+ * ONE fact that loop needs, read fresh on every load; the push producer (checkin-due.ts) and the
+ * coach's date line read the same fact the same way. The active plan `getActivePlan` returns is
+ * by construction the newest version (every commit supersedes the one before it), so "no newer
+ * version exists" needs no extra query.
+ *
+ * The clock is `week_started_at` (0058, week-clock.ts), NOT `generated_at`. "Any commit IS the
+ * week being handled" was the original rule, and it meant a user who accepted a proposal, added a
+ * routine or applied an Adjust mid-week silently restarted their week each time — the owner had
+ * never once reached this flag (2026-09-07). Now an ordinary commit carries the clock forward and
+ * only the two check-in exits reset it.
  *
  * `ends_on` is the DUE date (generated_at + the horizon), not the last day that actually has
  * content — those differ by one day (a 7-day materialization spans days 0-6, so day 6 is the last
@@ -124,11 +130,14 @@ export interface WeekState {
   ends_on: string;
   checkin_due: boolean;
 }
-export function computeWeekState(plan: Pick<Plan, 'generated_at' | 'horizon_days'> | null): WeekState | null {
+export function computeWeekState(plan: (WeekClockPlan & Pick<Plan, 'horizon_days'>) | null): WeekState | null {
   if (!plan) return null;
-  const generatedMs = new Date(plan.generated_at).getTime();
+  // The week clock (0058, week-clock.ts): `week_started_at ?? generated_at`. The clock is what an
+  // ordinary commit carries forward — "any commit IS the week being handled" turned out to mean
+  // an engaged user never reached this line's `true` (owner, 2026-09-07).
+  const startMs = weekStartMs(plan);
   // The plan's OWN horizon (0050) — 7 unless the user asked the coach to extend this week.
-  const dueMs = generatedMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000;
+  const dueMs = startMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000;
   return { ends_on: iso(new Date(dueMs)), checkin_due: Date.now() >= dueMs };
 }
 

@@ -11,6 +11,7 @@ import { cadenceConfig } from '../config.ts';
 import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 import { diffCommittedActivities } from './plan-commit-diff.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
+import { carriedWeekStart } from './week-clock.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
 import { runInBackground } from './background.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
@@ -405,6 +406,14 @@ export async function commitActivities(
     steer?: string;
     goalIds: string[];
     occurrenceDays?: number;
+    /**
+     * This commit STARTS the next week (0058) — `week_started_at` resets to now instead of being
+     * carried forward from the version being superseded. Set by exactly the two check-in exits
+     * ("Just build my week" in week-build.ts; "Confirm my week" resets the clock on its own route
+     * since it may commit nothing). Every other caller — proposals, Adjust, routines, replan, the
+     * fan-out — leaves it unset, which is the whole fix: editing the week no longer restarts it.
+     */
+    startsNewWeek?: boolean;
   },
 ): Promise<CommitResult> {
   const occurrenceDays = opts.occurrenceDays ?? DEFAULT_HORIZON_DAYS;
@@ -456,6 +465,9 @@ export async function commitActivities(
         status: 'active',
         rationale: opts.rationale || null,
         steer: opts.steer || null,
+        // The week clock (week-clock.ts): carried forward from `old`, or null → now() when this
+        // commit starts a week (a check-in exit, or the first plan ever).
+        week_started_at: carriedWeekStart(old, opts.startsNewWeek === true),
       },
       tx,
     );
