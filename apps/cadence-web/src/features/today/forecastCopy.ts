@@ -1,21 +1,36 @@
 /**
- * How the forecast is written in the weather sheet — the tab names, the hour and day labels, and
- * the one line the coach says when the provider's horizon is shorter than the tab's.
+ * How the forecast is written in the weather sheet — the tab names, and the hour and day labels.
  *
- * Pure, so the labels can be tabled: a day that reads "Tomorrow" when it is today, or an hour
- * written in the device's zone when the forecast was cut in another, fails silently on screen.
+ * Pure, so the labels can be tabled: a day that reads "Tomorrow" when it is today, an hour
+ * written in the device's zone when the forecast was cut in another, or a tab that promises more
+ * days than the list under it, fails silently on screen.
  */
 import type { ClockUnit } from '@cadence/shared';
 import { minutesToClock } from '../../lib/clock.ts';
 
-export type ForecastTab = 'hourly' | 'week' | 'fortnight';
+export type ForecastTab = 'hourly' | 'days';
 
-/** The three ranges, in tab order. `days` is how many rows the tab promises. */
-export const FORECAST_TABS: readonly { id: ForecastTab; label: string; days?: number }[] = [
-  { id: 'hourly', label: 'Hourly' },
-  { id: 'week', label: '7 days', days: 7 },
-  { id: 'fortnight', label: '14 days', days: 14 },
-];
+/** The most days the sheet will ever promise: Apple's ten. Nobody forecasts fourteen. */
+export const MAX_FORECAST_DAYS = 10;
+
+export type ForecastTabSpec = { id: ForecastTab; label: string; days?: number };
+
+/**
+ * The tabs, in order, for a series with `dayCount` days: Hourly, then ONE days tab named for what
+ * is actually there — "10 days" from Apple, "5 days" from OpenWeatherMap — and none when the
+ * provider gave no days at all.
+ *
+ * There used to be three — Hourly, 7 days, 14 days — with the coach saying how far she got under
+ * a list shorter than its tab. The owner's reading was the right one: a tab that says fourteen and
+ * shows ten is a promise, not a range, and "if we can't show 14 days, don't have an option for
+ * it" (2026-09-07). So the label IS the count, and the count is capped at the ten Apple sees.
+ */
+export function forecastTabs(dayCount: number): readonly ForecastTabSpec[] {
+  const promised = Math.min(Math.max(0, Math.floor(dayCount)), MAX_FORECAST_DAYS);
+  const tabs: ForecastTabSpec[] = [{ id: 'hourly', label: 'Hourly' }];
+  if (promised > 0) tabs.push({ id: 'days', label: `${promised} ${promised === 1 ? 'day' : 'days'}`, days: promised });
+  return tabs;
+}
 
 /** The local calendar date (YYYY-MM-DD) of an instant in `tz`; the device's zone when unusable. */
 export function localDateIn(at: Date, tz: string | null | undefined): string {
@@ -54,7 +69,7 @@ export function hourLabel(iso: string, tz: string | null | undefined, clock: Clo
   return `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`;
 }
 
-/** "Today", "Tomorrow", then the weekday and the date — "Wed 10" — so a fortnight stays legible. */
+/** "Today", "Tomorrow", then the weekday and the date — "Wed 10" — so ten days stay legible. */
 export function dayLabel(date: string, todayIso: string): string {
   if (date === todayIso) return 'Today';
   if (date === nextDay(todayIso)) return 'Tomorrow';
@@ -74,14 +89,4 @@ function nextDay(iso: string): string {
 export function precipLabel(chance: number | null | undefined): string | null {
   if (chance == null || chance < 0.2) return null;
   return `${Math.round(chance * 100)}%`;
-}
-
-/**
- * What the coach says under a list shorter than its tab promised. Apple sees ten days and
- * OpenWeatherMap five; a fourteen-day tab over either shows what there is and says so, rather
- * than filling the rest with rows nobody forecast.
- */
-export function horizonLine(shown: number, promised: number): string | null {
-  if (shown >= promised) return null;
-  return `That's as far ahead as I can see — ${shown} ${shown === 1 ? 'day' : 'days'}.`;
 }

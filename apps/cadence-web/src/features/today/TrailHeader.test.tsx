@@ -8,6 +8,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TrailHeader } from './TrailHeader.tsx';
+import { writeSource } from '../settings/location-source.ts';
 
 const getWeather = vi.fn();
 const getForecast = vi.fn();
@@ -303,15 +304,37 @@ describe('the set-location prompt', () => {
 
 describe('the weather sheet', () => {
   it('opens from the chip, carrying the city and the legal link the header gave up', async () => {
+    writeSource('device'); // the fixture's place is a device fix (reverse-geocoded, so it carries a label)
     const view = renderHeader(at(13));
     await waitFor(() => expect(view.q('.thead-wxbtn')).toBeTruthy());
     fireEvent.click(view.q('.thead-wxbtn'));
 
     const sheet = await screen.findByRole('dialog', { name: 'Weather' });
     expect(sheet.textContent).toContain("Notre-Dame-de-l'Île-Perrot, QC");
-    expect(sheet.textContent).toContain('CHANGE');
+    // With the device setting the place, the city is a fact, not a control (owner, 2026-09-08).
+    expect(sheet.textContent).not.toContain('CHANGE');
+    expect(sheet.querySelector('button.thead-loc')).toBeNull();
     const link = screen.getByRole('link', { name: /Other data sources/ });
     expect(link.getAttribute('href')).toBe('https://weather-data.apple.com/legal-attribution.html');
+    writeSource(null);
+  });
+
+  it('offers CHANGE when the place was typed, and CHANGE opens the city field', async () => {
+    writeSource('city'); // device location off: the place on file is one the user typed
+    const view = renderHeader(at(13));
+    await waitFor(() => expect(view.q('.thead-wxbtn')).toBeTruthy());
+    fireEvent.click(view.q('.thead-wxbtn'));
+
+    const sheet = await screen.findByRole('dialog', { name: 'Weather' });
+    const change = await waitFor(() => {
+      const b = sheet.querySelector('button.thead-loc');
+      expect(b).toBeTruthy();
+      return b as HTMLButtonElement;
+    });
+    expect(change.textContent).toContain('CHANGE');
+    fireEvent.click(change);
+    expect(screen.getByLabelText('City')).toBeInTheDocument();
+    writeSource(null);
   });
 
   it('closes again', async () => {
@@ -339,7 +362,8 @@ describe('the weather sheet', () => {
     expect(sheet.querySelectorAll('.wxsheet-hour')).toHaveLength(24);
     expect(sheet.textContent).not.toContain('Reading the days ahead');
 
-    fireEvent.click(screen.getByRole('tab', { name: '14 days' }));
+    // Apple's ten days, on a tab that says ten — never the fourteen it used to promise.
+    fireEvent.click(screen.getByRole('tab', { name: '10 days' }));
     expect(sheet.querySelectorAll('.wxsheet-day')).toHaveLength(10);
   });
 

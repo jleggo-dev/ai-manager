@@ -1,6 +1,6 @@
 import type { ClockUnit } from '@cadence/shared';
 import type { ForecastDay, ForecastHour } from '../../lib/api.ts';
-import { dayLabel, horizonLine, hourLabel, localHourIn, precipLabel } from './forecastCopy.ts';
+import { dayLabel, hourLabel, localHourIn, precipLabel } from './forecastCopy.ts';
 import { isNightHour } from './skyTint.ts';
 import { cap, wxEmoji } from './weatherCopy.ts';
 
@@ -9,7 +9,8 @@ import { cap, wxEmoji } from './weatherCopy.ts';
  *
  * Both are drawn from what the provider actually said. The strip is a day of entries (true hours
  * from Apple, three-hourly slots from OpenWeatherMap, labelled as they fall); the list is as long
- * as the provider sees, with the coach's one line underneath when that is shorter than the tab.
+ * as the provider sees, and its tab is named for that length (forecastTabs), so nothing under it
+ * ever has to explain a shortfall.
  */
 
 /** The hours ahead, scrolling sideways. Each hour's glyph knows whether it is after dark. */
@@ -51,13 +52,12 @@ export function DayList({
   label,
 }: {
   days: ForecastDay[];
-  /** How many rows the tab promised (7 or 14) — what the horizon line measures against. */
+  /** How many rows the tab is named for — never more than the series has (forecastTabs). */
   promised: number;
   todayIso: string;
   label: string;
 }) {
   const rows = days.slice(0, promised);
-  const horizon = horizonLine(rows.length, promised);
   return (
     <div role="tabpanel" aria-label={label}>
       <ul className="wxsheet-days">
@@ -78,7 +78,6 @@ export function DayList({
           );
         })}
       </ul>
-      {horizon && <p className="wxsheet-horizon">{horizon}</p>}
     </div>
   );
 }

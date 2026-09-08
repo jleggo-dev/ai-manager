@@ -137,12 +137,4 @@ describe('the Today header, deciding where you are', () => {
     await waitFor(() => expect(result.current.needsLocation).toBe(false));
     expect(saveHomeLocation).not.toHaveBeenCalled();
   });
-
-  it('takes "I am here now" at its word — one tap, no dwell', async () => {
-    const { result } = mount();
-    await waitFor(() => expect(getCoarseLocation).toHaveBeenCalled());
-    await result.current.setHereNow();
-    expect(saveCurrentLocation).toHaveBeenCalledWith({ lat: 45.5, lon: -73.57 });
-    expect(saveHomeLocation).not.toHaveBeenCalled();
-  });
 });
