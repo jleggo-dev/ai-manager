@@ -432,17 +432,15 @@ export async function saveRecipe(draft: RecipeDraft): Promise<SaveRecipeResult> 
   }
 }
 
-/** One-line macros for list/detail (never shame — just the numbers). */
+/**
+ * One-line macros for list/detail (never shame — just the numbers). Spelled out — "32g protein",
+ * never "P32" (owner, 2026-09-08: nothing in the product abbreviates a word the user has to decode).
+ */
 export function recipeMacroHint(m: Macros): string {
   const bits: string[] = [];
   if (m.kcal != null) bits.push(`~${Math.round(m.kcal)} kcal`);
-  const pcf = [
-    m.protein_g != null ? `P${Math.round(m.protein_g)}` : '',
-    m.carbs_g != null ? `C${Math.round(m.carbs_g)}` : '',
-    m.fat_g != null ? `F${Math.round(m.fat_g)}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  if (pcf) bits.push(pcf);
+  if (m.protein_g != null) bits.push(`${Math.round(m.protein_g)}g protein`);
+  if (m.carbs_g != null) bits.push(`${Math.round(m.carbs_g)}g carbs`);
+  if (m.fat_g != null) bits.push(`${Math.round(m.fat_g)}g fat`);
   return bits.join(' · ');
 }

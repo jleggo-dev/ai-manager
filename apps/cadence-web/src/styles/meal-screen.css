@@ -624,6 +624,19 @@
 .ms-panel:has(> .ms-strip) .ms-panel-scroll {
   padding-bottom: 132px;
 }
+/* With the keyboard up the cart is ONE line — no chips, no Done — so the list keeps the room
+   (owner, on device, 2026-09-08: the Done panel "takes up far too much space"). The keyboard's
+   own ✓ ends typing; the full cart is back the moment it goes. */
+.ms-panel:has(> .ms-strip--compact) .ms-panel-scroll {
+  padding-bottom: 56px;
+}
+.ms-strip--compact {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.ms-strip--compact .ms-strip-sum b {
+  font-size: 12.5px;
+}
 
 /* ── The strip — added is not logged ───────────────────────────────────────── */
 .ms-strip {
@@ -693,6 +706,12 @@
   font-size: 12px;
   padding: 0 2px;
   cursor: pointer;
+}
+/* "+2 more" — a count, not a thing: no ×, quieter than the chips it stands for. */
+.ms-strip-chip--more {
+  background: none;
+  border-style: dashed;
+  color: var(--text-mute);
 }
 /* Canvas B2's raised key — radius, weight and the solid 4px lip that makes it read as pressable
    rather than as a coloured bar. In FOREST, not the canvas's amber: green is complete in this

@@ -204,7 +204,10 @@ it('rejoins an open meal and draws its rows, window and totals — and the butto
   await mount();
   expect(await screen.findByText('Greek yogurt')).toBeInTheDocument();
   expect(screen.getByText(/OPEN · 50 MIN LEFT/)).toBeInTheDocument();
-  expect(screen.getByText(/adds until/)).toBeInTheDocument();
+  // Two loose rows: the one line is the grouping hint, and only that — the window yields to it
+  // (owner, 2026-09-08: "don't add more words"). windowLine.test.ts pins the window on its own.
+  expect(screen.getByText('drag things together to make a recipe')).toBeInTheDocument();
+  expect(screen.queryByText(/adds until/)).toBeNull();
   // The line under the title says only what the list cannot — no clock, no count of rows.
   expect(screen.queryByText(/TWO THINGS/)).toBeNull();
   expect(screen.getByRole('button', { name: /Log breakfast · 204 kcal/ })).toBeEnabled();
@@ -250,7 +253,10 @@ describe('a logged meal — the cart ruling', () => {
     const onLogged = vi.fn();
     await mount({ meal: 'breakfast', onLogged });
     expect(await screen.findByText('LOGGED')).toBeInTheDocument();
-    expect(screen.getByText(/counts right away/)).toBeInTheDocument();
+    // The chip says it; the old "anything you add counts right away" line added nothing
+    // (owner, 2026-09-08) — with one loose row there is no hint to show either.
+    expect(screen.queryByText(/counts right away/)).toBeNull();
+    expect(screen.queryByText(/drag things together/)).toBeNull();
     expect(screen.queryByRole('button', { name: /Log breakfast/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Espresso/ }));
     await waitFor(() => expect(appendFood).toHaveBeenCalled());
@@ -301,7 +307,9 @@ describe('B3 — four quick adds, offered once', () => {
       fireEvent.click(await screen.findByText(f, { selector: '.fq-row b' }));
       await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Done · back to breakfast' }));
+    // The keyboard goes (its ✓) and the full cart, Done included, is back.
+    fireEvent.blur(input);
+    fireEvent.click(await screen.findByRole('button', { name: 'Done · back to breakfast' }));
     await screen.findByText('Strawberries', { selector: '.fa-row-n b' });
   }
 
@@ -331,7 +339,8 @@ describe('B3 — four quick adds, offered once', () => {
     fireEvent.change(input, { target: { value: 'Oat latte' } });
     fireEvent.click(await screen.findByText('Oat latte', { selector: '.fq-row b' }));
     await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
-    fireEvent.click(screen.getByRole('button', { name: 'Done · back to breakfast' }));
+    fireEvent.blur(input);
+    fireEvent.click(await screen.findByRole('button', { name: 'Done · back to breakfast' }));
     await screen.findByText('Oat latte', { selector: '.fa-row-n b' });
     expect(screen.queryByText(/Do they go together\?/)).toBeNull();
   });
@@ -340,6 +349,8 @@ describe('B3 — four quick adds, offered once', () => {
     getOpenMeal.mockResolvedValue(mkMeal({ items: [item('Greek yogurt'), item('Chia seeds')] }));
     await mount();
     await screen.findByText('Greek yogurt');
+    // …and the header's one line says how (owner, 2026-09-08: "no indication that you can group").
+    expect(screen.getByText(/drag things together to make a recipe/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Group some of these into a recipe/ }));
     // Select mode is up — the rows are tickable now.
     expect(await screen.findByRole('dialog', { name: 'Group things' })).toBeInTheDocument();

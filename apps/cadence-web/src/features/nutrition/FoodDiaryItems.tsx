@@ -29,9 +29,11 @@ import { cell, type DiaryGroup, type DiaryPartGroup, type DiaryRow } from './foo
  */
 const COLUMNS: Array<{ key: keyof MealMacros; head: string }> = [
   { key: 'kcal', head: 'kcal' },
-  { key: 'protein_g', head: 'P' },
-  { key: 'carbs_g', head: 'C' },
-  { key: 'fat_g', head: 'F' },
+  // Spelled out, never P/C/F (owner, 2026-09-08). The column widths in styles.css (.fh-item-head
+  // and .fh-item-nums) are sized to these words.
+  { key: 'protein_g', head: 'protein' },
+  { key: 'carbs_g', head: 'carbs' },
+  { key: 'fat_g', head: 'fat' },
 ];
 
 const fmt = (n: number): string => n.toLocaleString('en-US');

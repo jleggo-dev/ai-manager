@@ -21,7 +21,7 @@ export function MealPlateList({
         const sub = [
           e.food.servings[e.servingIndex]?.label,
           m.kcal ? `${Math.round(m.kcal)} kcal` : '',
-          m.protein_g ? `P${Math.round(m.protein_g)}` : '',
+          m.protein_g ? `${Math.round(m.protein_g)}g protein` : '',
         ]
           .filter(Boolean)
           .join(' · ');

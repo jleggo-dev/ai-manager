@@ -118,6 +118,7 @@ allowed to differ — that's the pattern working, not an inconsistency.
 - `resources`, `limits` for constraints (HR-speak; judgmental + code collision)
 - `Listener` as a service name (event-listener ambiguity)
 - `plan.status = 'set'` (unsearchable stopword)
+- abbreviations the user has to decode — `P`/`C`/`F` for the macros, "5P 7C 3F", "P32" (owner, 2026-09-08: spell it out — "5g protein · 7g carbs · 3g fat"; the diary's column heads too)
 - "captured" in any user-facing copy (surveillance framing)
 - "someone in your corner", "gentle is a strategy", "unlock/empower/journey/transform" (wellness clichés)
 - streak mechanics that **punish you for life happening** — reset-to-zero on travel/illness/a rough week, streak-shame, red marks. A *protected* streak (freezes + detours + check-ins, always beside the honest 5-of-7) is the sanctioned form; see PLAN.md "Req 4"

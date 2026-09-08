@@ -99,10 +99,12 @@ describe('PlanView — check-in picks route to the coach', () => {
     const lighter = CHECKIN_ADJUSTMENT_OPTIONS.find((o) => o.code === 'lighter')!;
 
     fireEvent.click(screen.getByText('Make it lighter'));
-    expect(sendDailyCheckin).toHaveBeenCalledWith({ adjustment: 'lighter' });
+    // Nothing is sent on the pick — the one button commits it (owner, 2026-09-08).
+    expect(sendDailyCheckin).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(sendDailyCheckin).toHaveBeenCalledWith({ mood: null, adjustment: 'lighter' });
 
-    // The pick shows its reply beat, then routes (the 600ms handoff in DailyCheckIn).
-    await waitFor(() => expect(onSteerCoach).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    await waitFor(() => expect(onSteerCoach).toHaveBeenCalledTimes(1));
     expect(onSteerCoach).toHaveBeenCalledWith(lighter.steer);
     expect(screen.queryByTestId('adjust-sheet')).toBeNull();
   });
@@ -111,10 +113,10 @@ describe('PlanView — check-in picks route to the coach', () => {
     const onSteerCoach = renderPlan();
 
     fireEvent.click(screen.getByText('Keep the week as is'));
-    expect(sendDailyCheckin).toHaveBeenCalledWith({ adjustment: 'keep' });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(sendDailyCheckin).toHaveBeenCalledWith({ mood: null, adjustment: 'keep' });
 
-    // Give the handoff timer more than its 600ms — it must never fire for 'keep'.
-    await new Promise((r) => setTimeout(r, 750));
+    await waitFor(() => expect(screen.queryByText('Keep the week as is')).toBeNull());
     expect(onSteerCoach).not.toHaveBeenCalled();
     expect(screen.queryByTestId('adjust-sheet')).toBeNull();
   });

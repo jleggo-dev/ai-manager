@@ -75,6 +75,28 @@ describe('BracketList', () => {
     expect(onOpenMenu).toHaveBeenCalledWith('p1');
   });
 
+  it('an unnamed part asks to be named when the host can name it — and stays a count when it cannot', () => {
+    // Owner, 2026-09-08: "it says '2 things' — that doesn't help anyone at all; it should say
+    // 'name this recipe'". The diary passes no onName and keeps the plain count.
+    const unnamed: MealPart[] = [{ key: 'p1', name: null }];
+    const onName = vi.fn();
+    const { unmount } = render(<BracketList items={items} parts={unnamed} renderRow={renderRow} onName={onName} />);
+    expect(screen.queryByText('4 things')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Name this recipe ›' }));
+    expect(onName).toHaveBeenCalledWith('p1');
+    unmount();
+    render(<BracketList items={items} parts={unnamed} renderRow={renderRow} />);
+    expect(screen.getByText('4 things')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('a named pill opens the menu too — the ⋯ is not the only door', () => {
+    const onOpenMenu = vi.fn();
+    render(<BracketList items={items} parts={parts} renderRow={renderRow} onOpenMenu={onOpenMenu} onName={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Chia bowl' }));
+    expect(onOpenMenu).toHaveBeenCalledWith('p1');
+  });
+
   it('yield rides the same mark: butter bracket, "1 of 4 servings", no new row type', () => {
     const stew: MealItem[] = [
       { name: 'Chickpeas', est: { kcal: 80 }, part: 'p1' },

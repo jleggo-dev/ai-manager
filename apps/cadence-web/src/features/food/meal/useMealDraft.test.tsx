@@ -37,6 +37,7 @@ const invalidate = vi.fn();
 vi.mock('../../../lib/query/index.ts', () => ({
   useInvalidateNutritionDay: () => invalidate,
   useNutritionDay: () => ({ data: null }),
+  useInvalidateFoodLibrary: () => vi.fn(),
 }));
 
 const { useMealDraft } = await import('./useMealDraft.ts');

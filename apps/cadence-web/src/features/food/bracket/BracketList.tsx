@@ -26,8 +26,35 @@ export interface BracketListProps {
   onToggleCollapse?: (partKey: string) => void;
   /** The part's ⋯ — opens PartMenu. Absent = no ⋯ drawn. */
   onOpenMenu?: (partKey: string) => void;
+  /**
+   * Name an unnamed part. With this wired, an unnamed part's pill is not "2 things" but a button
+   * reading "Name this recipe ›" — the count told nobody what to do next (owner, 2026-09-08).
+   * Absent (the diary), the pill stays the plain count.
+   */
+  onName?: (partKey: string) => void;
   /** From useBracketGestures. Absent = the list is inert. */
   gestures?: BracketGestures;
+}
+
+/** The head's pill: the name, or — when the host can name it — the ask. A named pill opens the
+ *  menu when there is one, so the whole head is a door and the ⋯ is not the only way in. */
+function Pill({ part, label, props }: { part: MealPart; label: string; props: BracketListProps }) {
+  const { onName, onOpenMenu } = props;
+  if (!part.name && onName) {
+    return (
+      <button type="button" className="mb-pill mb-pill--name" onClick={() => onName(part.key)}>
+        {'Name this recipe ›'}
+      </button>
+    );
+  }
+  if (onOpenMenu) {
+    return (
+      <button type="button" className="mb-pill mb-pill--btn" onClick={() => onOpenMenu(part.key)}>
+        {label}
+      </button>
+    );
+  }
+  return <span className="mb-pill">{label}</span>;
 }
 
 function OpenPart({
@@ -71,7 +98,7 @@ function OpenPart({
       )}
       <div className="mb-part-body">
         <div className="mb-head">
-          <span className="mb-pill">{label}</span>
+          <Pill part={part} label={label} props={props} />
           <span className="mb-head-kcal">{fmtKcal(total.kcal)} kcal</span>
           <span className="mb-head-space" />
           {onToggleCollapse && (

@@ -4,23 +4,17 @@
  * after the first change), and one quiet line under it.
  *
  * That line used to read "08:02 · ONE THING · ADDS UNTIL 11:02" — the opened clock and a count
- * of rows the eye can see right below (owner, 2026-09-07: "superfluous text"). It now says the
- * one thing the list cannot: the window while the cart is open ("adds until 11:02"), that adds
- * count at once when the meal is logged, and "nothing in it yet" when it is empty.
+ * of rows the eye can see right below (owner, 2026-09-07: "superfluous text"). It says only what
+ * the list cannot — windowLine.ts decides which sentence, and its table test pins the order.
  */
 import { useState } from 'react';
 import { MEAL_KINDS, type MealKind } from '@cadence/shared';
-
-function windowLine(opts: { empty: boolean; logged: boolean; addsUntil: string | null }): string {
-  const { empty, logged, addsUntil } = opts;
-  if (logged) return 'logged · anything you add counts right away';
-  if (empty) return [addsUntil, 'nothing in it yet'].filter(Boolean).join(' · ');
-  return addsUntil ?? '';
-}
+import { windowLine } from './windowLine.ts';
 
 export function MealHeader({
   kind,
   count,
+  loose,
   logged,
   openLabel,
   addsUntil,
@@ -31,6 +25,8 @@ export function MealHeader({
 }: {
   kind: MealKind;
   count: number;
+  /** Items outside every bracket. Defaults to none so read-only hosts never show the hint. */
+  loose?: number;
   logged: boolean;
   openLabel: string | null;
   addsUntil: string | null;
@@ -40,7 +36,7 @@ export function MealHeader({
   onMenu: () => void;
 }) {
   const [changed, setChanged] = useState(false);
-  const line = windowLine({ empty: count === 0, logged, addsUntil });
+  const line = windowLine({ empty: count === 0, logged, addsUntil, loose: loose ?? 0 });
   return (
     <div className="ms-head">
       <div className="ms-head-row">

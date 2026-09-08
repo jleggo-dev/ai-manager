@@ -67,6 +67,7 @@ export function MealBody({
         collapsed={collapsed}
         onToggleCollapse={(key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))}
         onOpenMenu={(key) => setPicker({ kind: 'menu', part: key })}
+        onName={(key) => setPicker({ kind: 'name', part: key })}
         gestures={gestures}
         renderRow={(item, index) => (
           <MealDraftRow
@@ -161,6 +162,7 @@ export function MealBody({
           draft={draft}
           partKey={namePart.key}
           initialName={namePart.name ?? undefined}
+          inCookbook={!!namePart.recipe_id}
           onClose={() => setPicker(null)}
         />
       )}
@@ -179,16 +181,29 @@ export function MealBody({
   );
 }
 
-/** Rename / yield for one bracket — the ⋯'s certain path, no cookbook write. */
+/**
+ * Name / yield for one bracket — the ⋯'s certain path and the pill's "Name this recipe ›".
+ *
+ * A name SAVES (owner, 2026-09-08: a latte named at breakfast "should show up as a recipe in
+ * recently logged — it doesn't"). The card under the field already promised it — "Saves as a
+ * meal — tap it, it logs exactly this" — while this flow only wrote the name onto the part, so
+ * the cookbook never heard of it and the shelf never showed it. Now a name on a part the
+ * cookbook does not hold goes through saveAs; a part already in the cookbook, or a name cleared,
+ * is a rename of the part alone (the cookbook copy is its own thing — editing never reaches
+ * backwards, and it does not reach forwards from here either).
+ */
 function PartNameFlow({
   draft,
   partKey,
   initialName,
+  inCookbook,
   onClose,
 }: {
   draft: MealDraft;
   partKey: string;
   initialName?: string;
+  /** The part carries a recipe_id already — naming it again must not mint a second recipe. */
+  inCookbook?: boolean;
   onClose: () => void;
 }) {
   const members = membersOf(draft.items, partKey);
@@ -208,8 +223,12 @@ function PartNameFlow({
           onName={setName}
           onYield={setServings}
           onSave={() => {
-            draft.editParts({ op: 'rename', part: partKey, name: name ?? '' });
-            if (servings > 1) draft.editParts({ op: 'set_yield', part: partKey, yield_servings: servings });
+            if (name && !inCookbook) {
+              void draft.saveAs({ part: partKey, name, yield_servings: servings });
+            } else {
+              draft.editParts({ op: 'rename', part: partKey, name: name ?? '' });
+              if (servings > 1) draft.editParts({ op: 'set_yield', part: partKey, yield_servings: servings });
+            }
             onClose();
           }}
           onCancel={onClose}

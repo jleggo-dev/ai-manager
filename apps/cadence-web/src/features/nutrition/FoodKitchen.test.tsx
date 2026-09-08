@@ -40,12 +40,12 @@ vi.mock('../../lib/api.ts', () => ({
   mealPlanDayLabel: (d: string) => d,
   shoppingListSummary: (l: unknown[]) => `${l.length} to get`,
   weekOfMonday: () => '2026-08-24',
-  // The real one-liner, not a stub — the per-serving numbers are the point of 10a.
-  recipeMacroHint: (m: { kcal?: number; protein_g?: number }) =>
-    [m.kcal != null ? `~${Math.round(m.kcal)} kcal` : '', m.protein_g != null ? `P${Math.round(m.protein_g)}` : '']
-      .filter(Boolean)
-      .join(' · '),
+  // The real one-liner, not a stub — the per-serving numbers are the point of 10a. Imported, not
+  // hand-copied: a copy here kept saying "P32" after the product had spelled it out.
+  recipeMacroHint: (m: { kcal?: number; protein_g?: number }) => realRecipeMacroHint(m),
 }));
+
+const { recipeMacroHint: realRecipeMacroHint } = await import('../../lib/api/recipes.ts');
 
 vi.mock('../../components/MicButton.tsx', () => ({ MicButton: () => null }));
 
@@ -132,7 +132,7 @@ describe('recipes carry their per-serving numbers (10a)', () => {
     await mountKitchen();
     const row = await screen.findByRole('button', { name: /Beef chili/i });
     expect(row).toHaveTextContent('Serves 4');
-    expect(row).toHaveTextContent('~520 kcal · P32 per serving');
+    expect(row).toHaveTextContent('~520 kcal · 32g protein per serving');
   });
 
   it('opens a recipe onto its ingredients and steps', async () => {

@@ -44,7 +44,8 @@ Warm words in the UI; boring stable words in schema/prompts. A brand refresh nev
 
 **Banned:** "captured" in user copy; `beats`/`instruments`/`tempo changes` anywhere; `tools` as a
 field name; `resources`/`limits` for constraints; streaks that reset to zero; wellness clichés
-("unlock", "empower", "journey"). Full veto list + rationale in BRAND.md.
+("unlock", "empower", "journey"); abbreviations the user has to decode — macros are "5g protein ·
+7g carbs · 3g fat", never "5P 7C 3F" (owner, 2026-09-08). Full veto list + rationale in BRAND.md.
 
 ## Engineering conventions
 

@@ -540,11 +540,6 @@
   font-weight: 800;
   color: oklch(30% 0.02 150);
 }
-.dci-optt span {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
 .dci-radio {
   width: 20px;
   height: 20px;
@@ -564,23 +559,25 @@
 .dci-talk .dci-optt b {
   color: oklch(32% 0.05 152);
 }
-.dci-talk .dci-optt span {
-  color: oklch(46% 0.05 152);
+/* The one button under the list (owner, 2026-09-08). With nothing picked it is the quiet
+   underlined "Not now" (.dci-not); once something is picked it is this raised forest key —
+   the same key the cart's Done is — reading "Done" or "Next". */
+.dci-commit {
+  width: 100%;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--forest);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+  padding: 13px;
+  box-shadow: 0 4px 0 oklch(28% 0.05 160);
+  cursor: pointer;
 }
-.dci-reply {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-top: 12px;
-  background: oklch(96% 0.02 152);
-  border-radius: 12px;
-  padding: 10px 12px;
-}
-.dci-reply p {
-  font-size: 12px;
-  font-weight: 700;
-  color: oklch(34% 0.05 152);
-  line-height: 1.4;
+.dci-commit:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 oklch(28% 0.05 160);
 }
 .dci-not {
   width: 100%;

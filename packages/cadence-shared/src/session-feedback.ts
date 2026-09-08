@@ -81,44 +81,41 @@ export const MOODS = [
 
 export type MoodValue = (typeof MOODS)[number]['value'];
 
+/**
+ * Every code a stored check-in row may carry. `earlier` stays accepted for rows already written,
+ * but it is no longer OFFERED (owner, 2026-09-08): "Shift evenings earlier" was a static guess
+ * about the user's week, not something read from it, and nobody could tell what it would do.
+ */
 export const CHECKIN_ADJUSTMENTS = ['keep', 'lighter', 'earlier'] as const;
 export type CheckinAdjustment = (typeof CHECKIN_ADJUSTMENTS)[number];
 
 export interface CheckinAdjustmentOption {
   code: CheckinAdjustment;
+  /** The whole row — no sub-line under it (owner, 2026-09-08: the labels stand on their own). */
   label: string;
-  sub: string;
   /** The steer handed to the ordinary plan-adjust flow — never a bespoke mutation path. */
   steer: string;
-  reply: string;
+  /** The one button under the list: "Done" ends it here; "Next" hands the steer to the coach. */
+  commit: 'Done' | 'Next';
 }
 
 /**
- * The three offers. Each one is just a pre-written steer for the SAME suggest→preview→confirm
- * adjust flow the coach already uses, so a check-in can never mutate a plan by a route the user
- * can't see, undo, or argue with.
+ * The offers. Each one is just a pre-written steer for the SAME suggest→preview→confirm adjust
+ * flow the coach already uses, so a check-in can never mutate a plan by a route the user can't
+ * see, undo, or argue with. Nothing fires on the tap: the pick waits for the button.
  */
 export const CHECKIN_ADJUSTMENT_OPTIONS: readonly CheckinAdjustmentOption[] = [
   {
     code: 'keep',
     label: 'Keep the week as is',
-    sub: 'Yesterday was a blip — carry on',
     steer: '',
-    reply: 'Done — the week stays put.',
+    commit: 'Done',
   },
   {
     code: 'lighter',
     label: 'Make it lighter',
-    sub: 'Trim a session, make one optional',
     steer: 'Make the rest of this week lighter — trim one session and make another optional.',
-    reply: 'Let me show you what that looks like before anything moves.',
-  },
-  {
-    code: 'earlier',
-    label: 'Shift evenings earlier',
-    sub: 'Wind-downs keep losing to dinner',
-    steer: 'Move my evening sessions earlier — they keep losing to dinner. Aim for before 7pm.',
-    reply: 'Let me show you what that looks like before anything moves.',
+    commit: 'Next',
   },
 ];
 
