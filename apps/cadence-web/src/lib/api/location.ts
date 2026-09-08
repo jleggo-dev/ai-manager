@@ -139,7 +139,7 @@ export type ForecastDay = {
 
 /**
  * The hours and days behind the weather sheet's tabs. As long as the provider sees — ten days
- * from Apple, five from OpenWeatherMap — never padded; the sheet says how far it got.
+ * from Apple, five from OpenWeatherMap — never padded; the sheet names its days tab for the count it got.
  */
 export type Forecast = {
   available: boolean;

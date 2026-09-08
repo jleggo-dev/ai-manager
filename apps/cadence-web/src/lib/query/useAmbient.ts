@@ -35,7 +35,7 @@ export function fetchWeatherCached(queryClient: QueryClient): Promise<WeatherNow
 }
 
 /** After a location change the cached sky belongs to the old city — drop it before re-reading.
- *  The forecast goes with it: it describes the same point, and a fortnight for the wrong city is
+ *  The forecast goes with it: it describes the same point, and a week of days for the wrong city is
  *  worse than a moment's spinner. */
 export function forgetWeather(queryClient: QueryClient): void {
   queryClient.removeQueries({ queryKey: queryKeys.weather.all });
