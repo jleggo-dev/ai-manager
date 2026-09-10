@@ -48,7 +48,13 @@ export const SET_HOME_LOCATION: CoachActionTool = {
     if (!geo) return `"${place}" could not be found; nothing was changed.`;
 
     const user = await getUser(userId);
-    await setHomeLocation(userId, { lat: geo.lat, lon: geo.lon, label: geo.label }, user?.timezone ?? null);
+    // A place named in conversation is a typed city, as far as the clients are concerned: it may
+    // be retyped from the weather sheet, and Settings draws it as one (users.ts `HomeLocationSource`).
+    await setHomeLocation(
+      userId,
+      { lat: geo.lat, lon: geo.lon, label: geo.label, source: 'city' },
+      user?.timezone ?? null,
+    );
 
     const after = await getUser(userId);
     const landed =

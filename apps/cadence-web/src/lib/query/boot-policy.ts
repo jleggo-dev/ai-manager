@@ -81,8 +81,10 @@ const FAMILIES: Record<string, BootPolicy> = {
   // over today's sun.
   weather: { ttlMs: HOUR, rank: 10 },
   // The days ahead, behind the sky's tap. Same hour as the sky, for the same reason — and painted
-  // so the sheet opens on last launch's forecast even before the network has answered.
-  forecast: { ttlMs: HOUR, rank: 11 },
+  // so the sheet opens on last launch's forecast even before the network has answered. A read
+  // that FAILED is not a forecast and is not painted: seeding it would put "couldn't read the days
+  // ahead" on screen before this launch has tried, and hold it there through the stale window.
+  forecast: { ttlMs: HOUR, rank: 11, revive: (d) => ((d as { error?: true } | undefined)?.error ? null : d) },
   // Today's food, for the trail's strip. The date is IN the key, so age is the wrong guard —
   // yesterday's day is refused by name, however recently it was written.
   nutritionDay: {

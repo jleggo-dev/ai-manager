@@ -24,7 +24,7 @@ export interface CadenceUserRow {
   unit_prefs?: UnitPrefs | null;
   macro_targets: MacroTargets | null;
   timezone: string | null;
-  home_location: { lat: number; lon: number; label?: string } | null;
+  home_location: HomeLocation | null;
   // Present once migration 0040 is applied. Where you ARE, when that is somewhere other than
   // where you live — read by the Today header's weather + city and by nothing else (A21).
   current_location?: { lat: number; lon: number; label?: string; at?: string } | null;
@@ -485,7 +485,16 @@ export async function setDietaryProfile(userId: string, profile: DietaryProfile)
     where id = ${userId}`;
 }
 
-export type HomeLocation = { lat: number; lon: number; label?: string };
+/**
+ * How the place got here — `device` for a fix the phone took, `city` for a name someone typed
+ * (or told the coach). Stored WITH the place, because the two clients that need to know (the
+ * weather sheet deciding whether CHANGE belongs, Settings drawing its three states) used to keep
+ * the answer in the phone's localStorage — which a place saved before that record existed, or an
+ * account switch on the device, leaves empty. A reverse-geocoded device fix carries a label too,
+ * so nothing about the row itself tells the two apart. Absent on rows saved before 2026-09-10.
+ */
+export type HomeLocationSource = 'device' | 'city';
+export type HomeLocation = { lat: number; lon: number; label?: string; source?: HomeLocationSource };
 
 /**
  * Persist coarse home location + IANA timezone (§B1). Columns exist since migration 0001 —

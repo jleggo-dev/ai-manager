@@ -1,6 +1,12 @@
-import { BASE, headers } from './http.ts';
+import { BASE, headers, timeoutSignal } from './http.ts';
 
-export type HomeLocation = { lat: number; lon: number; label?: string };
+/**
+ * How the place was set, as the server recorded it when it was saved: `device` for a fix the
+ * phone took, `city` for a name someone typed. Absent on places saved before the server kept it —
+ * the client then falls back to its own record (features/settings/location-source.ts).
+ */
+export type HomeLocationSource = 'device' | 'city';
+export type HomeLocation = { lat: number; lon: number; label?: string; source?: HomeLocationSource };
 
 /** Where you ARE, when that is not where you live (A21). `at` is when the server committed it. */
 export type CurrentLocation = { lat: number; lon: number; label?: string; at?: string };
@@ -143,6 +149,13 @@ export type ForecastDay = {
  */
 export type Forecast = {
   available: boolean;
+  /**
+   * The READ failed — a timeout, a dead socket, a non-2xx — as opposed to the server answering
+   * that there is no forecast (`available:false` alone). The two look the same on the sheet
+   * unless it is told, and it used to be told nothing: a failed read was cached as "no forecast"
+   * for the next hour with no line and no way to ask again (owner, on device, 2026-09-09).
+   */
+  error?: true;
   timezone?: string | null;
   hourly?: ForecastHour[];
   daily?: ForecastDay[];
@@ -150,14 +163,23 @@ export type Forecast = {
   attribution?: { name: string; url: string } | null;
 };
 
-/** GET /me/forecast — read with the sky, ahead of the tap, so the sheet opens on a forecast. */
+/** The read that failed, distinct from the server saying there is nothing to read. */
+export const FORECAST_READ_FAILED: Forecast = { available: false, error: true };
+
+/**
+ * GET /me/forecast — read with the sky, ahead of the tap, so the sheet opens on a forecast.
+ *
+ * Bounded like every other read that gates something on screen: iOS suspends the webview when
+ * the app backgrounds, and a request in flight at that moment can come back to a socket that
+ * never answers. Without the timeout that left the sheet on "Reading the days ahead…" for good.
+ */
 export async function getForecast(): Promise<Forecast> {
   try {
-    const res = await fetch(`${BASE}/me/forecast`, { headers: headers() });
-    if (!res.ok) return { available: false };
+    const res = await fetch(`${BASE}/me/forecast`, { headers: headers(), signal: timeoutSignal(15_000) });
+    if (!res.ok) return FORECAST_READ_FAILED;
     return (await res.json()) as Forecast;
   } catch {
-    return { available: false };
+    return FORECAST_READ_FAILED;
   }
 }
 

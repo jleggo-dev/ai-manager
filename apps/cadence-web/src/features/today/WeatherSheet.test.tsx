@@ -158,6 +158,32 @@ describe('when there is less to show', () => {
     expect(container.querySelector('.wxsheet-hour')).toBeNull();
   });
 
+  /**
+   * A read that failed is not "no forecast", and it used to be drawn as one: the reading alone,
+   * no line, no door, for the rest of the hour — which on the owner's phone read as the forecast
+   * having been reverted (2026-09-09). The coach says so now, and Try again asks.
+   */
+  it('says the read failed and offers Try again — distinct from there being nothing to read', () => {
+    const onRetry = vi.fn();
+    const { container } = open({ forecast: { available: false, error: true }, onRetry });
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(container.textContent).toContain('I couldn’t read the days ahead.');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the failed line but no door when nobody can be asked', () => {
+    const { container } = open({ forecast: { available: false, error: true } });
+    expect(container.textContent).toContain('I couldn’t read the days ahead.');
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('never says the read failed when the server simply has no forecast', () => {
+    const { container } = open({ forecast: { available: false }, onRetry: vi.fn() });
+    expect(container.textContent).not.toContain('couldn’t read');
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
   it('keeps the city and the coach’s line whatever the forecast did', () => {
     const { container } = open({ weather: { ...CLEAR, precip_chance: 0.4 }, forecast: { available: false } });
     expect(container.querySelector('.thead-loc')!.textContent).toContain('Montreal');

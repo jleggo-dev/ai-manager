@@ -34,7 +34,10 @@ import type { CitySetter } from './useCitySetter.ts';
  *
  * `forecast` is `undefined` while it is still on its way (a first launch, or a place that just
  * moved) and `available:false` when there is none — the sheet then shows the reading alone and
- * never a made-up week.
+ * never a made-up week. A read that FAILED (`error`) is a third thing and is drawn as one: the
+ * coach says she couldn't read the days ahead, and Try again asks (`onRetry`). A failed read
+ * never displaces a series the sheet already had (lib/query/useAmbient.ts), so this line only
+ * appears when there was nothing to keep.
  */
 export function WeatherSheet({
   weather,
@@ -44,6 +47,7 @@ export function WeatherSheet({
   clock,
   now = new Date(),
   citySetter,
+  onRetry,
   onClose,
 }: {
   weather: WeatherNow;
@@ -56,6 +60,8 @@ export function WeatherSheet({
   now?: Date;
   /** Offered when the place may be retyped here (device location off); absent = plain text. */
   citySetter?: CitySetter;
+  /** Ask for the days ahead again, after a read that failed. */
+  onRetry?: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<ForecastTab>('hourly');
@@ -116,6 +122,18 @@ export function WeatherSheet({
           ) : forecast === undefined ? (
             <div className="sheet-loading">
               <span className="sheet-loading-t">Reading the days ahead…</span>
+            </div>
+          ) : forecast?.error ? (
+            // The read failed — which is not the same as there being nothing to read, and used to
+            // look exactly like it: the reading alone, no line, no door, for the rest of the hour
+            // (owner, on device, 2026-09-09). Say so, and let a tap ask again.
+            <div className="sheet-loading wxsheet-failed">
+              <span className="sheet-loading-t">I couldn&rsquo;t read the days ahead.</span>
+              {onRetry && (
+                <button type="button" className="wxsheet-retry" onClick={onRetry}>
+                  Try again
+                </button>
+              )}
             </div>
           ) : null}
           <p className="wxsheet-coach">{weatherSentence(weather)}</p>

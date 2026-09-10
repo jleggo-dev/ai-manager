@@ -7,6 +7,7 @@ export {
   forgetLocation,
   forgetWeather,
   prefetchForecast,
+  refetchForecast,
   useDailyCheckinDue,
   useForecast,
   useHomeLocation,

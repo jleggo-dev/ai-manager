@@ -12,6 +12,8 @@ import {
   mergeUnitPrefs,
   setCurrentLocation,
   setHomeLocation,
+  type HomeLocation,
+  type HomeLocationSource,
 } from '../repos/users.ts';
 import {
   geocodeCity,
@@ -150,6 +152,10 @@ router.post('/location', async (req: Request, res: Response) => {
     let lat = body.lat;
     let lon = body.lon;
     let label = body.label?.trim() || body.city?.trim() || undefined;
+    // Coordinates mean the phone took a fix; a name alone means somebody typed it. Recorded with
+    // the place (users.ts `HomeLocationSource`) so the sheet's CHANGE and Settings' three states
+    // stop guessing from the label — a device fix is reverse-geocoded and carries one too.
+    const source: HomeLocationSource = lat != null && lon != null ? 'device' : 'city';
 
     if ((lat == null || lon == null) && label) {
       const geo = await geocodeCity(label);
@@ -164,7 +170,7 @@ router.post('/location', async (req: Request, res: Response) => {
     // "Toronto, CA" instead of "Weather nearby". Best-effort — null keeps the old behaviour.
     if (!label) label = (await reverseGeocode(lat, lon)) ?? undefined;
 
-    const location = { lat, lon, ...(label ? { label } : {}) };
+    const location: HomeLocation = { lat, lon, ...(label ? { label } : {}), source };
     // Setting home is also a statement that you are AT home — any transient position is stale the
     // moment it is made, and the response says so, so the client drops its copy too.
     await setHomeLocation(userId, location, timezone);

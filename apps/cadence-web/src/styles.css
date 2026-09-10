@@ -9471,3 +9471,23 @@ html[data-native] .sheet-body {
   font-size: 12.5px;
   color: oklch(45% 0.03 250);
 }
+
+/* The weather sheet after a read that failed: the coach's line, and one quiet door to ask again. */
+.wxsheet-failed {
+  padding: 22px 0 26px;
+}
+.wxsheet-retry {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.wxsheet-retry:active {
+  opacity: 0.7;
+}
