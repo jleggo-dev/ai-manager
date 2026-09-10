@@ -17,6 +17,7 @@ import { SettingsTools } from './SettingsTools.tsx';
 import { SettingsYouGroup } from './SettingsYouGroup.tsx';
 import { SettingsYourActivities } from './SettingsYourActivities.tsx';
 import { buildRoomSubLine, weeksSinceCreation } from './settingsRoomWeek.ts';
+import { buildStamp } from '../../lib/build.ts';
 import { UnitSettings } from './UnitSettings.tsx';
 
 type RoomScreen =
@@ -170,6 +171,10 @@ export function SettingsRoom({
         />
 
         <SettingsAccountDanger email={email} />
+
+        {/* Which bundle this phone is running — so "older build" and "broken fix" stop looking
+            the same from the outside (lib/build.ts). */}
+        <p className="room-build">Build {buildStamp()}</p>
       </div>
     </div>
   );

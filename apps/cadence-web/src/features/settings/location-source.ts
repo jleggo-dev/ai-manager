@@ -20,19 +20,40 @@
  */
 export type Source = 'device' | 'city';
 
+/** What the two readers below accept: the stored place, with the server's record when it has one. */
+export type SourcedPlace = { label?: string; source?: Source };
+
 const SOURCE_KEY = 'cadence.locationSource';
 const OFF_KEY = 'cadence.locationOff';
 
-export function readSource(loc: { label?: string } | null): Source | null {
+/**
+ * How the place was set, when that is actually KNOWN: the server's record first (kept with the
+ * place since 2026-09-10, so it survives a new phone and an account switch), this device's record
+ * second, and null when neither exists. No guessing — that is `readSource`'s job, and only for
+ * a screen whose worst case is a mislabelled row. A control that ACTS on the answer (the weather
+ * sheet's CHANGE) must not act on a guess: a device fix is reverse-geocoded and carries a label,
+ * so the label heuristic offered CHANGE on a device-set place for every phone that predated the
+ * local record (owner, on device, 2026-09-09).
+ */
+export function knownSource(loc: SourcedPlace | null): Source | null {
   if (!loc) return null;
+  if (loc.source === 'device' || loc.source === 'city') return loc.source;
   try {
     const stored = window.localStorage.getItem(SOURCE_KEY);
     if (stored === 'device' || stored === 'city') return stored;
   } catch {
-    /* fall through to the heuristic below */
+    /* storage unavailable — unknown */
   }
-  // No record (e.g. a place saved before the Settings rebuild, or storage unavailable): a typed
-  // city always carries a label; a bare device share usually does not.
+  return null;
+}
+
+export function readSource(loc: SourcedPlace | null): Source | null {
+  if (!loc) return null;
+  const known = knownSource(loc);
+  if (known) return known;
+  // No record anywhere (a place saved before either record existed, or storage unavailable): a
+  // typed city always carries a label; a bare device share usually does not. Good enough for
+  // Settings' three states, which only draw; not for anything that acts (see knownSource).
   return loc.label ? 'city' : 'device';
 }
 

@@ -51,16 +51,42 @@ export function forgetWeather(queryClient: QueryClient): void {
 export function prefetchForecast(queryClient: QueryClient): Promise<void> {
   return queryClient.prefetchQuery({
     queryKey: queryKeys.forecast.all,
-    queryFn: getForecast,
+    queryFn: forecastQueryFn(queryClient),
     staleTime: AMBIENT_STALE_MS,
+  });
+}
+
+/**
+ * A failed read must NOT displace a good series — the same rule the place follows above. The
+ * server saying "no forecast" (`available:false` alone) is an answer and does replace; a read
+ * that failed (`error`) is not, and the last series the sheet had stays on screen. With nothing
+ * to fall back on, the failure itself is stored, so the sheet can say so and offer a retry
+ * instead of showing the reading alone as if there were nothing to read.
+ */
+function forecastQueryFn(queryClient: QueryClient) {
+  return async (): Promise<Forecast> => {
+    const fresh = await getForecast();
+    if (!fresh.error) return fresh;
+    const last = queryClient.getQueryData<Forecast>(queryKeys.forecast.all);
+    return last && !last.error ? last : fresh;
+  };
+}
+
+/** The sheet's retry: a read now, past the stale window, through the same keep-last rule. */
+export function refetchForecast(queryClient: QueryClient): Promise<Forecast> {
+  return queryClient.fetchQuery({
+    queryKey: queryKeys.forecast.all,
+    queryFn: forecastQueryFn(queryClient),
+    staleTime: 0,
   });
 }
 
 /** The same forecast, for the sheet to draw. `undefined` while it is still on its way. */
 export function useForecast(enabled: boolean): Forecast | undefined {
+  const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: queryKeys.forecast.all,
-    queryFn: getForecast,
+    queryFn: forecastQueryFn(queryClient),
     staleTime: AMBIENT_STALE_MS,
     enabled,
   });

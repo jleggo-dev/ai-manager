@@ -185,6 +185,14 @@ describe('SettingsRoom — the groups and their rows', () => {
     expect(screen.getByText('Danger zone')).toBeInTheDocument();
   });
 
+  it('names the build at the foot of the room, so an old bundle stops looking like a broken fix', async () => {
+    renderRoom();
+    expect(await screen.findByText('Settings')).toBeInTheDocument();
+    // Vitest does not run the app's Vite config, so the stamp is the guard's fallback here; what
+    // is pinned is that the line exists and reads as a build, not the commit it names.
+    expect(screen.getByText(/^Build /)).toBeInTheDocument();
+  });
+
   it('counts only non-abandoned goals as "on the plan"', async () => {
     renderRoom();
     expect(await screen.findByText('2 on the plan')).toBeInTheDocument();

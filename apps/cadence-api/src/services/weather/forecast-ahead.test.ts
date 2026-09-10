@@ -166,6 +166,16 @@ describe('a WeatherKit series', () => {
 });
 
 describe('fetching it', () => {
+  // The fetch path reads the real clock (the mapper's `now` default), and the fixture's ten days
+  // start on the 8th — so from the 9th on, a day had already slipped behind "today" and the
+  // count came up one short. Only Date is faked: the fetch mocks and their promises stay real.
+  beforeEach(() => {
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('asks WeatherKit for the daily set too, and caches the answer per cell', async () => {
     const wk = vi.fn(async () => json(wkPayload(48, 10)));
     __setWeatherKitFetchForTests(wk as unknown as typeof fetch);

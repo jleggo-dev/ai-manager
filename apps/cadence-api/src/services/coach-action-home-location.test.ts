@@ -68,7 +68,7 @@ describe('set_home_location', () => {
     expect(geocodeCity).toHaveBeenCalledWith('Denver');
     expect(store.setHomeLocation).toHaveBeenCalledWith(
       'u1',
-      { lat: 39.7392, lon: -104.9903, label: 'Denver, CO, US' },
+      { lat: 39.7392, lon: -104.9903, label: 'Denver, CO, US', source: 'city' },
       null,
     );
     expect(out).toContain('Home location set to Denver, CO, US (39.7392, -104.9903)');
@@ -85,7 +85,7 @@ describe('set_home_location', () => {
 
     expect(store.setHomeLocation).toHaveBeenCalledWith(
       'u1',
-      { lat: 39.7392, lon: -104.9903, label: 'Denver, CO, US' },
+      { lat: 39.7392, lon: -104.9903, label: 'Denver, CO, US', source: 'city' },
       'America/Denver',
     );
   });

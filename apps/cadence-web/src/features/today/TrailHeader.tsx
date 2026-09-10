@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTodayHeader } from './useTodayHeader.ts';
-import { useClockUnit, useForecast } from '../../lib/query/index.ts';
+import { refetchForecast, useClockUnit, useForecast } from '../../lib/query/index.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { QuietHoursChip } from './QuietHoursChip.tsx';
 import { WeatherSheet } from './WeatherSheet.tsx';
@@ -52,6 +53,7 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
   // subscribing here — not inside the sheet — is what lets a tap open on a forecast, not a spinner.
   const forecast = useForecast(Boolean(wx));
   const clock = useClockUnit();
+  const queryClient = useQueryClient();
 
   return (
     <>
@@ -104,6 +106,7 @@ export function TrailHeader({ streak, xp, now = new Date() }: { streak: number; 
           clock={clock}
           now={now}
           citySetter={citySetter}
+          onRetry={() => void refetchForecast(queryClient)}
           onClose={() => setOpen(false)}
         />
       )}

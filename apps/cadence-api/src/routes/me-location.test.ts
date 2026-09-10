@@ -150,4 +150,30 @@ describe('POST /me/location', () => {
     // can drop its copy instead of drawing a city the server no longer believes in.
     expect(r.body.current_location).toBeNull();
   });
+
+  /**
+   * How the place was set travels WITH the place. The clients used to keep this in localStorage,
+   * which a place saved before that record existed — or an account switch on the phone — leaves
+   * empty; the fallback then read the reverse-geocoded label as a typed city and offered CHANGE
+   * on a device-set place (owner, on device, 2026-09-09). A device fix is reverse-geocoded and
+   * carries a label too, so the row alone cannot say — the request shape can.
+   */
+  it('records a fix the phone took as device-sourced, label and all', async () => {
+    const r = await call('POST', '/me/location', { lat: 45.4, lon: -73.9 });
+    expect(r.status).toBe(200);
+    const stored = setHome.mock.calls[0]![1] as { source?: string; label?: string };
+    expect(stored.source).toBe('device');
+    expect(stored.label).toBe('Montreal, Quebec, CA'); // the label alone would have read as typed
+    expect((r.body.home_location as { source?: string }).source).toBe('device');
+  });
+
+  it('records a typed city as city-sourced', async () => {
+    const { geocodeCity } = await import('../services/weather/weather.ts');
+    vi.mocked(geocodeCity).mockResolvedValueOnce({ lat: 45.5, lon: -73.57, label: 'Montreal, QC, CA' });
+    const r = await call('POST', '/me/location', { city: 'Montreal' });
+    expect(r.status).toBe(200);
+    const stored = setHome.mock.calls[0]![1] as { source?: string };
+    expect(stored.source).toBe('city');
+    expect((r.body.home_location as { source?: string }).source).toBe('city');
+  });
 });
