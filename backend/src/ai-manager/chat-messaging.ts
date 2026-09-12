@@ -16,7 +16,7 @@ import { v2ThreadingEnabled } from '../services/ai-profile-runtime-options.ts';
 import { updateV2ProviderMetadata } from './v2-metadata.ts';
 import { refreshSessionSystemPrompt } from '../services/session-persona-refresh.ts';
 import { getChatSession as dbGetSession, createChatMessage } from '../models/chat-sessions.ts';
-import type { Attachment, FormattingRule } from '../types.ts';
+import type { Attachment, ChatFileInput, FormattingRule } from '../types.ts';
 import { resolveChatInvocation } from './chat-messaging-resolve.ts';
 import { openChatSendStream } from './chat-messaging-stream.ts';
 import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
@@ -38,6 +38,13 @@ interface SendChatMessageOptions {
    * model. In-process chat (Cadence's coach) is the first caller; see openChatSendStream.
    */
   images?: string[];
+  /**
+   * Documents for THIS turn (owner, 2026-09-11): a PDF by provider `fileId` (put there first
+   * with `uploadChatSessionFile`) or inline `data`, or a `.txt`/`.md`/`.csv` as decoded `text`.
+   * Spliced in memory like `images` — the persisted row keeps the plain message, so a later turn
+   * rebuilding history never resends a file id the provider may have expired.
+   */
+  files?: ChatFileInput[];
 }
 
 interface SendChatMessageResult {
@@ -98,6 +105,7 @@ export async function sendChatMessage(
   const timeoutMs = options.timeoutMs || (await resolveTimeoutMs({}, provider));
   const attachments: Attachment[] = options.attachments || [];
   const images: string[] = options.images || [];
+  const files: ChatFileInput[] = options.files || [];
 
   const { resolvedMessage, workflowStepId, stepFormattingRules, stepOutputMappings, ruleSetKey, resolvedJob } =
     await resolveChatInvocation(session, sessionId, message, options);
@@ -166,6 +174,7 @@ export async function sendChatMessage(
     resolvedJob,
     attachments,
     images,
+    files,
     timeoutMs,
     extraTools: options.extraTools,
   });

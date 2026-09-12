@@ -22,7 +22,30 @@ export interface ChatCompletionResponse {
  * diagnostics log URL references instead of blobs). Providers map this canonical shape to
  * their own dialect (OpenAI-compat `image_url:{url}`, Responses `input_image`, etc.).
  */
-export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; url: string };
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; url: string }
+  /**
+   * A document the model reads whole (a PDF). Either a provider-side `fileId` (uploaded ahead
+   * through `LlmClient.uploadFile` — the only way past the ~4.5 MB request-body ceiling) or
+   * inline base64 `data` for something small. Providers map this to their dialect (Responses
+   * `input_file`, OpenAI chat `file`); text-only clients drop it, as they drop images.
+   */
+  | { type: 'file'; filename: string; mimeType: string; fileId?: string; data?: string };
+
+/** A document handed to a chat turn (`SendChatMessageOptions.files`). Text-bearing files ride as
+ *  a labelled text block — no provider takes a `.csv` as a file part — everything else as a
+ *  `file` content part by id or inline data. */
+export interface ChatFileInput {
+  filename: string;
+  mimeType: string;
+  /** Provider file id from `uploadChatSessionFile` (PDFs). */
+  fileId?: string;
+  /** Inline base64 (small PDFs only). */
+  data?: string;
+  /** Decoded text (.txt / .md / .csv). */
+  text?: string;
+}
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -41,6 +64,12 @@ export interface LlmClient {
     messages: ChatMessage[],
     options?: Record<string, unknown>,
   ): Promise<globalThis.Response>;
+  /**
+   * Put a file on the provider ahead of a turn and get back the id a `file` content part
+   * references. Optional: a client without it cannot take documents, and the engine says so
+   * rather than inlining megabytes of base64 into a request body.
+   */
+  uploadFile?(file: { buffer: Buffer; filename: string; mimeType: string }): Promise<{ fileId: string }>;
 }
 
 export interface PatchedResponse extends globalThis.Response {

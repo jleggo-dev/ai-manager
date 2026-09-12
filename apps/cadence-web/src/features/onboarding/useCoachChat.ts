@@ -14,6 +14,7 @@ import {
   stopCoachTurn,
   type CoachFoodAction,
 } from '../../lib/api.ts';
+import type { AttachmentRef } from '@cadence/shared';
 import { capabilities } from '../../lib/capability/index.ts';
 import { useCoachActivity } from './useCoachActivity.ts';
 import { recoverTurnFromServer, useReplyNotifyArm, useResumeHealer } from './coach-recovery.ts';
@@ -23,7 +24,17 @@ import { healthOfferAnswered } from './health-digest.ts';
 export interface CoachTurn {
   role: 'user' | 'coach';
   text: string;
+  /** What rode a user turn (filenames) — display only; the server holds the files themselves. */
+  attachments?: string[];
 }
+
+/** What Send hands over from the tray (useCoachAttachments.take): refs for the wire, names for
+ *  the bubble. Empty by default so every existing caller is unchanged. */
+export interface SendAttachments {
+  refs: AttachmentRef[];
+  labels: string[];
+}
+const NO_ATTACHMENTS: SendAttachments = { refs: [], labels: [] };
 
 /**
  * What the Broker has heard so far, surfaced as it lands rather than saved for the review.
@@ -199,9 +210,10 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
    * happened); `sendText` is the one caller that acts on it, because an auto-sent message with
    * nowhere left to retry from would otherwise just vanish.
    */
-  async function deliver(text: string, echo = true): Promise<boolean> {
+  async function deliver(text: string, echo = true, attached: SendAttachments = NO_ATTACHMENTS): Promise<boolean> {
     const window = turnsWindow(turns, text);
-    setTurns((t) => [...t, ...(echo ? [{ role: 'user' as const, text }] : []), { role: 'coach' as const, text: '' }]);
+    const mine = { role: 'user' as const, text, ...(attached.labels.length ? { attachments: attached.labels } : {}) };
+    setTurns((t) => [...t, ...(echo ? [mine] : []), { role: 'coach' as const, text: '' }]);
     setStreaming(true);
     notifyArm.startTurn();
     healer.begin();
@@ -251,6 +263,7 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
         // tool_start: the SAME line, just at the honest moment — while the tool runs, not after.
         noteActivity,
         noteStage,
+        attached.refs,
       );
       if (!completed && !stopped.current && !healer.recovered.current && !(await recoverFromServer())) {
         if (echo) fillLastCoach('⚠️ Connection dropped — send again to continue.');
@@ -325,17 +338,18 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
    * composer's own state, and a caller passing its own text has no reason to also clear a box it
    * never wrote into (which would erase an unrelated draft the user happened to be mid-typing).
    */
-  async function sendText(text: string): Promise<boolean> {
+  async function sendText(text: string, attached: SendAttachments = NO_ATTACHMENTS): Promise<boolean> {
     const trimmed = text.trim();
-    if (!trimmed || streaming) return false;
-    return deliver(trimmed);
+    // A message can be a photo and nothing else — the files are the content (owner, 2026-09-11).
+    if ((!trimmed && attached.refs.length === 0) || streaming) return false;
+    return deliver(trimmed, true, attached);
   }
 
-  async function send() {
+  async function send(attached: SendAttachments = NO_ATTACHMENTS) {
     const text = input.trim();
-    if (!text || streaming) return;
+    if ((!text && attached.refs.length === 0) || streaming) return;
     setInput('');
-    await sendText(text);
+    await sendText(text, attached);
   }
 
   return {

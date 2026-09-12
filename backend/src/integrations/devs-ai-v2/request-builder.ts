@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../types.ts';
+import type { ChatMessage, ContentPart } from '../../types.ts';
 import { contentText } from '../../lib/message-content.ts';
 import {
   expectedSchemaFieldsToJsonSchema,
@@ -70,6 +70,23 @@ export function toolOutputsToV2Request(
 }
 
 /**
+ * One canonical content part → the Responses `InputContentPart` union (`input_text` /
+ * `input_image` / `input_file`, per the Devs.ai spec). A `file` part rides by `file_id` when it
+ * was uploaded ahead (the only route past the ~4.5 MB body ceiling), else as inline
+ * `file_data` — a data URL, which is what OpenAI's own `input_file` takes.
+ */
+export function toV2InputContentPart(p: ContentPart): Record<string, unknown> {
+  if (p.type === 'text') return { type: 'input_text', text: p.text };
+  if (p.type === 'image_url') return { type: 'input_image', image_url: p.url };
+  return {
+    type: 'input_file',
+    filename: p.filename,
+    ...(p.fileId ? { file_id: p.fileId } : {}),
+    ...(p.data ? { file_data: `data:${p.mimeType};base64,${p.data}` } : {}),
+  };
+}
+
+/**
  * Split chat messages into v2 instructions (system) + user/assistant input items.
  */
 export function messagesToV2Request(
@@ -102,13 +119,8 @@ export function messagesToV2Request(
     } else if (typeof msg.content === 'string') {
       inputItems.push({ role: msg.role, content: msg.content });
     } else {
-      // Multimodal user turn → Responses content parts (vision).
-      inputItems.push({
-        role: msg.role,
-        content: msg.content.map((p) =>
-          p.type === 'text' ? { type: 'input_text', text: p.text } : { type: 'input_image', image_url: p.url },
-        ),
-      });
+      // Multimodal user turn → Responses content parts (vision + documents).
+      inputItems.push({ role: msg.role, content: msg.content.map(toV2InputContentPart) });
     }
   }
 

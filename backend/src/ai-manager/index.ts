@@ -46,6 +46,9 @@ export {
   reconnectV2ChatStream,
 } from './chat-messaging.ts';
 
+/* ── Chat files (documents uploaded ahead of a turn) ─────────── */
+export { uploadChatSessionFile, type ChatSessionFileUpload } from './chat-files.ts';
+
 /* ── Tool fulfillment ────────────────────────────────────────── */
 export {
   extractAndAccumulateOutputs,

@@ -9421,3 +9421,46 @@ context chips feeding the coach); `photo_due` nudge kind (a tier-contract decisi
 patch); the watch's set logger sends no load — loaded-lift pairs need phone-side logs until it
 does; Settings overhaul + the two stale-screen chips (dead July code; food converges on the
 Kitchen tab).
+
+## Files and photos on the coach chat — the limits, and why they are what they are (owner, 2026-09-11)
+
+The open coach chat takes attachments: up to four per message — photos, PDFs, and plain text
+(`.txt`, `.md`, `.csv`). MP13's `photo` data-URL field still works; nothing in the web app sent
+it, so this is the first time a picture actually reaches her from the composer.
+
+**The limits, one place (`packages/cadence-shared/src/attachments.ts` — the derivation is in
+the file header):** images 4 MB AFTER the composer shrinks them (2048 px long edge, JPEG 0.85 —
+Claude keeps up to 2576 px, so nothing a model would use is lost; a 20 MB phone shot is accepted
+from the picker and lands at 300 KB–1 MB); PDFs 20 MB AND 100 pages (the page cap is the cost
+gate, the byte cap the transport gate; pdf-lib counts real pages, object streams included); text
+1 MB (already ~250k tokens — expect this to come down). HEIC is taken from the picker and
+converted on the device, since no model reads it. The classifier and the rejection words are
+shared, so the composer, the sign route, and the turn refuse the same things in the same words.
+
+**Why no byte ever rides a JSON body.** Vercel Functions refuse a request body over 4.5 MB, and
+cadence-api and Devs.ai both run on them; base64 adds a third on top. So `POST /coach/attachments`
+mints a one-shot signed upload for a path the server chose (`<userId>/<date>/<uuid>.<ext>` in
+the private `coach-attachments` bucket — byte cap and MIME allowlist set ON THE BUCKET, because
+a signed token binds a path, not a size), the browser PUTs straight to Storage, and the message
+carries only refs. Uploads start on pick, not on Send.
+
+**What she gets (`coach-attach-turn.ts`, succeeding `coach-photo-attach.ts`):** photos as signed
+URLs on the turn (vision, as before) plus a transcript-invisible note carrying a bucket-prefixed
+`photo_ref` so `read_label` still works on a later turn; text files decoded and spliced as prose;
+PDFs page-gated, then put on the PROVIDER through the engine's new `uploadChatSessionFile` (its
+own upload call, never the conversation's JSON) and referenced as an `input_file` by id — the
+engine grew a `file` content part, `SendChatMessageOptions.files`, `LlmClient.uploadFile`, and the
+Devs.ai v2 mapping for it (`toV2InputContentPart`). Every failure soft-fails PER ATTACHMENT as a
+line in the note: she is told a 240-page scan did not come through and why, and the photo beside
+it still lands. A message may be a photo and nothing else.
+
+**Priced honestly:** Devs.ai's own standalone upload is multipart through a Vercel Function —
+about 4.5 MB. The composer allows 20 MB PDFs (the owner's ceiling, and what the Anthropic Files
+API takes at 500 MB when M1–M4 land); on Devs.ai today a PDF over ~4.5 MB reaches the coach as
+"larger than I can take as a document right now (about 4 MB)". Their chat-scoped Blob flow goes
+to 100 MB but needs a v1 chat id the v2 Responses path does not have. Attachments are this turn's
+only — the persisted row keeps the plain text, so a later turn cannot resend an expired file id;
+a `read_document(ref)` tool for reaching back is the natural next slice. The restored transcript
+shows the words, not the chips (nothing about the files is persisted client-side). Not rehearsed
+against a live provider from dev (the #232 constraint): the `input_file` shape is pinned to the
+published Devs.ai spec, and the first real PDF turn post-deploy is the acceptance test.

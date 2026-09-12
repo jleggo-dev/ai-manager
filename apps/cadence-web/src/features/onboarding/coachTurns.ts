@@ -16,11 +16,15 @@ export interface CoachTurnView {
   text: string;
   /** Picks carried by this turn, whether or not they are still live. */
   picks: CoachPicks | null;
+  /** A user turn's attachments, by name (display only). */
+  attachments?: string[];
 }
 
 export function viewTurns(turns: readonly CoachTurn[]): CoachTurnView[] {
   return turns.map((t) =>
-    t.role === 'coach' ? { role: 'coach', ...parseCoachTurn(t.text) } : { role: 'user', text: t.text, picks: null },
+    t.role === 'coach'
+      ? { role: 'coach', ...parseCoachTurn(t.text) }
+      : { role: 'user', text: t.text, picks: null, ...(t.attachments?.length ? { attachments: t.attachments } : {}) },
   );
 }
 

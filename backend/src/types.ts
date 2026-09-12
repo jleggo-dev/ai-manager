@@ -12,6 +12,7 @@ export type {
   ChatCompletionChoice,
   ChatCompletionResponse,
   ContentPart,
+  ChatFileInput,
   ChatMessage,
   LlmClient,
   PatchedResponse,

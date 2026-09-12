@@ -30,6 +30,7 @@
     "@vercel/functions": "^3.9.5",
     "dotenv": "^16",
     "express": "^4",
+    "pdf-lib": "^1.17.1",
     "postgres": "^3.4.5",
     "tsx": "^4.21.0",
     "undici": "^7.28.0",

@@ -1,5 +1,6 @@
 import { cadenceServiceClient } from '../db/supabase.ts';
 import { parsePhotoDataUrl } from './photo-validate.ts';
+import { COACH_ATTACHMENTS_BUCKET, COACH_ATTACHMENT_REF_PREFIX } from './coach-attachments.ts';
 import type { NutritionLog } from '@cadence/shared';
 
 /**
@@ -31,9 +32,14 @@ export async function putMealPhoto(userId: string, date: string, dataUrl: string
   return path;
 }
 
-/** Sign ONE photo_ref (e.g. to hand a just-uploaded photo to the vision parser). */
+/** Sign ONE photo_ref (e.g. to hand a just-uploaded photo to the vision parser). A chat photo's
+ *  ref carries its bucket as a prefix (`coach-attachments/…`, see coach-attachments.ts) so
+ *  read_label can re-sign either kind through this one door. */
 export async function signMealPhotoUrl(photoRef: string, ttlSeconds = 600): Promise<string> {
-  const { data, error } = await cadenceServiceClient().storage.from(BUCKET).createSignedUrl(photoRef, ttlSeconds);
+  const [bucket, path] = photoRef.startsWith(COACH_ATTACHMENT_REF_PREFIX)
+    ? [COACH_ATTACHMENTS_BUCKET, photoRef.slice(COACH_ATTACHMENT_REF_PREFIX.length)]
+    : [BUCKET, photoRef];
+  const { data, error } = await cadenceServiceClient().storage.from(bucket).createSignedUrl(path, ttlSeconds);
   if (error || !data?.signedUrl) throw new Error(`photo sign failed: ${error?.message ?? 'no url'}`);
   return data.signedUrl;
 }

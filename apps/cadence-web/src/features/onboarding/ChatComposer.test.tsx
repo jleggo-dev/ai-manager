@@ -165,3 +165,56 @@ describe('ChatComposer', () => {
     expect(container.querySelector('textarea')!.style.height).not.toBe('0px');
   });
 });
+
+/**
+ * Attachments (owner, 2026-09-11): a photo alone is a message, so Send lights up for a ready tray
+ * with no words; it waits while a file is still going up; and the paperclip is only there when a
+ * tray is — the ongoing tab passes one, a composer without one renders exactly as before.
+ */
+describe('ChatComposer attachments', () => {
+  const tray = (over: Partial<{ ready: boolean; busy: boolean }>) =>
+    ({ items: [], add: vi.fn(), remove: vi.fn(), take: vi.fn(), ready: false, busy: false, ...over }) as never;
+
+  it('shows the paperclip only when given a tray', () => {
+    const { rerender } = render(
+      <ChatComposer value="" onChange={noop} onSend={noop} streaming={false} showDisclaimer={false} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Attach a photo or file' })).not.toBeInTheDocument();
+    rerender(
+      <ChatComposer value="" onChange={noop} onSend={noop} streaming={false} showDisclaimer={false} tray={tray({})} />,
+    );
+    expect(screen.getByRole('button', { name: 'Attach a photo or file' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+  });
+
+  it('lights Send for a ready file with no words, and holds it while a file is still going up', () => {
+    const onSend = vi.fn();
+    const { rerender } = render(
+      <ChatComposer
+        value=""
+        onChange={noop}
+        onSend={onSend}
+        streaming={false}
+        showDisclaimer={false}
+        tray={tray({ ready: true })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ChatComposer
+        value="with words"
+        onChange={noop}
+        onSend={onSend}
+        streaming={false}
+        showDisclaimer={false}
+        tray={tray({ ready: true, busy: true })}
+      />,
+    );
+    const waiting = screen.getByRole('button', { name: 'Sending your files first' });
+    expect(waiting).toBeDisabled();
+    fireEvent.click(waiting);
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+});

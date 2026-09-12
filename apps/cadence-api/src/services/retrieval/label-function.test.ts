@@ -10,6 +10,7 @@ import {
   type ParsedIdentifyCapture,
 } from '../food-capture.ts';
 import { signMealPhotoUrl } from '../meal-photos.ts';
+import { MAX_PHOTO_BYTES } from '../photo-validate.ts';
 import { READ_LABEL } from './label-function.ts';
 
 /**
@@ -150,7 +151,7 @@ describe('read_label — run()', () => {
     const arrayBuffer = vi.fn(async () => new Uint8Array(0).buffer);
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => fakeImageResponse({ contentLength: 2_000_000, arrayBuffer })),
+      vi.fn(async () => fakeImageResponse({ contentLength: MAX_PHOTO_BYTES + 1, arrayBuffer })),
     );
     await expect(READ_LABEL.run(USER, { photo_ref: 'huge' })).rejects.toThrow(/too large/);
     expect(arrayBuffer).not.toHaveBeenCalled();
@@ -159,7 +160,7 @@ describe('read_label — run()', () => {
   it('rejects an oversized photo by its real size when no content-length was declared', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => fakeImageResponse({ contentLength: null, bodyBytes: 2_000_000 })),
+      vi.fn(async () => fakeImageResponse({ contentLength: null, bodyBytes: MAX_PHOTO_BYTES + 1 })),
     );
     await expect(READ_LABEL.run(USER, { photo_ref: 'huge-undeclared' })).rejects.toThrow(/too large/);
   });

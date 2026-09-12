@@ -2,6 +2,8 @@ import { type ReactNode } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { useAutoGrow } from './useAutoGrow.ts';
+import { AttachButton, AttachmentTray } from './AttachmentTray.tsx';
+import type { CoachAttachmentsTray } from './useCoachAttachments.ts';
 
 /** A plain square. Every chat app uses one for stop; there is nothing to be clever about here. */
 const StopIcon = () => (
@@ -44,6 +46,7 @@ export function ChatComposer({
   placeholder = 'Message your coach…',
   rootRef,
   onStop,
+  tray,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -58,14 +61,21 @@ export function ChatComposer({
   onStop?: () => void;
   /** Rides above the field inside the same floating stack (the Broker's live captures). */
   above?: ReactNode;
+  /** The attachments tray (useCoachAttachments). Absent = no paperclip, no chips. */
+  tray?: CoachAttachmentsTray;
 }) {
   // Re-fits on every render, so it follows the text, `streaming` blanking the field, and — the
   // one that was broken — the tab finally becoming visible. See useAutoGrow.
   const taRef = useAutoGrow();
+  // Send lights up for words OR files — a photo alone is a message. It waits while a file is
+  // still going up, because a Send that races its own upload sends a message with a hole in it.
+  const canSend = Boolean(value.trim()) || Boolean(tray?.ready);
+  const uploading = Boolean(tray?.busy);
 
   return (
     <div className="composer-wrap" ref={rootRef}>
       {above}
+      {tray && <AttachmentTray tray={tray} />}
       <div className={`composer${streaming ? ' is-locked' : ''}`}>
         <textarea
           ref={taRef}
@@ -90,6 +100,7 @@ export function ChatComposer({
           </button>
         ) : (
           <>
+            {tray && <AttachButton tray={tray} />}
             {/* The mic is ALWAYS here — mounted and visible — and both of those are bugs paid for.
                 It was once the `else` branch of the send button, so the first dictated word made
                 the field non-empty, React unmounted MicButton, and its cleanup called abort(),
@@ -103,8 +114,13 @@ export function ChatComposer({
             <span className="mic-slot">
               <MicButton value={value} onChange={onChange} disabled={false} />
             </span>
-            {value.trim() && (
-              <button className="send" onClick={onSend} aria-label="Send">
+            {canSend && (
+              <button
+                className={`send${uploading ? ' is-waiting' : ''}`}
+                onClick={onSend}
+                aria-label={uploading ? 'Sending your files first' : 'Send'}
+                disabled={uploading}
+              >
                 <SendIcon />
               </button>
             )}

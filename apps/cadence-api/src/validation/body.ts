@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { DESCRIPTION_MAX, type RepertoireStatus } from '@cadence/shared';
+import { DESCRIPTION_MAX, MAX_ATTACHMENTS_PER_MESSAGE, type RepertoireStatus } from '@cadence/shared';
 
 export class BodyValidationError extends Error {
   constructor(message: string) {
@@ -650,3 +650,28 @@ export const scheduleUserRoutineBodySchema = z.object({
   days: z.array(userRoutineDaySchema).min(1, { message: 'at least one day is required' }).max(7),
   time_of_day: z.enum(['morning', 'evening', 'anytime']).optional(),
 });
+
+/* ── Coach chat attachments (owner, 2026-09-11) ─────────────────────────────── */
+
+/** What the composer asks before it uploads: the file's name, declared type, and size AFTER its
+ *  own shrinking. Kind and limits are decided by the shared classifier in the route, not here. */
+export const coachAttachmentSignBodySchema = z.object({
+  name: z.string({ message: 'name required' }).trim().min(1, 'name required').max(255),
+  mime: z.string().max(120).optional().default(''),
+  size: z.coerce.number({ message: 'size required' }).int().nonnegative(),
+});
+
+/** The refs a message carries. Bounded here so a malformed list is a clean 400 BEFORE the SSE
+ *  stream opens (the message text gets the same treatment); ownership and what Storage actually
+ *  holds are checked per ref in coach-attach-turn.ts, where a bad one soft-fails alone. */
+export const coachMessageAttachmentsSchema = z
+  .array(
+    z.object({
+      ref: z.string().min(1).max(300),
+      kind: z.enum(['image', 'document', 'text']),
+      name: z.string().trim().min(1).max(255),
+      mime: z.string().max(120).optional().default(''),
+      size: z.coerce.number().int().nonnegative().optional().default(0),
+    }),
+  )
+  .max(MAX_ATTACHMENTS_PER_MESSAGE, `at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments per message`);

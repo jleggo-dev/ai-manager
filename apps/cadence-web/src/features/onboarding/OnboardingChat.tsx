@@ -18,6 +18,7 @@ import { useStickToBottom } from './useStickToBottom.ts';
 import { useAnchorOnPrepend } from './useAnchorOnPrepend.ts';
 import { useFloatingInset } from './useFloatingInset.ts';
 import { useCoachChat } from './useCoachChat.ts';
+import { useCoachAttachments } from './useCoachAttachments.ts';
 import { useCoachHistory } from './useCoachHistory.ts';
 import { useReplanWatch } from './useReplanWatch.ts';
 import { chatProgress, livePicks, viewTurns } from './coachTurns.ts';
@@ -175,6 +176,10 @@ export function OnboardingChat({
    * work she started does not go silent the moment her dots do.
    */
   const replanWatch = useReplanWatch({ streaming });
+
+  // What is attached to the message being written (owner, 2026-09-11) — uploads start on pick,
+  // Send takes what is ready. Its own hook; see useCoachAttachments.
+  const tray = useCoachAttachments();
 
   /**
    * Everything said before the conversation on screen — loaded only when asked for, one
@@ -404,6 +409,7 @@ export function OnboardingChat({
                 <ChatTurn
                   role={t.role}
                   text={t.text}
+                  attachments={t.attachments}
                   pending={t.role === 'coach' && !t.text}
                   // Only the newest turn; a line under an older reply would describe the past.
                   activity={last ? activity : ''}
@@ -524,8 +530,9 @@ export function OnboardingChat({
           // Their own message is the thing they are waiting on, so re-arm the follow even if
           // they had scrolled up to check something before sending.
           stickNow();
-          void send();
+          void send(tray.take());
         }}
+        tray={tray}
         streaming={streaming}
         showDisclaimer={chrome === 'onboarding'}
         // Only while the opening question is the live one: after that she is asking real

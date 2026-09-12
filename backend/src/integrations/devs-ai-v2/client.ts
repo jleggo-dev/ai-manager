@@ -19,6 +19,7 @@ import {
 } from './request-builder.ts';
 import { createSseTransformState, transformV2SseChunk } from './sse-transform.ts';
 import { createSseLineBuffer } from '../../services/sse-line-reader.ts';
+import { uploadStandaloneFile } from '../devs-ai/files.ts';
 
 /** Build the Devs.ai v2 /resume JSON body (camelCase `toolOutputs`, not `tool_outputs`). */
 export function buildV2ResumeBody(toolOutputs?: V2ResumeToolOutput[], reason?: string): V2ResumeRequestBody {
@@ -426,6 +427,15 @@ export class DevsAiV2Client {
       max_output_tokens: 16,
     });
     return { ok: data.status === 'completed', responseId: data.id };
+  }
+
+  /**
+   * LlmClient.uploadFile — put a document on Devs.ai ahead of a turn so the turn can reference it
+   * as `input_file.file_id` (request-builder.ts `toV2InputContentPart`). Same v1 files endpoint
+   * and bearer key as the v1 client; the helper lives beside it in devs-ai/files.ts.
+   */
+  async uploadFile(file: { buffer: Buffer; filename: string; mimeType: string }): Promise<{ fileId: string }> {
+    return uploadStandaloneFile(this, file);
   }
 
   /** List models via v1 endpoint (shared platform). */
