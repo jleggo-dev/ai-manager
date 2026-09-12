@@ -12,7 +12,7 @@ describe('describeFile', () => {
   it.each([
     ['IMG_0001.HEIC', '', 8_000_000, 'image', 'image/heic'],
     ['photo.jpg', 'image/jpeg', 19 * 1024 * 1024, 'image', 'image/jpeg'],
-    ['bloodwork.pdf', 'application/pdf', 15 * 1024 * 1024, 'document', 'application/pdf'],
+    ['bloodwork.pdf', 'application/pdf', 3 * 1024 * 1024, 'document', 'application/pdf'],
     ['notes.md', '', 2000, 'text', 'text/markdown'],
     ['export.csv', 'application/octet-stream', 500_000, 'text', 'text/csv'],
   ])('%s goes (%s, %d bytes)', (name, mime, size, kind, norm) => {
@@ -26,9 +26,9 @@ describe('describeFile', () => {
   });
 
   it('documents and text are gated at their own caps, in the shared words', () => {
-    const pdf = describeFile('scan.pdf', 'application/pdf', 21 * 1024 * 1024);
+    const pdf = describeFile('scan.pdf', 'application/pdf', 5 * 1024 * 1024);
     expect(pdf.ok).toBe(false);
-    if (!pdf.ok) expect(pdf.text).toMatch(/over 20 MB/);
+    if (!pdf.ok) expect(pdf.text).toMatch(/over 4 MB/);
     const txt = describeFile('dump.txt', 'text/plain', 2 * 1024 * 1024);
     expect(txt.ok).toBe(false);
     if (!txt.ok) expect(txt.text).toMatch(/over 1 MB/);

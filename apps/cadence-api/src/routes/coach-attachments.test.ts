@@ -62,13 +62,13 @@ describe('POST /coach/attachments', () => {
     expect(signCoachUpload).not.toHaveBeenCalled();
   });
 
-  it('refuses an image still over 4 MB after shrinking, and a 21 MB PDF', async () => {
+  it('refuses an image still over 4 MB after shrinking, and a 5 MB PDF (the Devs.ai ceiling)', async () => {
     const img = await post({ name: 'big.jpg', mime: 'image/jpeg', size: IMAGE_MAX_BYTES + 1 });
     expect(img.status).toBe(400);
     expect(String(img.body.error)).toMatch(/still over 4 MB after shrinking/);
-    const pdf = await post({ name: 'scan.pdf', mime: 'application/pdf', size: 21 * 1024 * 1024 });
+    const pdf = await post({ name: 'scan.pdf', mime: 'application/pdf', size: 5 * 1024 * 1024 });
     expect(pdf.status).toBe(400);
-    expect(String(pdf.body.error)).toMatch(/over 20 MB/);
+    expect(String(pdf.body.error)).toMatch(/over 4 MB/);
   });
 
   it('400s a body with no name or size, before any Storage call', async () => {

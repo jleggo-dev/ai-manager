@@ -9431,8 +9431,8 @@ it, so this is the first time a picture actually reaches her from the composer.
 **The limits, one place (`packages/cadence-shared/src/attachments.ts` — the derivation is in
 the file header):** images 4 MB AFTER the composer shrinks them (2048 px long edge, JPEG 0.85 —
 Claude keeps up to 2576 px, so nothing a model would use is lost; a 20 MB phone shot is accepted
-from the picker and lands at 300 KB–1 MB); PDFs 20 MB AND 100 pages (the page cap is the cost
-gate, the byte cap the transport gate; pdf-lib counts real pages, object streams included); text
+from the picker and lands at 300 KB–1 MB); PDFs 4 MB AND 100 pages (the page cap is the cost
+gate, the byte cap is Devs.ai's — see below; pdf-lib counts real pages, object streams included); text
 1 MB (already ~250k tokens — expect this to come down). HEIC is taken from the picker and
 converted on the device, since no model reads it. The classifier and the rejection words are
 shared, so the composer, the sign route, and the turn refuse the same things in the same words.
@@ -9455,10 +9455,11 @@ line in the note: she is told a 240-page scan did not come through and why, and 
 it still lands. A message may be a photo and nothing else.
 
 **Priced honestly:** Devs.ai's own standalone upload is multipart through a Vercel Function —
-about 4.5 MB. The composer allows 20 MB PDFs (the owner's ceiling, and what the Anthropic Files
-API takes at 500 MB when M1–M4 land); on Devs.ai today a PDF over ~4.5 MB reaches the coach as
-"larger than I can take as a document right now (about 4 MB)". Their chat-scoped Blob flow goes
-to 100 MB but needs a v1 chat id the v2 Responses path does not have. Attachments are this turn's
+about 4.5 MB — and Devs.ai is the main provider, so the document cap is 4 MB (owner ruling the
+same evening: "we have to respect the devs.ai limit"), refused on the device in the same words
+the server would use. The owner's 20 MB waits on the Anthropic Files API path (500 MB, M1–M4);
+raising it is one constant. Their chat-scoped Blob flow goes to 100 MB but needs a v1 chat id the
+v2 Responses path does not have. Attachments are this turn's
 only — the persisted row keeps the plain text, so a later turn cannot resend an expired file id;
 a `read_document(ref)` tool for reaching back is the natural next slice. The restored transcript
 shows the words, not the chips (nothing about the files is persisted client-side). Not rehearsed

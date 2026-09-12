@@ -146,7 +146,7 @@ describe('attachToTurn', () => {
   });
 
   it('a provider that refuses the upload becomes a plain-words line, and the turn continues', async () => {
-    statAttachment.mockResolvedValue({ size: 6_000_000, contentType: 'application/pdf' });
+    statAttachment.mockResolvedValue({ size: 3_000_000, contentType: 'application/pdf' });
     downloadAttachment.mockResolvedValue(Buffer.from('%PDF'));
     countPdfPages.mockResolvedValue(4);
     uploadCoachFile.mockRejectedValue(new Error('Devs.ai takes files up to about 4.5 MB on this path'));

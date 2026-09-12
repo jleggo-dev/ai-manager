@@ -4,8 +4,8 @@
  * The bytes never touch cadence-api. The route mints a one-shot signed upload URL for a path it
  * chose (`<userId>/<date>/<uuid>.<ext>` — the same shape meal photos use, so purge stays one
  * folder walk), the browser PUTs straight to Supabase Storage, and the message carries only the
- * ref. That is the whole reason a 20 MB PDF is possible on a platform whose functions refuse a
- * 4.5 MB body (`@cadence/shared` attachments.ts has the derivation).
+ * ref. That is what keeps a 4 MB PDF and a 4 MB photo off a platform whose functions refuse a
+ * 4.5 MB body (`@cadence/shared` attachments.ts has the derivation and the Devs.ai ceiling).
  *
  * One PRIVATE bucket for every kind, with the byte cap and the MIME allowlist set ON THE BUCKET:
  * a signed token is bound to a path, not to a size, so the bucket is what stops a 200 MB upload

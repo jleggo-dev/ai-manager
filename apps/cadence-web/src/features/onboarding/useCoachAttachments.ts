@@ -7,7 +7,7 @@
  * next message" is a distinct responsibility from "run the turn", and it is the piece the meal
  * screen or a check-in would reuse without inheriting a chat.
  *
- * Uploads start the moment a file is picked, not on Send: a 20 MB PDF takes seconds to go up,
+ * Uploads start the moment a file is picked, not on Send: a 4 MB PDF takes seconds to go up,
  * and doing that while the user is still typing is the difference between Send feeling instant
  * and Send feeling broken. Send waits only for what is still in flight (`busy`).
  *

@@ -6,8 +6,8 @@ import type { PreparedAttachment } from '../attachments/prepare.ts';
 /**
  * The upload, in two calls and no body (owner, 2026-09-11): ask the API to mint a one-shot signed
  * upload for this file, then PUT the bytes straight to Supabase Storage on that token. The
- * message that follows carries only the ref. That is what lets a 20 MB PDF through a platform
- * whose functions refuse a 4.5 MB body — `@cadence/shared` attachments.ts has the derivation.
+ * message that follows carries only the ref, so no upload ever meets the 4.5 MB body cap of the
+ * platform's functions — `@cadence/shared` attachments.ts has the derivation.
  */
 
 interface SignedUpload {

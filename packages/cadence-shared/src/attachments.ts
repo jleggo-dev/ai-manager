@@ -16,9 +16,10 @@
  *    composer shrinks it BEFORE upload and rejects only what is still over 4 MB afterwards.
  *  - PDFs cannot be compressed (they already are), so they get a byte cap AND a page cap: 100
  *    pages is the Claude limit on 200k-context models and roughly 150k to 300k tokens — the page
- *    cap is the cost gate, the byte cap is the transport gate. Devs.ai's own multipart upload
- *    is limited to ~4.5 MB; the engine reports anything over that as a soft failure the coach
- *    can explain, rather than the composer silently refusing what the owner asked to allow.
+ *    cap is the cost gate, the byte cap is the transport gate. The byte cap is Devs.ai's: its
+ *    standalone upload is multipart through a Vercel Function, about 4.5 MB, and Devs.ai is the
+ *    main provider (owner, 2026-09-11) — so 4 MB, refused on the device rather than discovered as
+ *    a provider error. Raise it when documents go through the Anthropic Files API (500 MB).
  *  - Text files are tokens, not bytes: 1 MB of CSV is ~250k tokens, already past what most of
  *    the models in the catalog take in one turn. 1 MB is the owner's ceiling; expect it to come
  *    down once a real one lands.
@@ -81,7 +82,9 @@ export const IMAGE_JPEG_QUALITY = 0.85;
  *  small screenshot only softens its text. */
 export const IMAGE_PASSTHROUGH_MAX_BYTES = 1024 * 1024;
 
-export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+/** Devs.ai's multipart ceiling is ~4.5 MB (`DEVS_AI_MULTIPART_MAX_BYTES` in the engine); 4 MB
+ *  keeps a clean margin under it. The owner's 20 MB waits on the Anthropic Files API path. */
+export const DOCUMENT_MAX_BYTES = 4 * 1024 * 1024;
 export const DOCUMENT_MAX_PAGES = 100;
 
 export const TEXT_MAX_BYTES = 1024 * 1024;

@@ -110,7 +110,6 @@ export {
   getProgress,
   addGoalEvent,
   buildNextWeek,
-  buildWeekAhead,
   getRoutines,
   getRoutineSession,
   type PlanRoutine,

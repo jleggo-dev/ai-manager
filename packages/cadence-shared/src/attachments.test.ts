@@ -60,8 +60,8 @@ describe('the limits the owner set (2026-09-11)', () => {
     expect(IMAGE_MAX_BYTES).toBe(4 * 1024 * 1024);
     expect(IMAGE_MAX_EDGE_PX).toBe(2048);
   });
-  it('documents: 20 MB and 100 pages; text: 1 MB; four per message', () => {
-    expect(DOCUMENT_MAX_BYTES).toBe(20 * 1024 * 1024);
+  it('documents: 4 MB (the Devs.ai multipart ceiling, with margin) and 100 pages; text: 1 MB; four per message', () => {
+    expect(DOCUMENT_MAX_BYTES).toBe(4 * 1024 * 1024);
     expect(DOCUMENT_MAX_PAGES).toBe(100);
     expect(TEXT_MAX_BYTES).toBe(1024 * 1024);
     expect(MAX_ATTACHMENTS_PER_MESSAGE).toBe(4);
