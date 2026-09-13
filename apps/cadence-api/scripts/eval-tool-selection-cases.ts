@@ -493,6 +493,20 @@ const ACTIONS: EvalCase[] = [
       'Finding TR-5 (tool audit, 2026-09-03), the restraint half — a set of only positive cases measures ' +
       'recall and silently ignores false triggering (TOOL-HARNESS.md, step 7).',
   },
+  {
+    id: 'A27',
+    kind: 'action',
+    turn: "can you just build next week already? i want to see what it looks like. keep the check-in where it is",
+    expect: ['build_week_ahead'],
+    allow: [...DOSSIER_READS],
+    // The three neighbours differ by what happens to the check-in: rolling the week forward skips
+    // it, extending the week moves it, a plan change redesigns. "Keep the check-in where it is"
+    // names the one that leaves it alone.
+    forbid: ['build_next_week', 'extend_horizon', 'propose_plan_change', 'start_replan'],
+    from:
+      'Owner ruling 2026-09-09 (DESIGN-check-in.md, "the wall stands mid-week"): the locked days past the ' +
+      'check-in open on request without moving it — from the trail, or from chat.',
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -863,6 +877,17 @@ const SILENCE: EvalCase[] = [
       'Design frame 1e (repertoire build, P7) — the forbidden half of the offer. The ruling is that she may ' +
       'offer when they say they are PARTWAY THROUGH something; owning a copy of it is not a standing.',
   },
+  {
+    id: 'C20',
+    kind: 'silence',
+    turn: "what's on for next tuesday? just curious how the week after this one shapes up",
+    expect: [],
+    allow: [...DOSSIER_READS],
+    // Looking at next week is not asking for it to be built: a curious glance must not write the
+    // following week (build_week_ahead), end this one (build_next_week) or lengthen it.
+    forbid: ['build_week_ahead', 'build_next_week', 'extend_horizon'],
+    from: 'build_week_ahead ships (owner ruling 2026-09-09) — the restraint half of A27, TOOL-HARNESS.md step 7.',
+  },
 ];
 
 /* ══ D · CANARIES — the grader on trial before the model is ══════════════════════════════════ */
@@ -939,6 +964,7 @@ export const ACTION_TOOLS = new Set([
   'update_repertoire',
   'revise_session',
   'start_replan',
+  'build_week_ahead',
   // A tail action all the same, and the one whose miss is least visible: when she does not call
   // it she asks the person to type their book out, which reads as helpfulness rather than a gap.
   'offer_repertoire_review',

@@ -40,12 +40,22 @@ export interface ActiveEpisode {
    *  question makes no sense here, so the paused copy replaces it. Absent on older servers. */
   paused?: boolean;
 }
+/** One line of the rhythm drawn on a day behind the wall — a title, no id, nothing to tap. */
+export interface PlanPreviewItem {
+  title: string;
+  time_of_day?: string;
+  area?: 'movement' | 'nourishment' | 'mind' | 'practice';
+}
 export interface PlanDay {
   date: string;
   weekday: string;
   dayNum: number;
   isToday: boolean;
   occurrences: PlanOccurrence[];
+  /** What this day would hold, projected from the plan's recurrences (the API's plan-preview.ts).
+   *  Present only on days past the week's end that no commit has written yet; the locked day
+   *  lists it as plain text. Absent from older servers, and absence must stay a no-claim. */
+  preview?: PlanPreviewItem[];
 }
 export interface PlanActivity {
   activity_id: string;
@@ -95,7 +105,16 @@ export interface PlanViewData {
   pendingProposal?: PendingProposal | null;
   /** Named `weekState`, not `week` — `week: PlanDay[]` above already owns that name. Null before
    *  a plan exists. `checkin_due` drives the end-of-trail card (check-in rebuild, step 6). */
-  weekState?: { ends_on: string; checkin_due: boolean } | null;
+  weekState?: {
+    ends_on: string;
+    checkin_due: boolean;
+    /** The day the week began — the gate prompt's "day N of your plan" (checkinGate.ts). Absent
+     *  from older servers; the prompt then uses its mid-week wording. */
+    started_on?: string;
+    /** How far ahead the user deliberately built ("Build next week"), or null. The trail locks
+     *  every day past the later of `ends_on` and this (trailLock.ts). */
+    built_through?: string | null;
+  } | null;
 }
 
 /**
@@ -639,9 +658,10 @@ export async function postponeDetour(): Promise<{ ok: boolean; cancelled?: boole
 
 /**
  * "Just build my week — I trust you" (check-in rebuild, step 6): the end-of-trail card's trust
- * path. A commit, not a synthesis — no coach call, no preview step; the outgoing week's own
- * activities are recommitted as the next version. 409 with `status: 'no_plan' | 'not_due'` when
- * the guard on the other end declines (nothing to rebuild, or the week genuinely isn't over yet).
+ * path, and the gate prompt's skipped check-in. A commit, not a synthesis — no coach call, no
+ * preview step; the outgoing week's own activities are recommitted as the next version and the
+ * week clock starts over. 409 with `status: 'no_plan' | 'not_due'` when the guard on the other
+ * end declines (nothing to rebuild, or the week genuinely isn't over yet).
  */
 export interface WeekBuildResult {
   status: 'committed' | 'no_plan' | 'not_due';
@@ -653,6 +673,22 @@ export interface WeekBuildResult {
 }
 export async function buildNextWeek(): Promise<WeekBuildResult> {
   const res = await fetch(`${BASE}/plan/week/build`, { method: 'POST', headers: headers() });
+  return res.json();
+}
+
+/**
+ * "Build next week" BEFORE the check-in (owner, 2026-09-09): the following week is written on
+ * the same rhythm and its days open on the trail; the check-in date does NOT move. 200 with
+ * `built` (or `already_built`); 409 with `due` (the week is over — that is `buildNextWeek`) or
+ * `no_plan`.
+ */
+export interface WeekAheadResult {
+  status: 'built' | 'already_built' | 'due' | 'no_plan';
+  builtThrough?: string;
+  occurrences?: number;
+}
+export async function buildWeekAhead(): Promise<WeekAheadResult> {
+  const res = await fetch(`${BASE}/plan/week/build-ahead`, { method: 'POST', headers: headers() });
   return res.json();
 }
 

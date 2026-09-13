@@ -3681,40 +3681,24 @@ html[data-native] .sheet-body {
 .trail-wall {
   padding: 12px 20px 0;
 }
-/* Behind the wall: the horizon still shows, dimmed, and nothing on it is pressable. */
+/* Behind the wall: the horizon still shows, muted. Its discs stay pressable — a tap opens the
+   gate prompt (owner, 2026-09-09), which is the only door a locked day has; nothing holds. */
 .trail-day.is-locked {
   opacity: 0.55;
   filter: saturate(0.6);
-  pointer-events: none;
 }
-.trail-locked {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0 12px;
-  text-align: center;
-}
+/* The one quiet line on a locked day. Static text, so it sits above the sky layer rather than
+   under it. */
 .trail-locked-line {
-  margin: 0;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 6px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: center;
   color: oklch(45% 0.03 250);
-}
-.trail-locked-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.trail-locked-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: oklch(38% 0.03 250);
 }
 
 .trail-node {
@@ -4158,14 +4142,6 @@ html[data-native] .sheet-body {
 }
 .trail-day.is-dark-sky .trail-locked-line {
   color: oklch(85% 0.02 250);
-}
-.trail-day.is-dark-sky .trail-locked-title {
-  color: oklch(94% 0.01 250);
-}
-/* A locked day's plain-text list is static, so without this the sky layer would paint over it. */
-.trail-locked {
-  position: relative;
-  z-index: 1;
 }
 
 /* ── Redesign task start sheet (StartSheet) ── */

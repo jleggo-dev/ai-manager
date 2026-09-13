@@ -17,6 +17,7 @@ import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
+import { BUILD_WEEK_AHEAD } from './coach-action-build-week-ahead.ts';
 import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { PAUSE_WEEK } from './coach-action-pause-week.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
@@ -545,6 +546,11 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // Tail tier (the drawer), not ALWAYS_ACTIONS: extending a week is an occasional, explicit ask
   // — the end-cap's visible send names it in the same words as its DRAWER_HOOKS line.
   extend_horizon: EXTEND_HORIZON,
+  // Tail tier, same ruling. "Build next week" before the check-in (owner, 2026-09-09): writes
+  // the following week on the same rhythm WITHOUT moving the check-in — the conversational road
+  // to the locked days on the trail. Its two neighbours differ by what the check-in does:
+  // build_next_week ends a finished week (skips it), extend_horizon moves it out.
+  build_week_ahead: BUILD_WEEK_AHEAD,
   // Tail tier, same ruling. The other end of extend_horizon: clearing a stretch instead of
   // running one longer. It exists because the empty-plan guard below had nowhere to send her —
   // the refusal named no way to give someone the empty week they had just asked for.
