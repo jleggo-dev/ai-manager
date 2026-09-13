@@ -8,13 +8,7 @@
  * app setting. Renders only while the end-of-trail card is not up; the two never compete.
  */
 
-import { endPhrase } from './end-phrase.ts';
-
-/** Local calendar day — the end-cap's clock is the user's day, not UTC (PlanView's own rule). */
-function localTodayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+import { endPhrase, localTodayIso } from './end-phrase.ts';
 
 export function HorizonEndCap({
   endsOn,

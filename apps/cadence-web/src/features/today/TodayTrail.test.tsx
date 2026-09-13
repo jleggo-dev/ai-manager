@@ -285,7 +285,7 @@ describe('TodayTrail — the wall', () => {
     };
   }
 
-  it('locks every day from lockedFrom on: the is-locked class, no node buttons, no hold, the quiet line', () => {
+  it('locks every day from lockedFrom on: the is-locked class, muted discs that tap, no bay, the quiet line', () => {
     const onOpen = vi.fn();
     const onHold = vi.fn();
     const { container, getByText, getAllByText } = render(
@@ -301,20 +301,80 @@ describe('TodayTrail — the wall', () => {
     );
     const sections = [...container.querySelectorAll('.trail-day')];
     expect(sections.map((s) => s.classList.contains('is-locked'))).toEqual([false, true, true]);
-    // Nothing on a locked day is a button — the two exits live on the wall card, nowhere else.
+    // A locked day keeps its discs — there to see and to tap (the caller's gate answers) — but
+    // no coach bay: the only conversation a locked day has is the gate.
     for (const s of sections.slice(1)) {
-      expect(s.querySelector('button')).toBeNull();
-      expect(s.querySelector('.trail-node')).toBeNull();
+      expect(s.querySelector('.trail-node')).not.toBeNull();
+      expect(s.querySelector('.trail-bay')).toBeNull();
     }
-    expect(getAllByText('After your check-in')).toHaveLength(2);
-    // The day's shape is still readable — the owner is fine seeing the horizon.
-    expect(getByText('Long run')).toBeTruthy();
+    expect(getAllByText('Locked until weekly check-in')).toHaveLength(2);
+    // A tap reaches the caller with the day it landed on; the caller decides what it means.
     fireEvent.click(getByText('Long run'));
-    expect(onOpen).not.toHaveBeenCalled();
-    expect(onHold).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ title: 'Long run' }), '2026-08-17');
     // Today is untouched: its node still taps.
     fireEvent.click(getByText('Easy run'));
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * The check-in as a task on its day (owner, 2026-09-13): a node of its own, last on the day,
+   * that taps through to the caller as a check-in occurrence and never holds — there is no row
+   * behind it to move. The server's own retired check-in row must not come back beside it.
+   */
+  it("draws the check-in as the day's last node on checkinOn, tappable, never holdable", () => {
+    const onOpen = vi.fn();
+    const onHold = vi.fn();
+    const plan = threeDays();
+    plan.week[0] = {
+      ...plan.week[0]!,
+      occurrences: [
+        ...plan.week[0]!.occurrences,
+        occ({ occurrence_id: 'o-server-checkin', title: 'Weekly check-in', kind: 'system' }),
+      ],
+    };
+    const { container, getAllByText, getByText } = render(
+      <TodayTrail
+        plan={plan}
+        onOpen={onOpen}
+        onHold={onHold}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        checkinOn="2026-08-16"
+        lockedFrom="2026-08-17"
+      />,
+    );
+    // Exactly one check-in node, and it is today's last.
+    expect(getAllByText('Weekly check-in')).toHaveLength(1);
+    const today = container.querySelector('.trail-day')!;
+    const labels = [...today.querySelectorAll('.trail-label')].map((el) => el.textContent);
+    expect(labels[labels.length - 1]).toBe('Weekly check-in');
+    fireEvent.click(getByText('Weekly check-in'));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ occurrence_id: 'checkin:2026-08-16' }), '2026-08-16');
+  });
+
+  it('draws no check-in node without a checkinOn day', () => {
+    const { queryByText } = render(
+      <TodayTrail plan={threeDays()} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} />,
+    );
+    expect(queryByText('Weekly check-in')).toBeNull();
+  });
+
+  it('stands the card at wallAt even when the lock starts later (a week built early)', () => {
+    const { container } = render(
+      <TodayTrail
+        plan={threeDays()}
+        onOpen={() => {}}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        wallAt="2026-08-17"
+        lockedFrom="2026-08-18"
+        wall={<div data-testid="wall">Week wraps up</div>}
+      />,
+    );
+    const order = [...container.querySelectorAll('.trail-day, .trail-wall')].map((el) =>
+      el.classList.contains('trail-wall') ? 'wall' : el.classList.contains('is-locked') ? 'locked' : 'open',
+    );
+    expect(order).toEqual(['open', 'wall', 'open', 'locked']);
   });
 
   it('stands the wall card between the last open day and the first locked one', () => {
@@ -332,6 +392,51 @@ describe('TodayTrail — the wall', () => {
       el.classList.contains('trail-wall') ? 'wall' : el.classList.contains('is-locked') ? 'locked' : 'open',
     );
     expect(order).toEqual(['open', 'wall', 'locked', 'locked']);
+  });
+
+  /**
+   * Mid-week (owner, 2026-09-09) the days behind the wall have no rows yet — the server projects
+   * the rhythm onto them as `preview`. A locked day draws it as the same muted discs (a tap
+   * reaches the caller as a preview occurrence, which the gate never opens); a day with rows of
+   * its own draws those; an open day ignores a preview entirely, and an empty locked day says
+   * nothing — no "clear day" verdict on a day nobody has reached.
+   */
+  it("draws a locked day's preview as muted discs, and an open day never draws it", () => {
+    const onOpen = vi.fn();
+    const plan = threeDays();
+    plan.week[0] = { ...plan.week[0]!, preview: [{ title: 'Not on today' }] };
+    plan.week[1] = { ...plan.week[1]!, occurrences: [], preview: [{ title: 'Long run', time_of_day: '07:00' }] };
+    plan.week[2] = { ...plan.week[2]!, preview: [{ title: 'Never drawn' }] };
+    const { container, getByText, queryByText } = render(
+      <TodayTrail
+        plan={plan}
+        onOpen={onOpen}
+        onOpenFood={() => {}}
+        onCoach={() => {}}
+        lockedFrom="2026-08-17"
+        wall={<div data-testid="wall">Week wraps up</div>}
+      />,
+    );
+    expect(container.querySelectorAll('.trail-day.is-locked')).toHaveLength(2);
+    expect(getByText('Long run').closest('.trail-node')).not.toBeNull();
+    fireEvent.click(getByText('Long run'));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ occurrence_id: 'preview:2026-08-17:0' }),
+      '2026-08-17',
+    );
+    // The day that already has its own rows draws those, not the preview; today ignores its.
+    expect(getByText('Morning sit')).toBeTruthy();
+    expect(queryByText('Never drawn')).toBeNull();
+    expect(queryByText('Not on today')).toBeNull();
+  });
+
+  it('an empty locked day says nothing — no "clear day" line', () => {
+    const plan = threeDays();
+    plan.week[1] = { ...plan.week[1]!, occurrences: [] };
+    const { container } = render(
+      <TodayTrail plan={plan} onOpen={() => {}} onOpenFood={() => {}} onCoach={() => {}} lockedFrom="2026-08-17" />,
+    );
+    expect(container.querySelector('.is-locked .trail-empty')).toBeNull();
   });
 
   it('with no lockedFrom nothing is locked and the wall (if any) sits at the end', () => {

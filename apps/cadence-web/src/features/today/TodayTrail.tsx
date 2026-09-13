@@ -12,8 +12,8 @@ import { glyphOf } from './glyphs.ts';
 import { currentNodeIndex, useLandOnNow } from './useLandOnNow.ts';
 import { useKeepScrollOnPrepend } from './useKeepScrollOnPrepend.ts';
 import { useLongPress } from './useLongPress.ts';
-import { isLockedDay } from './trailLock.ts';
-import { LockedTrailDay } from './LockedTrailDay.tsx';
+import { isLockedDay, LOCKED_DAY_LINE } from './trailLock.ts';
+import { checkinOccurrence, isSyntheticOccurrence, previewOccurrences } from './trailPreview.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import type { SkyCategory } from './skyCategory.ts';
 import { DaySky } from './DaySky.tsx';
@@ -281,6 +281,8 @@ export function TodayTrail({
   onOpenFood,
   onCoach,
   lockedFrom,
+  wallAt,
+  checkinOn,
   wall,
   skies,
 }: {
@@ -291,12 +293,21 @@ export function TodayTrail({
   onHold?: (occ: PlanOccurrence, date: string) => void;
   onOpenFood: () => void;
   onCoach: () => void;
-  /** The wall (trailLock.ts): every day from this YYYY-MM-DD on renders locked — dimmed, no tap,
-   *  no hold. Absent, nothing is locked. PlanView derives it from `weekState`. */
+  /** The lock (trailLock.ts): every day from this YYYY-MM-DD on renders locked — muted, its
+   *  discs there to tap (the caller's gate answers), nothing to hold. A locked day with nothing
+   *  written draws the rhythm the server projected onto it (`preview`) as the same muted discs.
+   *  Absent, nothing is locked. PlanView derives it from `weekState`. */
   lockedFrom?: string;
+  /** Where the check-in CARD stands: just before the first day from this YYYY-MM-DD on. Defaults
+   *  to `lockedFrom`; a week built early keeps the card on the check-in's own day while the lock
+   *  moves out past what was built. At the end of the trail when nothing in view is past it. */
+  wallAt?: string;
+  /** The day the check-in is demanded — `ends_on`, or today once that day is past. It gets a
+   *  "Weekly check-in" node of its own (owner, 2026-09-13), so a week built past it still says
+   *  where the check-in lands, and the check-in is a thing you can tap on the day itself. */
+  checkinOn?: string;
   /** What stands AT the wall — the end-of-trail card, rendered by the caller so this file owns
-   *  no check-in behaviour. Placed just before the first locked day (or at the end of the trail
-   *  when nothing is locked), so the check-in sits where the week actually ends. */
+   *  no check-in behaviour. */
   wall?: ReactNode;
   /** The forecast, one sky per date (skyCategory.ts; PlanView reads it from the header's own weather
    *  and forecast queries). A day with no entry is `'clear'` — the untouched Linen sky. */
@@ -317,17 +328,25 @@ export function TodayTrail({
   const [weeksBack, setWeeksBack] = useState(0);
   const earlier = useEarlierDays(weeksBack);
   const trailRef = useKeepScrollOnPrepend(earlier.days.length);
-  const days = [...earlier.days, ...plan.week].map((d) => ({
-    ...d,
-    occurrences: d.occurrences.filter((o) => !isWeeklyCheckin(o)),
-  }));
+  const days = [...earlier.days, ...plan.week].map((d) => {
+    const own = d.occurrences.filter((o) => !isWeeklyCheckin(o));
+    // A locked day nothing has written yet shows the rhythm the server projected onto it, as the
+    // same muted discs (trailPreview.ts) — there to see and to tap, never to open.
+    const locked = isLockedDay(d.date, lockedFrom);
+    const occurrences = locked && own.length === 0 ? previewOccurrences(d) : own;
+    // The check-in is a task on the day it is demanded (owner, 2026-09-13) — the day's last node,
+    // where the week wraps. A tap starts it (the caller's business).
+    return { ...d, occurrences: d.date === checkinOn ? [...occurrences, checkinOccurrence(d.date)] : occurrences };
+  });
   // The one node the trail opens on, and the day it belongs to. Only today has a "now".
   const nowDay = days.findIndex((d) => d.isToday);
   const nowNode = nowDay === -1 ? -1 : currentNodeIndex(days[nowDay]!.occurrences);
   const nowRef = useLandOnNow();
-  // Where the wall goes: before the first locked day, else after the last day.
-  const firstLocked = days.findIndex((d) => isLockedDay(d.date, lockedFrom));
-  const wallAt = firstLocked === -1 ? days.length : firstLocked;
+  // Where the card goes: before the first day at or past `wallAt` (the lock's start, unless the
+  // caller says otherwise), else after the last day.
+  const wallFrom = wallAt ?? lockedFrom;
+  const firstPastWall = days.findIndex((d) => isLockedDay(d.date, wallFrom));
+  const wallIndex = firstPastWall === -1 ? days.length : firstPastWall;
 
   return (
     <div className="trail" ref={trailRef}>
@@ -356,7 +375,7 @@ export function TodayTrail({
         const darkSky = SKY_SCENES[sky].dark;
         return (
           <Fragment key={day.date}>
-            {di === wallAt && wall && <div className="trail-wall">{wall}</div>}
+            {di === wallIndex && wall && <div className="trail-wall">{wall}</div>}
             <section
               className={`trail-day${di > 0 ? ' is-later' : ''}${locked ? ' is-locked' : ''} is-sky-${sky}${darkSky ? ' is-dark-sky' : ''}`}
               style={
@@ -391,15 +410,14 @@ export function TodayTrail({
               full width at the top of today, IN the day (2a: a per-day number belongs to the day),
               and absent entirely when food is idle. The bay stays her line and her face. */}
               {day.isToday && <TrailFoodStrip date={day.date} onOpen={onOpenFood} />}
-              {/* Behind the wall: the day's shape as plain text, nothing pressable. */}
-              {locked ? (
-                <LockedTrailDay day={day} />
-              ) : (
-                <div className="trail-nodes">
-                  {day.occurrences.length === 0 ? (
-                    <div className="trail-empty">A clear day — rest counts too.</div>
-                  ) : (
-                    day.occurrences.map((o, i) => (
+              {/* Behind the wall: one quiet line says why the discs are muted. A locked day with
+                  nothing on it says nothing — "a clear day" would be a verdict on a day nobody
+                  has reached. */}
+              {locked && <p className="trail-locked-line">{LOCKED_DAY_LINE}</p>}
+              <div className="trail-nodes">
+                {day.occurrences.length === 0
+                  ? !locked && <div className="trail-empty">A clear day — rest counts too.</div>
+                  : day.occurrences.map((o, i) => (
                       <TrailNode
                         key={o.occurrence_id}
                         occ={o}
@@ -408,15 +426,15 @@ export function TodayTrail({
                         n={day.occurrences.length}
                         d={daySide(day.date)}
                         onOpen={onOpen}
-                        onHold={onHold}
+                        // A locked day taps (the gate answers) but never holds — nothing to move;
+                        // neither does a stand-in node (a preview, the check-in) with no row behind it.
+                        onHold={locked || isSyntheticOccurrence(o) ? undefined : onHold}
                         nodeRef={di === nowDay && i === nowNode ? nowRef : undefined}
                         clock={clock}
                         darkSky={darkSky}
                       />
-                    ))
-                  )}
-                </div>
-              )}
+                    ))}
+              </div>
               {day.occurrences.length > 0 && !locked && (
                 /* Top to bottom: her line, then her face. The day's food reads full-width at the
                top of today (TrailFoodStrip) — the 134px bay could never hold three bars. */
@@ -431,7 +449,7 @@ export function TodayTrail({
           </Fragment>
         );
       })}
-      {wallAt === days.length && wall && <div className="trail-wall">{wall}</div>}
+      {wallIndex === days.length && wall && <div className="trail-wall">{wall}</div>}
     </div>
   );
 }

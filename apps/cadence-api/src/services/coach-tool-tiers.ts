@@ -256,34 +256,35 @@ export const ALWAYS_ACTIONS = [
 export const DRAWER_LABEL_MAX = 3140;
 
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
-  get_nutrition: 'everything they eat — log, recipes, targets, trends; name the view you need',
+  get_nutrition: 'everything they eat — log, recipes, targets, trends; name the view',
   preview_meal: 'parse-and-price a described meal WITHOUT logging it',
-  check_food_sources: 'ask every food database at once about one food, disagreements included',
+  check_food_sources: 'every food database at once on one food, disagreements included',
   resolve_portion: 'what a household measure of a saved food weighs in grams',
   read_label: 'read an attached photo: nutrition panel or front-of-pack',
   set_micro_target: "ACTION: a doctor's nutrient target, over the reference",
   research_food: 'web research on a NAMED product no database has — slow',
   get_workout_history: 'their recorded workouts from their devices, newest first',
-  get_practice_totals: 'running totals of anything they count — words written, minutes sat, pages read',
-  get_repertoire: 'what they are learning and already know — pieces, katas, poems — with standing',
-  offer_repertoire_review: 'ACTION: show a collection (music book, kata syllabus, reading list) as a checklist',
+  get_practice_totals: 'running totals of what they count — words, minutes sat, pages read',
+  get_repertoire: 'pieces, katas, poems they are learning or already know — with standing',
+  offer_repertoire_review: 'ACTION: show a music book, kata syllabus or reading list as a checklist',
   get_user_built_activities: 'activities they built themselves — steps, runs, and plan placement',
   get_journal: 'recent journal entries, verbatim; private ones are never included',
   get_goal_progress: 'per-goal progress numbers computed from what they logged',
   propose_progress_layout: 'redesign what their Progress page watches — they confirm a card first',
   get_recent_logs: 'their session notes from recent days: what they did and how it felt',
   get_equipment: 'training equipment they own, with usage wear for tracked items',
-  update_equipment: 'ACTION: add, remove, or rename equipment on their file — corrections included',
-  extend_horizon: 'ACTION: run the current week longer — "plan two weeks ahead" — check-in moves with it',
-  pause_week: 'ACTION: pause every session between two dates; nothing deleted, resumes after',
-  revise_session: 'ACTION: rebuild one upcoming session\'s contents from their words — "add chest and abs"',
-  start_replan: 'ACTION: rebuild the WHOLE week around their words — background, takes minutes',
-  set_home_location: 'ACTION: record where they live, so weather and daylight can be read for outdoor sessions',
+  update_equipment: 'ACTION: add, remove or rename equipment on their file — corrections too',
+  extend_horizon: 'ACTION: run this week longer — "plan two weeks ahead"; the check-in moves with it',
+  build_week_ahead: 'ACTION: write next week early, same rhythm; check-in stays put',
+  pause_week: 'ACTION: pause every session between two dates; nothing deleted',
+  revise_session: 'ACTION: rebuild one upcoming session from their words — "add chest and abs"',
+  start_replan: 'ACTION: rebuild the WHOLE week around their words — background, minutes',
+  set_home_location: 'ACTION: record where they live — weather and daylight for outdoor sessions',
   // 88 of the 90 the hook rule allows. The brief's wording ("...on their screen AT ONCE; THEIR
   // answers...") measured 102 with the ACTION mark; "at once" and one "their" went, and the two
   // facts that decide whether to reach for it — several questions, and the answers arrive as the
   // person's own message — are both still here.
-  send_questionnaire: 'ACTION: put two to six questions on their screen; answers come back as their own message',
+  send_questionnaire: 'ACTION: put two to six questions on their screen; answers return as their message',
 };
 
 /**
@@ -423,7 +424,16 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `pause_week` (2026-09-03): the other end of extend_horizon — clearing a stretch rather than
     // running one longer, so the ladder this category shows reads whole: one session, the week's
     // shape, the week rebuilt, the week emptied.
-    members: ['extend_horizon', 'pause_week', 'revise_session', 'start_replan', 'get_user_built_activities'],
+    // `build_week_ahead` (2026-09-09): next week written early, check-in untouched — the third
+    // way the week's edge can move, beside extend_horizon (moves it) and pause_week (empties it).
+    members: [
+      'extend_horizon',
+      'build_week_ahead',
+      'pause_week',
+      'revise_session',
+      'start_replan',
+      'get_user_built_activities',
+    ],
   },
   {
     key: 'progress',

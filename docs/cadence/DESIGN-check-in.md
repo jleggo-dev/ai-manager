@@ -160,8 +160,63 @@ the trail is a wall, not a card at the bottom of a scrollable next week: days th
 day's titles as plain text under one line ("After your check-in"), no discs, no bay, no "A clear
 day". The only ways past are the card's own "Start check-in" and "Just build my week", both
 unchanged. `restEmpty` still shows the card for a week that ran out of content, but an empty week
-is not a wall — locking keys off `checkin_due` + `ends_on` only, and fails open on any date it
-cannot read.
+is not a wall — locking keys off `ends_on` (and fails open on any date it cannot read).
+
+### The wall stands mid-week, and the gate (owner rulings, 2026-09-09)
+
+Owner: *"When I look long-term, I see blank days. It can show the future days and a potential
+plan, but we have to check-in to unlock. Previously this was indicated on the plan, along with a
+button to build the plan out without checking in."* And, settling the balance between the old
+ever-growing horizon and the forced check-in: *"1) A planned week. 2) A weekly check-in or a
+deliberately skipped weekly check-in. 3) Continued visibility into what the next week could look
+like — future days appear as locked and when you select an activity it prompts you to either
+begin a check-in or deliberately skip the check-in… When they arrive on the day a check-in was
+planned for, it should still re-prompt."*
+
+**What was wrong.** A week materializes once, at its commit, but the view is seven days from
+today — so from the second day of a week the trail ran past the last written day, and those days
+rendered as ordinary empty days ("A clear day — rest counts too"), with the wall, the lock and
+the build button all held back until `checkin_due` flipped on day seven.
+
+**The rulings, as built.**
+
+- **An early check-in moves the check-in; an early build does not.** "Build next week"
+  (`POST /plan/week/build-ahead`, `buildWeekAhead` in week-build.ts) writes the following week on
+  the same rhythm through the check-in date plus one horizon and records the decision as
+  `plans.built_through` (migration 0059). The week clock and `horizon_days` are untouched, so the
+  check-in still lands on its day and still asks. A confirmed check-in resets the clock (as
+  before) and clears `built_through` — the check-in can redefine the following week. A column,
+  not "does the day have rows": an ordinary mid-week commit also materializes seven days from
+  today as a side effect, and those days must stay locked. `commitActivities` carries
+  `built_through` forward on an ordinary commit and clears it when the commit starts a new week.
+- **Seven days from today, locked from the check-in on.** `trailLock.ts` has two dates:
+  `wallDate` (where the card stands — the day after the later of `ends_on` and today) and
+  `lockedFromDate` (where the lock starts — the wall, pushed out past `built_through`). Neither
+  needs `checkin_due`. Locked days are muted but their discs are there: a day nothing has written
+  yet draws the API's `preview` (`services/plan-preview.ts` — the plan's recurrences from the same
+  anchor, no rows, no ids; `trailPreview.ts` turns them into stand-in nodes) under one line,
+  "Locked until weekly check-in". **The check-in is a task on the day it is demanded** (owner,
+  2026-09-13: "either as a task today or otherwise indicated in the UI… on the day where it's
+  demanded" — and both places, the card too): a "Weekly check-in" node, last on `ends_on` (or on
+  today once that day is past), that starts the check-in on tap with no prompt and never holds
+  (`checkinOccurrence` in trailPreview.ts). The server's own retired check-in row stays retired —
+  its date follows the plan's recurrence, not the week clock. The card stays (owner: "keep the
+  card!") in two moments:
+  **due** ("Week N wraps up today", *Start check-in* / *Just build my week*) and **ahead** ("Week
+  N wraps up on Sunday", *Start check-in* / *Build next week*).
+- **The gate** (`checkinGate.ts`, `WeekGateSheet.tsx`, `useWeekGate.ts`): a tap on a locked
+  activity asks before it opens. Day 1–3: *"It's only day N of your plan"* → Build next week /
+  Not yet. Day 4 on: *"We're still working through this week"* → Check in now / Build next week /
+  Just browsing. On the check-in's day or later, a tap on any activity from the check-in on asks
+  *"Do you want to check in today?"* → Check in now / Later today / Just build my week (the
+  owner's "skip til next week", wearing the trust path's name — never "Skip"). *Later today*
+  dismisses for the rest of the local day (per device) and opens what was tapped; the card
+  stays, and a locked day still asks — it is the only door a locked day has. A preview node is
+  never opened. The gate is table-tested (`checkinGate.test.ts`).
+- **The coach can do all of it from chat.** `build_week_ahead` (tail tier, category `plan`)
+  writes next week without moving the check-in; `build_next_week` still ends a finished week
+  (the skipped check-in); `open_week_review` runs the check-in; `extend_horizon` runs this week
+  longer. Eval cases A27 (fires) and C20 (must not) — **eval:tools run pending post-deploy**.
 
 ---
 

@@ -32,12 +32,14 @@ export async function getLatestCoachBuild(userId: string, db: SqlExecutor = sql)
  * services/week-clock.ts for why `generated_at` could never be that clock.
  */
 export async function insertPlan(userId: string, plan: Partial<Plan>, db: SqlExecutor = sql): Promise<Plan> {
+  const builtThrough = plan.built_through ? new Date(plan.built_through).toISOString().slice(0, 10) : null;
   const [row] = await db<Plan[]>`
-    insert into cadence.plans (user_id, goal_ids, generated_by, version, status, rationale, steer, week_started_at)
+    insert into cadence.plans (user_id, goal_ids, generated_by, version, status, rationale, steer, week_started_at, built_through)
     values (
       ${userId}, ${plan.goal_ids ?? []}::uuid[], ${plan.generated_by ?? 'coach'},
       ${plan.version ?? 1}, ${plan.status ?? 'active'}, ${plan.rationale ?? null}, ${plan.steer ?? null},
-      coalesce(${plan.week_started_at ?? null}::timestamptz, now())
+      coalesce(${plan.week_started_at ?? null}::timestamptz, now()),
+      ${builtThrough}::date
     )
     returning *`;
   if (!row) throw new Error('insertPlan: no row returned');
@@ -47,15 +49,23 @@ export async function insertPlan(userId: string, plan: Partial<Plan>, db: SqlExe
 /**
  * Start the ACTIVE plan's week over from now (0058) — the check-in exit that performs no commit:
  * "Confirm my week" with nothing to change. The wall on the trail (`checkin_due`) clears the
- * moment this lands, the same as it would after "Just build my week". Returns whether there was
- * an active plan to reset. Never called by "Not now"/dismiss — a card put away is not a week done.
+ * moment this lands, the same as it would after "Just build my week". A check-in redefines the
+ * following week, so anything built past the old check-in (0059) is no longer a decision that
+ * stands — `built_through` clears with the clock. Returns whether there was an active plan to
+ * reset. Never called by "Not now"/dismiss — a card put away is not a week done.
  */
 export async function restartActiveWeek(userId: string, db: SqlExecutor = sql): Promise<boolean> {
   const rows = await db<{ plan_id: string }[]>`
-    update cadence.plans set week_started_at = now()
+    update cadence.plans set week_started_at = now(), built_through = null
     where user_id = ${userId} and status = 'active'
     returning plan_id`;
   return rows.length > 0;
+}
+
+/** Record how far ahead the week was deliberately built (0059) — written only by `buildWeekAhead`
+ *  (week-build.ts), which owns the guard and the materialization. */
+export async function setPlanBuiltThrough(planId: string, builtThrough: string, db: SqlExecutor = sql): Promise<void> {
+  await db`update cadence.plans set built_through = ${builtThrough}::date where plan_id = ${planId}`;
 }
 
 /** Mark all of a user's active plans superseded (call before committing a new version). */
