@@ -5,13 +5,14 @@ import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import { buildProviderChatOptions, v2ThreadingEnabled } from '../services/ai-profile-runtime-options.ts';
 import { resolveAttachments, resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
-import { contentText, withImageParts } from '../lib/message-content.ts';
+import { contentText, withAttachmentParts } from '../lib/message-content.ts';
 import { resolveProfileToolDefinitions } from './tool-fulfillment.ts';
 import { buildSessionChatMessages } from './chat-history.ts';
 import { sliceForThread } from './thread-mode.ts';
 import { updateV2ProviderMetadata } from './v2-metadata.ts';
 import type {
   Attachment,
+  ChatFileInput,
   ChatMessage,
   ChatSessionRow,
   FormattingRule,
@@ -45,6 +46,8 @@ export async function openChatSendStream(args: {
   /** https URLs (short-lived signed Storage URLs) — spliced onto THIS turn's message as real
    *  `image_url` content parts, never persisted. See `SendChatMessageOptions.images`. */
   images: string[];
+  /** Documents for this turn — see `SendChatMessageOptions.files`. Same in-memory splice. */
+  files: ChatFileInput[];
   timeoutMs: number;
   /** Caller-supplied tool definitions merged beside the profile's toolJobs — the in-process
    *  consumer's door into function calling (Cadence's coach registry tools ride here). The
@@ -63,6 +66,7 @@ export async function openChatSendStream(args: {
     resolvedJob,
     attachments,
     images,
+    files,
     timeoutMs,
   } = args;
 
@@ -114,9 +118,9 @@ export async function openChatSendStream(args: {
      * later turn rebuilding history from scratch never resends a signed URL that has likely
      * expired by then. Independent of the attachments-as-text block above — both can apply.
      */
-    if (images.length > 0 && fullHistory.length > 0) {
+    if ((images.length > 0 || files.length > 0) && fullHistory.length > 0) {
       const lastMsg = fullHistory[fullHistory.length - 1];
-      if (lastMsg) lastMsg.content = withImageParts(contentText(lastMsg.content), images);
+      if (lastMsg) lastMsg.content = withAttachmentParts(contentText(lastMsg.content), images, files);
     }
 
     /**

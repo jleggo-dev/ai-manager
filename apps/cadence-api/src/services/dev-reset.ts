@@ -2,6 +2,7 @@ import { sql, json } from '../db/sql.ts';
 import { ensureUser } from '../repos/users.ts';
 import { purgeMealPhotos } from './meal-photos.ts';
 import { purgeProgressPhotos } from './progress-photos.ts';
+import { purgeCoachAttachments } from './coach-attachments.ts';
 import { initialStreakState } from './metrics.ts';
 import { EMPTY_DIETARY_PROFILE } from '@cadence/shared';
 
@@ -121,6 +122,12 @@ export async function resetUserData(userId: string): Promise<void> {
     await purgeProgressPhotos(userId);
   } catch (e) {
     console.warn('[reset] progress-photo purge failed (continuing):', e);
+  }
+  // Chat attachments (photos and documents sent to the coach) — same again.
+  try {
+    await purgeCoachAttachments(userId);
+  } catch (e) {
+    console.warn('[reset] coach-attachment purge failed (continuing):', e);
   }
   // One round trip for every child table. `foods` rides along: it keys on owner_user_id, and the
   // shared/global rows (owner null) stay.

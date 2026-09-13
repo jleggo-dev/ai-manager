@@ -15,6 +15,8 @@
     "cleanup:dev-accounts": "node --import tsx scripts/account.ts reset-all",
     "probe:backgrounded": "node --import tsx scripts/probe-backgrounded-phone.ts",
     "probe:replan": "node --import tsx scripts/probe-replan-preview.ts",
+    "probe:office": "node --import tsx scripts/probe-devs-ai-office.ts",
+    "probe:v1-file": "node --import tsx scripts/probe-devs-ai-v1-file.ts",
     "eval:tools": "node --import tsx scripts/eval-tool-selection.ts",
     "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts",
     "metrics:food-ledger": "node --import tsx scripts/food-variance-baseline.ts",
@@ -30,9 +32,11 @@
     "@vercel/functions": "^3.9.5",
     "dotenv": "^16",
     "express": "^4",
+    "pdf-lib": "^1.17.1",
     "postgres": "^3.4.5",
     "tsx": "^4.21.0",
     "undici": "^7.28.0",
+    "unpdf": "^1.8.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

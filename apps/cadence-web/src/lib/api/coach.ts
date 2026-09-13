@@ -1,3 +1,4 @@
+import type { AttachmentRef } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 import { createCoachSseParseState, pushCoachSseChunk } from './coach-sse.ts';
 
@@ -154,11 +155,13 @@ export async function sendCoachMessage(
   /** Called once per turn, right after the stream opens and before any model work — the stage name
    *  ("reading") covers the pre-first-token stretch that used to be bare dots. */
   onStage?: (name: string) => void,
+  /** Files already in Storage (uploadCoachAttachment) — the message carries only their refs. */
+  attachments: AttachmentRef[] = [],
 ): Promise<{ completed: boolean; responseId: string | null }> {
   const res = await fetch(`${BASE}/coach/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, ...(attachments.length ? { attachments } : {}) }),
     signal,
   });
   if (!res.body) throw new Error('No stream body');

@@ -40,6 +40,7 @@ export {
   type UserRoutineDay,
 } from './api/user-routines.ts';
 export type { ArchivedConversation, CurrentCoach } from './api/coach.ts';
+export { uploadCoachAttachment, signCoachUpload } from './api/coach-attachments.ts';
 
 export { registerPushToken, removePushToken } from './api/devices.ts';
 

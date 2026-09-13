@@ -13,7 +13,8 @@ import {
   cancelCoachTurn,
 } from '../ai/aim.ts';
 import { readArchivedConversations, readTranscript } from '../services/coach-transcript.ts';
-import { attachPhotoToTurn } from '../services/coach-photo-attach.ts';
+import { attachToTurn } from '../services/coach-attach-turn.ts';
+import { coachMessageAttachmentsSchema } from '../validation/body.ts';
 import { runCaptureExtract } from '../services/capture.ts';
 import { injectCoachBlocks, refreshChangedBlocks } from '../services/coach-block-refresh.ts';
 import { renderScreenNotes } from '../services/goal-screen.ts';
@@ -473,14 +474,23 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   const t0 = Date.now();
   const userId = req.cadenceUserId!;
   const message: unknown = req.body?.message;
-  if (typeof message !== 'string' || !message.trim()) {
+  const hasAttachments = Array.isArray(req.body?.attachments) && req.body.attachments.length > 0;
+  // A message can be a photo and nothing else (owner, 2026-09-11): empty text is fine WITH
+  // attachments — the note attachToTurn injects is what she reads. Empty and bare stays a 400.
+  if (typeof message !== 'string' || (!message.trim() && !hasAttachments)) {
     res.status(400).json({ error: 'message (string) required' });
     return;
   }
-  // MP13: an image can ride a chat turn. `message` above is required and rejected with a clean
-  // 400; `photo` is optional and soft-fails instead (attachPhotoToTurn) — a malformed or missing
-  // photo must not sink an otherwise-valid text message once we are already streaming SSE.
+  // Attachments ride a chat turn (MP13's `photo`, and since 2026-09-11 up to four Storage refs —
+  // photos, PDFs, text). The LIST's shape is checked here, where a 400 is still clean; each ref's
+  // ownership and contents are checked in attachToTurn, where one bad file soft-fails alone
+  // rather than sinking an otherwise-valid message once we are already streaming SSE.
   const photo: string | null = typeof req.body?.photo === 'string' ? req.body.photo : null;
+  const attachmentsParsed = coachMessageAttachmentsSchema.safeParse(req.body?.attachments ?? []);
+  if (!attachmentsParsed.success) {
+    res.status(400).json({ error: attachmentsParsed.error.issues[0]?.message ?? 'invalid attachments' });
+    return;
+  }
 
   openTurnStream(res);
 
@@ -517,9 +527,12 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      */
     await refreshChangedBlocks(userId, req.params.id as string).catch((e) => console.error('[blockRefresh]', e));
 
-    // MP13: images ride the turn as real vision content parts (see coach-photo-attach.ts for what
-    // this also hands her as a durable, transcript-invisible photo_ref note).
-    const images = await attachPhotoToTurn(userId, sessionIdParam, photo);
+    // Images ride the turn as real vision content parts and documents as file parts (see
+    // coach-attach-turn.ts for what this also hands her as a durable, transcript-invisible note).
+    const { images, files } = await attachToTurn(userId, sessionIdParam, {
+      photo,
+      attachments: attachmentsParsed.data,
+    });
 
     const turnMessage = await assembleTurn(userId, req.params.id as string, message);
     // The coach's read tools ride the request; when she calls one, the loop below fulfills it
@@ -531,6 +544,7 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       turnMessage,
       coachToolDefinitions(),
       images,
+      files,
     );
 
     // Relay upstream SSE bytes verbatim (upstream emits its own `data: [DONE]`) while

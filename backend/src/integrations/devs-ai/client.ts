@@ -184,6 +184,11 @@ export class DevsAiClient {
     return files.listChatFiles(this, chatId);
   }
 
+  /** LlmClient.uploadFile — a standalone file for a `file` content part (see files.ts). */
+  async uploadFile(file: { buffer: Buffer; filename: string; mimeType: string }): Promise<{ fileId: string }> {
+    return files.uploadStandaloneFile(this, file);
+  }
+
   async createFileRecord(fileInfo: {
     filename: string;
     size: number;

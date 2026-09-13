@@ -162,6 +162,20 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
     },
     required: ['photo_ref'],
   },
+
+  read_document: {
+    properties: {
+      doc_ref: {
+        type: 'string',
+        description: 'The doc_ref from the attachment note — "coach-attachments/..." — of the file to read back.',
+      },
+      from_page: {
+        type: 'number',
+        description: 'First page to return, to continue past a cut. Default 1.',
+      },
+    },
+    required: ['doc_ref'],
+  },
 };
 
 export interface CoachToolCall {

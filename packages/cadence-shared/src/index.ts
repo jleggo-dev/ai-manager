@@ -71,3 +71,4 @@ export * from './meal-read-progress.ts';
 export * from './meal-plan-items.ts';
 export * from './weight-units.ts';
 export * from './unit-prefs.ts';
+export * from './attachments.ts';

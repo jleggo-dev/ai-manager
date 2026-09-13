@@ -652,6 +652,19 @@ const READS: EvalCase[] = [
       'to type what he knew because nothing could read it back. With the store live, "what do i know" turns ' +
       'are reads, and only new facts about what they know are writes.',
   },
+  {
+    id: 'B12',
+    kind: 'read',
+    turn: "that pdf i sent you the other day from my physio — what did it say about hills again?",
+    expect: ['read_document'],
+    allow: [...DOSSIER_READS, 'get_recent_logs'],
+    // A file from an earlier turn is not in front of her; the note named its doc_ref and this is
+    // the door back. Never the photo reader, and never a guess from memory.
+    forbid: ['read_label'],
+    from:
+      'Owner ruling 2026-09-13 ("as a user, I kind of expect that the AI will have continued access to a ' +
+      'file I upload") — attachments were this turn\'s only until read_document.',
+  },
 ];
 
 /* ══ C · SILENCE — a set of only positive cases measures recall and ignores false triggering ══ */

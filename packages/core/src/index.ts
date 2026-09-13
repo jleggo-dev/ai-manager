@@ -56,6 +56,7 @@ export {
   purgeRemoteChatsForUser,
   pauseV2ChatResponse,
   cancelV2ChatResponse,
+  uploadChatSessionFile,
 } from '../../../backend/src/ai-manager/index.ts';
 
 /**
@@ -77,7 +78,7 @@ export {
   tenantClient,
 } from '../../../backend/src/db/tenant.ts';
 
-export type { RequestAuthContext } from '../../../backend/src/types.ts';
+export type { RequestAuthContext, ChatFileInput } from '../../../backend/src/types.ts';
 
 /* ── SSE line buffering (incremental; CROSS-02 shared contract with BE-02) ── */
 export { createSseLineBuffer, pushSseChunk } from './sse-line-reader.ts';

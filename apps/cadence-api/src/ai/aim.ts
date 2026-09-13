@@ -23,7 +23,9 @@ import {
   pauseV2ChatResponse,
   cancelV2ChatResponse,
   type RequestAuthContext,
+  type ChatFileInput,
   updateV2ProviderMetadata,
+  uploadChatSessionFile,
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
 import { rejectAsAimError } from './aim-errors.ts';
@@ -31,6 +33,7 @@ import { remoteJobsEnabled, remoteJobsTarget, remoteRunJobById, remoteRunJobBySl
 
 export { AimError } from './aim-errors.ts';
 export type { AimErrorKind } from './aim-errors.ts';
+export type { ChatFileInput } from '@ai-admin/core';
 
 function aimContext(cadenceUserId: string): RequestAuthContext {
   return {
@@ -181,13 +184,30 @@ export function sendCoachMessage(
   message: string,
   extraTools?: unknown[],
   images?: string[],
+  /** Documents for this turn (owner, 2026-09-11) — see `SendChatMessageOptions.files`. */
+  files?: ChatFileInput[],
 ) {
   return withAim(cadenceUserId, () =>
     sendChatMessage(sessionId, message, {
       ...(extraTools ? { extraTools } : {}),
       ...(images?.length ? { images } : {}),
+      ...(files?.length ? { files } : {}),
     }),
   );
+}
+
+/**
+ * Coach: put a document on the session's provider ahead of a turn (the engine's own upload call,
+ * never the JSON that carries the conversation — the only route past the 4.5 MB body ceiling).
+ * Returns the provider file id a `files` entry references. Throws when the provider refuses it;
+ * coach-attach-turn.ts turns that into a note rather than a lost turn.
+ */
+export function uploadCoachFile(
+  cadenceUserId: string,
+  sessionId: string,
+  file: { buffer: Buffer; filename: string; mimeType: string },
+) {
+  return withAim(cadenceUserId, () => uploadChatSessionFile(sessionId, file));
 }
 
 /**

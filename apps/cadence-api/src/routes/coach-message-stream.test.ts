@@ -43,7 +43,9 @@ vi.mock('../services/coach-transcript.ts', () => ({
   readArchivedConversations: vi.fn(),
   readTranscript: vi.fn(async () => []),
 }));
-vi.mock('../services/coach-photo-attach.ts', () => ({ attachPhotoToTurn: vi.fn(async () => undefined) }));
+vi.mock('../services/coach-attach-turn.ts', () => ({
+  attachToTurn: vi.fn(async () => ({ images: [], files: [] })),
+}));
 vi.mock('../services/capture.ts', () => ({ runCaptureExtract: vi.fn(async () => ({ screened: [] })) }));
 vi.mock('../services/coach-block-refresh.ts', () => ({
   injectCoachBlocks: vi.fn(async () => {}),

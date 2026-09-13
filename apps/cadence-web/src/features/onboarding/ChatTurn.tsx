@@ -28,16 +28,34 @@ export function ChatTurn({
   pending = false,
   activity = '',
   after,
+  attachments,
 }: {
   role: 'user' | 'coach';
   text: string;
+  /** A user turn's attachments, by name — a row of small chips under the words. */
+  attachments?: string[];
   /** Coach turn with nothing streamed yet — show the dots instead of an empty bubble. */
   pending?: boolean;
   /** What she is doing right now, in plain words — shown instead of bare dots while a tool runs. */
   activity?: string;
   after?: ReactNode;
 }) {
-  if (role === 'user') return <div className="ct-me">{text}</div>;
+  if (role === 'user') {
+    return (
+      <div className="ct-me">
+        {text}
+        {attachments?.length ? (
+          <span className="ct-me-attach" aria-label="Attached">
+            {attachments.map((name, i) => (
+              <span key={i} className="ct-me-chip">
+                {name}
+              </span>
+            ))}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="ct-coach">
       <div className="ct-row">

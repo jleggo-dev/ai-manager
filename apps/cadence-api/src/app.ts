@@ -7,6 +7,7 @@ import healthRoutes from './routes/health.ts';
 import coachRoutes from './routes/coach.ts';
 import coachFoodRoutes from './routes/coach-food.ts';
 import coachQuestionnaireRoutes from './routes/coach-questionnaire.ts';
+import coachAttachmentRoutes from './routes/coach-attachments.ts';
 import planRoutes from './routes/plan.ts';
 import planReplanRoutes from './routes/plan-replan.ts';
 import weekReviewRoutes from './routes/week-review.ts';
@@ -51,6 +52,7 @@ export function createApp() {
   app.use('/coach', coachRoutes);
   app.use('/coach', coachFoodRoutes);
   app.use('/coach', coachQuestionnaireRoutes);
+  app.use('/coach', coachAttachmentRoutes);
   app.use('/plan', planRoutes);
   app.use('/plan', planReplanRoutes);
   app.use('/plan', weekReviewRoutes);

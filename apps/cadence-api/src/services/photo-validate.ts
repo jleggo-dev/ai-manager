@@ -1,10 +1,13 @@
 /**
  * Pure photo data-URL validation (no deps — unit-testable like capture-normalize.ts).
  * The client downscales to ≤1024px JPEG before sending, so the cap here is a backstop
- * against raw uploads, not the normal path. express.json's 2mb limit is the outer wall.
+ * against raw uploads, not the normal path. express.json's 2mb limit is the outer wall for the
+ * data-URL routes; chat attachments never ride a body (coach-attachments.ts).
  */
+import { IMAGE_MAX_BYTES } from '@cadence/shared';
 
-export const MAX_PHOTO_BYTES = 1_500_000; // ~1.5MB decoded — a downscaled JPEG is far smaller
+/** One image ceiling everywhere (owner, 2026-09-11): the same 4 MB the chat composer shrinks to. */
+export const MAX_PHOTO_BYTES = IMAGE_MAX_BYTES;
 
 const DATA_URL_RE = /^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/;
 
