@@ -1,4 +1,4 @@
-import { getActivePlan } from '../repos/plans.ts';
+import { getActivePlan, setPlanBuiltThrough } from '../repos/plans.ts';
 import { runInBackground } from './background.ts';
 import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
@@ -6,6 +6,7 @@ import { commitActivities, type CommitResult } from './plan-synthesis.ts';
 import { toPendingPlanActivity } from './plan-partial-apply.ts';
 import { computeWeekState } from './plan-view.ts';
 import { sendPlanReadyPush } from './plan-ready-push.ts';
+import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
 import { clockLabel, parseTimeOfDay } from '@cadence/shared';
 
 export interface WeekBuildResult {
@@ -15,6 +16,44 @@ export interface WeekBuildResult {
   activities?: number;
   occurrences?: number;
   note?: string;
+}
+
+/**
+ * "Build next week" before the check-in (owner, 2026-09-09): the days past the check-in are locked
+ * because the check-in can redefine them — but someone planning ahead may build them now, on the
+ * same rhythm, and the check-in stays exactly where it was. Three rules, all the owner's:
+ *
+ *  - It does NOT move the check-in. The week clock and `horizon_days` are untouched; when the
+ *    check-in day arrives it still asks. (An early CHECK-IN moves it — that is the review's job.)
+ *  - It writes the following week — `ensureHorizon` through the check-in date plus one horizon —
+ *    and records the decision as `built_through` (0059), which is what opens those days on the
+ *    trail. Rows alone are not the decision: an ordinary mid-week commit also reaches past the
+ *    check-in as a side effect, and those days stay locked.
+ *  - It is the mid-week half only. A week that is over goes through `buildNextWeek` (the
+ *    roll-forward that skips the check-in) — `due` tells the caller so.
+ */
+export interface WeekAheadResult {
+  status: 'built' | 'already_built' | 'due' | 'no_plan';
+  builtThrough?: string;
+  occurrences?: number;
+}
+
+export async function buildWeekAhead(userId: string): Promise<WeekAheadResult> {
+  const plan = await getActivePlan(userId);
+  if (!plan) return { status: 'no_plan' };
+  const state = computeWeekState(plan)!;
+  if (state.checkin_due) return { status: 'due' };
+
+  const target = addDays(state.ends_on, DEFAULT_HORIZON_DAYS);
+  if (state.built_through && state.built_through >= target) {
+    return { status: 'already_built', builtThrough: state.built_through };
+  }
+  // ensureHorizon counts from TODAY; the target is a date. Convert, never overshooting: the days
+  // between today and the target are exactly the ones a tap on a locked day was asking for.
+  const fromToday = Math.ceil((Date.parse(`${target}T00:00:00Z`) - Date.now()) / 86_400_000);
+  const occurrences = fromToday > 0 ? await ensureHorizon(userId, fromToday) : 0;
+  await setPlanBuiltThrough(plan.plan_id, target);
+  return { status: 'built', builtThrough: target, occurrences };
 }
 
 const FULL_WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

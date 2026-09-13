@@ -9,7 +9,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { EndOfTrail, EndOfTrailBoundary, EndOfTrailCard, EndOfTrailFallback } from './EndOfTrailCard.tsx';
 
 const buildNextWeek = vi.fn();
-vi.mock('../../lib/api.ts', () => ({ buildNextWeek: (...a: unknown[]) => buildNextWeek(...a) }));
+const buildWeekAhead = vi.fn();
+vi.mock('../../lib/api.ts', () => ({
+  buildNextWeek: (...a: unknown[]) => buildNextWeek(...a),
+  buildWeekAhead: (...a: unknown[]) => buildWeekAhead(...a),
+}));
 
 /** Throws on every render — stands in for whatever real failure the rich card could have. */
 function ThrowingChild(): never {
@@ -240,5 +244,108 @@ describe('EndOfTrail (what PlanView renders)', () => {
     expect(onBuilt).not.toHaveBeenCalled();
     // The card is still there, not swapped for the fallback — a declined build is not a render failure.
     expect(screen.getByText('Week 3 wraps up today')).toBeTruthy();
+  });
+});
+
+/**
+ * The mid-week wall (owner, 2026-09-09): the same card, before the check-in is due, with the
+ * week's end named and a build that writes NEXT week without moving the check-in. What the copy
+ * must never do is claim the week wraps up "today" when it does not; what the build must do is
+ * call the build-ahead route (never the roll-forward, which would end the week) and treat
+ * `built` and `already_built` as landed.
+ */
+describe('EndOfTrail — the mid-week wall (mode "ahead")', () => {
+  const NOW = '2026-08-26T12:00:00.000Z'; // a Wednesday
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(NOW));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('names the day the week wraps, says the check-in stays put, and offers both exits', () => {
+    render(
+      <EndOfTrailCard
+        version={5}
+        endsOn="2026-08-30"
+        mode="ahead"
+        onStartCheckIn={vi.fn()}
+        onJustBuild={vi.fn()}
+        busy={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByText('Week 5 wraps up on Sunday')).toBeTruthy();
+    expect(screen.getByText(/your check-in stays where it is/)).toBeTruthy();
+    expect(screen.getByText('Start check-in')).toBeTruthy();
+    expect(screen.getByText('Build next week')).toBeTruthy();
+    expect(screen.queryByText('Just build my week')).toBeNull();
+  });
+
+  it('never claims "today" mid-week — an unreadable end date reads as "soon"', () => {
+    render(
+      <EndOfTrailCard
+        version={5}
+        mode="ahead"
+        onStartCheckIn={vi.fn()}
+        onJustBuild={vi.fn()}
+        busy={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByText('Week 5 wraps up soon')).toBeTruthy();
+  });
+
+  it('the fallback carries the same build label', () => {
+    render(<EndOfTrailFallback mode="ahead" onStartCheckIn={vi.fn()} onJustBuild={vi.fn()} busy={false} />);
+    expect(screen.getByText('Build next week')).toBeTruthy();
+  });
+
+  it('builds ahead — never the roll-forward — and treats "built" as landed', async () => {
+    buildWeekAhead.mockResolvedValue({ status: 'built', builtThrough: '2026-09-06' });
+    const onBuilt = vi.fn();
+    render(<EndOfTrail show={true} mode="ahead" endsOn="2026-08-30" onStartCheckIn={vi.fn()} onBuilt={onBuilt} />);
+
+    screen.getByText('Build next week').click();
+
+    await waitFor(() => expect(onBuilt).toHaveBeenCalledTimes(1));
+    expect(buildWeekAhead).toHaveBeenCalledTimes(1);
+    expect(buildNextWeek).not.toHaveBeenCalled();
+  });
+
+  it('"already_built" is landed too', async () => {
+    buildWeekAhead.mockResolvedValue({ status: 'already_built', builtThrough: '2026-09-06' });
+    const onBuilt = vi.fn();
+    render(<EndOfTrail show={true} mode="ahead" endsOn="2026-08-30" onStartCheckIn={vi.fn()} onBuilt={onBuilt} />);
+
+    screen.getByText('Build next week').click();
+
+    await waitFor(() => expect(onBuilt).toHaveBeenCalledTimes(1));
+  });
+
+  it('a declined build shows the line and leaves the card standing', async () => {
+    buildWeekAhead.mockResolvedValue({ status: 'due' });
+    const onBuilt = vi.fn();
+    render(<EndOfTrail show={true} mode="ahead" endsOn="2026-08-30" onStartCheckIn={vi.fn()} onBuilt={onBuilt} />);
+
+    screen.getByText('Build next week').click();
+
+    await screen.findByText(/Couldn't build your next week/);
+    expect(onBuilt).not.toHaveBeenCalled();
+    expect(screen.getByText('Start check-in')).toBeTruthy();
+  });
+
+  it('the due card still rolls forward through the trust path, never the build-ahead', async () => {
+    buildNextWeek.mockResolvedValue({ status: 'committed', version: 6 });
+    const onBuilt = vi.fn();
+    render(<EndOfTrail show={true} mode="due" onStartCheckIn={vi.fn()} onBuilt={onBuilt} />);
+
+    screen.getByText('Just build my week').click();
+
+    await waitFor(() => expect(onBuilt).toHaveBeenCalledTimes(1));
+    expect(buildWeekAhead).not.toHaveBeenCalled();
   });
 });

@@ -48,3 +48,23 @@ export function carriedWeekStart(old: WeekClockPlan | null, startsNewWeek: boole
   if (startsNewWeek || !old) return null;
   return new Date(weekStartedAt(old)).toISOString();
 }
+
+/** A plan row's `built_through` (0059) as YYYY-MM-DD, or null. The driver hands a `date` column
+ *  back as a Date, so every reader normalizes here rather than comparing a Date to a string. */
+export function builtThroughIso(plan: Pick<Plan, 'built_through'> | null | undefined): string | null {
+  const raw = plan?.built_through;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/**
+ * What a NEW plan version's `built_through` should be (0059), by the same logic as the clock: an
+ * ordinary commit keeps the decision the user made ("build next week" still stands after an
+ * Adjust); a commit that STARTS a week is the next week arriving, so nothing is built past its
+ * own check-in yet; a first-ever plan has nothing to carry.
+ */
+export function carriedBuiltThrough(old: Pick<Plan, 'built_through'> | null, startsNewWeek: boolean): string | null {
+  if (startsNewWeek || !old) return null;
+  return builtThroughIso(old);
+}

@@ -15,7 +15,11 @@ const commitActivities = vi.fn();
 const listOccurrences = vi.fn();
 const sendPlanReadyPush = vi.fn();
 
-vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
+const setPlanBuiltThrough = vi.fn();
+vi.mock('../repos/plans.ts', () => ({
+  getActivePlan: (...a: unknown[]) => getActivePlan(...a),
+  setPlanBuiltThrough: (...a: unknown[]) => setPlanBuiltThrough(...a),
+}));
 vi.mock('../repos/activities.ts', () => ({
   listActivities: (...a: unknown[]) => listActivities(...a),
   // Mirrors activities.ts's real values — kept in sync by hand since this mock replaces the module.
@@ -24,8 +28,14 @@ vi.mock('../repos/activities.ts', () => ({
 vi.mock('../repos/occurrences.ts', () => ({ listOccurrences: (...a: unknown[]) => listOccurrences(...a) }));
 vi.mock('./plan-synthesis.ts', () => ({ commitActivities: (...a: unknown[]) => commitActivities(...a) }));
 vi.mock('./plan-ready-push.ts', () => ({ sendPlanReadyPush: (...a: unknown[]) => sendPlanReadyPush(...a) }));
+const ensureHorizon = vi.fn();
+vi.mock('./plan-horizon.ts', () => ({
+  // Mirrors plan-horizon.ts's real constant — kept in sync by hand since this mock replaces the module.
+  DEFAULT_HORIZON_DAYS: 7,
+  ensureHorizon: (...a: unknown[]) => ensureHorizon(...a),
+}));
 
-const { buildNextWeek } = await import('./week-build.ts');
+const { buildNextWeek, buildWeekAhead } = await import('./week-build.ts');
 
 /** Lets the fire-and-forget ready-push chain (never awaited by `buildNextWeek` itself) settle
  *  before assertions run — it is all mocked, microtask-only work, so a macrotask flush is enough. */
@@ -315,5 +325,76 @@ describe('buildNextWeek — the ready push', () => {
     await flush();
 
     expect(sendPlanReadyPush).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * "Build next week" before the check-in (owner, 2026-09-09): writes the following week on the
+ * same rhythm and records the decision (`built_through`) — and does NOT touch the week clock, so
+ * the check-in still lands where it was. What must hold: no commit ever, the target is the
+ * check-in date plus one horizon, a finished week is refused (that is the roll-forward's job),
+ * and a week already built that far is reported as such without writing anything.
+ */
+describe('buildWeekAhead — building next week before the check-in', () => {
+  /** A week three days in: the check-in lands four days out. */
+  const MID_WEEK = { ...FRESH_PLAN, week_started_at: new Date(Date.now() - 3 * 86_400_000).toISOString() };
+  const endsOn = (plan: { week_started_at: string }) =>
+    new Date(new Date(plan.week_started_at).getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const plusDays = (iso: string, n: number) =>
+    new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+  it('declines with no_plan when there is no active plan, and writes nothing', async () => {
+    getActivePlan.mockResolvedValue(null);
+
+    const r = await buildWeekAhead(USER);
+
+    expect(r).toEqual({ status: 'no_plan' });
+    expect(ensureHorizon).not.toHaveBeenCalled();
+    expect(setPlanBuiltThrough).not.toHaveBeenCalled();
+  });
+
+  it('writes through the check-in date plus a horizon, records it, and never commits', async () => {
+    getActivePlan.mockResolvedValue(MID_WEEK);
+    ensureHorizon.mockResolvedValue(9);
+
+    const r = await buildWeekAhead(USER);
+    const target = plusDays(endsOn(MID_WEEK), 7);
+
+    expect(commitActivities).not.toHaveBeenCalled();
+    // Counted from today: four days to the check-in plus seven — never past the target.
+    expect(ensureHorizon).toHaveBeenCalledWith(USER, 11);
+    expect(setPlanBuiltThrough).toHaveBeenCalledWith('p1', target);
+    expect(r).toEqual({ status: 'built', builtThrough: target, occurrences: 9 });
+  });
+
+  it('reports already_built when the decision already reaches that far, writing nothing', async () => {
+    const target = plusDays(endsOn(MID_WEEK), 7);
+    getActivePlan.mockResolvedValue({ ...MID_WEEK, built_through: target });
+
+    const r = await buildWeekAhead(USER);
+
+    expect(r).toEqual({ status: 'already_built', builtThrough: target });
+    expect(ensureHorizon).not.toHaveBeenCalled();
+    expect(setPlanBuiltThrough).not.toHaveBeenCalled();
+  });
+
+  it('builds again when an earlier build stopped short of the target', async () => {
+    getActivePlan.mockResolvedValue({ ...MID_WEEK, built_through: plusDays(endsOn(MID_WEEK), 2) });
+    ensureHorizon.mockResolvedValue(5);
+
+    const r = await buildWeekAhead(USER);
+
+    expect(r.status).toBe('built');
+    expect(setPlanBuiltThrough).toHaveBeenCalledWith('p1', plusDays(endsOn(MID_WEEK), 7));
+  });
+
+  it('refuses a finished week — that one rolls forward through buildNextWeek', async () => {
+    getActivePlan.mockResolvedValue(DUE_PLAN);
+
+    const r = await buildWeekAhead(USER);
+
+    expect(r).toEqual({ status: 'due' });
+    expect(ensureHorizon).not.toHaveBeenCalled();
+    expect(setPlanBuiltThrough).not.toHaveBeenCalled();
   });
 });

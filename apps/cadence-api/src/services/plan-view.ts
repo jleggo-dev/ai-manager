@@ -11,7 +11,8 @@ import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
 import { planDayBase } from './plan-day.ts';
-import { weekStartMs, type WeekClockPlan } from './week-clock.ts';
+import { builtThroughIso, weekStartIso, weekStartMs, type WeekClockPlan } from './week-clock.ts';
+import { previewFromDate, projectPreview, type PlanViewPreviewItem } from './plan-preview.ts';
 
 export const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -39,6 +40,13 @@ export interface PlanViewDay {
   dayNum: number; // 6
   isToday: boolean;
   occurrences: PlanViewOccurrence[];
+  /**
+   * The rhythm drawn on a day BEHIND THE WALL (plan-preview.ts): what this day would hold, from the
+   * plan's own recurrences, before the check-in that writes it down. Present only on days past the
+   * week's end with no rows of their own; never on an open day. Nothing here has an id — it is a
+   * picture of the plan, not the plan.
+   */
+  preview?: PlanViewPreviewItem[];
 }
 export interface PlanViewActivity {
   activity_id: string;
@@ -129,8 +137,16 @@ export const iso = (d: string | Date): string => new Date(d).toISOString().slice
 export interface WeekState {
   ends_on: string;
   checkin_due: boolean;
+  /** The day the week began (YYYY-MM-DD) — the trail's gate prompt counts "day N of your plan"
+   *  from it (owner, 2026-09-09). */
+  started_on: string;
+  /** How far ahead the user deliberately built (0059), or null — the trail locks every day past
+   *  the later of `ends_on` and this. */
+  built_through: string | null;
 }
-export function computeWeekState(plan: (WeekClockPlan & Pick<Plan, 'horizon_days'>) | null): WeekState | null {
+export function computeWeekState(
+  plan: (WeekClockPlan & Pick<Plan, 'horizon_days'> & Partial<Pick<Plan, 'built_through'>>) | null,
+): WeekState | null {
   if (!plan) return null;
   // The week clock (0058, week-clock.ts): `week_started_at ?? generated_at`. The clock is what an
   // ordinary commit carries forward — "any commit IS the week being handled" turned out to mean
@@ -138,7 +154,12 @@ export function computeWeekState(plan: (WeekClockPlan & Pick<Plan, 'horizon_days
   const startMs = weekStartMs(plan);
   // The plan's OWN horizon (0050) — 7 unless the user asked the coach to extend this week.
   const dueMs = startMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000;
-  return { ends_on: iso(new Date(dueMs)), checkin_due: Date.now() >= dueMs };
+  return {
+    ends_on: iso(new Date(dueMs)),
+    checkin_due: Date.now() >= dueMs,
+    started_on: weekStartIso(plan),
+    built_through: builtThroughIso(plan),
+  };
 }
 
 /**
@@ -313,6 +334,18 @@ export async function buildPlanView(
     day.occurrences.sort((x, y) => (x.time_of_day ?? '99').localeCompare(y.time_of_day ?? '99'));
   }
 
+  // Past the week's end the view runs into days no commit has written yet (a week materializes
+  // once, at its commit). Those days are behind the wall on the trail; draw the rhythm on them so
+  // the wall shows what the check-in will confirm, instead of a week that looks like it stopped.
+  const weekState = computeWeekState(plan);
+  projectPreview(
+    days,
+    activities,
+    goalById,
+    iso(plan.generated_at),
+    previewFromDate(weekState?.ends_on, todayIso, weekState?.built_through),
+  );
+
   // Rolling-window consistency over the LAST 7 days (days with ≥1 completion) — `past` was
   // fetched in the batch above.
   const { kept, window } = rollingConsistency(past, now, 7);
@@ -351,6 +384,6 @@ export async function buildPlanView(
     streak,
     activeEpisode,
     pendingProposal: user?.pending_proposal ?? null,
-    weekState: computeWeekState(plan),
+    weekState,
   };
 }

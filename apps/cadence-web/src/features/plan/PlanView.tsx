@@ -17,8 +17,10 @@ import { DetourDayCards } from './DetourDayCards.tsx';
 import { isWeeklyCheckin } from './occurrence/format.ts';
 import { EndOfTrail } from './EndOfTrailCard.tsx';
 import { HorizonEndCap } from './HorizonEndCap.tsx';
-import { lockedFromDate } from '../today/trailLock.ts';
+import { isLockedDay } from '../today/trailLock.ts';
 import { useDaySkies } from '../today/useDaySkies.ts';
+import { useWeekGate } from './useWeekGate.ts';
+import { WeekGateSheet } from './WeekGateSheet.tsx';
 import { endEpisode, checkin, type PlanOccurrence, enterEpisode } from '../../lib/api.ts';
 import { useProposalAccept } from './useProposalAccept.ts';
 import { useTaskEdits } from './hold-menu/useTaskEdits.ts';
@@ -160,6 +162,17 @@ export function PlanView({
     },
     openTask,
   });
+  // The gate (owner, 2026-09-09; useWeekGate.ts): a tap past the weekly check-in asks first —
+  // check in, build next week, or just browse — and only then opens. Also where the wall stands.
+  const gate = useWeekGate({
+    plan: data,
+    openTask: edits.tap,
+    onStartCheckIn,
+    onChanged: () => {
+      refresh();
+      bump();
+    },
+  });
 
   // The proposal banner's accept lifecycle + this screen's pending-replan recovery (mount AND
   // foreground resume) — the whole story lives in useProposalAccept.ts, including the Phase 0
@@ -262,17 +275,29 @@ export function PlanView({
   // content). OR'd with the server's `checkin_due` in the render below — either can fire this on
   // its own, and this half needs nothing but the week already on screen to work.
   const restEmpty = data.week.slice(1).every((d) => d.occurrences.filter((o) => !isWeeklyCheckin(o)).length === 0);
-  // One name for "the horizon has been reached" — the end-of-trail card and the mid-week end-cap
-  // key off the same fact so exactly one of them can ever be on screen.
+  // One name for "the horizon has been reached" — the week is over (server), or ran out of
+  // content (the trail's own read).
   const horizonReached = restEmpty || !!data.weekState?.checkin_due;
-  // The wall (owner, 2026-09-07; trailLock.ts): once the check-in is due, the days past the
-  // week's end stay visible but locked, and the card stands BETWEEN them and today rather than
-  // at the bottom of a scrollable next week. Keys off `checkin_due` + `ends_on` only — `restEmpty`
-  // still shows the card, but an empty week is not a wall.
-  const lockedFrom = lockedFromDate(data.weekState, data.week.find((d) => d.isToday)?.date ?? data.week[0]?.date);
+  // The wall (owner, 2026-09-07; trailLock.ts): the days past the check-in stay visible but
+  // locked, and the card stands BETWEEN them and today rather than at the bottom of a scrollable
+  // next week. It stands mid-week too (owner, 2026-09-09): a week materializes once, so from its
+  // second day the view runs past what was written, and those days were rendering as blank
+  // ordinary days with no sign they were waiting on the check-in and no way to build them out.
+  // A week built early opens (the lock moves past `built_through`) while the card keeps the
+  // check-in's own day. `wallInView` is the fact the card and the end-cap share, so exactly one
+  // of them is on screen.
+  const { wallAt, lockedFrom, todayIso } = gate;
+  const wallInView = data.week.some((d) => isLockedDay(d.date, lockedFrom));
+  // The check-in as a task on the day it is demanded (owner, 2026-09-13): its own day, or today
+  // once that day is past — a late check-in is demanded today, not on a day already gone.
+  const endsOn = data.weekState?.ends_on;
+  const checkinOn = endsOn && todayIso && todayIso > endsOn ? todayIso : endsOn;
   const endOfTrail = (
     <EndOfTrail
-      show={horizonReached}
+      show={horizonReached || wallInView}
+      // Mid-week the same card offers the same two exits with the week's end named; its build
+      // writes next week and leaves the check-in where it is.
+      mode={horizonReached ? 'due' : 'ahead'}
       version={data.version}
       endsOn={data.weekState?.ends_on}
       // "Start check-in" — the sentence, not a mode (DESIGN-check-in.md), but a VISIBLE one:
@@ -353,23 +378,27 @@ export function PlanView({
 
         <TodayTrail
           plan={data}
-          onOpen={edits.tap}
+          // Through the gate: a tap past the check-in asks before it opens (useWeekGate.ts).
+          onOpen={gate.tap}
           onHold={edits.hold}
           onOpenFood={() => onOpenFood()}
           onCoach={onCoach}
           lockedFrom={lockedFrom ?? undefined}
-          wall={lockedFrom ? endOfTrail : undefined}
+          wallAt={wallAt ?? undefined}
+          checkinOn={checkinOn}
+          wall={wallAt ? endOfTrail : undefined}
           skies={skies}
         />
 
-        {/* No wall (mid-week, or a week that simply ran out of content): the card keeps its old
-            place at the bottom of the trail. */}
-        {!lockedFrom && endOfTrail}
+        {/* No wall (no readable week end, or a week that simply ran out of content): the card
+            keeps its old place at the bottom of the trail. */}
+        {!wallAt && endOfTrail}
 
-        {/* Mid-week the horizon is a marker, not a card: the check-in is named where it will
-            land, and seeing further is an ask to the coach. Quiet during a detour — the paused
-            week's end is not the moment to plan two ahead. */}
-        {!horizonReached && !data.activeEpisode && (
+        {/* Before any locked day is in view (the first day or two of a week) the horizon is a
+            marker, not a card: the check-in is named where it will land, and seeing further is
+            an ask to the coach. Once the wall stands, the card carries both. Quiet during a
+            detour — the paused week's end is not the moment to plan two ahead. */}
+        {!horizonReached && !wallInView && !data.activeEpisode && (
           <HorizonEndCap
             endsOn={data.weekState?.ends_on}
             canAskAhead={data.week.length <= 7}
@@ -441,6 +470,19 @@ export function PlanView({
           check-in is the only one that arrives uninvited, so it is the one that yields — it
           mounts (and only then asks the server whether it's due) once nothing else is open. */}
       <TaskEditSheets edits={edits} plan={data} />
+      {gate.gate && (
+        <WeekGateSheet
+          variant={gate.gate.variant}
+          day={gate.gate.day}
+          busy={gate.busy}
+          error={gate.error}
+          onCheckIn={gate.checkIn}
+          onBuild={gate.build}
+          onLater={gate.later}
+          onSkip={gate.skip}
+          onClose={gate.close}
+        />
+      )}
       {!checkinSettled &&
         !startOcc &&
         !captureOcc &&
@@ -448,6 +490,7 @@ export function PlanView({
         !adjustOpen &&
         !doorOpen &&
         !detourEntry &&
+        !gate.gate &&
         !edits.sheet && (
           <DailyCheckIn
             // A pick's preformed steer is a small ask — exactly what the coach's triage exists for

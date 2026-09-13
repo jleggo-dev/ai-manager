@@ -40,7 +40,11 @@ vi.mock('./streak.ts', () => ({
 vi.mock('../repos/episodes.ts', () => ({ getActiveEpisode: (...a: unknown[]) => q.getActiveEpisode(...a) }));
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => q.getActivePlan(...a) }));
 vi.mock('../repos/goals.ts', () => ({ listGoals: (...a: unknown[]) => q.listGoals(...a) }));
-vi.mock('../repos/activities.ts', () => ({ listActivities: (...a: unknown[]) => q.listActivities(...a) }));
+vi.mock('../repos/activities.ts', () => ({
+  listActivities: (...a: unknown[]) => q.listActivities(...a),
+  // Mirrors activities.ts's real values — kept in sync by hand since this mock replaces the module.
+  NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']),
+}));
 vi.mock('../repos/users.ts', () => ({ getUser: (...a: unknown[]) => q.getUser(...a) }));
 vi.mock('../repos/conversations.ts', () => ({
   getLatestConversation: (...a: unknown[]) => q.getLatestConversation(...a),
@@ -206,7 +210,12 @@ describe('buildPlanView', () => {
    */
   it('carries weekState on the payload, and null when there is no active plan', async () => {
     const withPlan = await buildPlanView(USER, 7, 'America/Toronto');
-    expect(withPlan.weekState).toEqual({ ends_on: expect.any(String), checkin_due: expect.any(Boolean) });
+    expect(withPlan.weekState).toEqual({
+      ends_on: expect.any(String),
+      checkin_due: expect.any(Boolean),
+      started_on: expect.any(String),
+      built_through: null,
+    });
 
     q.getActivePlan.mockImplementation(slow(null));
     const noPlan = await buildPlanView(USER, 7, 'America/Toronto');
@@ -309,5 +318,82 @@ describe('computeWeekState — the week clock beats generated_at', () => {
       generated_at: '2026-08-05T09:00:00.000Z',
     });
     expect(state?.ends_on).toBe('2026-08-08');
+  });
+});
+
+/**
+ * The days behind the wall carry the rhythm as a preview (plan-preview.ts, owner 2026-09-09):
+ * a week materializes once at its commit, so from day two the seven-day view runs past what was
+ * written. Those days are locked on the trail and must show what they would hold — never as rows
+ * with ids, never on an open day, never on a day that already has its own rows.
+ */
+describe('buildPlanView — the preview behind the wall', () => {
+  const DAILY = {
+    activity_id: 'a1',
+    commitment_id: 'c1',
+    plan_id: 'p1',
+    title: 'Morning sit',
+    kind: 'user',
+    schedule: { recurrence: 'FREQ=DAILY', time_of_day: '07:00' },
+    goal_id: 'g1',
+  };
+  const OFF_PLAN = { ...DAILY, activity_id: 'a2', commitment_id: 'c2', title: 'Off-plan', category: 'adhoc' };
+  /** A week that began three days ago: `ends_on` is four days out, so a 7-day view has two days past it. */
+  const MID_WEEK = { ...PLAN, generated_at: new Date(Date.now() - 3 * 86_400_000).toISOString() };
+
+  it('projects the rhythm onto the days after ends_on, and nowhere before it', async () => {
+    q.getActivePlan.mockImplementation(slow(MID_WEEK));
+    q.listActivities.mockImplementation(slow([DAILY, OFF_PLAN]));
+    q.listGoals.mockImplementation(slow([{ goal_id: 'g1', area: 'mind' }]));
+
+    const view = await buildPlanView(USER, 7, 'America/Toronto');
+    const endsOn = view.weekState!.ends_on;
+    const behind = view.week.filter((d) => d.date > endsOn);
+    const open = view.week.filter((d) => d.date <= endsOn);
+
+    expect(behind.length).toBeGreaterThan(0);
+    for (const day of behind) {
+      expect(day.preview).toEqual([{ title: 'Morning sit', time_of_day: '07:00', area: 'mind' }]);
+      expect(day.occurrences).toEqual([]);
+    }
+    for (const day of open) expect(day.preview).toBeUndefined();
+  });
+
+  it('leaves a day alone when it already carries rows of its own', async () => {
+    q.getActivePlan.mockImplementation(slow(MID_WEEK));
+    q.listActivities.mockImplementation(slow([DAILY]));
+    const lastDate = new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10);
+    q.listOccurrences.mockImplementation(
+      slow([{ occurrence_id: 'o9', activity_id: 'a1', date: lastDate, status: 'pending', kind: 'user' }]),
+    );
+
+    const view = await buildPlanView(USER, 7, 'America/Toronto');
+    const last = view.week.find((d) => d.date === lastDate);
+
+    expect(last?.occurrences.map((o) => o.occurrence_id)).toEqual(['o9']);
+    expect(last?.preview).toBeUndefined();
+  });
+
+  it('a week built early (built_through) pushes the wall out — nothing projected through that date', async () => {
+    q.listActivities.mockImplementation(slow([DAILY]));
+    const builtThrough = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+    q.getActivePlan.mockImplementation(slow({ ...MID_WEEK, built_through: builtThrough }));
+
+    const view = await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(view.weekState?.built_through).toBe(builtThrough);
+    for (const day of view.week) {
+      if (day.date <= builtThrough) expect(day.preview).toBeUndefined();
+      else expect(day.preview).toHaveLength(1);
+    }
+  });
+
+  it('projects nothing on a week that began today — every day in view is still open', async () => {
+    q.listActivities.mockImplementation(slow([DAILY]));
+    q.getActivePlan.mockImplementation(slow({ ...PLAN, generated_at: new Date().toISOString() }));
+
+    const view = await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(view.week.every((d) => d.preview === undefined)).toBe(true);
   });
 });

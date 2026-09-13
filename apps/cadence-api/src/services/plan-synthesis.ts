@@ -11,7 +11,7 @@ import { cadenceConfig } from '../config.ts';
 import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 import { diffCommittedActivities } from './plan-commit-diff.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
-import { carriedWeekStart } from './week-clock.ts';
+import { carriedBuiltThrough, carriedWeekStart } from './week-clock.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
 import { runInBackground } from './background.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
@@ -475,6 +475,9 @@ export async function commitActivities(
         // The week clock (week-clock.ts): carried forward from `old`, or null → now() when this
         // commit starts a week (a check-in exit, or the first plan ever).
         week_started_at: carriedWeekStart(old, opts.startsNewWeek === true),
+        // How far ahead the user deliberately built (0059): kept across an ordinary commit,
+        // cleared when this commit starts the next week.
+        built_through: carriedBuiltThrough(old, opts.startsNewWeek === true),
       },
       tx,
     );

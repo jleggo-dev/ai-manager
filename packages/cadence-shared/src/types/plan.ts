@@ -35,6 +35,11 @@ export interface Plan {
    *  week") reset it. Null/absent only for rows read before the migration — readers fall back to
    *  `generated_at`, the behaviour the app had before the column existed. */
   week_started_at?: string | null;
+  /** How far ahead the week was DELIBERATELY built (0059) — the YYYY-MM-DD the user's "Build next
+   *  week" (or the coach's build_week_ahead) reached. The trail locks every day past the later of
+   *  the check-in date and this one. Null: nothing built past the check-in. An ordinary commit
+   *  carries it forward; a commit that starts a new week, and "Confirm my week", clear it. */
+  built_through?: string | Date | null;
 }
 
 export interface ActivitySchedule {
