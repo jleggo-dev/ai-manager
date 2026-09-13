@@ -42,7 +42,7 @@ describe('classifyAttachment', () => {
     ['clip.mp4', 'video/mp4'],
     ['voice.m4a', 'audio/mp4'],
     ['archive.zip', 'application/zip'],
-    ['report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
     ['sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
     ['logo.svg', 'image/svg+xml'],
     ['noext', ''],
@@ -105,5 +105,33 @@ describe('the words', () => {
     expect(big).toContain('shrinking');
     expect(attachmentRejectionText('x.zip', { reason: 'unsupported_type' })).toContain('.csv');
     expect(attachmentRejectionText('x', { reason: 'too_many', limit: 4 })).toContain('4 files');
+  });
+});
+
+/**
+ * Word is a document (2026-09-13 — probed readable on Devs.ai); Excel and PowerPoint are not
+ * accepted (probed unreadable), and the rejection names Word among what works.
+ */
+describe('classifyAttachment — Word in, the other Office types out', () => {
+  const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  it.each([
+    ['physio.docx', DOCX, 'document', DOCX],
+    ['physio.docx', '', 'document', DOCX],
+    ['physio.docx', 'application/octet-stream', 'document', DOCX],
+  ])('%s (%s) → %s', (name, mime, kind, want) => {
+    expect(classifyAttachment(name, mime)).toEqual({ kind, mime: want });
+  });
+
+  it.each([
+    ['weigh-ins.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['race-plan.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    ['old.doc', 'application/msword'],
+  ])('%s is refused', (name, mime) => {
+    expect(classifyAttachment(name, mime)).toBeNull();
+  });
+
+  it('the rejection names Word documents among what works', () => {
+    expect(attachmentRejectionText('x.xlsx', { reason: 'unsupported_type' })).toContain('Word documents');
+    expect(ATTACHMENT_ACCEPT).toContain('.docx');
   });
 });

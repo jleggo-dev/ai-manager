@@ -258,33 +258,34 @@ export const DRAWER_LABEL_MAX = 3140;
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_nutrition: 'everything they eat — log, recipes, targets, trends; name the view',
   preview_meal: 'parse-and-price a described meal WITHOUT logging it',
-  check_food_sources: 'every food database at once on one food, disagreements included',
+  check_food_sources: 'every food database at once on one food, disagreements kept',
   resolve_portion: 'what a household measure of a saved food weighs in grams',
   read_label: 'read an attached photo: nutrition panel or front-of-pack',
+  read_document: 'read back a file they attached earlier',
   set_micro_target: "ACTION: a doctor's nutrient target, over the reference",
   research_food: 'web research on a NAMED product no database has — slow',
   get_workout_history: 'their recorded workouts from their devices, newest first',
   get_practice_totals: 'running totals of what they count — words, minutes sat, pages read',
-  get_repertoire: 'pieces, katas, poems they are learning or already know — with standing',
-  offer_repertoire_review: 'ACTION: show a music book, kata syllabus or reading list as a checklist',
+  get_repertoire: 'pieces, katas, poems they know or are learning, with standing',
+  offer_repertoire_review: 'ACTION: show a music book, kata list or reading list as a checklist',
   get_user_built_activities: 'activities they built themselves — steps, runs, and plan placement',
   get_journal: 'recent journal entries, verbatim; private ones are never included',
   get_goal_progress: 'per-goal progress numbers computed from what they logged',
-  propose_progress_layout: 'redesign what their Progress page watches — they confirm a card first',
+  propose_progress_layout: 'redesign what their Progress page watches; they confirm first',
   get_recent_logs: 'their session notes from recent days: what they did and how it felt',
   get_equipment: 'training equipment they own, with usage wear for tracked items',
-  update_equipment: 'ACTION: add, remove or rename equipment on their file — corrections too',
-  extend_horizon: 'ACTION: run this week longer — "plan two weeks ahead"; the check-in moves with it',
+  update_equipment: 'ACTION: add, remove or rename equipment on their file',
+  extend_horizon: 'ACTION: run this week longer ("plan two weeks ahead"); the check-in moves too',
   build_week_ahead: 'ACTION: write next week early, same rhythm; check-in stays put',
   pause_week: 'ACTION: pause every session between two dates; nothing deleted',
   revise_session: 'ACTION: rebuild one upcoming session from their words — "add chest and abs"',
   start_replan: 'ACTION: rebuild the WHOLE week around their words — background, minutes',
-  set_home_location: 'ACTION: record where they live — weather and daylight for outdoor sessions',
+  set_home_location: 'ACTION: record where they live, for weather and daylight outdoors',
   // 88 of the 90 the hook rule allows. The brief's wording ("...on their screen AT ONCE; THEIR
   // answers...") measured 102 with the ACTION mark; "at once" and one "their" went, and the two
   // facts that decide whether to reach for it — several questions, and the answers arrive as the
   // person's own message — are both still here.
-  send_questionnaire: 'ACTION: put two to six questions on their screen; answers return as their message',
+  send_questionnaire: 'ACTION: put two to six questions on their screen; answers return as text',
 };
 
 /**
@@ -393,7 +394,11 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
       'set_micro_target',
     ],
   },
-  { key: 'writing', label: 'what they have written', members: ['get_journal'] },
+  // `read_document` (2026-09-13): the door back to a file attached on an earlier turn — a
+  // document rides only the turn it was attached to, and the note names its doc_ref for this.
+  // Filed with the journal rather than in a category of its own: the find_tools label is on a
+  // budget (DRAWER_LABEL_MAX), and "what they wrote, and what they sent" is one shelf.
+  { key: 'writing', label: 'what they wrote, and files they sent', members: ['get_journal', 'read_document'] },
   {
     key: 'asking',
     label: 'ways to ask them things',

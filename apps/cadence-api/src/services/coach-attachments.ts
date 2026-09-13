@@ -34,6 +34,7 @@ const EXT_BY_MIME: Readonly<Record<string, string>> = {
   'image/webp': 'webp',
   'image/gif': 'gif',
   'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'text/plain': 'txt',
   'text/markdown': 'md',
   'text/csv': 'csv',
@@ -68,14 +69,32 @@ function isBucketMissing(message: string): boolean {
   return /bucket/i.test(message) && /not.*found/i.test(message);
 }
 
+const BUCKET_CONFIG = {
+  public: false,
+  fileSizeLimit: DOCUMENT_MAX_BYTES,
+  allowedMimeTypes: [...IMAGE_UPLOAD_MIMES, ...DOCUMENT_MIMES, ...TEXT_MIMES],
+};
+
 async function ensureBucket(): Promise<void> {
   await cadenceServiceClient()
-    .storage.createBucket(COACH_ATTACHMENTS_BUCKET, {
-      public: false,
-      fileSizeLimit: DOCUMENT_MAX_BYTES,
-      allowedMimeTypes: [...IMAGE_UPLOAD_MIMES, ...DOCUMENT_MIMES, ...TEXT_MIMES],
-    })
+    .storage.createBucket(COACH_ATTACHMENTS_BUCKET, BUCKET_CONFIG)
     .catch(() => {}); // race-safe: the loser's "already exists" is fine
+}
+
+/**
+ * The allowlist lives ON the bucket, and a bucket created under an older list keeps it — so
+ * widening `DOCUMENT_MIMES` (Word, 2026-09-13) would have left a live bucket refusing .docx with
+ * no code path ever re-stating the list. Re-applied once per process, before the first sign, so
+ * a deploy that changes the list is enough. Best-effort: a failure here just means the bucket's
+ * own list stands, which the sign itself will surface as a refused upload.
+ */
+let bucketConfigApplied: Promise<void> | null = null;
+function ensureBucketConfig(): Promise<void> {
+  bucketConfigApplied ??= cadenceServiceClient()
+    .storage.updateBucket(COACH_ATTACHMENTS_BUCKET, BUCKET_CONFIG)
+    .then(() => undefined)
+    .catch(() => undefined);
+  return bucketConfigApplied;
 }
 
 /**
@@ -86,6 +105,7 @@ async function ensureBucket(): Promise<void> {
 export async function signCoachUpload(userId: string, mime: string): Promise<{ ref: string; token: string }> {
   const ref = newAttachmentPath(userId, mime);
   const storage = cadenceServiceClient().storage;
+  await ensureBucketConfig();
   const sign = () => storage.from(COACH_ATTACHMENTS_BUCKET).createSignedUploadUrl(ref);
   let { data, error } = await sign();
   if (error && isBucketMissing(error.message)) {

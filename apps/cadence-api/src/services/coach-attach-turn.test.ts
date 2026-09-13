@@ -158,3 +158,60 @@ describe('attachToTurn', () => {
     expect(noteText()).toContain('larger than I can take as a document right now');
   });
 });
+
+/**
+ * The reach-back (owner, 2026-09-13): a document or text file rides THIS turn, and the note
+ * names its doc_ref so read_document can read it again on any later turn — the same door
+ * photo_ref opens for read_label. A photo's line is unchanged.
+ */
+describe('attachToTurn — the note carries a doc_ref for read_document', () => {
+  it('a document line names its doc_ref and the tool to read it again', async () => {
+    statAttachment.mockResolvedValue({ size: 3_000, contentType: 'application/pdf' });
+    downloadAttachment.mockResolvedValue(Buffer.from('%PDF'));
+    countPdfPages.mockResolvedValue(2);
+    uploadCoachFile.mockResolvedValue({ fileId: 'file_9' });
+    await attachToTurn(uid, 's1', {
+      photo: null,
+      attachments: [att('document', 'pdf', 'plan.pdf', 'application/pdf')],
+    });
+    expect(noteText()).toContain(`doc_ref: "coach-attachments/${ref('pdf')}"`);
+    expect(noteText()).toContain('call read_document with this exact doc_ref');
+  });
+
+  it('a text file line names its doc_ref too', async () => {
+    statAttachment.mockResolvedValue({ size: 12, contentType: 'text/csv' });
+    downloadAttachment.mockResolvedValue(Buffer.from('a,b\n1,2'));
+    await attachToTurn(uid, 's1', { photo: null, attachments: [att('text', 'csv', 'log.csv', 'text/csv')] });
+    expect(noteText()).toContain(`doc_ref: "coach-attachments/${ref('csv')}"`);
+  });
+
+  it('a photo line is unchanged — photo_ref, never doc_ref', async () => {
+    statAttachment.mockResolvedValue({ size: 10, contentType: 'image/jpeg' });
+    await attachToTurn(uid, 's1', { photo: null, attachments: [att('image', 'jpg', 'p.jpg', 'image/jpeg')] });
+    expect(noteText()).toContain('photo_ref');
+    expect(noteText()).not.toContain('doc_ref');
+  });
+});
+
+/**
+ * Word joins the accepted documents (2026-09-13 probe: Devs.ai reads a .docx by file id; Excel and
+ * PowerPoint it cannot see, so they stay out). A .docx has no page count until it is laid out —
+ * the page cap is a PDF gate — so it goes straight to the provider under the byte cap.
+ */
+describe('attachToTurn — a Word document', () => {
+  const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+  it('rides as a provider file with no page count, and the note says what it is', async () => {
+    statAttachment.mockResolvedValue({ size: 40_000, contentType: DOCX });
+    downloadAttachment.mockResolvedValue(Buffer.from('PK'));
+    uploadCoachFile.mockResolvedValue({ fileId: 'file_w' });
+    const out = await attachToTurn(uid, 's1', {
+      photo: null,
+      attachments: [att('document', 'docx', 'physio.docx', DOCX)],
+    });
+    expect(countPdfPages).not.toHaveBeenCalled();
+    expect(out.files).toEqual([{ filename: 'physio.docx', mimeType: DOCX, fileId: 'file_w' }]);
+    expect(noteText()).toContain('Document "physio.docx" (Word document) is attached');
+    expect(noteText()).toContain(`doc_ref: "coach-attachments/${ref('docx')}"`);
+  });
+});

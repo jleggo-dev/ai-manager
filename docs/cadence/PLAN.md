@@ -9462,6 +9462,35 @@ raising it is one constant. Their chat-scoped Blob flow goes to 100 MB but needs
 v2 Responses path does not have. Attachments are this turn's
 only — the persisted row keeps the plain text, so a later turn cannot resend an expired file id;
 a `read_document(ref)` tool for reaching back is the natural next slice. The restored transcript
-shows the words, not the chips (nothing about the files is persisted client-side). Not rehearsed
+shows the words, not the chips (nothing about the files is persisted client-side). ~~Not rehearsed
 against a live provider from dev (the #232 constraint): the `input_file` shape is pinned to the
-published Devs.ai spec, and the first real PDF turn post-deploy is the acceptance test.
+published Devs.ai spec, and the first real PDF turn post-deploy is the acceptance test.~~ —
+**rehearsed 2026-09-13** (`scripts/probe-devs-ai-office.ts`, the sanctioned in-process path on
+scratch account-1): a PDF by file id is read back correctly. The first run asked her to quote the
+file verbatim and her persona declined on principle while plainly having read it; the probe asks
+in real-usage words now, and the verdict is keyword-based.
+
+**Continued access, and which files (owner rulings 2026-09-13).** *"As a user, I kind of expect
+that the AI will have continued access to a file I upload."* The file rides the turn it was
+attached to; on every later turn the conversation carries only the note — so the note now names
+a `doc_ref` for documents and text files (as it already named `photo_ref` for photos), and
+**`read_document`** (`retrieval/document-function.ts`, tail tier, filed with the journal) is the
+door back: the ref → our own Storage copy → the words page by page, bounded, with `from_page` to
+continue past a cut. Our copy, never the provider's file id, which nothing relies on outliving
+the turn. Nothing is replayed on every turn on purpose: a 100-page PDF re-read each message is
+tokens for nothing, and the harness rule is that she reaches for what she needs. A scan with no
+text layer says so, as a different fact from an empty file. *"I think devs accepts/converts
+microsoft docs already — just test it."* Probed on both shapes the Responses spec allows (by
+file id, and inline `file_data`): **.docx is read; .xlsx and .pptx are accepted at upload and the
+model reports it cannot see them, either way.** So Word joins `DOCUMENT_MIMES` (read again later
+through `office-text.ts`, a hand-rolled `word/document.xml` walk — no library for one file), and
+the other two stay out; "accept what Devs.ai accepts" means what it can *read*. The bucket's
+allowlist is re-applied once per process (`ensureBucketConfig`) so a widened list reaches a
+bucket created under the old one. The fixture caveat (smallest valid packages, not files the
+apps wrote) was closed the same day with the owner's own 142 KB Excel export, sent both ways
+(`FILE=… npm run probe:office`): "I cannot see the file" each time. The v1 chat path too
+(`probe:v1-file`, the per-chat sandbox via AI Admin's `attachments` option): the agent sees the
+file by name, size and owner and reaches for its own tools to open it, then says it "cannot
+directly read the internal contents… in native Excel format". Neither road converts Excel. It
+stays out until the provider reads it; a converter of our own (sheet → CSV text, spliced like
+a text file) is the slice if it is wanted before then.

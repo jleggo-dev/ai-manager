@@ -39,7 +39,15 @@ export const IMAGE_SOURCE_MIMES = [
 ] as const;
 /** What actually goes up and reaches a model. */
 export const IMAGE_UPLOAD_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
-export const DOCUMENT_MIMES = ['application/pdf'] as const;
+/**
+ * PDF and Word. Probed live against Devs.ai on 2026-09-13 (apps/cadence-api/scripts/
+ * probe-devs-ai-office.ts): a .docx by file id AND inline is read back correctly; .xlsx and
+ * .pptx are accepted at upload but the model reports it cannot see them, on either path. So
+ * Word is in and the other two stay out until the provider reads them — "accept what Devs.ai
+ * accepts" means what it can READ, not what its upload endpoint takes.
+ */
+export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export const DOCUMENT_MIMES = ['application/pdf', DOCX_MIME] as const;
 export const TEXT_MIMES = ['text/plain', 'text/markdown', 'text/csv'] as const;
 
 /** Extension → kind, for pickers and OSes that hand over a blank or wrong MIME type (Windows
@@ -53,6 +61,7 @@ const EXT_KINDS: Readonly<Record<string, { kind: AttachmentKind; mime: string }>
   heic: { kind: 'image', mime: 'image/heic' },
   heif: { kind: 'image', mime: 'image/heif' },
   pdf: { kind: 'document', mime: 'application/pdf' },
+  docx: { kind: 'document', mime: DOCX_MIME },
   txt: { kind: 'text', mime: 'text/plain' },
   md: { kind: 'text', mime: 'text/markdown' },
   markdown: { kind: 'text', mime: 'text/markdown' },
@@ -155,7 +164,7 @@ export function humanBytes(bytes: number): string {
 export function attachmentRejectionText(name: string, r: AttachmentRejection): string {
   switch (r.reason) {
     case 'unsupported_type':
-      return `I can't read ${name} — photos, PDFs, and plain text (.txt, .md, .csv) work.`;
+      return `I can't read ${name} — photos, PDFs, Word documents, and plain text (.txt, .md, .csv) work.`;
     case 'too_large':
       return r.kind === 'image'
         ? `${name} is still over ${humanBytes(r.limitBytes)} after shrinking — try a screenshot or a smaller crop.`

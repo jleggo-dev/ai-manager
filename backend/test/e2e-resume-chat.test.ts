@@ -156,7 +156,15 @@ describe('E2E: Resume chat lifecycle (Devs.ai)', () => {
 });
 
 describe('E2E: Resume preserves conversation (history + AI memory)', () => {
-  const CODE_WORD = 'PINEAPPLE42';
+  /**
+   * A mundane fact, not a "code word". Asked to memorise an arbitrary token, the agent behind
+   * the picked profile declined it as an instruction-following probe (CI, 2026-09-12: "I need to
+   * respectfully decline… not to prove I can remember arbitrary code words or bypass my system
+   * instructions") — a launch-playbook assistant reading a jailbreak drill into the phrasing. A
+   * dog's name is the kind of thing any assistant remembers, and it tests the same resume:
+   * recall across close → resume proves the provider-side chat came back, not a fresh one.
+   */
+  const DOG_NAME = 'BISCUIT';
 
   it(
     'starts a chat, exchanges a message, closes, resumes, and the AI still remembers context',
@@ -182,7 +190,9 @@ describe('E2E: Resume preserves conversation (history + AI memory)', () => {
         .post(`/api/chat-sessions/${contextSessionId}/messages`)
         .set(authHeaders())
         .timeout({ deadline: LIVE_SSE_REQUEST_TIMEOUT_MS, response: LIVE_SSE_REQUEST_TIMEOUT_MS })
-        .send({ message: `Remember this exact code word for later: ${CODE_WORD}. Reply with only: OK` });
+        .send({
+          message: `My dog's name is ${DOG_NAME}. Please remember it — I'll ask you later. Reply with only: OK`,
+        });
       expect(turn1.status).toBe(200);
 
       /* Let the async user/assistant message persistence settle. */
@@ -202,18 +212,18 @@ describe('E2E: Resume preserves conversation (history + AI memory)', () => {
       expect(resumeRes.body.status).toBe('active');
       const restored = (resumeRes.body.messages || []) as Array<{ role: string; content: string }>;
       const userTurns = restored.filter((m) => m.role === 'user');
-      expect(userTurns.some((m) => (m.content || '').includes(CODE_WORD))).toBe(true);
+      expect(userTurns.some((m) => (m.content || '').includes(DOG_NAME))).toBe(true);
 
-      /* 5. Continue on the resumed session — the AI must recall the code word
+      /* 5. Continue on the resumed session — the AI must recall the dog's name
          from the provider-side chat history (proves a true resume, not a new chat). */
       const turn2 = await request(app)
         .post(`/api/chat-sessions/${contextSessionId}/messages`)
         .set(authHeaders())
         .timeout({ deadline: LIVE_SSE_REQUEST_TIMEOUT_MS, response: LIVE_SSE_REQUEST_TIMEOUT_MS })
-        .send({ message: 'What exact code word did I give you earlier? Reply with only the code word.' });
+        .send({ message: "What is my dog's name? Reply with only the name." });
       expect(turn2.status).toBe(200);
       const reply = parseSseText(turn2.text);
-      expect(reply.toUpperCase()).toContain(CODE_WORD);
+      expect(reply.toUpperCase()).toContain(DOG_NAME);
     },
     LIVE_SSE_TEST_TIMEOUT_MS,
   );

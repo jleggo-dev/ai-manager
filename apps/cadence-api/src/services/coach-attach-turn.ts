@@ -53,6 +53,12 @@ const READ_LABEL_HINT =
   'For an exact, structured read — the printed numbers on a nutrition panel, or a product name ' +
   'and brand — call read_label with this exact photo_ref rather than transcribing it from what you see.';
 
+/** The reach-back (owner, 2026-09-13): the file rides THIS turn; on any later one she reads it
+ *  again through read_document, from our own copy — the same way photo_ref → read_label works. */
+const READ_DOCUMENT_HINT =
+  'On a later turn, when they ask about it and it is no longer in front of you, call read_document with this ' +
+  'exact doc_ref to read it again.';
+
 function photoLine(name: string, photoRef: string): string {
   return `- Photo "${name}" is attached (shown to you directly, above). photo_ref: "${photoRef}". ${READ_LABEL_HINT}`;
 }
@@ -81,15 +87,19 @@ async function resolveOne(userId: string, sessionId: string, a: AttachmentRef): 
       return { image: url, line: photoLine(name, `${COACH_ATTACHMENT_REF_PREFIX}${a.ref}`) };
     }
     const bytes = await downloadAttachment(a.ref, stat.size);
+    const docRef = `${COACH_ATTACHMENT_REF_PREFIX}${a.ref}`;
     if (kind === 'text') {
       const text = bytes.toString('utf8');
       return {
         file: { filename: name, mimeType: stat.contentType, text },
-        line: `- Text file "${name}" is attached; its full contents are in this message.`,
+        line: `- Text file "${name}" is attached; its full contents are in this message. doc_ref: "${docRef}". ${READ_DOCUMENT_HINT}`,
       };
     }
-    const pages = await countPdfPages(bytes);
-    if (pages > DOCUMENT_MAX_PAGES) {
+    // The page cap is a PDF fact (the cost gate; pdf-lib counts real pages). A Word document has
+    // no page count until it is laid out — its gate is the byte cap alone, already applied above.
+    const isPdf = stat.contentType.split(';')[0]?.trim().toLowerCase() === 'application/pdf';
+    const pages = isPdf ? await countPdfPages(bytes) : null;
+    if (pages != null && pages > DOCUMENT_MAX_PAGES) {
       const why = attachmentRejectionText(name, { reason: 'too_many_pages', limitPages: DOCUMENT_MAX_PAGES });
       return { line: failedLine(name, why) };
     }
@@ -98,9 +108,10 @@ async function resolveOne(userId: string, sessionId: string, a: AttachmentRef): 
       filename: name,
       mimeType: stat.contentType,
     });
+    const shape = pages != null ? `${pages} page${pages === 1 ? '' : 's'}` : 'Word document';
     return {
       file: { filename: name, mimeType: stat.contentType, fileId },
-      line: `- Document "${name}" (${pages} page${pages === 1 ? '' : 's'}) is attached; read it directly from this message.`,
+      line: `- Document "${name}" (${shape}) is attached; read it directly from this message. doc_ref: "${docRef}". ${READ_DOCUMENT_HINT}`,
     };
   } catch (e) {
     console.error('[coach attach]', name, e);

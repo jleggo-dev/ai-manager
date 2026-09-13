@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { ATTACHMENT_ACCEPT } from '@cadence/shared';
 import type { CoachAttachmentsTray, PendingAttachment } from './useCoachAttachments.ts';
+import { attachmentGlyph } from './attachmentGlyph.ts';
 
 /**
  * The two visible halves of attaching something to a message (owner, 2026-09-11): the paperclip
@@ -25,7 +26,7 @@ const ClipIcon = () => (
   </svg>
 );
 
-/** The paperclip: opens the OS picker (photos, PDFs, text — `ATTACHMENT_ACCEPT` names them). */
+/** The paperclip: opens the OS picker (photos, PDFs, Word, text — `ATTACHMENT_ACCEPT` names them). */
 export function AttachButton({ tray, disabled }: { tray: CoachAttachmentsTray; disabled?: boolean }) {
   const input = useRef<HTMLInputElement | null>(null);
   return (
@@ -76,7 +77,7 @@ export function AttachmentTray({ tray }: { tray: CoachAttachmentsTray }) {
               <img className="attach-thumb" src={it.previewUrl} alt="" />
             ) : (
               <span className="attach-glyph" aria-hidden>
-                {it.kind === 'document' ? 'PDF' : it.kind === 'text' ? 'TXT' : '…'}
+                {attachmentGlyph(it.name, it.kind)}
               </span>
             )}
             <span className="attach-name">{it.name}</span>

@@ -42,7 +42,7 @@ describe('describeFile', () => {
   ])('%s is refused with the list of what works', (name, mime) => {
     const d = describeFile(name, mime, 10);
     expect(d.ok).toBe(false);
-    if (!d.ok) expect(d.text).toMatch(/photos, PDFs, and plain text/);
+    if (!d.ok) expect(d.text).toMatch(/photos, PDFs, Word documents, and plain text/);
   });
 });
 
