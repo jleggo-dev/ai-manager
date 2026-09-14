@@ -218,6 +218,64 @@ the build button all held back until `checkin_due` flipped on day seven.
   (the skipped check-in); `open_week_review` runs the check-in; `extend_horizon` runs this week
   longer. Eval cases A27 (fires) and C20 (must not) — **eval:tools run pending post-deploy**.
 
+### The week is always written, and a confirm writes it (owner rulings, 2026-09-14)
+
+Owner, on the morning after the check-in: *"We've gone from an endless horizon of always planned
+plan, to the absolute opposite — no plan after a week. There is no plan for today or this week…
+Cadence detects the plan, but it's not showing… I think we should always have the 2nd week
+loaded, so there's always something to show, but Cadence needs to consider tweaking it in the
+check-in. This last week I didn't get anything done, so probably the coming week should look like
+the previous one did — reps should stay the same or possibly go down — if she's doing any
+reasoning."* And on the plan's greeting: *"I immediately see the disrupted ask, which should only
+display if I deliberately pull down."*
+
+**What was wrong — the sequence, from the database.** v24 wrote seven days at its commit (6–13
+Sep); the check-in day was 14 Sep, and no row had ever been written for it. At 07:26 the owner
+tapped "Start check-in", opened the review, and confirmed it — *0 of 14 sessions · 3 of 24
+meals* — which reset the week clock (`restartActiveWeek`) and, because a confirm may commit
+nothing, wrote **no days at all**. The plan opened with "A clear day" on today and every day after
+it; the coach, reading the same calendar, said the week "hasn't ended yet, so nothing needs
+rebuilding" (her `build_next_week` had refused — the confirm had already started the week) and that
+the sessions "should show up… worth a quick app restart." Step 6's "a week materializes once and
+stops there" had been right when the check-in was timed off the rows running out; the week clock
+(0058) removed that dependency and left the hole behind.
+
+**The rulings, as built.**
+
+- **The calendar is always written through the week after the view.** `buildPlanView` reads
+  occurrences a week past what it shows and, when the far week is empty (`horizonFallsShort`,
+  plan-horizon.ts — quiet on every ordinary load, since a written plan lands a row there), calls
+  `ensureHorizon` for `writtenAheadDays(view)` — 14 from today for the 7-day view. The days past
+  the check-in are still **locked** (trailLock.ts keys off `ends_on`, never off rows), and the
+  check-in still redraws them: a commit wipes the outgoing plan's future pending rows and writes
+  its own. Their real rows draw as the same muted discs the preview did; `plan-preview.ts` stays
+  as the fallback for a day the top-up could not reach.
+- **"Confirm my week" writes the week it starts.** `POST /plan/week-review/recap` follows the
+  clock reset with the same fill, `keepElapsedToday` like a commit's own — the day they are
+  standing in comes back in full, including the 6am they confirmed past. Best effort, like the
+  clock: `GET /plan` tops the calendar up on its own on the next load.
+- **Due by day, in their zone.** `computeWeekState(plan, timezone)` names `started_on` as the
+  clock's local day, `ends_on` as that plus the horizon, and `checkin_due` from the first moment
+  of `ends_on` in the user's zone — the day the trail already puts the check-in node and the
+  "wraps up today" card on. It was due at the exact instant (clock + 7×24h), so a week begun at
+  14:53 spent the check-in's whole morning with the screen saying "check in today" and the server
+  — this flag, `build_next_week`'s guard, the coach's date line, `open_week_review`'s window —
+  saying "still running". The weekly_checkin push's SQL reads the same local-day bound.
+- **After the confirm, the coach reasons about the week ahead** (`AFTER_CONFIRM_RULES`,
+  coach-picks-protocol.ts): the receipt is the start of her turn, not the end of theirs; the next
+  week is already on the calendar, so she never calls `build_next_week` after it; **load follows
+  what happened** — a week mostly done can build, and only on what was done; a week with little or
+  nothing done holds (same sessions, reps, distances, loads) or eases, never progresses; and a
+  miss is a fact, not a verdict — she asks what got in the way before easing anything. Her
+  `build_next_week` refusal now says the week's days are already written, so "should show up,
+  restart the app" cannot come back.
+- **The shelf** (`proposalShelf.ts`, `usePullReveal.ts`): the app's own absence-noticed asks —
+  `enter_disrupted` ("Life happened?", four dark days) and `rebaseline` ("Welcome back", seven) —
+  no longer greet the plan on open. They wait above the trail behind a grip; a pull of
+  `PULL_REVEAL_PX` from the top of the plan, or a tap on the grip, brings the banner out, and it
+  stays out for that proposal for the session. A proposal the coach actually made (`replan`)
+  shows itself as before. Table-tested (`proposalShelf.test.ts`, `PlanView.test.tsx`).
+
 ---
 
 ## 5. Verification state

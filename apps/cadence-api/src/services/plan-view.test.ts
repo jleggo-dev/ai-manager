@@ -53,6 +53,12 @@ vi.mock('../repos/occurrences.ts', () => ({
   listOccurrences: (...a: unknown[]) => q.listOccurrences(...a),
   listSessionStepCounts: (...a: unknown[]) => q.listSessionStepCounts(...a),
 }));
+// The top-up (2026-09-14) is the one write this view makes; the pure helpers beside it stay real.
+const ensureHorizon = vi.fn();
+vi.mock('./plan-horizon.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./plan-horizon.ts')>()),
+  ensureHorizon: (...a: unknown[]) => ensureHorizon(...a),
+}));
 
 const { buildPlanView, computeWeekState } = await import('./plan-view.ts');
 
@@ -70,6 +76,86 @@ beforeEach(() => {
   q.listOccurrences.mockImplementation(slow([]));
   q.listSessionStepCounts.mockImplementation(slow([]));
   q.getLatestConversation.mockImplementation(slow(null));
+  ensureHorizon.mockResolvedValue(0);
+});
+
+/** Today in the fixtures' zone, shifted by whole days — the same arithmetic the view does. */
+async function todayPlus(days: number): Promise<string> {
+  const { planDayBase } = await import('./plan-day.ts');
+  return new Date(planDayBase(new Date(), 'America/Toronto', null) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * The calendar is always written past the view (owner, 2026-09-14: "we should always have the
+ * 2nd week loaded"). The hole this closes: a week wrote 7 days at its commit, the check-in day was
+ * day 7, and "Confirm my week" reset the clock without committing — the owner confirmed at 07:26
+ * and opened a plan with nothing on today or any day after. The view now reads a week past what
+ * it shows and writes the missing days itself, quietly: only when the far week is empty.
+ */
+describe('buildPlanView — the calendar is always written past the view', () => {
+  const DAILY = {
+    activity_id: 'a1',
+    kind: 'system',
+    title: 'Log breakfast',
+    schedule: { recurrence: 'FREQ=DAILY', time_of_day: '08:00' },
+  };
+  const row = (date: string) => ({ occurrence_id: `o-${date}`, activity_id: 'a1', date, status: 'pending' });
+
+  it('reads through the view plus a week, and writes the missing days when the far week is empty', async () => {
+    q.listActivities.mockImplementation(slow([DAILY]));
+    // Written only through the day after tomorrow — the confirm-day shape.
+    q.listOccurrences.mockImplementation(
+      slow([row(await todayPlus(0)), row(await todayPlus(1)), row(await todayPlus(2))]),
+    );
+    ensureHorizon.mockResolvedValue(11);
+
+    await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(q.listOccurrences).toHaveBeenCalledWith(USER, await todayPlus(0), await todayPlus(14));
+    expect(ensureHorizon).toHaveBeenCalledWith(USER, 14);
+    // The window read, the trailing week, and the re-read after the write.
+    expect(q.listOccurrences).toHaveBeenCalledTimes(3);
+  });
+
+  it('stays quiet when the far week already holds a row — the ordinary load costs no write', async () => {
+    q.listActivities.mockImplementation(slow([DAILY]));
+    q.listOccurrences.mockImplementation(slow([row(await todayPlus(0)), row(await todayPlus(10))]));
+
+    await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(ensureHorizon).not.toHaveBeenCalled();
+    expect(q.listOccurrences).toHaveBeenCalledTimes(2);
+  });
+
+  it('never asks a plan with nothing that repeats to write — it would only ask again next load', async () => {
+    q.listActivities.mockImplementation(slow([{ ...DAILY, schedule: { time_of_day: '08:00' } }]));
+
+    await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(ensureHorizon).not.toHaveBeenCalled();
+  });
+
+  it("renders what was written when the write fails — a top-up is never the screen's own risk", async () => {
+    q.listActivities.mockImplementation(slow([DAILY]));
+    q.listOccurrences.mockImplementation(slow([row(await todayPlus(0))]));
+    ensureHorizon.mockRejectedValue(new Error('db down'));
+
+    const view = await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(view.hasPlan).toBe(true);
+    expect(view.week[0]?.occurrences).toHaveLength(1);
+  });
+
+  it('only the ACTIVE plan’s rows count as "written" — a superseded version’s leftovers do not', async () => {
+    q.listActivities.mockImplementation(slow([DAILY]));
+    q.listOccurrences.mockImplementation(
+      slow([row(await todayPlus(0)), { ...row(await todayPlus(10)), activity_id: 'old-version-row' }]),
+    );
+
+    await buildPlanView(USER, 7, 'America/Toronto');
+
+    expect(ensureHorizon).toHaveBeenCalledWith(USER, 14);
+  });
 });
 
 describe('buildPlanView', () => {
@@ -233,9 +319,49 @@ describe('computeWeekState (the week ends where the horizon does — step 6)', (
     expect(state?.checkin_due).toBe(false);
   });
 
-  it('is not due at 6 days, 23 hours old — just under the line', () => {
-    const generated_at = new Date(Date.now() - (7 * 86_400_000 - 3_600_000)).toISOString();
-    expect(computeWeekState({ generated_at })?.checkin_due).toBe(false);
+  /**
+   * Due by DAY, in the user's zone (2026-09-14). It used to be due at the exact instant — clock +
+   * 7×24h — while the trail puts the check-in node and the "wraps up today" card on `ends_on` the
+   * moment that day dawns; a week that began at 09:00 spent the check-in's whole morning with the
+   * screen saying "check in today" and the server saying "still running".
+   */
+  describe('is due from the first moment of ends_on in their zone, not from the clock’s own hour', () => {
+    const TZ = 'America/Toronto';
+    // Mon 7 Sep, 09:00 in Montréal.
+    const WEEK = { week_started_at: '2026-09-07T13:00:00.000Z', generated_at: '2026-09-07T13:00:00.000Z' };
+
+    it.each([
+      // [label, now (UTC instant), due?]
+      ['23:00 local the evening before → not due', '2026-09-14T03:00:00.000Z', false],
+      ['07:26 local on the due day, hours before the clock’s own 09:00 → due', '2026-09-14T11:26:00.000Z', true],
+      ['the clock’s own hour on the due day → due', '2026-09-14T13:00:00.000Z', true],
+      ['a week later, still unhandled → due', '2026-09-21T11:00:00.000Z', true],
+    ])('%s', (_label, nowIso, want) => {
+      const state = computeWeekState(WEEK, TZ, new Date(nowIso));
+      expect(state?.ends_on).toBe('2026-09-14');
+      expect(state?.checkin_due).toBe(want);
+    });
+
+    it('names the week’s days in THEIR zone: a 20:52 Montréal start began that evening, not the UTC morning after', () => {
+      const state = computeWeekState(
+        { generated_at: '2026-09-02T00:52:00.000Z' },
+        TZ,
+        new Date('2026-09-02T12:00:00.000Z'),
+      );
+      expect(state?.started_on).toBe('2026-09-01');
+      expect(state?.ends_on).toBe('2026-09-08');
+    });
+
+    it('with no zone falls back to UTC days — the behaviour every caller had', () => {
+      const state = computeWeekState(
+        { generated_at: '2026-09-02T00:52:00.000Z' },
+        null,
+        new Date('2026-09-09T00:00:00.000Z'),
+      );
+      expect(state?.started_on).toBe('2026-09-02');
+      expect(state?.ends_on).toBe('2026-09-09');
+      expect(state?.checkin_due).toBe(true);
+    });
   });
 
   it('is due once the active plan is exactly 7 days old', () => {

@@ -1,4 +1,5 @@
 import type { Plan } from '@cadence/shared';
+import { localDayIso } from './plan-day.ts';
 
 /**
  * The week clock (0058, owner 2026-09-07: "I still have never been prompted for a weekly
@@ -30,9 +31,16 @@ export function weekStartMs(plan: WeekClockPlan): number {
   return new Date(weekStartedAt(plan)).getTime();
 }
 
-/** YYYY-MM-DD of the week's first day, for occurrence windows and the review card. */
-export function weekStartIso(plan: WeekClockPlan): string {
-  return new Date(weekStartedAt(plan)).toISOString().slice(0, 10);
+/**
+ * YYYY-MM-DD of the week's first day, for occurrence windows and the review card — in the USER's
+ * zone when one is given (plan-day.ts's precedence: stored zone, else UTC). The clock is an
+ * instant; the day it names is a local fact. A week confirmed at 20:52 in Montréal began on that
+ * evening's date, not on the UTC date it had already become — and `computeWeekState` counts
+ * `ends_on` from this day, so the check-in lands where the trail (which lives in local dates)
+ * expects it. No zone → the UTC date, exactly the behaviour every caller had before.
+ */
+export function weekStartIso(plan: WeekClockPlan, timezone?: string | null): string {
+  return localDayIso(new Date(weekStartedAt(plan)), timezone);
 }
 
 /**

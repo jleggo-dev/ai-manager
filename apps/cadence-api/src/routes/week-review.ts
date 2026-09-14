@@ -31,6 +31,7 @@ import { buildWeekReviewFacts } from '../services/week-review-facts.ts';
 import { confirmSession, toggleMealSlot, toggleMindStep } from '../services/week-review-write.ts';
 import { writeRecapForReview } from '../services/recap-write.ts';
 import { addDaysIso, mondayOnOrBefore } from '../services/progress-rhythm.ts';
+import { DEFAULT_HORIZON_DAYS, ensureHorizon, writtenAheadDays } from '../services/plan-horizon.ts';
 import {
   BodyValidationError,
   parseBody,
@@ -193,6 +194,16 @@ router.post('/week-review/recap', async (req: Request, res: Response) => {
     // the wall still standing, which the next confirm or "Just build my week" clears — never
     // as a lost recap.
     await restartActiveWeek(userId).catch((e) => console.error('[POST /plan/week-review/recap] week clock', e));
+    // The week just started has to have DAYS (owner, 2026-09-14). A confirm with nothing to
+    // change is the one check-in exit that never commits, and a commit was the only thing that
+    // wrote rows — so the owner confirmed at 07:26 and opened a plan with nothing on today or any
+    // day after it, while the coach read the same empty calendar and could only say the sessions
+    // "should show up". Written like a commit's own fill (`keepElapsedToday`): the day they are
+    // standing in is theirs in full, including the 6am they confirmed past. Best effort, same as
+    // the clock: `GET /plan` tops the calendar up on its own on the next load.
+    await ensureHorizon(userId, writtenAheadDays(DEFAULT_HORIZON_DAYS), { keepElapsedToday: true }).catch((e) =>
+      console.error('[POST /plan/week-review/recap] horizon', e),
+    );
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });

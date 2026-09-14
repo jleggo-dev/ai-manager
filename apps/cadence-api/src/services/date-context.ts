@@ -18,7 +18,7 @@ import { getUser } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { computeWeekState } from './plan-view.ts';
-import { weekStartIso } from './week-clock.ts';
+import { localDayIso } from './plan-day.ts';
 import { formatWeatherLine, getWeatherForUser, localDateIso, localTimeLabel } from './weather/weather.ts';
 
 const lastStamped = new Map<string, string>();
@@ -38,20 +38,25 @@ const lastStamped = new Map<string, string>();
  * draws that line at 7 days) — the protocol forbids her ever SAYING a day count, so this line is
  * for her reasoning only, never for her mouth.
  */
-async function checkinStateLine(userId: string): Promise<string> {
+async function checkinStateLine(userId: string, timezone: string | null): Promise<string> {
   const plan = await getActivePlan(userId).catch(() => null);
   if (!plan) return '';
-  const state = computeWeekState(plan);
+  // The user's own day decides "due" and "how late" — the same day the trail's card and check-in
+  // node stand on, so she is never told a week is still running while the screen says check in.
+  const now = new Date();
+  const state = computeWeekState(plan, timezone, now);
   if (!state?.checkin_due) return '';
 
-  const daysLate = Math.floor((Date.now() - Date.parse(`${state.ends_on}T00:00:00Z`)) / 86_400_000);
+  const daysLate = Math.round(
+    (Date.parse(`${localDayIso(now, timezone)}T00:00:00Z`) - Date.parse(`${state.ends_on}T00:00:00Z`)) / 86_400_000,
+  );
   const when = daysLate <= 0 ? 'ended today' : `ended ${daysLate} day${daysLate === 1 ? '' : 's'} ago`;
   const parts = [`Their plan week ${when}; check-in not yet done.`];
 
   // Same window the review card itself would show (the week's start through the due date —
   // the week clock, 0058, not `generated_at`) — "empty" means there is nothing on the card to
   // look at, not merely that nobody has looked yet.
-  const occ = await listOccurrences(userId, weekStartIso(plan), state.ends_on).catch(() => []);
+  const occ = await listOccurrences(userId, state.started_on, state.ends_on).catch(() => []);
   if (!occ.some((o) => o.status === 'done')) parts.push('Last week has no logged activity.');
 
   return parts.join(' ');
@@ -82,7 +87,7 @@ export async function ensureDateStamped(userId: string, sessionId: string): Prom
     );
   }
 
-  const checkin = await checkinStateLine(userId).catch(() => '');
+  const checkin = await checkinStateLine(userId, tz).catch(() => '');
   if (checkin) parts.push(checkin);
 
   await injectCoachContext(userId, sessionId, parts.join(' '), { source: 'date', version: 3 }).catch((e) =>

@@ -333,3 +333,31 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
     expect(out).not.toMatch(/lighter build|consolation prize|THE THREE ANSWERS/);
   });
 });
+
+/**
+ * After the confirm (owner, 2026-09-14): the receipt "Week confirmed — 0 of 14 sessions…" landed
+ * and she answered a rebuild nobody asked for ("this week hasn't ended yet, so nothing needs
+ * rebuilding"), because build_next_week had refused and nothing told her what a confirmed week
+ * asks of her. "Reps should stay the same or possibly go down — if she's doing any reasoning."
+ */
+describe('after the check-in — the week ahead', () => {
+  it('tells her the receipt starts her turn, and that the next week is already on the calendar', () => {
+    const out = renderPickProtocol({ intent: 'ongoing' });
+    expect(out).toContain('AFTER THE CHECK-IN — THE WEEK AHEAD');
+    expect(out).toContain('THE RECEIPT IS THE START OF YOUR TURN');
+    expect(out).toContain('its days are already written on their calendar');
+    expect(out).toContain('Do not call build_next_week after it');
+  });
+
+  it('moves load on what happened — a missed week holds or eases, never progresses', () => {
+    const out = renderPickProtocol();
+    expect(out).toContain('LOAD FOLLOWS WHAT HAPPENED');
+    expect(out).toContain('it never progresses past work that did not happen');
+    expect(out).toContain('A MISS IS A FACT, NOT A VERDICT');
+    // The brand's own line — count what happened, never what broke — holds in the new block too:
+    // it forbids presenting the week as a failure, and never counts days out loud.
+    const block = out.split('AFTER THE CHECK-IN — THE WEEK AHEAD')[1] ?? '';
+    expect(block).not.toMatch(/overdue/i);
+    expect(block).toContain('Never present the week as a failure');
+  });
+});

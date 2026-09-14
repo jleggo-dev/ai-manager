@@ -19,6 +19,13 @@ vi.mock('../repos/users.ts', () => ({
 vi.mock('../repos/plans.ts', () => ({
   restartActiveWeek: (...a: unknown[]) => restartActiveWeek(...a),
 }));
+const ensureHorizon = vi.fn();
+vi.mock('../services/plan-horizon.ts', () => ({
+  // Mirrors plan-horizon.ts's real values — kept in sync by hand since this mock replaces the module.
+  DEFAULT_HORIZON_DAYS: 7,
+  writtenAheadDays: (view: number) => view + 7,
+  ensureHorizon: (...a: unknown[]) => ensureHorizon(...a),
+}));
 vi.mock('../services/week-review-facts.ts', () => ({ buildWeekReviewFacts: vi.fn() }));
 vi.mock('../services/week-review-write.ts', () => ({
   confirmSession: vi.fn(),
@@ -67,6 +74,47 @@ beforeEach(() => {
   getUser.mockResolvedValue({ pending_week_review: REVIEW, baseline: {} });
   writeRecapForReview.mockResolvedValue({ id: 'r1' });
   restartActiveWeek.mockResolvedValue(true);
+  ensureHorizon.mockResolvedValue(12);
+});
+
+/**
+ * The week a confirm starts has to have DAYS (owner, 2026-09-14). This was the one check-in exit
+ * that never committed, and a commit was the only thing that wrote rows: the owner confirmed
+ * "0 of 14 sessions" at 07:26 and opened a plan with nothing on today or any day after it. The
+ * fill is a commit's own kind — the day they are standing in comes back in full.
+ */
+describe('POST /plan/week-review/recap — writes the week it starts', () => {
+  it('fills the calendar through the week after the view, keeping today’s already-passed slots', async () => {
+    const r = await post({ line: 'A steady week.' });
+    expect(r.status).toBe(200);
+    expect(ensureHorizon).toHaveBeenCalledWith('u1', 14, { keepElapsedToday: true });
+  });
+
+  it('writes the week AFTER the clock is reset, never before — the order the wall clears in', async () => {
+    const order: string[] = [];
+    restartActiveWeek.mockImplementation(async () => {
+      order.push('clock');
+      return true;
+    });
+    ensureHorizon.mockImplementation(async () => {
+      order.push('horizon');
+      return 12;
+    });
+    await post();
+    expect(order).toEqual(['clock', 'horizon']);
+  });
+
+  it('writes nothing when nothing is pending — a 404 is not a started week', async () => {
+    getUser.mockResolvedValue({ pending_week_review: null, baseline: {} });
+    await post();
+    expect(ensureHorizon).not.toHaveBeenCalled();
+  });
+
+  it('still confirms (200) when the fill fails — GET /plan tops the calendar up on the next load', async () => {
+    ensureHorizon.mockRejectedValue(new Error('db down'));
+    const r = await post();
+    expect(r.status).toBe(200);
+  });
 });
 
 /**

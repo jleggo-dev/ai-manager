@@ -31,7 +31,7 @@ export const BUILD_NEXT_WEEK: CoachActionTool = {
       return 'They have no active plan, so there is no rhythm to roll forward — nothing was built. Offer to build them a first week (the build card) instead.';
     }
     if (result.status === 'not_due') {
-      return 'Their current week is still running, so nothing was rolled — this tool only ends a finished week. If something should change mid-week, propose_plan_change is the right size; otherwise their week simply continues.';
+      return 'Their current week is still running, so nothing was rolled — this tool only ends a finished week. Its days are already written on the calendar (a week is always written through the one after it), so nothing needs building or "restarting"; if they just confirmed their check-in, that confirm is what started this week. If something should change, propose_plan_change is the right size; otherwise their week simply continues.';
     }
     return [
       `Done — week ${result.version} is being built from the same rhythm, nothing changed. The sessions are being written in the background and the app will notify them when it is ready.`,

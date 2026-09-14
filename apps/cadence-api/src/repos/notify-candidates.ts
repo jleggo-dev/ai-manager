@@ -124,13 +124,18 @@ export interface CheckinDueCandidate {
 export async function listCheckinDueCandidates(): Promise<CheckinDueCandidate[]> {
   return sql<CheckinDueCandidate[]>`
     select u.id as user_id, u.timezone,
-      to_char(coalesce(pl.week_started_at, pl.generated_at), 'YYYY-MM-DD') as week_started_at,
+      to_char(coalesce(pl.week_started_at, pl.generated_at) at time zone coalesce(u.timezone, 'UTC'), 'YYYY-MM-DD')
+        as week_started_at,
       pl.horizon_days
     from cadence.notification_prefs p
     join cadence.users u on u.id = p.user_id
     join cadence.plans pl on pl.user_id = u.id and pl.status = 'active'
     where p.enabled
-      and coalesce(pl.week_started_at, pl.generated_at) <= now() - make_interval(days => pl.horizon_days)`;
+      -- Due from the first moment of the due DAY in the user's zone, as computeWeekState reads it
+      -- (2026-09-14): the clock's local day plus the horizon, against today's local day.
+      and (coalesce(pl.week_started_at, pl.generated_at) at time zone coalesce(u.timezone, 'UTC'))::date
+            + pl.horizon_days
+          <= (now() at time zone coalesce(u.timezone, 'UTC'))::date`;
 }
 
 export interface WeatherMoveCandidate {
