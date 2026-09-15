@@ -188,6 +188,21 @@ export const ALWAYS_ACTIONS = [
    * 305–375 band it budgets for an ordinarily-shaped action.
    */
   'update_repertoire',
+  /**
+   * `rebuild` joined 2026-09-15 on the owner's ruling ("Do 1"), on evidence rather than a guess:
+   * the tool-selection run of that morning (TOOL-HARNESS.md, the 2026-09-15 row) had it called
+   * nothing from the tail on both of its rungs, and the reply text (added to the runner the same
+   * afternoon) showed what the silence was: on A21 ("add some chest and abs to …") she understood
+   * the ask and asked how long the finisher should be instead of calling; on A22 (the whole-week
+   * rebalance) she read the plan and NARRATED the new shape she would move to. Neither is a
+   * clarifying question about a session the world lacked (A23/A28/A29 were, and those cases were
+   * reworded). That is the `update_constraint` 0-of-3 shape above, measured a second time on the
+   * facade that fronts revise_session and start_replan. Definition measured at ~367 tokens/turn
+   * (1,468 chars serialized ÷ 4), inside the 305–375 band. `shape_week` stays in the tail: its
+   * pause (A25) and extend (A30) fired from the drawer; its build_ahead lost to the always-on
+   * `build_next_week` (A27), which is a tiebreak fixed in that tool's description, not a promotion.
+   */
+  'rebuild',
 ] as const;
 
 /**
@@ -303,11 +318,11 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_equipment: 'training equipment they own, with wear on tracked items',
   update_equipment: 'ACTION: add, remove or rename equipment on their file',
   // The two plan FACADES (coach-action-plan-facade.ts, owner 2026-09-15: "Build the plan facade
-  // so we stop raising the cap"): five hooks became two. extend_horizon, build_week_ahead and
-  // pause_week sit behind `shape_week`; revise_session and start_replan behind `rebuild`. The
-  // originals are no longer tools of their own, so they have no hooks here.
+  // so we stop raising the cap"): five hooks became one. extend_horizon, build_week_ahead and
+  // pause_week sit behind `shape_week`; revise_session and start_replan behind `rebuild`, which
+  // is ALWAYS-ON since the same afternoon (see ALWAYS_ACTIONS) and so has no hook. The originals
+  // are no longer tools of their own, so they have no hooks here either.
   shape_week: 'ACTION: this week’s edges — run it longer, write next week early, pause a stretch',
-  rebuild: 'ACTION: rebuild one upcoming session, or the WHOLE week, from their words',
   set_home_location: 'ACTION: record where they live — weather and daylight outdoors',
   // 2026-09-15 (owner: "Shouldn't Cadence be able to see the calendar?" / "she should be able
   // to adjust the calendar and the plan"): the days as WRITTEN, beyond the seven the plan read
@@ -476,9 +491,11 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // THE FACADES (same day, "Build the plan facade so we stop raising the cap"): the five
     // actions above are reached through two doors now — `shape_week` (extend, build_ahead,
     // pause: the week's edges) and `rebuild` (one session, or the whole week, from their words)
-    // — coach-action-plan-facade.ts. The ladder still reads whole from here: one session or the
-    // week rebuilt, the week's edges moved, one dated session moved, the days as written.
-    members: ['shape_week', 'rebuild', 'edit_calendar', 'get_calendar', 'get_user_built_activities'],
+    // — coach-action-plan-facade.ts. `rebuild` is always-on since the same afternoon (the eval
+    // had it silent from the tail on both rungs — see ALWAYS_ACTIONS) and so, like
+    // build_next_week and propose_plan_change, is deliberately not filed here. The ladder still
+    // reads whole from here: the week's edges moved, one dated session moved, the days as written.
+    members: ['shape_week', 'edit_calendar', 'get_calendar', 'get_user_built_activities'],
   },
   {
     key: 'progress',

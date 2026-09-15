@@ -540,6 +540,8 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // revise_session (PLAN-CHANGES.md rung 1) and start_replan (rung 3) behind `rebuild`. The
   // originals keep their files, contracts and tests; only the door changed.
   shape_week: SHAPE_WEEK,
+  // ALWAYS-ON since the afternoon of 2026-09-15 (owner ruling, recorded above ALWAYS_ACTIONS in
+  // coach-tool-tiers.ts): the morning's eval had it called nothing from the tail on both rungs.
   rebuild: REBUILD,
   // Tail tier, same ruling. The trail's hold menu from chat (owner, 2026-09-15: "she should be
   // able to adjust the calendar and the plan"): ONE dated session moved, copied or taken off,

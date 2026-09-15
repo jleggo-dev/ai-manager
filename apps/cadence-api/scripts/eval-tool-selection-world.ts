@@ -171,6 +171,7 @@ export async function seed(userId: string, token: string): Promise<void> {
   const { insertActivities } = await import('../src/repos/activities.ts');
   const { insertEquipment } = await import('../src/repos/equipment.ts');
   const { upsertWorkoutHistory } = await import('../src/repos/workout-history.ts');
+  const { DEFAULT_HORIZON_DAYS, ensureHorizon, writtenAheadDays } = await import('../src/services/plan-horizon.ts');
   const { randomUUID } = await import('node:crypto');
 
   await setName(userId, 'Sam');
@@ -224,6 +225,18 @@ export async function seed(userId: string, token: string): Promise<void> {
     })),
   );
   const idByTitle = new Map(activities.map((a) => [a.title, a.activity_id]));
+
+  /**
+   * THE CALENDAR, WRITTEN (2026-09-15). Until this line the world had a plan and no days: the seed
+   * inserted the commitments and three past logs and never materialized a future occurrence, which
+   * nothing noticed while the coach only ever read the RULES. Since #418 her plan read carries the
+   * next seven days AS WRITTEN — and on this world that block said, on every turn, that NOTHING
+   * was written for the week ahead, a sentence production never shows a live plan. The same fill
+   * a commit runs (`keepElapsedToday`, so today is whole whatever hour the run starts) makes the
+   * seeded week look like a real one: the Tuesday easy run and grip finisher sit on a Tuesday,
+   * and a case that names one of them is asking about a day she can see.
+   */
+  await ensureHorizon(userId, writtenAheadDays(DEFAULT_HORIZON_DAYS), { keepElapsedToday: true });
 
   for (const r of REPORTS) {
     const activityId = idByTitle.get(r.title);

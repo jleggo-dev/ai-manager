@@ -42,7 +42,13 @@ export function header(): void {
   );
 }
 
-export function line(o: Outcome): void {
+/**
+ * One case, one line — and, for a case that failed, what she SAID (owner, 2026-09-15: the run
+ * that morning could not tell a "which days, just to check?" from a description of the tool she
+ * never called, because the reply was thrown away). `say` prints it for every case, passed or
+ * not; without it only the failures speak, cut short so the table stays a table.
+ */
+export function line(o: Outcome, opts: { say?: boolean } = {}): void {
   const mark = o.error ? '💥' : o.pass ? '✓ ' : '✗ ';
   const tok = o.promptTokens ? `${o.promptTokens.toLocaleString('en-US')} in` : '? in';
   console.log(
@@ -60,8 +66,13 @@ export function line(o: Outcome): void {
   if (o.invented.length) console.log(`      INVENTED ${o.invented.join(', ')}`);
   for (const p of o.argProblems) console.log(`      ARGS    ${p}`);
   if (o.prefetched?.length) console.log(`      broker prefetched: ${o.prefetched.join(', ')}`);
-  if (!o.pass && o.missing.length && NARRATION.test(o.reply)) {
-    console.log(`      narrated it instead: "${o.reply.replace(/\s+/g, ' ').slice(0, 130)}…"`);
+  const said = o.reply.replace(/\s+/g, ' ').trim();
+  if (said && (opts.say || !o.pass)) {
+    // The narration hint stays a hint: it names the 2026-08-16 shape when the words match it,
+    // and otherwise the reply is simply shown so the reader can judge what kind of silence it was.
+    const tag = !o.pass && o.missing.length && NARRATION.test(o.reply) ? 'narrated' : 'said    ';
+    const cut = opts.say ? 600 : 240;
+    console.log(`      ${tag} "${said.slice(0, cut)}${said.length > cut ? '…' : ''}"`);
   }
 }
 

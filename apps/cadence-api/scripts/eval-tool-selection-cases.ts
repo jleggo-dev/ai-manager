@@ -372,13 +372,16 @@ const ACTIONS: EvalCase[] = [
   {
     id: 'A21',
     kind: 'action',
-    turn: "can you add some chest and abs to today's workout?",
+    turn: 'can you add some chest and abs to the grip finisher?',
     expect: ['rebuild'],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
     // The routing this tool exists for: a session-content ask must never fall through to the
     // plan-structure tools — that fall-through is the incident itself. Rewritten 2026-09-15: the
     // facade collapsed revise_session and start_replan into `rebuild`, so the rung-1 half of the
-    // tiebreak now lives in the `scope` argument, not the tool name.
+    // tiebreak now lives in the `scope` argument, not the tool name. "today's workout" became
+    // "the grip finisher" the same day: with the calendar in the plan read, "today" is a workout
+    // only on the world's Tuesdays and Thursdays, and a case that changes meaning with the
+    // weekday it runs on is not measuring her.
     forbid: ['propose_plan_change', 'build_next_week'],
     args: {
       tool: 'rebuild',
@@ -425,14 +428,17 @@ const ACTIONS: EvalCase[] = [
     id: 'A23',
     kind: 'action',
     turn:
-      'can you swap the intervals to wednesday and make the friday spin 30 minutes? everything else can ' +
-      'stay as it is',
+      'can you swap the grip finisher to wednesday and make the thursday easy run 30 minutes? everything ' +
+      'else can stay as it is',
     expect: ['propose_plan_change'],
     allow: [...DOSSIER_READS, 'get_recent_logs'],
     // The triage line drawn the other way: two NAMED commitment edits with "everything else stays"
     // is rung 0 — a minutes-long background rebuild landing on it would be the proportionality
     // failure the ladder exists to prevent, and the session-content tool has no session to open.
-    // Both rungs now sit behind `rebuild` (2026-09-15), so one forbid covers what two did.
+    // Both rungs now sit behind `rebuild` (2026-09-15), so one forbid covers what two did. The
+    // sessions were "the intervals" and "the friday spin" until 2026-09-15 — neither exists in
+    // the seeded world, and the first run with reply text showed her correctly asking which
+    // session was meant. Scored as a miss for two weeks; it was the instrument.
     forbid: ['rebuild'],
     from:
       'docs/cadence/PLAN-CHANGES.md Phase 2 (2026-08-31), the owner directive at its head: "latency must ' +
@@ -550,12 +556,18 @@ const ACTIONS: EvalCase[] = [
   {
     id: 'A28',
     kind: 'action',
-    turn: "move tomorrow's hill intervals to thursday, tuesday night's gone. just this once",
+    turn: "move this week's grip finisher to wednesday, tuesday night's gone. just this once",
     expect: ['edit_calendar'],
     allow: [...DOSSIER_READS, 'get_calendar'],
     // One dated session, this week, "just this once" — the calendar layer. A plan change would
-    // move the commitment's day for every week from now on, which is not what was asked.
+    // move the commitment's day for every week from now on, which is not what was asked. Named
+    // "tomorrow's hill intervals" for its first run (2026-09-15): the world has no hill intervals,
+    // and she asked which session was meant — reworded to the seeded grip finisher the same day.
     forbid: ['propose_plan_change', 'rebuild'],
+    args: {
+      tool: 'edit_calendar',
+      check: (a) => (a.action === 'move' ? null : `action was ${JSON.stringify(a.action)}, wanted "move"`),
+    },
     from:
       'Owner ruling 2026-09-15 ("she should be able to adjust the calendar and the plan") — the trail\'s ' +
       'hold menu, from chat; edit_calendar is the calendar half, propose_plan_change the rules half.',
@@ -563,10 +575,11 @@ const ACTIONS: EvalCase[] = [
   {
     id: 'A29',
     kind: 'action',
-    turn: 'from now on can we do the hill intervals on thursdays instead of tuesdays',
+    turn: 'from now on can we do the grip finisher on thursdays instead of tuesdays',
     expect: ['propose_plan_change'],
     allow: [...DOSSIER_READS, 'get_calendar'],
     // "From now on" is the rule, not one date — the restraint half of A28 (TOOL-HARNESS.md, step 7).
+    // Reworded from "the hill intervals" 2026-09-15, same reason as A28: the world has none.
     forbid: ['edit_calendar', 'rebuild'],
     from: 'edit_calendar ships (owner ruling 2026-09-15) — the tiebreak its description carries, measured.',
   },
