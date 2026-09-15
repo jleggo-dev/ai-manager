@@ -60,12 +60,13 @@ export const SHAPE_WEEK: CoachActionTool = {
       days: {
         type: 'number',
         description:
-          'For "extend": the week\'s total length in days from the day it began — 14 for two weeks, 28 at most.',
+          'Required for "extend": the week\'s total length in days from the day it began — 14 for two weeks, 28 at most. Omit otherwise.',
       },
       start: { type: 'string', description: 'For "pause": first paused day, YYYY-MM-DD. Defaults to today.' },
       end: {
         type: 'string',
-        description: 'For "pause": last paused day, YYYY-MM-DD. The plan runs again the day after.',
+        description:
+          'Required for "pause": last paused day, YYYY-MM-DD. The plan runs again the day after. Omit otherwise.',
       },
       reason: { type: 'string', description: 'For "pause": why, in their own words. Omit when they did not say.' },
     },
@@ -105,7 +106,10 @@ export const REBUILD: CoachActionTool = {
         type: 'string',
         description: 'What should be different, in THEIR words — never your summary of what they asked.',
       },
-      session: { type: 'string', description: 'For "session": which one, by the title the plan lists.' },
+      session: {
+        type: 'string',
+        description: 'Required for "session": which one, by the title the plan lists. Omit for "week".',
+      },
       date: {
         type: 'string',
         description: 'For "session": the day it is scheduled, YYYY-MM-DD. Omit to take the soonest upcoming one.',

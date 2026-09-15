@@ -92,6 +92,7 @@
  *   npm run eval:tools -- --only CAN,A1            # a handful — the cheap trial run
  *   npm run eval:tools                             # all 33, one at a time
  *   npm run eval:tools -- --concurrency 3          # faster, and blind to what the Broker prefetched
+ *   npm run eval:tools -- --only A23,A29 --say     # print what she SAID on every case, not only the failed ones
  *
  * Cost and clock are printed at the end of every run. It cleans up after itself: the auth user and
  * every cadence row it created are deleted on exit, success or failure.
@@ -128,6 +129,8 @@ const flag = (name: string): string | null => {
 const has = (name: string): boolean => argv.includes(`--${name}`) || argv.some((a) => a.startsWith(`--${name}=`));
 
 const DRY = has('dry');
+/** Print the coach's reply under every case, not only the failed ones (report.ts `line`). */
+const SAY = has('say');
 /**
  * ONE AT A TIME BY DEFAULT, and that is a measurement decision rather than politeness. The X-ray
  * (`/coach/trace`) is keyed by user and held in memory on whichever serverless instance answered,
@@ -331,7 +334,7 @@ try {
   const t0 = Date.now();
   const outcomes = await pool(cases, CONCURRENCY, async (c) => {
     const o = await runCase(world!, c);
-    line(o);
+    line(o, { say: SAY });
     return o;
   });
   const ok = graderVerdict(outcomes);

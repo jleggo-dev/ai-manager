@@ -175,27 +175,46 @@ clean on a trial run first):
 - **The restraint half holds at 30 tail tools.** Silence 21/21 and false-fires 0/22 — including
   C20/C21 (a glance at next week, and at tomorrow, with `get_calendar` now a read she could
   reach for) and the whole facade neighbourhood. Nothing built, moved or paused unasked.
-- **The `rebuild` facade under-fires on BOTH rungs.** A21 (the 2026-08-31 verbatim, "add some
-  chest and abs to today's workout") and A22 (the whole-week rebalance) both called nothing —
-  not even `find_tools`. That is the tail-action follow-through gap (`update_constraint` 0-of-3,
-  above ALWAYS_ACTIONS in coach-tool-tiers.ts) measured again, now on the facade. A27 went the
-  other way: asked to build next week early, she called the ALWAYS-ON `build_next_week` (a
-  forbid) instead of the tail `shape_week` with `build_ahead` — when an always-on neighbour and
-  a tail choice both say "build next week", the one in her hand wins. A25 (`shape_week`, pause)
-  and A30 (`shape_week`, extend) fired correctly. Whether `rebuild` earns promotion is an owner
-  ruling; the evidence is here, and it is the shape the tiers file warns about.
-- **`edit_calendar`, split.** A26 (skip Thursday's run) fired with a delete; A28 (move
-  tomorrow's hill intervals) read `get_calendar` and stopped short of the edit; A16 ("cut the
-  grip finisher and the long run" in a write-off week, written for `propose_plan_change` before
-  the calendar layer existed) went to `edit_calendar` — the case needs a ruling on "this week"
-  vs "for good" before it counts against her.
-- **Always-on under-calls are not new.** A13 (`update_constraint`), A23 and A29
-  (`propose_plan_change`) called nothing — the 2026-08-16 shape, on tools she has been holding
-  all along. A18 called `update_repertoire` with `status: "known"` where a piece finished today
-  is `learned`.
+- **The `rebuild` facade under-fires on BOTH rungs — and the reply text says what kind of
+  silence it was.** A21 (the 2026-08-31 shape, "add some chest and abs to …") and A22 (the
+  whole-week rebalance) both went uncalled. Rerun the same afternoon with `--say`: on A21 she
+  understood the ask and asked *how long* the finisher should be instead of calling; on A22 she
+  read the plan and **narrated the new shape she would move to** ("here's the shape I'd move
+  to: Tuesday just gets the easy run…"). That is the tail-action follow-through gap
+  (`update_constraint` 0-of-3, above ALWAYS_ACTIONS in coach-tool-tiers.ts) measured again, now
+  on the facade. A27 went the other way: asked to build next week early, she called the
+  ALWAYS-ON `build_next_week` (a forbid) instead of the tail `shape_week` with `build_ahead` —
+  when an always-on neighbour and a tail choice both say "build next week", the one in her hand
+  wins. A25 (`shape_week`, pause) and A30 (`shape_week`, extend) fired correctly.
+- **Three of the misses were the instrument, not her.** A23 ("swap the intervals … the friday
+  spin"), A28 ("tomorrow's hill intervals") and A29 ("the hill intervals on thursdays") named
+  sessions the seeded world does not have — and her replies, once visible, were the right ones:
+  *"I'm not finding a session called 'intervals' or a Friday spin — here's what's actually on
+  there… did you mean one of these?"* A case that scores that as silence is measuring its own
+  fixture. A13 passed on the rerun (variance). Left standing: A20 (`propose_progress_layout`)
+  and A18, which called `update_repertoire` with `status: "known"` where a piece finished today
+  is `learned`. A16 ("cut the grip finisher and the long run" in a write-off week, written for
+  `propose_plan_change` before the calendar layer existed) went to `edit_calendar` and needs a
+  ruling on "this week" vs "for good" before it counts against her.
+- **And the world had no calendar.** The seed writes the plan, its commitments and three past
+  logs, and never materialized a future day — so since #418 the plan read told her on every turn
+  that NOTHING was written for the next seven days, which production never says of a live plan.
+  How much that cost the action cases is unknowable from this run.
 - **Tokens/turn 22,473 → 24,737 (+2,264).** The calendar block (~210), `update_repertoire`'s
   always-on definition (348), the drawer label's growth since 08-28, and the rest of the tail's
   hooks. The facade took 313 chars off the label the same day; the run measures the sum.
+- **Acted on the same afternoon** (owner: *"Do 1 and 2, and add reply text to the runner"*):
+  `rebuild` promoted to `ALWAYS_ACTIONS` — measured at ~367 tokens/turn (1,468 chars serialized
+  ÷ 4), inside the 305–375 band; the ruling is recorded beside it in coach-tool-tiers.ts.
+  `build_next_week`'s description now carries the tiebreak to `shape_week`'s build-ahead (the
+  always-on side names the tail side, the audit's rule). The runner prints what she said under
+  every failed case, `--say` for all of them — which is what exposed the three fixture misses
+  above within the hour. **The instrument was corrected the same afternoon:** the world now
+  writes its calendar after seeding the plan (the same `ensureHorizon` a commit runs), and
+  A21/A23/A28/A29 were reworded to name sessions the world has (A21 also stops depending on the
+  weekday it runs on). So the row above is the last measurement on the uncorrected instrument;
+  the NEXT run is the first on the corrected one, and its numbers will not be comparable to this
+  row either — compare its silence and false-fire rates, which the fixture faults did not touch.
 
 **Two things those rows taught, the second the hard way:**
 
