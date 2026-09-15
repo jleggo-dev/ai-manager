@@ -166,7 +166,36 @@ old commit:
 | 2026-08-26 | (deployed main) | 70.4% | 76.0% | 73.1% | 24/36 | 0/11 | 6/25 (A7 A13 A14 A15 A16 B3) | 20,654 median |
 | 2026-08-27 | (deployed main, identical code) | 70.0% | 84.0% | 76.4% | 24/36 | 2/11 (C6 C8) | 4/25 (A13 A14 A15 B6) | 20,703 median |
 | 2026-08-28 | `open_week_review` + `build_next_week` live (#280) | 71.0% | 88.0% | 78.6% | 27/36 | **0/11** | 2/25 (A14 A15) | 22,473 median |
-| 2026-08-30 | `update_repertoire` joins ALWAYS_ACTIONS (348 tok/turn measured) + `practice` category + cases A17/A18/B11 — **run PENDING post-deploy**; write the numbers over this line | — | — | — | — | — | — | — |
+| 2026-08-30 | `update_repertoire` joins ALWAYS_ACTIONS (348 tok/turn measured) + `practice` category + cases A17/A18/B11 — never run on its own; first measured in the 2026-09-15 row, alongside everything since | — | — | — | — | — | — | — |
+| 2026-09-15 | everything since 08-28, deployed as 81bf20a8: `update_repertoire` always-on, the `practice`/`plan`/`home`/`asking` categories and their tail actions, #417 `build_week_ahead`, #418 the calendar in `get_active_plan` + `get_calendar` + `edit_calendar` + the after-confirm rules, #419 the plan facades (`shape_week`, `rebuild`). Cases A17–A30, B11–B13, C18–C21 added since; A21/A22/A25/A27 rewritten to the facades. **66 cases — not comparable to the 36-case rows above** | 89.5% | 77.3% | 82.9% | 54/66 | **0/22** | 6/44 (A13 A20 A21 A22 A23 A29) | 24,737 median |
+
+**What the 2026-09-15 run taught** (28 min, 1.64M tokens in, claude-sonnet-5; the two canaries and A1
+clean on a trial run first):
+
+- **The restraint half holds at 30 tail tools.** Silence 21/21 and false-fires 0/22 — including
+  C20/C21 (a glance at next week, and at tomorrow, with `get_calendar` now a read she could
+  reach for) and the whole facade neighbourhood. Nothing built, moved or paused unasked.
+- **The `rebuild` facade under-fires on BOTH rungs.** A21 (the 2026-08-31 verbatim, "add some
+  chest and abs to today's workout") and A22 (the whole-week rebalance) both called nothing —
+  not even `find_tools`. That is the tail-action follow-through gap (`update_constraint` 0-of-3,
+  above ALWAYS_ACTIONS in coach-tool-tiers.ts) measured again, now on the facade. A27 went the
+  other way: asked to build next week early, she called the ALWAYS-ON `build_next_week` (a
+  forbid) instead of the tail `shape_week` with `build_ahead` — when an always-on neighbour and
+  a tail choice both say "build next week", the one in her hand wins. A25 (`shape_week`, pause)
+  and A30 (`shape_week`, extend) fired correctly. Whether `rebuild` earns promotion is an owner
+  ruling; the evidence is here, and it is the shape the tiers file warns about.
+- **`edit_calendar`, split.** A26 (skip Thursday's run) fired with a delete; A28 (move
+  tomorrow's hill intervals) read `get_calendar` and stopped short of the edit; A16 ("cut the
+  grip finisher and the long run" in a write-off week, written for `propose_plan_change` before
+  the calendar layer existed) went to `edit_calendar` — the case needs a ruling on "this week"
+  vs "for good" before it counts against her.
+- **Always-on under-calls are not new.** A13 (`update_constraint`), A23 and A29
+  (`propose_plan_change`) called nothing — the 2026-08-16 shape, on tools she has been holding
+  all along. A18 called `update_repertoire` with `status: "known"` where a piece finished today
+  is `learned`.
+- **Tokens/turn 22,473 → 24,737 (+2,264).** The calendar block (~210), `update_repertoire`'s
+  always-on definition (348), the drawer label's growth since 08-28, and the rest of the tail's
+  hooks. The facade took 313 chars off the label the same day; the run measures the sum.
 
 **Two things those rows taught, the second the hard way:**
 
