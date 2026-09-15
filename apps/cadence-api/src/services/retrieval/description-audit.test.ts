@@ -59,8 +59,9 @@ const TIEBREAK_PAIRS: Array<[string, string]> = [
   // Named commitment edits (seconds, instant card) vs the whole week reshaped (minutes, background
   // run). The 2026-08-31 incident IS this ambiguity mis-resolved — a five-exercise tweak routed
   // into a full re-synthesis — so the always-on side must carry the tiebreak (PLAN-CHANGES.md
-  // Phase 2; start_replan lives in the tail, invisible to this file's byName lookup).
-  ['propose_plan_change', 'start_replan'],
+  // Phase 2; the rebuild lives in the tail behind the `rebuild` facade since 2026-09-15,
+  // invisible to this file's byName lookup).
+  ['propose_plan_change', 'rebuild'],
 ];
 
 /** Every failure here points at the checklist, because the rule broken is written down there and

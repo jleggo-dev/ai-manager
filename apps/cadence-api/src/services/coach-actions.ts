@@ -17,9 +17,7 @@ import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
 import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
-import { BUILD_WEEK_AHEAD } from './coach-action-build-week-ahead.ts';
-import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
-import { PAUSE_WEEK } from './coach-action-pause-week.ts';
+import { REBUILD, SHAPE_WEEK } from './coach-action-plan-facade.ts';
 import { EDIT_CALENDAR } from './coach-action-edit-calendar.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { SET_MICRO_TARGET } from './coach-action-micro-target.ts';
@@ -27,8 +25,6 @@ import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
 import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 import { OFFER_REPERTOIRE_REVIEW } from './coach-action-offer-repertoire.ts';
 import { SEND_QUESTIONNAIRE } from './coach-action-questionnaire.ts';
-import { REVISE_SESSION } from './coach-action-revise-session.ts';
-import { START_REPLAN } from './coach-action-start-replan.ts';
 import { SET_HOME_LOCATION } from './coach-action-home-location.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
@@ -125,7 +121,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   propose_plan_change: {
     name: 'propose_plan_change',
     description:
-      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits address commitments BY its printed handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with the user, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before you say it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A full rebuild from their words is start_replan.',
+      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits name commitments BY its handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with them, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before saying it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A full rebuild from their words is rebuild with scope "week".',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,
@@ -287,7 +283,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
          * week") has a real request the product already serves: `pause_week` shelves the stretch
          * without deleting anything, and the plan resumes on its own. Keep this text exact.
          */
-        return 'That edit would leave the plan with no commitments, so no change was proposed and their plan is unchanged. pause_week clears a stretch of the week without deleting anything.';
+        return 'That edit would leave the plan with no commitments, so no change was proposed and their plan is unchanged. shape_week with action "pause" clears a stretch of the week without deleting anything.';
       }
 
       await setPendingPlan(userId, {
@@ -375,7 +371,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         }).catch(() => null);
         return action === 'complete'
           ? `Marked "${goal.title}" finished.`
-          : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`;
+          : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`;
       }
 
       if (action === 'retire' || action === 'restore') {
@@ -394,8 +390,8 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           label: action === 'retire' ? `Set aside: ${goal.title}` : `Brought back: ${goal.title}`,
         }).catch(() => null);
         return action === 'retire'
-          ? `"${goal.title}" is set aside. Say it plainly and without any suggestion they failed — it will not shape next week's plan, but everything it already built stays in Progress. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`
-          : `"${goal.title}" is back. It will shape the plan again from the next build. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`;
+          ? `"${goal.title}" is set aside. Say it plainly and without any suggestion they failed — it will not shape next week's plan, but everything it already built stays in Progress. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`
+          : `"${goal.title}" is back. It will shape the plan again from the next build. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`;
       }
 
       if (action === 'retarget') {
@@ -427,7 +423,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           kind: 'note',
           label: `Target changed: ${String(was ?? '?')} → ${target}${unit ? ` ${unit}` : ''}`,
         }).catch(() => null);
-        return `"${retitled ?? goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`;
+        return `"${retitled ?? goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`;
       }
 
       const date = String(params.date ?? '').trim();
@@ -441,7 +437,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         kind: 'note',
         label: `Date moved: ${wasDate ?? 'unset'} → ${date}`,
       }).catch(() => null);
-      return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. Their plan still holds the sessions built for the old date. get_active_plan shows them; start_replan rebuilds the week.`;
+      return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. Their plan still holds the sessions built for the old date. get_active_plan shows them; rebuild (scope "week") rebuilds the week.`;
     },
   },
 
@@ -538,24 +534,13 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   build_next_week: BUILD_NEXT_WEEK,
   // Tail tier (the drawer), not ALWAYS_ACTIONS — new tools default to the tail plus a hook
   // (owner ruling 2026-08-30, coach-tool-tiers.ts); promotion needs its own ruling and an
-  // eval:tools run. Rung 1 of PLAN-CHANGES.md: rebuild ONE session's contents from their words.
-  revise_session: REVISE_SESSION,
-  // Tail tier, same ruling. Rung 3 of PLAN-CHANGES.md (Phase 2): the door onto the background
-  // whole-week rebuild — the same plan_run spine the Adjust sheet uses (replan-start.ts), so a
-  // rebuild asked for in chat and one tapped on the sheet are one mechanism, never two.
-  start_replan: START_REPLAN,
-  // Tail tier (the drawer), not ALWAYS_ACTIONS: extending a week is an occasional, explicit ask
-  // — the end-cap's visible send names it in the same words as its DRAWER_HOOKS line.
-  extend_horizon: EXTEND_HORIZON,
-  // Tail tier, same ruling. "Build next week" before the check-in (owner, 2026-09-09): writes
-  // the following week on the same rhythm WITHOUT moving the check-in — the conversational road
-  // to the locked days on the trail. Its two neighbours differ by what the check-in does:
-  // build_next_week ends a finished week (skips it), extend_horizon moves it out.
-  build_week_ahead: BUILD_WEEK_AHEAD,
-  // Tail tier, same ruling. The other end of extend_horizon: clearing a stretch instead of
-  // running one longer. It exists because the empty-plan guard below had nowhere to send her —
-  // the refusal named no way to give someone the empty week they had just asked for.
-  pause_week: PAUSE_WEEK,
+  // eval:tools run. The two plan FACADES (coach-action-plan-facade.ts, owner 2026-09-15: "Build
+  // the plan facade so we stop raising the cap") front five tools that used to be registered
+  // here one by one — extend_horizon, build_week_ahead and pause_week behind `shape_week`;
+  // revise_session (PLAN-CHANGES.md rung 1) and start_replan (rung 3) behind `rebuild`. The
+  // originals keep their files, contracts and tests; only the door changed.
+  shape_week: SHAPE_WEEK,
+  rebuild: REBUILD,
   // Tail tier, same ruling. The trail's hold menu from chat (owner, 2026-09-15: "she should be
   // able to adjust the calendar and the plan"): ONE dated session moved, copied or taken off,
   // at once — the calendar layer, where propose_plan_change edits the rules.

@@ -120,7 +120,7 @@ function commitmentWhen(schedule: unknown, area: GoalArea | undefined): string {
 function planRunLine(run: PlanRunState | undefined): string {
   if (!run) return '';
   if (run.status === 'failed') {
-    return `\nThe last week rebuild failed: ${run.error} — start_replan can retry it.`;
+    return `\nThe last week rebuild failed: ${run.error} — rebuild (scope "week") can retry it.`;
   }
   const min = Math.max(0, Math.floor((Date.now() - Date.parse(run.startedAt)) / 60_000));
   return `\nA week rebuild is in flight (started ${min} min ago, stage: ${run.stage}) — the card lands on their plan when it finishes.`;

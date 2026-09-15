@@ -328,7 +328,7 @@ describe('the check-in edge cases — late arrivals and empty weeks', () => {
     const out = renderPickProtocol();
     expect(out).toMatch(/only the logging is missing, build_next_week rolls it forward/);
     expect(out).toMatch(/propose_plan_change carries the change/);
-    expect(out).toMatch(/pause_week or a detour holds it without deleting anything/);
+    expect(out).toMatch(/a pause \(shape_week, action "pause"\) or a detour holds it without deleting anything/);
     expect(out).not.toContain('(lighter, shorter, fewer days)');
     expect(out).not.toMatch(/lighter build|consolation prize|THE THREE ANSWERS/);
   });
