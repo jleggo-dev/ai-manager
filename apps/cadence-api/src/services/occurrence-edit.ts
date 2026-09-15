@@ -9,8 +9,32 @@ import {
   moveOccurrenceDate,
   type OccurrenceEditRow,
 } from '../repos/occurrence-edit.ts';
+import { recordPlanEdit, type PlanEditAction, type PlanEditSource } from '../repos/plan-edits.ts';
 import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
 import { localDayIso, localDayIsoPlus } from './plan-day.ts';
+
+/**
+ * Every edit that lands is put on record (0060, owner 2026-09-15: "Part of the rule for moving
+ * things in the calendar was that Cadence would know about it"). `source` says who made it — the
+ * trail's hold menu, or the coach through edit_calendar — and the plan read she carries every
+ * turn renders the person's own. Best effort AFTER the write: a record that fails to land is a
+ * gap in her knowledge, never a move that did not happen.
+ */
+async function noteEdit(
+  userId: string,
+  source: PlanEditSource,
+  action: PlanEditAction,
+  row: Pick<OccurrenceEditRow, 'title' | 'date'>,
+  toDate?: string,
+): Promise<void> {
+  await recordPlanEdit(userId, {
+    source,
+    action,
+    title: row.title,
+    from_date: row.date,
+    to_date: toDate ?? null,
+  }).catch((e) => console.error('[occurrence-edit] record', e));
+}
 
 /**
  * Rearranging one's own week by hand (the trail's hold menu, 2026-09-07): move a task to another
@@ -74,6 +98,7 @@ export async function moveOccurrence(
   occurrenceId: string,
   date: string,
   tzHint?: string | null,
+  source: PlanEditSource = 'trail',
 ): Promise<OccurrenceEditResult> {
   const g = await gate(userId, occurrenceId, date, tzHint);
   if (!g.ok) return g.result;
@@ -81,7 +106,9 @@ export async function moveOccurrence(
   const there = await findOccurrenceOnDate(userId, g.row.activity_id, date);
   if (there) return conflict(there);
   const moved = await moveOccurrenceDate(userId, occurrenceId, date);
-  return moved ? { status: 'ok', occurrence_id: occurrenceId } : { status: 'not_found' };
+  if (!moved) return { status: 'not_found' };
+  await noteEdit(userId, source, 'move', g.row, date);
+  return { status: 'ok', occurrence_id: occurrenceId };
 }
 
 /** A fresh pending copy of the occurrence on `date` — the id returned is the COPY's. */
@@ -90,19 +117,32 @@ export async function duplicateOccurrence(
   occurrenceId: string,
   date: string,
   tzHint?: string | null,
+  source: PlanEditSource = 'trail',
 ): Promise<OccurrenceEditResult> {
   const g = await gate(userId, occurrenceId, date, tzHint);
   if (!g.ok) return g.result;
   const there = await findOccurrenceOnDate(userId, g.row.activity_id, date);
   if (there) return conflict(there);
   const id = await duplicateOccurrenceTo(userId, occurrenceId, date);
-  if (id) return { status: 'ok', occurrence_id: id };
+  if (id) {
+    await noteEdit(userId, source, 'copy', g.row, date);
+    return { status: 'ok', occurrence_id: id };
+  }
   // The insert met a same-day row the pre-check just missed (a race) — report the conflict it is.
   const raced = await findOccurrenceOnDate(userId, g.row.activity_id, date);
   return raced ? conflict(raced) : { status: 'not_found' };
 }
 
-/** Take the occurrence off the plan. Any day, any status — the person's call, confirmed client-side. */
-export async function removeOccurrence(userId: string, occurrenceId: string): Promise<'ok' | 'not_found'> {
-  return (await deleteOccurrence(userId, occurrenceId)) ? 'ok' : 'not_found';
+/** Take the occurrence off the plan. Any day, any status — the person's call, confirmed client-side.
+ *  The row is read first so the record can name what came off; a delete leaves nothing to ask. */
+export async function removeOccurrence(
+  userId: string,
+  occurrenceId: string,
+  source: PlanEditSource = 'trail',
+): Promise<'ok' | 'not_found'> {
+  const row = await getOccurrenceForEdit(userId, occurrenceId);
+  if (!row) return 'not_found';
+  if (!(await deleteOccurrence(userId, occurrenceId))) return 'not_found';
+  await noteEdit(userId, source, 'delete', row);
+  return 'ok';
 }

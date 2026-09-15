@@ -252,35 +252,59 @@ export const ALWAYS_ACTIONS = [
  * nothing behind it; what it costs is ~39 tokens a message. The next thing that wants in should
  * read the paragraph above before reading this row: two raises in three days is the shape of a
  * tail that wants consolidating, not a budget that wants raising.
+ *
+ * 3,140 → 3,260 (2026-09-15, `get_calendar` + `edit_calendar`, both owner-asked the same day).
+ * Trimmed FIRST this time — fourteen hooks lost words that decided nothing, −132 chars in all —
+ * and it was still not enough for two tools at once:
+ *
+ *   before  3,070   (main, 26 tail tools)
+ *   after   3,200   (+130 net: two hooks of 57 and 56, their names and one action marker, minus
+ *                    the 132 trimmed elsewhere)
+ *   cap     3,260   (after + 60 headroom)
+ *
+ * That is the THIRD raise in twelve days, which the paragraph above already names as the shape
+ * of a tail that wants consolidating. The `plan` category now holds eight tools — five actions
+ * and three reads — and is the obvious candidate for a facade the way get_nutrition fronts the
+ * food reads. An OWNER RULING IS STILL OWED on that; this row does not settle it, it pays for
+ * two tools he asked for by name.
  */
-export const DRAWER_LABEL_MAX = 3140;
+export const DRAWER_LABEL_MAX = 3260;
 
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
-  get_nutrition: 'everything they eat — log, recipes, targets, trends; name the view',
+  get_nutrition: 'all they eat — log, recipes, targets, trends; name the view',
   preview_meal: 'parse-and-price a described meal WITHOUT logging it',
-  check_food_sources: 'every food database at once on one food, disagreements kept',
-  resolve_portion: 'what a household measure of a saved food weighs in grams',
+  check_food_sources: 'every food database on one food, disagreements kept',
+  resolve_portion: 'grams in a household measure of a saved food',
   read_label: 'read an attached photo: nutrition panel or front-of-pack',
   read_document: 'read back a file they attached earlier',
   set_micro_target: "ACTION: a doctor's nutrient target, over the reference",
   research_food: 'web research on a NAMED product no database has — slow',
-  get_workout_history: 'their recorded workouts from their devices, newest first',
-  get_practice_totals: 'running totals of what they count — words, minutes sat, pages read',
+  get_workout_history: 'workouts their devices recorded, newest first',
+  get_practice_totals: 'totals of what they count — words, minutes sat, pages read',
   get_repertoire: 'pieces, katas, poems they know or are learning, with standing',
-  offer_repertoire_review: 'ACTION: show a music book, kata list or reading list as a checklist',
-  get_user_built_activities: 'activities they built themselves — steps, runs, and plan placement',
-  get_journal: 'recent journal entries, verbatim; private ones are never included',
-  get_goal_progress: 'per-goal progress numbers computed from what they logged',
-  propose_progress_layout: 'redesign what their Progress page watches; they confirm first',
-  get_recent_logs: 'their session notes from recent days: what they did and how it felt',
-  get_equipment: 'training equipment they own, with usage wear for tracked items',
+  offer_repertoire_review: 'ACTION: show a music book, kata or reading list as a checklist',
+  get_user_built_activities: 'activities they built themselves — steps, runs, plan placement',
+  get_journal: 'recent journal entries, verbatim; private ones excluded',
+  get_goal_progress: 'per-goal progress numbers from what they logged',
+  propose_progress_layout: 'redesign what their Progress page watches; they confirm',
+  get_recent_logs: 'their recent session notes: what they did and how it felt',
+  get_equipment: 'training equipment they own, with wear on tracked items',
   update_equipment: 'ACTION: add, remove or rename equipment on their file',
-  extend_horizon: 'ACTION: run this week longer ("plan two weeks ahead"); the check-in moves too',
+  extend_horizon: 'ACTION: run this week longer ("plan two weeks ahead"); check-in moves too',
   build_week_ahead: 'ACTION: write next week early, same rhythm; check-in stays put',
-  pause_week: 'ACTION: pause every session between two dates; nothing deleted',
+  pause_week: 'ACTION: pause all sessions between two dates; nothing deleted',
   revise_session: 'ACTION: rebuild one upcoming session from their words — "add chest and abs"',
-  start_replan: 'ACTION: rebuild the WHOLE week around their words — background, minutes',
-  set_home_location: 'ACTION: record where they live, for weather and daylight outdoors',
+  start_replan: 'ACTION: rebuild the WHOLE week from their words — background, minutes',
+  set_home_location: 'ACTION: record where they live — weather and daylight outdoors',
+  // 2026-09-15 (owner: "Shouldn't Cadence be able to see the calendar?" / "she should be able
+  // to adjust the calendar and the plan"): the days as WRITTEN, beyond the seven the plan read
+  // carries, and the hold menu's three edits from chat. Fourteen hooks above were trimmed of
+  // words that decided nothing ("running totals" → "totals", "are never included" →
+  // "excluded", "what a household measure … weighs in grams" → "grams in a household measure")
+  // per the DRAWER_LABEL_MAX rule — trim first — and the cap was still raised; the row beside
+  // DRAWER_LABEL_MAX states the arithmetic.
+  get_calendar: 'the days as written — what sits on each date, done or not',
+  edit_calendar: 'ACTION: move, copy or delete one dated session this week',
   // 88 of the 90 the hook rule allows. The brief's wording ("...on their screen AT ONCE; THEIR
   // answers...") measured 102 with the ACTION mark; "at once" and one "their" went, and the two
   // facts that decide whether to reach for it — several questions, and the answers arrive as the
@@ -431,6 +455,12 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // shape, the week rebuilt, the week emptied.
     // `build_week_ahead` (2026-09-09): next week written early, check-in untouched — the third
     // way the week's edge can move, beside extend_horizon (moves it) and pause_week (empties it).
+    // `get_calendar` (2026-09-15, owner: "Shouldn't Cadence be able to see the calendar?"): the
+    // days as WRITTEN, further than the seven get_active_plan now carries every turn. Filed here
+    // because it is the plan's own dated face, and what every edit above lands on.
+    // `edit_calendar` (same day, "she should be able to adjust the calendar and the plan"): the
+    // hold menu's move / copy / delete of ONE dated session, from chat — the calendar layer,
+    // beside the rule-layer edits above.
     members: [
       'extend_horizon',
       'build_week_ahead',
@@ -438,6 +468,8 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
       'revise_session',
       'start_replan',
       'get_user_built_activities',
+      'get_calendar',
+      'edit_calendar',
     ],
   },
   {

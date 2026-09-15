@@ -276,6 +276,49 @@ stops there" had been right when the check-in was timed off the rows running out
   stays out for that proposal for the session. A proposal the coach actually made (`replan`)
   shows itself as before. Table-tested (`proposalShelf.test.ts`, `PlanView.test.tsx`).
 
+### The coach sees the calendar, edits it, and knows what you did to it (owner, 2026-09-15)
+
+Owner: *"Shouldn't Cadence be able to see the calendar?"* — she could not. *"Whenever Cadence
+calls to look at the plan, return the plan along with the calendar. But she should be able to
+adjust the calendar and the plan. Part of the rule for moving things in the calendar was that
+Cadence would know about it (moving, deleting, adding)."*
+
+**What was wrong.** The plan has two layers — the RULES (each commitment with its repeat days) and
+the CALENDAR (the dated rows the trail draws) — and every read the coach had was on the rules or
+on the past: `get_active_plan` listed commitments and a "week shape" computed from them,
+`get_consistency`/`get_recent_logs` looked backward. Nothing showed her the days ahead as written,
+which is how she read "joint mobility, Mon/Wed/Fri/Sun, 6am" on 2026-09-14 and called it present
+when nothing was. And the trail's hold menu (move / copy / delete a dated session, 2026-09-07)
+told her nothing at all.
+
+**As built** (`retrieval/calendar-function.ts`, `coach-action-edit-calendar.ts`, migration 0060):
+
+- **The plan read carries the week as written.** `get_active_plan` — floor context on every
+  turn — now reads the next 7 days of rows in its own batch and renders one compact line per day
+  (today first, with ✓ done / ✗ skipped marks; meal logs folded to a count; an empty day said
+  as "— nothing written"). A week with nothing on it is one sentence: *NOTHING is written from … —
+  say so plainly rather than assuming the sessions are on it.* A failed read renders as a fault
+  line, never as an empty week (TOOL-HARNESS.md step 4). Measured on the owner's 18-commitment
+  plan: ~850 characters, ~210 tokens a turn.
+- **`get_calendar`** (tail tier, `plan` category): the same view further ahead or back —
+  `{"days": 14}` from today (default 14, up to 28), or `{"from": "2026-10-01", "days": 7}`.
+- **`edit_calendar`** (tail tier, `plan` category, an ACTION that takes effect at once): move,
+  copy or delete ONE dated session this week, named by date and title as the calendar shows them
+  — the hold menu from chat, through the same `occurrence-edit.ts` service, so the week-window
+  and same-day-conflict rules hold whichever door the edit came through. A rule change ("from now
+  on, Thursdays") stays `propose_plan_change`; the descriptions carry that tiebreak and eval
+  cases A28/A29 measure it.
+- **She knows what you did.** Every successful move, copy or delete — from the trail or from
+  chat — is recorded in `cadence.plan_edits` (0060: source, action, title, from/to dates), and the
+  plan read renders the person's own edits from the past week: *Changes they made by hand on the
+  plan screen: Mon 14 (today): moved "Hill intervals" from Tue 15 to Wed 16.* Her own edits are
+  left out; a failed read says so. The record is best effort on both sides, so a missing table
+  never blocks a move.
+- **The drawer label** was brought back under `DRAWER_LABEL_MAX` by trimming nine hooks of words
+  that decided nothing rather than raising the cap — the rule the tiers file asks for.
+- Eval cases: A28/A29 (edit vs rule), B13/C21 (calendar read vs the floor), C20 allows the
+  read. **eval:tools run pending post-deploy** (it measures the deployed API).
+
 ---
 
 ## 5. Verification state

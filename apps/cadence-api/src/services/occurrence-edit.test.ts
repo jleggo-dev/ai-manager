@@ -26,6 +26,8 @@ vi.mock('../repos/occurrence-edit.ts', () => ({
   duplicateOccurrenceTo: (...a: unknown[]) => duplicateOccurrenceTo(...a),
   deleteOccurrence: (...a: unknown[]) => deleteOccurrence(...a),
 }));
+const recordPlanEdit = vi.fn();
+vi.mock('../repos/plan-edits.ts', () => ({ recordPlanEdit: (...a: unknown[]) => recordPlanEdit(...a) }));
 
 const { dateInWindow, editWindow, moveOccurrence, duplicateOccurrence, removeOccurrence } =
   await import('./occurrence-edit.ts');
@@ -51,6 +53,73 @@ beforeEach(() => {
   moveOccurrenceDate.mockResolvedValue(true);
   duplicateOccurrenceTo.mockResolvedValue('occ-copy');
   deleteOccurrence.mockResolvedValue(true);
+  recordPlanEdit.mockResolvedValue(undefined);
+});
+
+/**
+ * Every edit that lands is put on record (0060; owner 2026-09-15: "Part of the rule for moving
+ * things in the calendar was that Cadence would know about it"). The trail is the default source;
+ * the coach's edit_calendar names itself. A record that fails never fails the edit — and an edit
+ * that did not land is never recorded.
+ */
+describe('the record (plan_edits)', () => {
+  it("a move is recorded as the trail's, with the day it came from and the day it went to", async () => {
+    await moveOccurrence('u1', 'occ-1', '2026-09-10');
+    expect(recordPlanEdit).toHaveBeenCalledWith('u1', {
+      source: 'trail',
+      action: 'move',
+      title: 'Strength — lower',
+      from_date: '2026-09-09',
+      to_date: '2026-09-10',
+    });
+  });
+
+  it('a copy and a delete are recorded too, and the coach can name herself as the source', async () => {
+    await duplicateOccurrence('u1', 'occ-1', '2026-09-11', null, 'coach');
+    expect(recordPlanEdit).toHaveBeenLastCalledWith('u1', {
+      source: 'coach',
+      action: 'copy',
+      title: 'Strength — lower',
+      from_date: '2026-09-09',
+      to_date: '2026-09-11',
+    });
+    await removeOccurrence('u1', 'occ-1');
+    expect(recordPlanEdit).toHaveBeenLastCalledWith('u1', {
+      source: 'trail',
+      action: 'delete',
+      title: 'Strength — lower',
+      from_date: '2026-09-09',
+      to_date: null,
+    });
+  });
+
+  it.each([
+    ['a move onto its own day (a no-op)', () => moveOccurrence('u1', 'occ-1', '2026-09-09')],
+    ['a move refused as out of range', () => moveOccurrence('u1', 'occ-1', '2026-09-20')],
+    [
+      'a move that met a same-day conflict',
+      async () => {
+        findOccurrenceOnDate.mockResolvedValue({ occurrence_id: 'occ-2', status: 'pending' });
+        return moveOccurrence('u1', 'occ-1', '2026-09-10');
+      },
+    ],
+    [
+      'a delete of a row that is not there',
+      async () => {
+        getOccurrenceForEdit.mockResolvedValue(null);
+        return removeOccurrence('u1', 'occ-9');
+      },
+    ],
+  ])('%s is never recorded', async (_label, act) => {
+    await act();
+    expect(recordPlanEdit).not.toHaveBeenCalled();
+  });
+
+  it('a record that fails to land does not fail the edit', async () => {
+    recordPlanEdit.mockRejectedValue(new Error('no such table'));
+    expect(await moveOccurrence('u1', 'occ-1', '2026-09-10')).toEqual({ status: 'ok', occurrence_id: 'occ-1' });
+    expect(await removeOccurrence('u1', 'occ-1')).toBe('ok');
+  });
 });
 
 describe('dateInWindow', () => {

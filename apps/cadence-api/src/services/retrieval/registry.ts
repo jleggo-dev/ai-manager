@@ -38,6 +38,19 @@ import { PREVIEW_MEAL } from './food-log-function.ts';
 import { RESEARCH_FOOD } from './food-research-function.ts';
 import { GET_REPERTOIRE } from './repertoire-function.ts';
 import { GET_USER_BUILT_ACTIVITIES } from './user-built-function.ts';
+import {
+  addDays,
+  CALENDAR_FLOOR_DAYS,
+  dateOf,
+  GET_CALENDAR,
+  renderPlanEdits,
+  renderWrittenDays,
+  shapeWrittenDays,
+  titlesFor,
+  type WrittenCalendar,
+} from './calendar-function.ts';
+import { listPlanEdits, type PlanEdit } from '../../repos/plan-edits.ts';
+import { localDayIso } from '../plan-day.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
 
 // Re-exported so the many existing importers of this module keep working unchanged.
@@ -161,34 +174,54 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_active_plan: {
     name: 'get_active_plan',
     description:
-      'The user\'s current plan: the sessions and habits they committed to, each with the days it repeats on, its time of day, and its length — "Easy run — Tue · 07:00 · 40 min effort (allow 50)" is a 40-min run at 7am Tuesdays, needing 50 minutes of their morning. "no time set" means none has been picked yet; say so and offer to. Also gives what they last asked to change and when. Use for what their week is SUPPOSED to look like; for whether they actually did it, use get_consistency.',
+      'The user\'s current plan: the sessions and habits they committed to, each with the days it repeats on, its time of day and its length — "Easy run — Tue · 07:00 · 40 min effort (allow 50)" is a 40-min run at 7am Tuesdays needing 50 minutes. "no time set" means none was picked; say so and offer to. Also the next 7 days as actually written on their calendar, with today\'s done/skipped marks, and what they last asked to change. Use for what their week looks like; for how reliably they did it, use get_consistency.',
     domains: ['plans', 'activities'],
     async run(userId) {
       const plan = await getActivePlan(userId);
       if (!plan) return { plan: null, activities: [], areaByGoal: {} };
       /**
-       * Two independent reads, issued together rather than one after the other, because this
+       * Independent reads, issued together rather than one after the other, because this
        * function runs on EVERY turn (coach-tool-tiers.ts `ALWAYS_READS`) and the goals are here
        * only to resolve each commitment's AREA — the thing that turns the stored effort into the
        * time to set aside. plan-view.ts resolves it the same way, for the same reason.
        */
-      const [activities, goals, user] = await Promise.all([
+      const utcToday = new Date().toISOString().slice(0, 10);
+      const [activities, goals, user, written, edits] = await Promise.all([
         listActivities(plan.plan_id),
         listGoals(userId),
         // For the plan_run rider only — a background rebuild she cannot see is one she cannot
         // speak about, and "how's it going?" lands in chat, not on the sheet that started it.
         getUser(userId),
+        // The calendar as written (calendar-function.ts, owner 2026-09-15). Read a day wide on
+        // either side in UTC so it rides this batch — the user's own "today" is only known once
+        // `user` lands — and cut to their week below. A failed read renders as a fault line,
+        // never as an empty calendar (TOOL-HARNESS.md, step 4).
+        listOccurrences(userId, addDays(utcToday, -1), addDays(utcToday, CALENDAR_FLOOR_DAYS + 1)).catch(() => null),
+        // What they changed by hand on the plan screen this past week (0060) — the fact, not
+        // just the resulting rows. Best effort the same way.
+        listPlanEdits(userId, `${addDays(utcToday, -7)}T00:00:00Z`, 8).catch(() => null),
       ]);
       const areaByGoal: Record<string, GoalArea> = {};
       for (const g of goals) if (g.area) areaByGoal[g.goal_id] = g.area;
-      return { plan, activities, areaByGoal, planRun: readPlanRun(user) };
+      const today = localDayIso(new Date(), user?.timezone);
+      const to = addDays(today, CALENDAR_FLOOR_DAYS - 1);
+      const inWeek = written?.filter((o) => dateOf(o.date) >= today && dateOf(o.date) <= to) ?? null;
+      const calendar = inWeek
+        ? shapeWrittenDays(inWeek, await titlesFor(userId, inWeek, activities), { from: today, to, today })
+        : null;
+      return { plan, activities, areaByGoal, planRun: readPlanRun(user), calendar, edits, today };
     },
     render(r) {
-      const { plan, activities, areaByGoal, planRun } = r as {
+      const { plan, activities, areaByGoal, planRun, calendar, edits, today } = r as {
         plan: Record<string, unknown> | null;
         activities: Array<Record<string, unknown>>;
         areaByGoal?: Record<string, GoalArea>;
         planRun?: PlanRunState;
+        /** Absent on an older result shape; null when the read failed; else the week as written. */
+        calendar?: WrittenCalendar | null;
+        /** Their own plan-screen edits this week (0060) — same three states as `calendar`. */
+        edits?: PlanEdit[] | null;
+        today?: string;
       };
       if (!plan) return '';
       /**
@@ -217,7 +250,25 @@ const CORE_FUNCTIONS: Record<string, RetrievalFunction> = {
       const dayNames = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
       const shape = d.perDay.map((n, i) => `${dayNames[i]} ${n || '—'}`).join(' · ');
       const density = `\nWeek shape (their own items per day): ${shape}`;
-      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${density}${changed}${planRunLine(planRun)}`;
+      // The week AS WRITTEN (calendar-function.ts, owner 2026-09-15: "Shouldn't Cadence be able
+      // to see the calendar?"). The lines above are the rules; this is what actually sits on the
+      // days — where they differ, the days are the truth about their screen.
+      const written =
+        calendar === undefined
+          ? ''
+          : calendar === null
+            ? '\n(Their calendar as written could not be read just now — if a specific day matters, say so rather than assuming it matches the rules above.)'
+            : `\n${renderWrittenDays(calendar, `Their calendar as written, next ${CALENDAR_FLOOR_DAYS} days`)}`;
+      const byHand =
+        edits === undefined
+          ? ''
+          : edits === null
+            ? '\n(Their plan-screen changes this week could not be read just now.)'
+            : (() => {
+                const block = renderPlanEdits(edits, today ?? calendar?.today ?? '');
+                return block ? `\n${block}` : '';
+              })();
+      return `Current plan v${String(plan.version)} (${activities.length} commitments):\n${lines.join('\n')}${density}${written}${byHand}${changed}${planRunLine(planRun)}`;
     },
     rows(r) {
       return (r as { activities: unknown[] }).activities.length;
@@ -551,4 +602,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // What the user built in the Activity Builder — awareness, never approval (owner 2026-09-01):
   // she is told what exists, never rewrites its steps, and answers review asks from it.
   [GET_USER_BUILT_ACTIVITIES.name]: GET_USER_BUILT_ACTIVITIES,
+  // The calendar as written, further than the 7 days get_active_plan carries (owner 2026-09-15).
+  // Tail category `plan`.
+  [GET_CALENDAR.name]: GET_CALENDAR,
 };

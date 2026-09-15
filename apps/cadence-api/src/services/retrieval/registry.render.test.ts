@@ -20,6 +20,7 @@ vi.mock('../../repos/equipment.ts', () => ({ listEquipment: vi.fn() }));
 vi.mock('../../repos/plans.ts', () => ({ getActivePlan: vi.fn() }));
 vi.mock('../../repos/activities.ts', () => ({ listActivities: vi.fn() }));
 vi.mock('../../repos/occurrences.ts', () => ({ listOccurrences: vi.fn(), listRecentLogged: vi.fn() }));
+vi.mock('../../repos/plan-edits.ts', () => ({ listPlanEdits: vi.fn(), recordPlanEdit: vi.fn() }));
 vi.mock('../../repos/nutrition.ts', () => ({ listNutritionLogs: vi.fn() }));
 vi.mock('../../repos/journal-entries.ts', () => ({ listForCoach: vi.fn() }));
 vi.mock('../progress.ts', () => ({ buildProgress: vi.fn() }));
@@ -38,6 +39,8 @@ import { RETRIEVAL_FUNCTIONS } from './registry.ts';
 import { searchFoodsWithUsda } from '../food-sources/usda-enrich.ts';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities } from '../../repos/activities.ts';
+import { listOccurrences } from '../../repos/occurrences.ts';
+import { listPlanEdits } from '../../repos/plan-edits.ts';
 import { listGoals } from '../../repos/goals.ts';
 import { getUser } from '../../repos/users.ts';
 
@@ -218,6 +221,8 @@ describe('retrieval registry — render / rows', () => {
       }),
     ] as never);
     vi.mocked(listGoals).mockResolvedValue([{ goal_id: 'g-mind', area: 'mind' }] as never);
+    vi.mocked(listOccurrences).mockResolvedValue([] as never);
+    vi.mocked(listPlanEdits).mockResolvedValue([] as never);
 
     const result = await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1');
     expect(RETRIEVAL_FUNCTIONS.get_active_plan!.render(result)).toContain(
@@ -226,12 +231,157 @@ describe('retrieval registry — render / rows', () => {
     expect(RETRIEVAL_FUNCTIONS.get_active_plan!.rows(result)).toBe(1);
   });
 
+  /**
+   * The calendar as WRITTEN rides the plan read (calendar-function.ts; owner 2026-09-15,
+   * "Shouldn't Cadence be able to see the calendar?"). On 2026-09-14 she read the rules, assumed
+   * the days were on the screen, and told the owner to restart the app; the days did not exist.
+   * The rules are the week as intended; this block is the week as it actually sits.
+   */
+  describe('get_active_plan — the week as written', () => {
+    const utcToday = new Date().toISOString().slice(0, 10);
+    const plus = (n: number) =>
+      new Date(Date.parse(`${utcToday}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+    const sit = commitment({
+      activity_id: 'a-sit',
+      title: 'Evening sit',
+      goal_id: 'g-mind',
+      schedule: { recurrence: 'FREQ=DAILY', time_of_day: '21:00', duration_min: 20 },
+    });
+    const breakfast = commitment({
+      activity_id: 'a-bf',
+      commitment_id: 'bbbbbbbb-1111-2222-3333-444455556666',
+      kind: 'system',
+      category: 'nutrition',
+      title: 'Log breakfast',
+      goal_id: undefined,
+      schedule: { recurrence: 'FREQ=DAILY', time_of_day: '08:00' },
+    });
+    const row = (activity_id: string, date: string, status = 'pending') => ({
+      occurrence_id: `o-${activity_id}-${date}`,
+      activity_id,
+      date,
+      status,
+    });
+
+    function arrange(rows: unknown[], edits: unknown[] = []) {
+      vi.mocked(getActivePlan).mockResolvedValue({ plan_id: 'p1', version: 3 } as never);
+      vi.mocked(listActivities).mockResolvedValue([sit, breakfast] as never);
+      vi.mocked(listGoals).mockResolvedValue([{ goal_id: 'g-mind', area: 'mind' }] as never);
+      vi.mocked(getUser).mockResolvedValue({ timezone: null } as never);
+      vi.mocked(listOccurrences).mockResolvedValue(rows as never);
+      vi.mocked(listPlanEdits).mockResolvedValue(edits as never);
+    }
+
+    /**
+     * What they changed by hand (0060; owner 2026-09-15: "Part of the rule for moving things in
+     * the calendar was that Cadence would know about it"). The fact of the change rides the read;
+     * the coach's own edits do not — she made them.
+     */
+    it('lists their own plan-screen edits from the past week, and leaves hers out', async () => {
+      arrange(
+        [row('a-sit', utcToday)],
+        [
+          {
+            source: 'trail',
+            action: 'move',
+            title: 'Hill intervals',
+            from_date: plus(1),
+            to_date: plus(2),
+            at: `${utcToday}T07:00:00Z`,
+          },
+          {
+            source: 'coach',
+            action: 'copy',
+            title: 'Evening sit',
+            from_date: utcToday,
+            to_date: plus(1),
+            at: `${utcToday}T08:00:00Z`,
+          },
+          {
+            source: 'trail',
+            action: 'delete',
+            title: 'Piano practice',
+            from_date: plus(-1),
+            to_date: null,
+            at: `${plus(-1)}T20:00:00Z`,
+          },
+        ],
+      );
+      const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1'));
+
+      expect(listPlanEdits).toHaveBeenCalledWith('u1', `${plus(-7)}T00:00:00Z`, 8);
+      expect(text).toContain('Changes they made by hand on the plan screen (last 7 days, newest first):');
+      expect(text).toMatch(/\(today\): moved "Hill intervals" from \w{3} \d+ to \w{3} \d+/);
+      expect(text).toMatch(/: took "Piano practice" off \w{3} \d+/);
+      expect(text).not.toContain('Evening sit" from');
+    });
+
+    it('says nothing about edits when there are none, and reports a failed read as a fault', async () => {
+      arrange([row('a-sit', utcToday)]);
+      expect(
+        RETRIEVAL_FUNCTIONS.get_active_plan!.render(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1')),
+      ).not.toContain('plan-screen changes');
+      vi.mocked(listPlanEdits).mockRejectedValue(new Error('no such table'));
+      expect(
+        RETRIEVAL_FUNCTIONS.get_active_plan!.render(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1')),
+      ).toContain('plan-screen changes this week could not be read just now');
+    });
+
+    it('reads a day either side of the week in one batch, then shows the seven days with today first', async () => {
+      arrange([
+        row('a-sit', plus(-1), 'done'),
+        row('a-sit', utcToday, 'done'),
+        row('a-bf', utcToday),
+        row('a-sit', plus(1)),
+      ]);
+      const result = await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1');
+      const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render(result);
+
+      expect(listOccurrences).toHaveBeenCalledWith('u1', plus(-1), plus(8));
+      expect(text).toContain('Their calendar as written, next 7 days (✓ done · ✗ skipped · otherwise still to do):');
+      // Today: the sit is done, breakfast not yet logged. Yesterday is outside the block.
+      expect(text).toMatch(/\(today\): 21:00 Evening sit ✓ · meals 0\/1 logged/);
+      expect(text).toContain('21:00 Evening sit\n');
+      expect(text.split('nothing written').length - 1).toBe(5);
+      // The rules are still above it, unchanged.
+      expect(text).toContain('Evening sit — Every day · 21:00 · 20 min effort (allow 25)');
+    });
+
+    it('says NOTHING is written when the week has no rows — the 2026-09-14 fact, in one sentence', async () => {
+      arrange([]);
+      const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1'));
+      expect(text).toContain('NOTHING is written from');
+      expect(text).toContain('Say so plainly rather than assuming the sessions are on it.');
+      expect(text).not.toContain('nothing written\n');
+    });
+
+    it('reports a failed calendar read as a fault, never as an empty week', async () => {
+      arrange([]);
+      vi.mocked(listOccurrences).mockRejectedValue(new Error('db down'));
+      const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1'));
+      expect(text).toContain('could not be read just now');
+      expect(text).not.toContain('NOTHING is written');
+      // The plan itself still renders — the calendar is a rider, not the read.
+      expect(text).toContain('Current plan v3');
+    });
+
+    it('renders an older result shape (no calendar key) with no calendar block at all', () => {
+      const text = RETRIEVAL_FUNCTIONS.get_active_plan!.render({
+        plan: { version: 2 },
+        activities: [sit],
+        areaByGoal: {},
+      });
+      expect(text).not.toContain('calendar as written');
+    });
+  });
+
   /** This runs on every turn. With no plan there is nothing for an area to belong to, so the
    *  goals read must not happen at all. */
   it('get_active_plan.run reads nothing else when there is no plan', async () => {
     vi.mocked(getActivePlan).mockResolvedValue(null as never);
     vi.mocked(listActivities).mockClear();
     vi.mocked(listGoals).mockClear();
+    vi.mocked(listOccurrences).mockClear();
     expect(await RETRIEVAL_FUNCTIONS.get_active_plan!.run('u1')).toEqual({
       plan: null,
       activities: [],
@@ -239,6 +389,7 @@ describe('retrieval registry — render / rows', () => {
     });
     expect(listActivities).not.toHaveBeenCalled();
     expect(listGoals).not.toHaveBeenCalled();
+    expect(listOccurrences).not.toHaveBeenCalled();
   });
 
   /**
