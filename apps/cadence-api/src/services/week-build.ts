@@ -1,4 +1,5 @@
 import { getActivePlan, setPlanBuiltThrough } from '../repos/plans.ts';
+import { getUser } from '../repos/users.ts';
 import { runInBackground } from './background.ts';
 import { listActivities, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
@@ -41,7 +42,7 @@ export interface WeekAheadResult {
 export async function buildWeekAhead(userId: string): Promise<WeekAheadResult> {
   const plan = await getActivePlan(userId);
   if (!plan) return { status: 'no_plan' };
-  const state = computeWeekState(plan)!;
+  const state = computeWeekState(plan, (await getUser(userId))?.timezone)!;
   if (state.checkin_due) return { status: 'due' };
 
   const target = addDays(state.ends_on, DEFAULT_HORIZON_DAYS);
@@ -111,7 +112,8 @@ export async function buildNextWeek(userId: string): Promise<WeekBuildResult> {
   const plan = await getActivePlan(userId);
   if (!plan) return { status: 'no_plan' };
 
-  const state = computeWeekState(plan);
+  // Due by the user's own day (plan-view.ts) — the day the trail's card said "check in".
+  const state = computeWeekState(plan, (await getUser(userId))?.timezone);
   if (!state?.checkin_due) return { status: 'not_due' };
 
   // Off-plan/episode/menu buckets are derived per-version (getOrCreateAdhocActivity et al. lazily

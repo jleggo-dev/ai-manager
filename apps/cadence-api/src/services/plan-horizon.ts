@@ -12,11 +12,48 @@ import { weekStartMs } from './week-clock.ts';
  * The horizon IS the view window (check-in rebuild, step 6) — 7, not 14. A plan used to
  * materialize two weeks ahead of whatever the user could actually see, so the trail never had an
  * edge and the coach never got a natural moment to ask "how was the week?" Owner: "Just infinitely
- * generating a plan doesn't really ensure success and success is what we're after." Now the week
- * the user sees IS the week that's materialized, and reaching its last day is the deliberate
- * check-in moment (docs/cadence/DESIGN-check-in.md, plan-view.ts's `computeWeekState`).
+ * generating a plan doesn't really ensure success and success is what we're after." The week the
+ * user sees IS the week, and its last day is the deliberate check-in moment (docs/cadence/
+ * DESIGN-check-in.md, plan-view.ts's `computeWeekState`) — timed by the week clock (0058), not
+ * by the rows running out, which is what lets `writtenAheadDays` below keep the following week
+ * written without moving the check-in an inch.
  */
 export const DEFAULT_HORIZON_DAYS = 7;
+
+/**
+ * How far the calendar is always written, counted from today: the view and the week after it
+ * (owner, 2026-09-14: "we should always have the 2nd week loaded, so there's always something to
+ * show"). The days past the check-in stay LOCKED on the trail (trailLock.ts keys off `ends_on`,
+ * never off rows), and the check-in still redraws them — a commit wipes the outgoing plan's
+ * future pending rows and writes its own. What this closes is the hole between "the week wrote
+ * 7 days at its commit" and "the check-in is day 7": the check-in day itself had nothing on it,
+ * and "Confirm my week" with nothing to change reset the clock without writing a single day.
+ */
+export function writtenAheadDays(viewDays: number): number {
+  return viewDays + DEFAULT_HORIZON_DAYS;
+}
+
+/**
+ * Has the written calendar fallen short of `reachTo`? True when no row of the ACTIVE plan lands
+ * in the final `DEFAULT_HORIZON_DAYS` before it. A plan with any weekly-or-denser commitment
+ * lands one there once written, so this is quiet on every ordinary load and fires only on the
+ * day the window moves past what was written. A plan whose rhythm could never write a row (no
+ * recurrences at all) is never short — asking would just be asking again on the next load.
+ * `rows` may be any user occurrence in range; only the active plan's activities count, since
+ * a superseded version's leftover rows are not the calendar the user has.
+ */
+export function horizonFallsShort(
+  rows: Array<{ activity_id: string; date: string | Date }>,
+  activities: Array<{ activity_id: string; schedule?: { recurrence?: string | null } | null }>,
+  reachTo: string,
+): boolean {
+  if (!activities.some((a) => a.schedule?.recurrence)) return false;
+  const active = new Set(activities.map((a) => a.activity_id));
+  const tailFrom = new Date(Date.parse(`${reachTo}T00:00:00Z`) - (DEFAULT_HORIZON_DAYS - 1) * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return !rows.some((r) => active.has(r.activity_id) && new Date(r.date).toISOString().slice(0, 10) >= tailFrom);
+}
 
 /** The most a week may be stretched to (0050) — past this it's a different plan, not a longer
  *  week, and the conversation should go through a re-plan instead. */
@@ -38,13 +75,15 @@ export function minutesOfDay(timeOfDay: string | undefined | null): number | nul
  * through today+`days`. Idempotent — `upsertOccurrences` is `on conflict (activity_id, date) do
  * nothing` — so a repeat call just tops up newly-in-range days without disturbing what's there.
  *
- * **No longer a speculative, ever-rolling top-up (check-in rebuild, step 6).** It used to be
- * void-fired from every plan load and every coach-session open, silently materializing two weeks
- * forever, so nobody ever reached the end of their week and the coach never got a natural moment
- * to ask about it. The ONLY caller now is `commitActivities` (plan-synthesis.ts) — a week
- * materializes exactly once, at the commit that creates it, and stops there. Recurrences are still
- * anchored to the plan's `generated_at`, so INTERVAL patterns (every other day / week) keep the
- * same parity if this is ever called again for the same plan. Returns the count materialized.
+ * **Three callers, each with a reason (2026-09-14).** `commitActivities` (plan-synthesis.ts)
+ * writes a week at the commit that creates it; `buildPlanView` keeps the calendar written through
+ * `writtenAheadDays` — guarded by `horizonFallsShort`, so it runs on the day the window moves
+ * past what was written and not on every load; and "Confirm my week" (routes/week-review.ts)
+ * writes the week it just started, because a confirm may commit nothing and used to leave the
+ * new week with no days at all. None of them moves the check-in: that is the week clock's
+ * (0058), and the step-6 worry — a view that kept writing days meant a week that never ended —
+ * no longer applies. Recurrences are anchored to the plan's `generated_at`, so INTERVAL patterns
+ * (every other day / week) keep the same parity across calls. Returns the count materialized.
  *
  * **Never invents a task in the past.** A slot for TODAY whose time has already gone by is
  * skipped, and the reason shows up hardest on the day a plan is born: someone who finished

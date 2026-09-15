@@ -21,6 +21,8 @@ import { isLockedDay } from '../today/trailLock.ts';
 import { useDaySkies } from '../today/useDaySkies.ts';
 import { useWeekGate } from './useWeekGate.ts';
 import { WeekGateSheet } from './WeekGateSheet.tsx';
+import { isShelvedProposal } from './proposalShelf.ts';
+import { usePullReveal } from './usePullReveal.ts';
 import { endEpisode, checkin, type PlanOccurrence, enterEpisode } from '../../lib/api.ts';
 import { useProposalAccept } from './useProposalAccept.ts';
 import { useTaskEdits } from './hold-menu/useTaskEdits.ts';
@@ -100,6 +102,12 @@ export function PlanView({
   // The trail's weather (DESIGN-weather-skies.md): one sky per date from the header's own weather
   // and forecast queries — no request of its own; before the plan lands every day draws clear.
   const skies = useDaySkies(data?.week);
+  // The shelf (owner, 2026-09-14; proposalShelf.ts): the app's own "Life happened?" / "Welcome
+  // back" asks wait above the trail for a deliberate pull down (or a tap on the grip) instead of
+  // greeting the plan on open. The coach's own suggestions still show themselves.
+  const shelfKey =
+    data?.pendingProposal && isShelvedProposal(data.pendingProposal.action) ? data.pendingProposal.created_at : null;
+  const shelf = usePullReveal(shelfKey);
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
   // meant the sheet had to re-learn the row's own title from the server before it could draw its
@@ -314,8 +322,17 @@ export function PlanView({
   return (
     <>
       <TrailHeader streak={data.streak?.current ?? 0} xp={xp} />
-      <div className="scrollbody">
-        {data.pendingProposal && (
+      <div className="scrollbody" {...shelf.handlers}>
+        {/* The grip: the one quiet sign an ask is waiting on the shelf. A pull, or a tap here. */}
+        {shelfKey && !shelf.revealed && (
+          <button
+            type="button"
+            className="plan-shelf-grip"
+            aria-label="Pull down for a note from your coach"
+            onClick={shelf.reveal}
+          />
+        )}
+        {data.pendingProposal && (!shelfKey || shelf.revealed) && (
           <PlanProposalBanner
             proposal={data.pendingProposal}
             busy={proposalBusy}

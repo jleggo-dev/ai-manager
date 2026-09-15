@@ -55,6 +55,17 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
   get_workout_history: {
     properties: { days: { type: 'integer', description: 'How many days back to look (default 30, up to 90).' } },
   },
+  // The calendar as written (retrieval/calendar-function.ts, 2026-09-15): forward by default —
+  // the one read here that looks AHEAD — with `from` for a past or later stretch.
+  get_calendar: {
+    properties: {
+      days: { type: 'integer', description: 'How many days to show (default 14, up to 28).' },
+      from: {
+        type: 'string',
+        description: 'The first day, as YYYY-MM-DD. Omit to start from today; a past date reads what happened.',
+      },
+    },
+  },
   get_practice_totals: {
     properties: { days: { type: 'integer', description: 'How many days back to add up (default 30, up to 365).' } },
   },

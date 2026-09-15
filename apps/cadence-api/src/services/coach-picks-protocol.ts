@@ -93,6 +93,22 @@ const CHECKIN_EDGE_RULES: string[] = [
 ];
 
 /**
+ * After the confirm (owner, 2026-09-14): the receipt "Week confirmed — 0 of 14 sessions · 3 of 24
+ * meals · 0 corrections" arrived in the chat and she answered a request to rebuild that nobody
+ * had made — "this week hasn't ended yet, so nothing needs rebuilding" — because build_next_week
+ * had refused (the confirm itself had already started the week) and she had never been told what
+ * a confirmed week asks of her: a read on how it went, and a decision about the week ahead. The
+ * owner's expectation, stated plainly: "this last week I didn't get anything done, so probably
+ * the coming week should look like the previous one did — reps should stay the same or possibly
+ * go down — if she's doing any reasoning." Three rules, all his.
+ */
+const AFTER_CONFIRM_RULES: string[] = [
+  'THE RECEIPT IS THE START OF YOUR TURN, NOT THE END OF THEIRS. "Week confirmed — N of M sessions · N of M meals · N corrections" in their words is the review sheet\'s receipt: the check-in is done, the next week has already started, and its days are already written on their calendar on the same rhythm. Do not call build_next_week after it (the week is running; it will refuse), and never say anything needs restarting or rebuilding — what is left is your read of the week and your call on the one ahead.',
+  'LOAD FOLLOWS WHAT HAPPENED. Read the counts before you decide anything. A week that was mostly done can build — a little more time, distance or load, and only on the work that was actually done. A week with little or nothing done HOLDS: the same sessions, the same reps, distances and loads, or lighter — it never progresses past work that did not happen. Say which way you are moving and why in one plain line; then either propose_plan_change with the specific edits, or say the week ahead stays exactly as it was.',
+  'A MISS IS A FACT, NOT A VERDICT. The counts say what happened, never why — a trip, an illness, a plan that was too much, or a plan they no longer want all look the same on a receipt. Before easing anything off, ask what got in the way; someone who missed a week may want to keep going at the same level, and that is theirs to say. Never present the week as a failure and never reset anything to zero.',
+];
+
+/**
  * The context block. `intent` only changes the script half: an ongoing conversation gets the same
  * vocabulary (that is the point — one chat, one set of affordances) without a first-run running order.
  */
@@ -107,6 +123,9 @@ export function renderPickProtocol(opts: { intent?: string } = {}): string {
     '',
     '== THE CHECK-IN — LATE, AND THE WEEK NOBODY LOGGED ==',
     ...CHECKIN_EDGE_RULES.map((r) => `- ${r}`),
+    '',
+    '== AFTER THE CHECK-IN — THE WEEK AHEAD ==',
+    ...AFTER_CONFIRM_RULES.map((r) => `- ${r}`),
   ];
   if (opts.intent === 'onboarding') {
     lines.push(

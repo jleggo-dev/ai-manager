@@ -1,17 +1,18 @@
-import type { OccurrenceStatus, PendingProposal, Plan, StreakView } from '@cadence/shared';
+import type { Activity, OccurrenceStatus, PendingProposal, Plan, StreakView } from '@cadence/shared';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities, listActivitiesByIds, NON_PLAN_CATEGORIES } from '../repos/activities.ts';
-import { listOccurrences, listSessionStepCounts } from '../repos/occurrences.ts';
+import { listOccurrences, listSessionStepCounts, type OccurrenceListRow } from '../repos/occurrences.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getUser } from '../repos/users.ts';
 import { getLatestConversation } from '../repos/conversations.ts';
 import { listGoals } from '../repos/goals.ts';
-import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
+import { DEFAULT_HORIZON_DAYS, ensureHorizon, horizonFallsShort, writtenAheadDays } from './plan-horizon.ts';
 import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
-import { planDayBase } from './plan-day.ts';
-import { builtThroughIso, weekStartIso, weekStartMs, type WeekClockPlan } from './week-clock.ts';
+import { localDayIso, planDayBase } from './plan-day.ts';
+import { addDaysIso } from './progress-rhythm.ts';
+import { builtThroughIso, weekStartIso, type WeekClockPlan } from './week-clock.ts';
 import { previewFromDate, projectPreview, type PlanViewPreviewItem } from './plan-preview.ts';
 
 export const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -127,12 +128,13 @@ export const iso = (d: string | Date): string => new Date(d).toISOString().slice
  * never once reached this flag (2026-09-07). Now an ordinary commit carries the clock forward and
  * only the two check-in exits reset it.
  *
- * `ends_on` is the DUE date (generated_at + the horizon), not the last day that actually has
- * content — those differ by one day (a 7-day materialization spans days 0-6, so day 6 is the last
- * real day and day 7 is when `checkin_due` flips). The card copy hardcodes "today" regardless of
- * which of those it lands on; the client's own "is there anything left to show" check (PlanView's
- * `restEmpty`) is what catches the former a day early, and is why that check is OR'd with this flag
- * rather than relied on alone.
+ * `ends_on` is the DUE date: the week clock's local day plus the horizon. It is a DAY, and the
+ * week is due from the start of that day in the user's zone (2026-09-14). It used to be due at
+ * the exact instant — clock + 7×24h — while everything the user can see is a date: the trail
+ * puts the check-in node and the "wraps up today" card on `ends_on` the moment that day dawns,
+ * so a week that began at 14:53 spent the check-in's whole morning with the screen saying "today"
+ * and the server (this flag, `build_next_week`'s guard, the coach's date line) saying "still
+ * running". One day, one answer. `now` is injectable for tests; production always passes nothing.
  */
 export interface WeekState {
   ends_on: string;
@@ -146,20 +148,45 @@ export interface WeekState {
 }
 export function computeWeekState(
   plan: (WeekClockPlan & Pick<Plan, 'horizon_days'> & Partial<Pick<Plan, 'built_through'>>) | null,
+  /** The user's zone (stored, else the client's hint). Absent → UTC, the horizon machinery's floor. */
+  timezone?: string | null,
+  now: Date = new Date(),
 ): WeekState | null {
   if (!plan) return null;
   // The week clock (0058, week-clock.ts): `week_started_at ?? generated_at`. The clock is what an
   // ordinary commit carries forward — "any commit IS the week being handled" turned out to mean
   // an engaged user never reached this line's `true` (owner, 2026-09-07).
-  const startMs = weekStartMs(plan);
+  const started_on = weekStartIso(plan, timezone);
   // The plan's OWN horizon (0050) — 7 unless the user asked the coach to extend this week.
-  const dueMs = startMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000;
+  const ends_on = addDaysIso(started_on, plan.horizon_days ?? DEFAULT_HORIZON_DAYS);
   return {
-    ends_on: iso(new Date(dueMs)),
-    checkin_due: Date.now() >= dueMs,
-    started_on: weekStartIso(plan),
+    ends_on,
+    // Due from the first moment of `ends_on` in their zone — the same day the trail already
+    // treats as the check-in's (trailLock.ts, checkinGate.ts compare local dates).
+    checkin_due: localDayIso(now, timezone) >= ends_on,
+    started_on,
     built_through: builtThroughIso(plan),
   };
+}
+
+/**
+ * The calendar, written through `reachTo` (see `buildPlanView`). Quiet on every ordinary load —
+ * a written plan lands a row in the far week — and only on the day the window moves past what
+ * was written does it cost the top-up plus one re-read. Best effort: a top-up that fails hands
+ * back whatever was written, never a failed screen.
+ */
+async function writtenThrough(
+  userId: string,
+  occ: OccurrenceListRow[],
+  activities: Activity[],
+  span: { from: string; reachTo: string; aheadDays: number },
+): Promise<OccurrenceListRow[]> {
+  if (!horizonFallsShort(occ, activities, span.reachTo)) return occ;
+  const written = await ensureHorizon(userId, span.aheadDays).catch((e) => {
+    console.error('[buildPlanView:horizon]', e);
+    return 0;
+  });
+  return written > 0 ? listOccurrences(userId, span.from, span.reachTo) : occ;
 }
 
 /**
@@ -167,13 +194,17 @@ export function computeWeekState(
  * occurrences by day and reports rolling-window consistency (days you showed up, never a streak
  * that resets).
  *
- * **Does NOT top up the horizon (check-in rebuild, step 6).** This used to void-fire
- * `ensureHorizon` on every load, silently materializing a rolling two weeks forever — the reason
- * nobody ever reached the end of their plan and the coach never had a natural moment to ask about
- * it. A week now materializes ONCE, at the commit that creates it (plan-synthesis.ts's
- * `commitActivities`, which keeps its own `ensureHorizon` call), and this view simply renders
- * whatever that commit left behind — including the day it runs out, which `computeWeekState`
- * reports below so the client can offer the check-in instead of a silently-extending plan.
+ * **Keeps the calendar written past the view (owner, 2026-09-14) — and that is NOT the old
+ * ever-extending horizon.** Check-in rebuild step 6 stopped this view topping up the horizon,
+ * because back then the check-in was timed off the rows running out: a view that kept writing
+ * days meant a week that never ended. The week clock (0058) ended that dependency — the check-in
+ * lands on `ends_on` whatever is written, and the trail locks every day past it (trailLock.ts)
+ * whether or not a row exists there. What the no-top-up rule left behind was a hole: a week
+ * materializes 7 days at its commit, the check-in day itself is day 7, and "Confirm my week"
+ * resets the clock without committing — so the owner confirmed a week at 07:26 on 2026-09-14 and
+ * opened a plan with nothing on today, nothing on tomorrow, and a coach reading the same empty
+ * calendar. Now the visible week AND the week after it are always written (`writtenAheadDays`);
+ * the days past the check-in stay locked, and the check-in still redraws them.
  */
 export async function buildPlanView(
   userId: string,
@@ -278,6 +309,11 @@ export async function buildPlanView(
 
   const from = days[0]!.date;
   const to = days[days.length - 1]!.date;
+  // How far the calendar must be written: the view plus the week after it (plan-horizon.ts). The
+  // occurrence read reaches that far so ONE query answers both "what is on screen" (the day loop
+  // below ignores dates past `to`) and "has the written week fallen short" (`horizonFallsShort`).
+  const aheadDays = writtenAheadDays(viewDays);
+  const reachTo = iso(new Date(base + aheadDays * 86_400_000));
   /**
    * The week, its step counts, and the trailing week for consistency — one round trip, not three
    * (PERF-05). All three depend only on the day window just computed, and on nothing from each
@@ -285,11 +321,12 @@ export async function buildPlanView(
    */
   const pastFrom = iso(new Date(base - 6 * 86_400_000));
   const pastTo = iso(new Date(base));
-  const [occ, stepRows, past] = await Promise.all([
-    listOccurrences(userId, from, to),
+  const [occRead, stepRows, past] = await Promise.all([
+    listOccurrences(userId, from, reachTo),
     listSessionStepCounts(userId, from, to),
     listOccurrences(userId, pastFrom, pastTo),
   ]);
+  const occ = await writtenThrough(userId, occRead, activities, { from, reachTo, aheadDays });
   const stepCounts = new Map(stepRows.map((r) => [r.occurrence_id, r.steps]));
   // Hoisted above the occurrence loop (2026-08-31): occurrences carry their goal's area now, so
   // the trail's icon family comes from the goal itself instead of a title guess.
@@ -334,10 +371,10 @@ export async function buildPlanView(
     day.occurrences.sort((x, y) => (x.time_of_day ?? '99').localeCompare(y.time_of_day ?? '99'));
   }
 
-  // Past the week's end the view runs into days no commit has written yet (a week materializes
-  // once, at its commit). Those days are behind the wall on the trail; draw the rhythm on them so
-  // the wall shows what the check-in will confirm, instead of a week that looks like it stopped.
-  const weekState = computeWeekState(plan);
+  // A day past the week's end that still has nothing written (the top-up above failed, or the
+  // plan's rhythm is sparse) is behind the wall on the trail; draw the rhythm on it as a preview
+  // so the wall shows what the check-in will confirm, instead of a week that looks like it stopped.
+  const weekState = computeWeekState(plan, timezone ?? tzHint ?? null, now);
   projectPreview(
     days,
     activities,

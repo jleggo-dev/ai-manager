@@ -496,7 +496,7 @@ const ACTIONS: EvalCase[] = [
   {
     id: 'A27',
     kind: 'action',
-    turn: "can you just build next week already? i want to see what it looks like. keep the check-in where it is",
+    turn: 'can you just build next week already? i want to see what it looks like. keep the check-in where it is',
     expect: ['build_week_ahead'],
     allow: [...DOSSIER_READS],
     // The three neighbours differ by what happens to the check-in: rolling the week forward skips
@@ -506,6 +506,29 @@ const ACTIONS: EvalCase[] = [
     from:
       'Owner ruling 2026-09-09 (DESIGN-check-in.md, "the wall stands mid-week"): the locked days past the ' +
       'check-in open on request without moving it — from the trail, or from chat.',
+  },
+  {
+    id: 'A28',
+    kind: 'action',
+    turn: "move tomorrow's hill intervals to thursday, tuesday night's gone. just this once",
+    expect: ['edit_calendar'],
+    allow: [...DOSSIER_READS, 'get_calendar'],
+    // One dated session, this week, "just this once" — the calendar layer. A plan change would
+    // move the commitment's day for every week from now on, which is not what was asked.
+    forbid: ['propose_plan_change', 'revise_session', 'start_replan'],
+    from:
+      'Owner ruling 2026-09-15 ("she should be able to adjust the calendar and the plan") — the trail\'s ' +
+      'hold menu, from chat; edit_calendar is the calendar half, propose_plan_change the rules half.',
+  },
+  {
+    id: 'A29',
+    kind: 'action',
+    turn: 'from now on can we do the hill intervals on thursdays instead of tuesdays',
+    expect: ['propose_plan_change'],
+    allow: [...DOSSIER_READS, 'get_calendar'],
+    // "From now on" is the rule, not one date — the restraint half of A28 (TOOL-HARNESS.md, step 7).
+    forbid: ['edit_calendar', 'start_replan'],
+    from: 'edit_calendar ships (owner ruling 2026-09-15) — the tiebreak its description carries, measured.',
   },
 ];
 
@@ -655,7 +678,7 @@ const READS: EvalCase[] = [
   {
     id: 'B12',
     kind: 'read',
-    turn: "that pdf i sent you the other day from my physio — what did it say about hills again?",
+    turn: 'that pdf i sent you the other day from my physio — what did it say about hills again?',
     expect: ['read_document'],
     allow: [...DOSSIER_READS, 'get_recent_logs'],
     // A file from an earlier turn is not in front of her; the note named its doc_ref and this is
@@ -664,6 +687,19 @@ const READS: EvalCase[] = [
     from:
       'Owner ruling 2026-09-13 ("as a user, I kind of expect that the AI will have continued access to a ' +
       'file I upload") — attachments were this turn\'s only until read_document.',
+  },
+  {
+    id: 'B13',
+    kind: 'read',
+    turn: "what's on the calendar the week after next? trying to see if the long run lands on the saturday i'm away",
+    expect: ['get_calendar'],
+    allow: [...DOSSIER_READS],
+    // A look further ahead is a read, never a build: the plan read carries only the next seven
+    // days as written, so "the week after next" needs the calendar tool — and nothing written.
+    forbid: ['build_week_ahead', 'extend_horizon', 'build_next_week'],
+    from:
+      'Owner question 2026-09-15 ("Shouldn\'t Cadence be able to see the calendar?") — she read the rules and ' +
+      'called the days present when they were not; the calendar as written is now a read of its own.',
   },
 ];
 
@@ -895,11 +931,24 @@ const SILENCE: EvalCase[] = [
     kind: 'silence',
     turn: "what's on for next tuesday? just curious how the week after this one shapes up",
     expect: [],
-    allow: [...DOSSIER_READS],
+    // `get_calendar` joined the allow list 2026-09-15: a glance past the seven days the plan read
+    // carries is exactly what that read is for, and must not score as a false trigger here.
+    allow: [...DOSSIER_READS, 'get_calendar'],
     // Looking at next week is not asking for it to be built: a curious glance must not write the
     // following week (build_week_ahead), end this one (build_next_week) or lengthen it.
     forbid: ['build_week_ahead', 'build_next_week', 'extend_horizon'],
     from: 'build_week_ahead ships (owner ruling 2026-09-09) — the restraint half of A27, TOOL-HARNESS.md step 7.',
+  },
+  {
+    id: 'C21',
+    kind: 'silence',
+    turn: "what's on tomorrow morning?",
+    expect: [],
+    allow: [...DOSSIER_READS],
+    // Tomorrow is inside the seven days the plan read already carries as written, so the answer
+    // is in front of her: no calendar read, and certainly nothing built or moved.
+    forbid: ['get_calendar', 'edit_calendar', 'build_week_ahead'],
+    from: 'get_calendar ships (owner question 2026-09-15) — the restraint half of B13, TOOL-HARNESS.md step 7.',
   },
 ];
 
@@ -978,6 +1027,8 @@ export const ACTION_TOOLS = new Set([
   'revise_session',
   'start_replan',
   'build_week_ahead',
+  // The calendar layer's one write (2026-09-15): a tail action, applied at once, no card.
+  'edit_calendar',
   // A tail action all the same, and the one whose miss is least visible: when she does not call
   // it she asks the person to type their book out, which reads as helpfulness rather than a gap.
   'offer_repertoire_review',

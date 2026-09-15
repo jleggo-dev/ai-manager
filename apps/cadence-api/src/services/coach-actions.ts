@@ -20,6 +20,7 @@ import { BUILD_NEXT_WEEK } from './coach-action-build-week.ts';
 import { BUILD_WEEK_AHEAD } from './coach-action-build-week-ahead.ts';
 import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { PAUSE_WEEK } from './coach-action-pause-week.ts';
+import { EDIT_CALENDAR } from './coach-action-edit-calendar.ts';
 import { LOG_MEAL } from './coach-action-log-meal.ts';
 import { SET_MICRO_TARGET } from './coach-action-micro-target.ts';
 import { PROPOSE_PROGRESS_LAYOUT } from './coach-action-progress-layout.ts';
@@ -555,6 +556,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // running one longer. It exists because the empty-plan guard below had nowhere to send her —
   // the refusal named no way to give someone the empty week they had just asked for.
   pause_week: PAUSE_WEEK,
+  // Tail tier, same ruling. The trail's hold menu from chat (owner, 2026-09-15: "she should be
+  // able to adjust the calendar and the plan"): ONE dated session moved, copied or taken off,
+  // at once — the calendar layer, where propose_plan_change edits the rules.
+  edit_calendar: EDIT_CALENDAR,
 
   log_meal: LOG_MEAL,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: a doctor's number arrives once and then holds for

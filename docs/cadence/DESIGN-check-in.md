@@ -218,6 +218,107 @@ the build button all held back until `checkin_due` flipped on day seven.
   (the skipped check-in); `open_week_review` runs the check-in; `extend_horizon` runs this week
   longer. Eval cases A27 (fires) and C20 (must not) — **eval:tools run pending post-deploy**.
 
+### The week is always written, and a confirm writes it (owner rulings, 2026-09-14)
+
+Owner, on the morning after the check-in: *"We've gone from an endless horizon of always planned
+plan, to the absolute opposite — no plan after a week. There is no plan for today or this week…
+Cadence detects the plan, but it's not showing… I think we should always have the 2nd week
+loaded, so there's always something to show, but Cadence needs to consider tweaking it in the
+check-in. This last week I didn't get anything done, so probably the coming week should look like
+the previous one did — reps should stay the same or possibly go down — if she's doing any
+reasoning."* And on the plan's greeting: *"I immediately see the disrupted ask, which should only
+display if I deliberately pull down."*
+
+**What was wrong — the sequence, from the database.** v24 wrote seven days at its commit (6–13
+Sep); the check-in day was 14 Sep, and no row had ever been written for it. At 07:26 the owner
+tapped "Start check-in", opened the review, and confirmed it — *0 of 14 sessions · 3 of 24
+meals* — which reset the week clock (`restartActiveWeek`) and, because a confirm may commit
+nothing, wrote **no days at all**. The plan opened with "A clear day" on today and every day after
+it; the coach, reading the same calendar, said the week "hasn't ended yet, so nothing needs
+rebuilding" (her `build_next_week` had refused — the confirm had already started the week) and that
+the sessions "should show up… worth a quick app restart." Step 6's "a week materializes once and
+stops there" had been right when the check-in was timed off the rows running out; the week clock
+(0058) removed that dependency and left the hole behind.
+
+**The rulings, as built.**
+
+- **The calendar is always written through the week after the view.** `buildPlanView` reads
+  occurrences a week past what it shows and, when the far week is empty (`horizonFallsShort`,
+  plan-horizon.ts — quiet on every ordinary load, since a written plan lands a row there), calls
+  `ensureHorizon` for `writtenAheadDays(view)` — 14 from today for the 7-day view. The days past
+  the check-in are still **locked** (trailLock.ts keys off `ends_on`, never off rows), and the
+  check-in still redraws them: a commit wipes the outgoing plan's future pending rows and writes
+  its own. Their real rows draw as the same muted discs the preview did; `plan-preview.ts` stays
+  as the fallback for a day the top-up could not reach.
+- **"Confirm my week" writes the week it starts.** `POST /plan/week-review/recap` follows the
+  clock reset with the same fill, `keepElapsedToday` like a commit's own — the day they are
+  standing in comes back in full, including the 6am they confirmed past. Best effort, like the
+  clock: `GET /plan` tops the calendar up on its own on the next load.
+- **Due by day, in their zone.** `computeWeekState(plan, timezone)` names `started_on` as the
+  clock's local day, `ends_on` as that plus the horizon, and `checkin_due` from the first moment
+  of `ends_on` in the user's zone — the day the trail already puts the check-in node and the
+  "wraps up today" card on. It was due at the exact instant (clock + 7×24h), so a week begun at
+  14:53 spent the check-in's whole morning with the screen saying "check in today" and the server
+  — this flag, `build_next_week`'s guard, the coach's date line, `open_week_review`'s window —
+  saying "still running". The weekly_checkin push's SQL reads the same local-day bound.
+- **After the confirm, the coach reasons about the week ahead** (`AFTER_CONFIRM_RULES`,
+  coach-picks-protocol.ts): the receipt is the start of her turn, not the end of theirs; the next
+  week is already on the calendar, so she never calls `build_next_week` after it; **load follows
+  what happened** — a week mostly done can build, and only on what was done; a week with little or
+  nothing done holds (same sessions, reps, distances, loads) or eases, never progresses; and a
+  miss is a fact, not a verdict — she asks what got in the way before easing anything. Her
+  `build_next_week` refusal now says the week's days are already written, so "should show up,
+  restart the app" cannot come back.
+- **The shelf** (`proposalShelf.ts`, `usePullReveal.ts`): the app's own absence-noticed asks —
+  `enter_disrupted` ("Life happened?", four dark days) and `rebaseline` ("Welcome back", seven) —
+  no longer greet the plan on open. They wait above the trail behind a grip; a pull of
+  `PULL_REVEAL_PX` from the top of the plan, or a tap on the grip, brings the banner out, and it
+  stays out for that proposal for the session. A proposal the coach actually made (`replan`)
+  shows itself as before. Table-tested (`proposalShelf.test.ts`, `PlanView.test.tsx`).
+
+### The coach sees the calendar, edits it, and knows what you did to it (owner, 2026-09-15)
+
+Owner: *"Shouldn't Cadence be able to see the calendar?"* — she could not. *"Whenever Cadence
+calls to look at the plan, return the plan along with the calendar. But she should be able to
+adjust the calendar and the plan. Part of the rule for moving things in the calendar was that
+Cadence would know about it (moving, deleting, adding)."*
+
+**What was wrong.** The plan has two layers — the RULES (each commitment with its repeat days) and
+the CALENDAR (the dated rows the trail draws) — and every read the coach had was on the rules or
+on the past: `get_active_plan` listed commitments and a "week shape" computed from them,
+`get_consistency`/`get_recent_logs` looked backward. Nothing showed her the days ahead as written,
+which is how she read "joint mobility, Mon/Wed/Fri/Sun, 6am" on 2026-09-14 and called it present
+when nothing was. And the trail's hold menu (move / copy / delete a dated session, 2026-09-07)
+told her nothing at all.
+
+**As built** (`retrieval/calendar-function.ts`, `coach-action-edit-calendar.ts`, migration 0060):
+
+- **The plan read carries the week as written.** `get_active_plan` — floor context on every
+  turn — now reads the next 7 days of rows in its own batch and renders one compact line per day
+  (today first, with ✓ done / ✗ skipped marks; meal logs folded to a count; an empty day said
+  as "— nothing written"). A week with nothing on it is one sentence: *NOTHING is written from … —
+  say so plainly rather than assuming the sessions are on it.* A failed read renders as a fault
+  line, never as an empty week (TOOL-HARNESS.md step 4). Measured on the owner's 18-commitment
+  plan: ~850 characters, ~210 tokens a turn.
+- **`get_calendar`** (tail tier, `plan` category): the same view further ahead or back —
+  `{"days": 14}` from today (default 14, up to 28), or `{"from": "2026-10-01", "days": 7}`.
+- **`edit_calendar`** (tail tier, `plan` category, an ACTION that takes effect at once): move,
+  copy or delete ONE dated session this week, named by date and title as the calendar shows them
+  — the hold menu from chat, through the same `occurrence-edit.ts` service, so the week-window
+  and same-day-conflict rules hold whichever door the edit came through. A rule change ("from now
+  on, Thursdays") stays `propose_plan_change`; the descriptions carry that tiebreak and eval
+  cases A28/A29 measure it.
+- **She knows what you did.** Every successful move, copy or delete — from the trail or from
+  chat — is recorded in `cadence.plan_edits` (0060: source, action, title, from/to dates), and the
+  plan read renders the person's own edits from the past week: *Changes they made by hand on the
+  plan screen: Mon 14 (today): moved "Hill intervals" from Tue 15 to Wed 16.* Her own edits are
+  left out; a failed read says so. The record is best effort on both sides, so a missing table
+  never blocks a move.
+- **The drawer label** was brought back under `DRAWER_LABEL_MAX` by trimming nine hooks of words
+  that decided nothing rather than raising the cap — the rule the tiers file asks for.
+- Eval cases: A28/A29 (edit vs rule), B13/C21 (calendar read vs the floor), C20 allows the
+  read. **eval:tools run pending post-deploy** (it measures the deployed API).
+
 ---
 
 ## 5. Verification state

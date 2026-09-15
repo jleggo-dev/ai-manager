@@ -26,6 +26,9 @@ vi.mock('../repos/activities.ts', () => ({
   NON_PLAN_CATEGORIES: new Set(['adhoc', 'episode', 'menu']),
 }));
 vi.mock('../repos/occurrences.ts', () => ({ listOccurrences: (...a: unknown[]) => listOccurrences(...a) }));
+// The guard is by the user's own day (2026-09-14); no stored zone → UTC days, which the fixtures
+// below (whole days ago) assume.
+vi.mock('../repos/users.ts', () => ({ getUser: async () => ({ timezone: null }) }));
 vi.mock('./plan-synthesis.ts', () => ({ commitActivities: (...a: unknown[]) => commitActivities(...a) }));
 vi.mock('./plan-ready-push.ts', () => ({ sendPlanReadyPush: (...a: unknown[]) => sendPlanReadyPush(...a) }));
 const ensureHorizon = vi.fn();

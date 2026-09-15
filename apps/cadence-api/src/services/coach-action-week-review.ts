@@ -1,8 +1,8 @@
 import { getActivePlan } from '../repos/plans.ts';
-import { setPendingWeekReview } from '../repos/users.ts';
+import { getUser, setPendingWeekReview } from '../repos/users.ts';
 import type { CoachActionTool } from './coach-action-types.ts';
-import { DEFAULT_HORIZON_DAYS } from './plan-horizon.ts';
-import { weekStartMs } from './week-clock.ts';
+import { localDayIso } from './plan-day.ts';
+import { computeWeekState } from './plan-view.ts';
 
 /**
  * `open_week_review` — puts the week up on the user's own screen, the way a check-in should:
@@ -38,15 +38,14 @@ export const OPEN_WEEK_REVIEW: CoachActionTool = {
 
     // The plan week: the week CLOCK (week-clock.ts, 0058 — `week_started_at`, which an ordinary
     // commit carries forward, not `generated_at`, which every commit refreshes) through the
-    // plan's own horizon. `weekStartMs` routes the column through `new Date(...)` because it may
-    // arrive as a Date rather than the string the type promises (the exact mismatch
-    // TOOL-HARNESS.md is written around) — that works whichever shape postgres handed back.
-    const startMs = weekStartMs(plan);
-    const from = new Date(startMs).toISOString().slice(0, 10);
-    const weekEnd = new Date(startMs + (plan.horizon_days ?? DEFAULT_HORIZON_DAYS) * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    const today = new Date().toISOString().slice(0, 10);
+    // plan's own horizon — read through `computeWeekState` so this window, the trail's card and
+    // the coach's date line all name the same days, in the user's own zone. The clock may arrive
+    // as a Date rather than the string the type promises (the exact mismatch TOOL-HARNESS.md is
+    // written around); week-clock.ts normalizes it whichever shape postgres handed back.
+    const timezone = (await getUser(userId))?.timezone ?? null;
+    const now = new Date();
+    const { started_on: from, ends_on: weekEnd } = computeWeekState(plan, timezone, now)!;
+    const today = localDayIso(now, timezone);
     const to = weekEnd < today ? weekEnd : today;
 
     await setPendingWeekReview(userId, { from, to, built_at: new Date().toISOString() });

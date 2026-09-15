@@ -6,6 +6,8 @@ const setPendingWeekReview = vi.fn();
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: (...a: unknown[]) => getActivePlan(...a) }));
 vi.mock('../repos/users.ts', () => ({
   setPendingWeekReview: (...a: unknown[]) => setPendingWeekReview(...a),
+  // No stored zone → the window is named in UTC days, which is what every date below assumes.
+  getUser: async () => ({ timezone: null }),
 }));
 
 const { OPEN_WEEK_REVIEW } = await import('./coach-action-week-review.ts');

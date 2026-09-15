@@ -1673,6 +1673,19 @@ html[data-native] .sheet-body {
   padding: 13px;
   margin: 4px 0 16px;
 }
+/* The shelf's grip (proposalShelf.ts): the one quiet sign that an ask is waiting above the
+   trail. A pull down from the top, or a tap here, brings the banner out. */
+.plan-shelf-grip {
+  display: block;
+  width: 36px;
+  height: 5px;
+  margin: 6px auto 10px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(234, 150, 112, 0.55);
+  cursor: pointer;
+}
 .plan-proposal .orb {
   width: 26px;
   height: 26px;
