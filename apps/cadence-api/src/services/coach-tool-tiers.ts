@@ -262,13 +262,25 @@ export const ALWAYS_ACTIONS = [
  *                    the 132 trimmed elsewhere)
  *   cap     3,260   (after + 60 headroom)
  *
- * That is the THIRD raise in twelve days, which the paragraph above already names as the shape
- * of a tail that wants consolidating. The `plan` category now holds eight tools — five actions
- * and three reads — and is the obvious candidate for a facade the way get_nutrition fronts the
- * food reads. An OWNER RULING IS STILL OWED on that; this row does not settle it, it pays for
- * two tools he asked for by name.
+ * That was the THIRD raise in twelve days, which the paragraph above already names as the shape
+ * of a tail that wants consolidating. The `plan` category held eight tools — five actions and
+ * three reads — and was the obvious candidate for a facade the way get_nutrition fronts the
+ * food reads.
+ *
+ * 3,260 → 3,140 (2026-09-15, the same day, owner: "Build the plan facade so we stop raising the
+ * cap"). The five plan actions went behind two doors (coach-action-plan-facade.ts): `shape_week`
+ * for the week's edges and `rebuild` for one session or the whole week. Three entries left the
+ * label:
+ *
+ *   before  3,200   (28 tail tools)
+ *   after   2,887   (25 tail tools; −313)
+ *   cap     3,140   (the cap from before the morning's raise, restored — 253 of headroom, about
+ *                    two tools' worth, which is what consolidation bought; the next tool spends
+ *                    it rather than raising)
+ *
+ * The rule stands: trim first, consolidate second, raise last — and only with the arithmetic.
  */
-export const DRAWER_LABEL_MAX = 3260;
+export const DRAWER_LABEL_MAX = 3140;
 
 export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_nutrition: 'all they eat — log, recipes, targets, trends; name the view',
@@ -290,19 +302,19 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_recent_logs: 'their recent session notes: what they did and how it felt',
   get_equipment: 'training equipment they own, with wear on tracked items',
   update_equipment: 'ACTION: add, remove or rename equipment on their file',
-  extend_horizon: 'ACTION: run this week longer ("plan two weeks ahead"); check-in moves too',
-  build_week_ahead: 'ACTION: write next week early, same rhythm; check-in stays put',
-  pause_week: 'ACTION: pause all sessions between two dates; nothing deleted',
-  revise_session: 'ACTION: rebuild one upcoming session from their words — "add chest and abs"',
-  start_replan: 'ACTION: rebuild the WHOLE week from their words — background, minutes',
+  // The two plan FACADES (coach-action-plan-facade.ts, owner 2026-09-15: "Build the plan facade
+  // so we stop raising the cap"): five hooks became two. extend_horizon, build_week_ahead and
+  // pause_week sit behind `shape_week`; revise_session and start_replan behind `rebuild`. The
+  // originals are no longer tools of their own, so they have no hooks here.
+  shape_week: 'ACTION: this week’s edges — run it longer, write next week early, pause a stretch',
+  rebuild: 'ACTION: rebuild one upcoming session, or the WHOLE week, from their words',
   set_home_location: 'ACTION: record where they live — weather and daylight outdoors',
   // 2026-09-15 (owner: "Shouldn't Cadence be able to see the calendar?" / "she should be able
   // to adjust the calendar and the plan"): the days as WRITTEN, beyond the seven the plan read
   // carries, and the hold menu's three edits from chat. Fourteen hooks above were trimmed of
   // words that decided nothing ("running totals" → "totals", "are never included" →
   // "excluded", "what a household measure … weighs in grams" → "grams in a household measure")
-  // per the DRAWER_LABEL_MAX rule — trim first — and the cap was still raised; the row beside
-  // DRAWER_LABEL_MAX states the arithmetic.
+  // per the DRAWER_LABEL_MAX rule — trim first.
   get_calendar: 'the days as written — what sits on each date, done or not',
   edit_calendar: 'ACTION: move, copy or delete one dated session this week',
   // 88 of the 90 the hook rule allows. The brief's wording ("...on their screen AT ONCE; THEIR
@@ -461,16 +473,12 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `edit_calendar` (same day, "she should be able to adjust the calendar and the plan"): the
     // hold menu's move / copy / delete of ONE dated session, from chat — the calendar layer,
     // beside the rule-layer edits above.
-    members: [
-      'extend_horizon',
-      'build_week_ahead',
-      'pause_week',
-      'revise_session',
-      'start_replan',
-      'get_user_built_activities',
-      'get_calendar',
-      'edit_calendar',
-    ],
+    // THE FACADES (same day, "Build the plan facade so we stop raising the cap"): the five
+    // actions above are reached through two doors now — `shape_week` (extend, build_ahead,
+    // pause: the week's edges) and `rebuild` (one session, or the whole week, from their words)
+    // — coach-action-plan-facade.ts. The ladder still reads whole from here: one session or the
+    // week rebuilt, the week's edges moved, one dated session moved, the days as written.
+    members: ['shape_week', 'rebuild', 'edit_calendar', 'get_calendar', 'get_user_built_activities'],
   },
   {
     key: 'progress',

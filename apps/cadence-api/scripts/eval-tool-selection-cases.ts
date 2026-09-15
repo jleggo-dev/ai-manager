@@ -373,14 +373,17 @@ const ACTIONS: EvalCase[] = [
     id: 'A21',
     kind: 'action',
     turn: "can you add some chest and abs to today's workout?",
-    expect: ['revise_session'],
+    expect: ['rebuild'],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
     // The routing this tool exists for: a session-content ask must never fall through to the
-    // plan-structure tools — that fall-through is the incident itself.
+    // plan-structure tools — that fall-through is the incident itself. Rewritten 2026-09-15: the
+    // facade collapsed revise_session and start_replan into `rebuild`, so the rung-1 half of the
+    // tiebreak now lives in the `scope` argument, not the tool name.
     forbid: ['propose_plan_change', 'build_next_week'],
     args: {
-      tool: 'revise_session',
+      tool: 'rebuild',
       check: (a) => {
+        if (a.scope !== 'session') return `scope was ${JSON.stringify(a.scope)}, wanted "session"`;
         const s = str(a.steer);
         if (!s) return 'steer was empty — the rebuild is nothing without their words';
         if (!/chest|abs/.test(s)) return `steer "${s}" carried neither chest nor abs`;
@@ -397,14 +400,16 @@ const ACTIONS: EvalCase[] = [
     turn:
       "this week just isn't working. can you redo the whole thing — keep the long run but rebalance " +
       'everything else around more recovery',
-    expect: ['start_replan'],
+    expect: ['rebuild'],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
     // The other side of A21's line: a whole-week reshape must reach the background rebuild, not be
     // squeezed through the deterministic editor or answered with a carry-forward of the same week.
-    forbid: ['propose_plan_change', 'build_next_week', 'revise_session'],
+    // Rewritten 2026-09-15 for the `rebuild` facade: the week/session line is the `scope` argument.
+    forbid: ['propose_plan_change', 'build_next_week'],
     args: {
-      tool: 'start_replan',
+      tool: 'rebuild',
       check: (a) => {
+        if (a.scope !== 'week') return `scope was ${JSON.stringify(a.scope)}, wanted "week"`;
         const s = str(a.steer);
         if (!s) return 'steer was empty — the rebuild is shaped by their words or it is shaped by nothing';
         if (!/recovery|long run/.test(s)) return `steer "${s}" carried neither the recovery ask nor the long-run keep`;
@@ -427,7 +432,8 @@ const ACTIONS: EvalCase[] = [
     // The triage line drawn the other way: two NAMED commitment edits with "everything else stays"
     // is rung 0 — a minutes-long background rebuild landing on it would be the proportionality
     // failure the ladder exists to prevent, and the session-content tool has no session to open.
-    forbid: ['start_replan', 'revise_session'],
+    // Both rungs now sit behind `rebuild` (2026-09-15), so one forbid covers what two did.
+    forbid: ['rebuild'],
     from:
       'docs/cadence/PLAN-CHANGES.md Phase 2 (2026-08-31), the owner directive at its head: "latency must ' +
       'be proportional to the size of the ask" — the incident was a small edit routed into a full ' +
@@ -459,14 +465,16 @@ const ACTIONS: EvalCase[] = [
     id: 'A25',
     kind: 'action',
     turn: "my dad died on saturday. i can't do any of this week — take everything off, i'll pick it up after",
-    expect: ['pause_week'],
+    expect: ['shape_week'],
     allow: [...DOSSIER_READS],
     // The refusal this tool replaces: removals that empty a plan are rejected by
     // propose_plan_change's own guard, so routing here through the edit tool ends in "no".
-    forbid: ['propose_plan_change', 'start_replan', 'build_next_week'],
+    // Rewritten 2026-09-15: pause_week sits behind `shape_week`, so the pause is the `action`.
+    forbid: ['propose_plan_change', 'rebuild', 'build_next_week'],
     args: {
-      tool: 'pause_week',
+      tool: 'shape_week',
       check: (a) => {
+        if (a.action !== 'pause') return `action was ${JSON.stringify(a.action)}, wanted "pause"`;
         const end = str(a.end);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return `end was "${end}" — a pause has no shape without a last day`;
         const start = str(a.start);
@@ -484,11 +492,17 @@ const ACTIONS: EvalCase[] = [
     id: 'A26',
     kind: 'action',
     turn: "skip thursday's run, i'm out all evening. rest of the week is fine",
-    expect: ['propose_plan_change'],
-    allow: [...DOSSIER_READS],
+    expect: ['edit_calendar'],
+    allow: [...DOSSIER_READS, 'get_calendar'],
     // The other side of A25's line, and the false trigger that would hurt most: ONE day off is a
     // named edit, not a stretch cleared — a pause here would shelve the whole rest of the week.
-    forbid: ['pause_week', 'start_replan'],
+    // Rewritten 2026-09-15: since edit_calendar, one day off is a dated delete on the calendar,
+    // not a rule change (propose_plan_change's "remove" drops the commitment from every week).
+    forbid: ['shape_week', 'rebuild', 'propose_plan_change'],
+    args: {
+      tool: 'edit_calendar',
+      check: (a) => (a.action === 'delete' ? null : `action was ${JSON.stringify(a.action)}, wanted "delete"`),
+    },
     from:
       'Finding TR-5 (tool audit, 2026-09-03), the restraint half — a set of only positive cases measures ' +
       'recall and silently ignores false triggering (TOOL-HARNESS.md, step 7).',
@@ -497,15 +511,41 @@ const ACTIONS: EvalCase[] = [
     id: 'A27',
     kind: 'action',
     turn: 'can you just build next week already? i want to see what it looks like. keep the check-in where it is',
-    expect: ['build_week_ahead'],
-    allow: [...DOSSIER_READS],
+    expect: ['shape_week'],
+    allow: [...DOSSIER_READS, 'get_calendar'],
     // The three neighbours differ by what happens to the check-in: rolling the week forward skips
     // it, extending the week moves it, a plan change redesigns. "Keep the check-in where it is"
-    // names the one that leaves it alone.
-    forbid: ['build_next_week', 'extend_horizon', 'propose_plan_change', 'start_replan'],
+    // names the one that leaves it alone. Since 2026-09-15 extend and build_ahead are two actions
+    // of one tool, so the `action` argument carries the tiebreak the tool names used to.
+    forbid: ['build_next_week', 'propose_plan_change', 'rebuild'],
+    args: {
+      tool: 'shape_week',
+      check: (a) =>
+        a.action === 'build_ahead' ? null : `action was ${JSON.stringify(a.action)}, wanted "build_ahead"`,
+    },
     from:
       'Owner ruling 2026-09-09 (DESIGN-check-in.md, "the wall stands mid-week"): the locked days past the ' +
       'check-in open on request without moving it — from the trail, or from chat.',
+  },
+  {
+    id: 'A30',
+    kind: 'action',
+    turn: 'can we plan two weeks ahead? i want to see the whole fortnight laid out',
+    expect: ['shape_week'],
+    allow: [...DOSSIER_READS, 'get_calendar'],
+    // The end-cap's own visible send ("Can we plan two weeks ahead?"). Running this week longer
+    // moves the check-in; writing next week early does not — the argument tells them apart.
+    forbid: ['build_next_week', 'propose_plan_change', 'rebuild'],
+    args: {
+      tool: 'shape_week',
+      check: (a) => {
+        if (a.action !== 'extend') return `action was ${JSON.stringify(a.action)}, wanted "extend"`;
+        return Number(a.days) === 14 ? null : `days was ${JSON.stringify(a.days)}, wanted 14`;
+      },
+    },
+    from:
+      'The plan facade (owner, 2026-09-15) — extend_horizon had no case of its own while it was a tool; ' +
+      'behind shape_week its half of the extend/build_ahead line needs one.',
   },
   {
     id: 'A28',
@@ -515,7 +555,7 @@ const ACTIONS: EvalCase[] = [
     allow: [...DOSSIER_READS, 'get_calendar'],
     // One dated session, this week, "just this once" — the calendar layer. A plan change would
     // move the commitment's day for every week from now on, which is not what was asked.
-    forbid: ['propose_plan_change', 'revise_session', 'start_replan'],
+    forbid: ['propose_plan_change', 'rebuild'],
     from:
       'Owner ruling 2026-09-15 ("she should be able to adjust the calendar and the plan") — the trail\'s ' +
       'hold menu, from chat; edit_calendar is the calendar half, propose_plan_change the rules half.',
@@ -527,7 +567,7 @@ const ACTIONS: EvalCase[] = [
     expect: ['propose_plan_change'],
     allow: [...DOSSIER_READS, 'get_calendar'],
     // "From now on" is the rule, not one date — the restraint half of A28 (TOOL-HARNESS.md, step 7).
-    forbid: ['edit_calendar', 'start_replan'],
+    forbid: ['edit_calendar', 'rebuild'],
     from: 'edit_calendar ships (owner ruling 2026-09-15) — the tiebreak its description carries, measured.',
   },
 ];
@@ -696,7 +736,7 @@ const READS: EvalCase[] = [
     allow: [...DOSSIER_READS],
     // A look further ahead is a read, never a build: the plan read carries only the next seven
     // days as written, so "the week after next" needs the calendar tool — and nothing written.
-    forbid: ['build_week_ahead', 'extend_horizon', 'build_next_week'],
+    forbid: ['shape_week', 'build_next_week'],
     from:
       'Owner question 2026-09-15 ("Shouldn\'t Cadence be able to see the calendar?") — she read the rules and ' +
       'called the days present when they were not; the calendar as written is now a read of its own.',
@@ -906,7 +946,7 @@ const SILENCE: EvalCase[] = [
     turn: "should tomorrow's run have some hills in it or is that pushing it?",
     expect: [],
     allow: [...DOSSIER_READS, 'get_recent_logs', 'get_workout_history'],
-    forbid: ['revise_session', 'propose_plan_change'],
+    forbid: ['rebuild', 'propose_plan_change'],
     from:
       "C6's shape applied to rung 1 (docs/cadence/PLAN-CHANGES.md, 2026-08-31) — a question about what a " +
       'session could hold is not a decision to rebuild it: "can you add chest and abs" decides, "should it ' +
@@ -935,8 +975,8 @@ const SILENCE: EvalCase[] = [
     // carries is exactly what that read is for, and must not score as a false trigger here.
     allow: [...DOSSIER_READS, 'get_calendar'],
     // Looking at next week is not asking for it to be built: a curious glance must not write the
-    // following week (build_week_ahead), end this one (build_next_week) or lengthen it.
-    forbid: ['build_week_ahead', 'build_next_week', 'extend_horizon'],
+    // following week or lengthen this one (both shape_week now), nor end it (build_next_week).
+    forbid: ['shape_week', 'build_next_week'],
     from: 'build_week_ahead ships (owner ruling 2026-09-09) — the restraint half of A27, TOOL-HARNESS.md step 7.',
   },
   {
@@ -947,7 +987,7 @@ const SILENCE: EvalCase[] = [
     allow: [...DOSSIER_READS],
     // Tomorrow is inside the seven days the plan read already carries as written, so the answer
     // is in front of her: no calendar read, and certainly nothing built or moved.
-    forbid: ['get_calendar', 'edit_calendar', 'build_week_ahead'],
+    forbid: ['get_calendar', 'edit_calendar', 'shape_week'],
     from: 'get_calendar ships (owner question 2026-09-15) — the restraint half of B13, TOOL-HARNESS.md step 7.',
   },
 ];
@@ -1012,8 +1052,9 @@ export const CASES: EvalCase[] = [...CANARIES, ...ACTIONS, ...READS, ...SILENCE]
  *
  * `log_meal` joined 2026-08-28 (MP21/MP40) — the tool that used to not exist, which is why A14/A15
  * spent a stretch as silence cases. `preview_meal` and `research_food` are reads and belong in
- * `KNOWN_TOOLS` below, not here. `revise_session` and `start_replan` (PLAN-CHANGES.md rungs 1 and
- * 3, 2026-08-31) are tail actions but actions all the same — no prefetch can ever satisfy A21/A22.
+ * `KNOWN_TOOLS` below, not here. `rebuild` (fronting revise_session and start_replan, PLAN-CHANGES.md
+ * rungs 1 and 3) and `shape_week` (fronting extend_horizon, build_week_ahead and pause_week) are
+ * tail actions but actions all the same — no prefetch can ever satisfy A21/A22/A25/A27.
  */
 export const ACTION_TOOLS = new Set([
   'propose_plan_change',
@@ -1024,9 +1065,9 @@ export const ACTION_TOOLS = new Set([
   'set_macro_targets',
   'log_meal',
   'update_repertoire',
-  'revise_session',
-  'start_replan',
-  'build_week_ahead',
+  // The two plan facades (2026-09-15), each an action whichever choice it carries.
+  'rebuild',
+  'shape_week',
   // The calendar layer's one write (2026-09-15): a tail action, applied at once, no card.
   'edit_calendar',
   // A tail action all the same, and the one whose miss is least visible: when she does not call

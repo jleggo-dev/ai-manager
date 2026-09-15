@@ -101,7 +101,7 @@ export async function planGapNote(userId: string): Promise<string> {
     `== PLAN GAP (deterministic — the app checked) ==`,
     `Agreed but NOT YET IN THE PLAN: ${confirmed.map((g) => `"${g.title}"`).join(', ')}.`,
     'The user said yes to this and the plan does not cover it yet — a rebuild was started and not',
-    'finished, or never started. start_replan rebuilds the week around it.',
+    'finished, or never started. rebuild (scope "week") rebuilds the week around it.',
     'Never claim it is already handled, and never let it stay silently stranded.',
   ].join('\n');
 }

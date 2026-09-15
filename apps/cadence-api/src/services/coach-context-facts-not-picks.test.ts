@@ -93,7 +93,7 @@ describe('planGapNote — CC-3', () => {
     const said = await planGapNote('u1');
 
     expect(said).toContain('Agreed but NOT YET IN THE PLAN: "Fix nutrition"');
-    expect(said).toMatch(/start_replan rebuilds the week around it\./);
+    expect(said).toMatch(/rebuild \(scope "week"\) rebuilds the week around it\./);
     // The boundary stays: a stranded goal must never be reported as handled.
     expect(said).toMatch(/Never claim it is already handled/);
     expect(said).not.toMatch(/Raise it yourself this conversation/);

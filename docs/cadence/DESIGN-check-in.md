@@ -314,8 +314,19 @@ told her nothing at all.
   plan screen: Mon 14 (today): moved "Hill intervals" from Tue 15 to Wed 16.* Her own edits are
   left out; a failed read says so. The record is best effort on both sides, so a missing table
   never blocks a move.
-- **The drawer label** was brought back under `DRAWER_LABEL_MAX` by trimming nine hooks of words
-  that decided nothing rather than raising the cap — the rule the tiers file asks for.
+- **The plan facades** (owner, same day: *"Build the plan facade so we stop raising the cap"*).
+  Two new tools pushed find_tools' carried label over its budget for the third time in twelve
+  days, and the `plan` category — eight tools, five of them actions — was where they were
+  landing. The five actions now sit behind two doors (`coach-action-plan-facade.ts`), the way
+  `get_nutrition` fronts the food reads: **`shape_week`** with `action` = `extend` | `build_ahead`
+  | `pause` (extend_horizon, build_week_ahead, pause_week — the week's edges) and **`rebuild`**
+  with `scope` = `session` | `week` (revise_session, start_replan — PLAN-CHANGES.md rungs 1 and
+  3; rung 2 stays `propose_plan_change`, always-on). The originals keep their files, contracts
+  and tests and are no longer registered on their own, so the facade is their only door; the eval
+  cases name the facade with an argument check on the choice (A21/A22/A25/A27, plus A30 for
+  extend; A26 now expects `edit_calendar` — one day off is a dated delete, not a rule change).
+  Fourteen hooks were trimmed of words that decided nothing as well; `DRAWER_LABEL_MAX` is back
+  at 3,140 with real headroom, and the rule stands: trim first, consolidate second, raise last.
 - Eval cases: A28/A29 (edit vs rule), B13/C21 (calendar read vs the floor), C20 allows the
   read. **eval:tools run pending post-deploy** (it measures the deployed API).
 

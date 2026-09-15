@@ -417,7 +417,7 @@ describe('retrieval registry — render / rows', () => {
       planRun: { status: 'failed', error: 'Too many goals at once — trim the list and try again.' },
     });
     expect(text).toContain(
-      'The last week rebuild failed: Too many goals at once — trim the list and try again. — start_replan can retry it.',
+      'The last week rebuild failed: Too many goals at once — trim the list and try again. — rebuild (scope "week") can retry it.',
     );
   });
 

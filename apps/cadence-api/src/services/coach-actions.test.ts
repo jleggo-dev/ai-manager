@@ -104,12 +104,12 @@ describe('propose_plan_change', () => {
 
   /** The refusal names the tool that CAN clear a week (TR-5): a dead end here is how "I need
    *  nothing on my plate this week" used to end in advice instead of a pause. */
-  it('refuses to propose an empty week, and points at pause_week', async () => {
+  it('refuses to propose an empty week, and points at the pause behind shape_week', async () => {
     const out = await propose.run('u1', { edits: [{ action: 'remove', activity: 'Easy run' }] });
     expect(setPendingPlan).not.toHaveBeenCalled();
     expect(out).toMatch(/no commitments/);
     expect(out).toMatch(/their plan is unchanged/);
-    expect(out).toContain('pause_week');
+    expect(out).toContain('shape_week with action "pause"');
     // No advice about what to suggest instead — facts only (owner red line).
     expect(out).not.toMatch(/suggest keeping/);
   });
@@ -220,10 +220,10 @@ describe('propose_plan_change', () => {
     const d = def.function.description;
     // The tiebreak against the full rebuild, and the honesty about what calling it does. The
     // rebuild's referent changed with Phase 2 (docs/cadence/PLAN-CHANGES.md): the coach now has
-    // her own door — start_replan — so the description points there, not at a card only the app
-    // could offer.
+    // her own door — start_replan, reached through the `rebuild` facade since 2026-09-15 — so the
+    // description points there, not at a card only the app could offer.
     expect(d).toMatch(/does NOT change anything/i);
-    expect(d).toMatch(/start_replan/);
+    expect(d).toMatch(/rebuild with scope "week"/);
     expect(d).toMatch(/get_active_plan/);
     // Owner 2026-08-31 (the coach IS the planner): a whole week is one call carrying the slate,
     // and the return is where she checks the shape before telling the user it is up.
@@ -349,7 +349,7 @@ describe('update_goal', () => {
     expect(out).toMatch(/aims at 50 books/);
     // The plan does not follow automatically, and she must not imply it did — she is told what
     // the week currently holds and which tool rebuilds it, not told to "offer" anything (TR-6).
-    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).toMatch(/rebuild \(scope "week"\) rebuilds it/);
     expect(out).not.toMatch(/offer to rebuild/);
   });
 
@@ -386,7 +386,7 @@ describe('update_goal', () => {
     // a "later usually eases off, earlier usually cannot be met" generalisation.
     expect(out).toMatch(/Their plan still holds the sessions built for the old date/);
     expect(out).toMatch(/get_active_plan/);
-    expect(out).toMatch(/start_replan rebuilds the week/);
+    expect(out).toMatch(/rebuild \(scope "week"\) rebuilds the week/);
     expect(out).not.toMatch(/usually|offer to rebuild/);
 
     vi.clearAllMocks();
@@ -407,7 +407,7 @@ describe('update_goal', () => {
     const stopped = await update.run('u1', { goal: 'Run a 10k', action: 'stop' });
     expect(setGoalStatus).toHaveBeenCalledWith('u1', 'g2', 'abandoned');
     expect(stopped).toMatch(/without any suggestion they failed/);
-    expect(stopped).toMatch(/start_replan rebuilds it/);
+    expect(stopped).toMatch(/rebuild \(scope "week"\) rebuilds it/);
     expect(stopped).not.toMatch(/offer to rebuild|offer that if it now looks empty/);
   });
 
@@ -431,7 +431,7 @@ describe('update_goal', () => {
     expect(out).toMatch(/set aside/i);
     expect(out).toMatch(/stays in Progress/);
     expect(out).toMatch(/without any suggestion they failed/);
-    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).toMatch(/rebuild \(scope "week"\) rebuilds it/);
     expect(out).not.toMatch(/offer to rebuild/);
   });
 
@@ -441,7 +441,7 @@ describe('update_goal', () => {
     expect(restoreGoal).toHaveBeenCalledWith('u1', 'g4');
     expect(insertGoalEvent.mock.calls[0]![1].label).toBe('Brought back: Obstacle race');
     expect(out).toMatch(/is back/);
-    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).toMatch(/rebuild \(scope "week"\) rebuilds it/);
     expect(out).not.toMatch(/say so warmly|offer to rebuild/i);
   });
 
@@ -627,7 +627,7 @@ describe('update_constraint', () => {
     // Matched against what is on file, so the fuller stored label survives.
     expect(written[0].label).toBe('left knee — patellar tendinopathy');
     expect(out).toMatch(/still on file/);
-    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).toMatch(/rebuild \(scope "week"\) rebuilds it/);
     expect(out).not.toMatch(/offer to rebuild/);
   });
 
@@ -637,7 +637,7 @@ describe('update_constraint', () => {
     expect(written[0].status).toBe('active');
     expect(written[0].plan_around).toBe(true);
     expect(removeCapturedConstraint).not.toHaveBeenCalled();
-    expect(out).toMatch(/start_replan rebuilds it/);
+    expect(out).toMatch(/rebuild \(scope "week"\) rebuilds it/);
     expect(out).not.toMatch(/offer to change the week/);
   });
 

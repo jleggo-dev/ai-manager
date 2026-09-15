@@ -142,12 +142,12 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
     }
     if (action === 'lift') {
       return row.plan_around === false
-        ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly. Their current week was built before this change and still holds the sessions it produced. start_replan rebuilds it.`
+        ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`
         : `"${row.label}" is still being planned around — the change did not take. Do NOT say it is eased; say you could not save it just now.`;
     }
     if (action === 'flare') {
       return row.plan_around
-        ? `"${row.label}" is active again and verified: the plan should work around it. Say so. Their current week was built while this was not being planned around, and still holds those sessions. start_replan rebuilds it.`
+        ? `"${row.label}" is active again and verified: the plan should work around it. Say so. Their current week was built while this was not being planned around, and still holds those sessions. rebuild (scope "week") rebuilds it.`
         : `"${row.label}" did not save as active. Do NOT say it is done; say you could not save it just now.`;
     }
     /**
