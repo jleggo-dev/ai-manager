@@ -9,8 +9,9 @@
  * added as a preview. Once this meal is logged, the day already carries it and the preview is
  * nothing.
  *
- * Bars are named in full — "protein", never "P" (BRAND.md: no abbreviation the user has to
- * decode; owner, 2026-09-08). The canvas's single letters were the mock's shorthand.
+ * Bars are labelled P / C / F — on this surface only (owner, 2026-10-28: the full words are too
+ * long beside three bars and a ring in a drawer's header). A scoped exception to BRAND.md's
+ * no-abbreviation rule; the button's label still says the words in full for a screen reader.
  *
  * The card is also the quiet door out to the whole day when the host has one — the capture
  * answers "what did I just eat" and the next question lives in the Food screen.
@@ -21,10 +22,10 @@ import { NutritionRing } from '../../nutrition/NutritionRing.tsx';
 import { fmtKcal } from '../bracket/copy.ts';
 import { loggedTotals } from './loggedTotals.ts';
 
-const BARS: Array<{ key: 'protein_g' | 'carbs_g' | 'fat_g'; label: string; color: string }> = [
-  { key: 'protein_g', label: 'protein', color: 'oklch(62% 0.12 152)' },
-  { key: 'carbs_g', label: 'carbs', color: 'oklch(64% 0.11 250)' },
-  { key: 'fat_g', label: 'fat', color: 'oklch(66% 0.12 268)' },
+const BARS: Array<{ key: 'protein_g' | 'carbs_g' | 'fat_g'; label: string; name: string; color: string }> = [
+  { key: 'protein_g', label: 'P', name: 'protein', color: 'oklch(62% 0.12 152)' },
+  { key: 'carbs_g', label: 'C', name: 'carbs', color: 'oklch(64% 0.11 250)' },
+  { key: 'fat_g', label: 'F', name: 'fat', color: 'oklch(66% 0.12 268)' },
 ];
 
 const pct = (v: number, t: number) => Math.max(0, Math.min(100, (v / t) * 100));
@@ -77,7 +78,9 @@ export function DayMacros({
           const addW = t && t > 0 ? Math.min(100 - doneW, pct(add, t)) : 0;
           return (
             <div className="ms-day-bar" key={b.key}>
-              <span className="ms-day-bar-l">{b.label}</span>
+              <span className="ms-day-bar-l" aria-label={b.name}>
+                {b.label}
+              </span>
               <div className="ms-day-bar-track">
                 <div className="ms-day-bar-done" style={{ width: `${doneW}%`, background: b.color }} />
                 <div

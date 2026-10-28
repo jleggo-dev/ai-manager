@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { MealItem, MealPart } from '@cadence/shared';
-import { badgeFor, cartChips, looseIndexOf, recipePortions, tapsOf, tileCount } from './cartModel.ts';
+import { badgeFor, cartChips, looseIndexOf, mealCopies, recipePortions, tapsOf, tileCount } from './cartModel.ts';
 
 const item = (name: string, over: Partial<MealItem> = {}): MealItem => ({ name, qty: 1, unit: 'cup', ...over });
 const part = (key: string, over: Partial<MealPart> = {}): MealPart => ({ key, name: null, ...over });
@@ -67,11 +67,32 @@ describe('tileCount / badgeFor', () => {
     [{ kind: 'food', id: 'f-oat' }, 0, '✓'],
     [{ kind: 'food', id: 'f-egg' }, 0, '✓'],
     [{ kind: 'recipe', id: 'r-bowl' }, 1, '✓'],
-    [{ kind: 'leftover', id: 'r-bowl' }, 1, '✓'],
+    [{ kind: 'leftover', id: 'm-old', source: { items: [item('Banana', { food_id: 'f-ban', qty: 2 })] } }, 1, '✓'],
+    [{ kind: 'leftover', id: 'm-old', source: { items: [item('Banana', { food_id: 'f-ban', qty: 1 })] } }, 0, '✓'],
     [{ kind: 'recipe', id: 'r-none' }, 0, '✓'],
   ] as const)('%o counts %i', (tile, count, badge) => {
     expect(tileCount(tile, items, parts, bases)).toBe(count);
     expect(badgeFor(count)).toBe(badge);
+  });
+});
+
+describe("mealCopies — a leftover's badge, read off the rows", () => {
+  const stew = [item('Lentils', { food_id: 'f-len' }), item('Onion', { food_id: 'f-on' })];
+  it.each<[string, MealItem[], MealItem[], number]>([
+    ['not in the cart', [], stew, 0],
+    ['every row once', stew, stew, 1],
+    ['every row twice', [...stew, ...stew], stew, 2],
+    ['one row missing is not a copy', [stew[0]!], stew, 0],
+    [
+      'the same food at another amount is not the same row',
+      [item('Lentils', { food_id: 'f-len', qty: 2 }), stew[1]!],
+      stew,
+      0,
+    ],
+    ['a row with no food_id matches by name, any case', [item('house salad')], [item('House salad')], 1],
+    ['a meal with no rows is never in the cart', stew, [], 0],
+  ])('%s → %i', (_label, cart, source, n) => {
+    expect(mealCopies(cart, source)).toBe(n);
   });
 });
 

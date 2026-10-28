@@ -21,6 +21,9 @@ const removeDraftItem = vi.fn();
 const setDraftAmount = vi.fn();
 const setDraftMeal = vi.fn();
 const closeMeal = vi.fn();
+const editMealParts = vi.fn();
+const tickHaptic = vi.fn();
+vi.mock('../../../lib/haptics.ts', () => ({ tickHaptic: () => tickHaptic() }));
 
 vi.mock('../../../lib/api/meal-draft.ts', () => ({
   openMealDraft: (...a: unknown[]) => openMealDraft(...a),
@@ -32,7 +35,7 @@ vi.mock('../../../lib/api/meal-draft.ts', () => ({
   setDraftAmount: (...a: unknown[]) => setDraftAmount(...a),
   setDraftMeal: (...a: unknown[]) => setDraftMeal(...a),
   closeMeal: (...a: unknown[]) => closeMeal(...a),
-  editMealParts: vi.fn(),
+  editMealParts: (...a: unknown[]) => editMealParts(...a),
   savePartAsRecipe: vi.fn(),
 }));
 
@@ -111,6 +114,7 @@ const recipe = (id: string, name: string, servings: number, kcal = 300) => ({
 beforeEach(() => {
   cleanup();
   vi.clearAllMocks();
+  window.localStorage.clear();
   getOpenMeal.mockResolvedValue(null);
   openMealDraft.mockResolvedValue(mkMeal());
   getUsualAtSlot.mockResolvedValue([banana, yogurtBowl]);
@@ -182,28 +186,85 @@ describe('the shelves', () => {
     expect(await tile(/^Yogurt bowl, Yogurt · Chia/)).toBeInTheDocument();
   });
 
-  it('Leftovers reads batches off the recent meals and says what is left', async () => {
+  it('Leftovers is the meals logged recently, newest first — open ones and old ones are not on it', async () => {
+    const closed = {
+      input_method: 'manual',
+      macros: { kcal: 520, protein_g: 31, carbs_g: 60, fat_g: 14 },
+      state: 'closed',
+    };
+    getRecentMeals.mockResolvedValue([
+      { ...closed, log_id: 'lunch', date: '2026-10-27', meal: 'lunch', items: [{ name: 'Wrap' }] },
+      {
+        ...closed,
+        log_id: 'dinner',
+        date: '2026-10-27',
+        meal: 'dinner',
+        items: [
+          { name: 'Lentils', qty: 1, unit: 'cup', food_id: 'f-len', part: 'p1', est: { kcal: 230 } },
+          { name: 'Onion', qty: 0.5, unit: 'item', food_id: 'f-on', part: 'p1', est: { kcal: 22 } },
+          { name: 'Side salad', est: { kcal: 60 } },
+        ],
+        parts: [{ key: 'p1', name: 'Lentil stew', recipe_id: 'r-stew', yield_servings: 4, servings_logged: 1 }],
+      },
+      { ...closed, log_id: 'open', date: '2026-10-28', meal: 'snack', items: [{ name: 'Apple' }], state: 'open' },
+      { ...closed, log_id: 'old', date: '2026-10-20', meal: 'dinner', items: [{ name: 'Chili' }] },
+    ]);
+    appendParsed.mockResolvedValue(
+      mkMeal({
+        items: [
+          { name: 'Lentils', qty: 1, unit: 'cup', food_id: 'f-len', est: { kcal: 230 } },
+          { name: 'Onion', qty: 0.5, unit: 'item', food_id: 'f-on', est: { kcal: 22 } },
+          { name: 'Side salad', est: { kcal: 60 } },
+        ],
+      }),
+    );
+    editMealParts.mockResolvedValue(mkMeal());
+    await mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Leftovers' }));
+    const stew = await tile(/^Lentil stew · Side salad, yesterday · dinner/);
+    const names = within(screen.getByRole('tabpanel'))
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label'));
+    expect(names).toEqual(['Lentil stew · Side salad, yesterday · dinner', 'Wrap, yesterday · lunch']);
+    expect(stew).toHaveTextContent('P 31 · C 60 · F 14');
+    tap(stew);
+    await waitFor(() =>
+      expect(appendParsed).toHaveBeenCalledWith('m1', {
+        items: [
+          { name: 'Lentils', qty: 1, unit: 'cup', food_id: 'f-len', est: { kcal: 230 } },
+          { name: 'Onion', qty: 0.5, unit: 'item', food_id: 'f-on', est: { kcal: 22 } },
+          { name: 'Side salad', est: { kcal: 60 } },
+        ],
+      }),
+    );
+    // The bracket is drawn round its rows again, under its own name.
+    await waitFor(() =>
+      expect(editMealParts).toHaveBeenCalledWith('m1', { op: 'group', item_indexes: [0, 1], name: 'Lentil stew' }),
+    );
+  });
+
+  it('a 14-day window from Settings reaches back past the default seven', async () => {
+    window.localStorage.setItem('cadence.leftoverWindowDays', '14');
     getRecentMeals.mockResolvedValue([
       {
         log_id: 'old',
-        date: '2026-10-26',
+        date: '2026-10-20',
         meal: 'dinner',
-        items: [{ name: 'Lentils', part: 'p1' }],
-        parts: [{ key: 'p1', name: 'Lentil stew', recipe_id: 'r-stew', yield_servings: 4, servings_logged: 1 }],
-        state: 'closed',
+        items: [{ name: 'Chili' }],
+        macros: {},
+        input_method: 'manual',
       },
     ]);
     await mount();
     fireEvent.click(screen.getByRole('tab', { name: 'Leftovers' }));
-    const stew = await tile(/^Lentil stew, 3 of 4 left · Mon/);
-    tap(stew);
-    await waitFor(() => expect(appendRecipe).toHaveBeenCalledWith('m1', { recipe_id: 'r-stew', servings: 1 }));
+    expect(await tile(/^Chili, 20 Oct · dinner/)).toBeInTheDocument();
+    expect(getRecentMeals).toHaveBeenCalledWith(15);
   });
 
   it('an empty shelf says one honest line', async () => {
     await mount();
     fireEvent.click(screen.getByRole('tab', { name: 'Leftovers' }));
-    expect(await screen.findByText(/Nothing cooked in multiples/)).toBeInTheDocument();
+    expect(await screen.findByText(/Nothing logged in that window yet/)).toBeInTheDocument();
   });
 });
 
@@ -285,6 +346,38 @@ describe('the tap grammar', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('hold is findable: a one-time line, a press that draws itself, and a haptic when it lands', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await mount();
+      expect(await screen.findByText('Hold a tile to choose how much.')).toBeInTheDocument();
+      const b = await tile(/^Banana, 1 medium$/);
+      fireEvent.pointerDown(b, { clientX: 10, clientY: 10, button: 0 });
+      expect(b).toHaveClass('is-pressing', 'can-hold');
+      expect(tickHaptic).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOLD_MS + 10);
+      });
+      expect(tickHaptic).toHaveBeenCalledTimes(1);
+      expect(b).not.toHaveClass('is-pressing');
+      fireEvent.pointerUp(b, { clientX: 10, clientY: 10 });
+      // Using the gesture retires the line, for good.
+      expect(screen.queryByText('Hold a tile to choose how much.')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem('cadence.holdHintSeen')).toBe('1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a tap is not a hold: no haptic, and the line stays', async () => {
+    appendFood.mockResolvedValue(mkMeal({ items: [{ name: 'Banana', qty: 1, food_id: 'f-ban' }] }));
+    await mount();
+    tap(await tile(/^Banana, 1 medium$/));
+    await waitFor(() => expect(appendFood).toHaveBeenCalled());
+    expect(tickHaptic).not.toHaveBeenCalled();
+    expect(screen.getByText('Hold a tile to choose how much.')).toBeInTheDocument();
   });
 
   it('a hold on a dish asks how many servings', async () => {

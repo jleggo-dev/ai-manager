@@ -103,8 +103,8 @@ reading changed:
    logged. The five doors, icon-only, Find first. One button: "Log breakfast · kcal".
 3. **Four shelves, one tap each:** Planned (the tab is absent, not greyed, when the week names
    nothing for the slot) · Usual (opens here; `useUsualAtSlot`, most-often first, plus the
-   saved one-portion recipes) · Leftovers (recipes cooked in multiples in the last four days,
-   "2 of 4 left · Mon" — read off the brackets' yield and portions, `leftovers.ts`) · Cookbook.
+   saved one-portion recipes) · Leftovers (meals logged recently, newest first — see the
+   follow-up below; the first cut read batches off the brackets' yield) · Cookbook.
    Two-column tiles — words and kcal, no photos — scrolling on without end.
 4. **Tap grammar:** tap = +1 default serving (✓), tap again = ×2 (the same row, doubled; a
    dish gets another portion), hold = the amount sheet (chips from the food's default serving
@@ -116,7 +116,21 @@ reading changed:
    coach with an app-authored note (`coachNote.ts`) — which meal, what is in the cart or was
    logged, and a pointer to `get_food_log` / `get_nutrition`; her goals are already in her
    context. Nothing on the drawer speaks. No Undo after logging — entries are deleted from the
-   day (owner, 2026-10-28). The macros stay spelled out: "protein", never "P".
+   day (owner, 2026-10-28).
+6. **Follow-up the same day (owner, 2026-10-28):**
+   - **Leftovers = meals logged recently**, most recent at the top (the later slot first within
+     a day), one tile per meal named in its own words ("Lentil stew · Side salad"), a repeat shown
+     once, open meals and the draft itself left off. A tap appends the meal's rows exactly as
+     logged and redraws its named brackets; the badge counts whole copies read off the rows
+     (`mealCopies`). Window: seven days by default, 3 / 7 / 14 in Settings → Nutrition — stored
+     on the device, cleared on an account switch (`leftoverWindow.ts`). Leftovers have no hold.
+   - **P / C / F here** — the day bars' labels and a "P 12 · C 30 · F 8" line on every tile.
+     The full words do not fit; a **scoped exception** to BRAND.md's no-abbreviation rule, this
+     drawer only (recorded in BRAND.md). Screen readers still hear the words.
+   - **Hold is findable** — the pressed tile sinks and a holdable one fills toward the hold
+     (450 ms); the hold landing ticks a haptic (Capacitor Haptics on iOS — a new native plugin,
+     so the phone needs a rebuild — and `navigator.vibrate` on the web); a one-time line, "Hold a
+     tile to choose how much.", retires on the first hold.
 
 ## Rulings ledger (from the canvas — binding)
 

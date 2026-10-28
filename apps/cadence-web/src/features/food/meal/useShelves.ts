@@ -3,7 +3,7 @@
  *
  *   Planned   the week's dish for this slot; the tab is absent, not greyed, when there is none
  *   Usual     foods and one-portion recipes logged at this slot, most-often first (useUsualAtSlot)
- *   Leftovers recipes cooked in multiples in the last four days, portions still unaccounted for
+ *   Leftovers meals logged recently, most recent first — the window is the user's (seven days)
  *   Cookbook  every saved recipe
  *
  * Every read is one the app already caches (the usual list, the cookbook, the recent meals,
@@ -11,11 +11,12 @@
  * No kind markers on a tile: the shelf you are on already says what these are.
  */
 import { useMemo } from 'react';
-import type { MealKind, MealPart, Recipe } from '@cadence/shared';
+import type { Macros, MealItem, MealKind, MealPart, Recipe } from '@cadence/shared';
 import { useRecentMeals, useRecipes } from '../../../lib/query/index.ts';
 import { usePlannedMeal, type PlannedMeal } from '../../plan/occurrence/usePlannedMeal.ts';
 import { useUsualAtSlot } from '../useUsualAtSlot.ts';
 import { deriveLeftovers, leftoverLine } from './leftovers.ts';
+import { useLeftoverWindow } from './leftoverWindow.ts';
 
 export type ShelfKey = 'planned' | 'usual' | 'leftovers' | 'cookbook';
 
@@ -29,15 +30,24 @@ export const SHELF_LABELS: Record<ShelfKey, string> = {
 export interface ShelfTile {
   key: string;
   kind: 'food' | 'recipe' | 'leftover' | 'planned';
-  /** food_id / recipe_id — `'planned'` for a composed planned dish with no recipe of its own. */
+  /**
+   * food_id / recipe_id — `'planned'` for a composed planned dish with no recipe of its own; a
+   * leftover's is the log_id of the meal it repeats.
+   */
   id: string;
   name: string;
   sub?: string;
   kcal: number | null;
-  /** Recipes: how many a batch makes. Leftovers: how many are still unaccounted for. */
+  /** One tap's protein / carbs / fat, for the tile's "P 12 · C 30 · F 8" line. */
+  macros?: Pick<Macros, 'protein_g' | 'carbs_g' | 'fat_g'>;
+  /** Recipes: how many a batch makes. */
   yield?: number;
-  left?: number;
+  /** Leftovers: the meal's rows and brackets, as logged — what a tap puts back in the cart. */
+  source?: { items: MealItem[]; parts: MealPart[] };
 }
+
+const pcf = (m: Partial<Record<'protein_g' | 'carbs_g' | 'fat_g', number | null>> | null | undefined) =>
+  m ? { protein_g: m.protein_g ?? undefined, carbs_g: m.carbs_g ?? undefined, fat_g: m.fat_g ?? undefined } : undefined;
 
 /** "yogurt · chia · whey · berries" — the first four ingredients, first word of each. */
 function ingredientWords(r: Recipe): string | undefined {
@@ -60,21 +70,39 @@ function plannedTile(p: PlannedMeal | null, recipes: Recipe[]): ShelfTile | null
   const kcal = p.recipe_id
     ? recipeKcal(recipe)
     : (p.items ?? []).reduce<number | null>((s, it) => (typeof it.kcal === 'number' ? (s ?? 0) + it.kcal : s), null);
-  return { key: 'planned', kind: 'planned', id: p.recipe_id ?? 'planned', name: p.name, sub: 'from your week', kcal };
+  const sum = (k: 'protein_g' | 'carbs_g' | 'fat_g') =>
+    (p.items ?? []).reduce<number | undefined>(
+      (s, it) => (typeof it[k] === 'number' ? (s ?? 0) + it[k] : s),
+      undefined,
+    );
+  const macros = p.recipe_id
+    ? pcf(recipe?.macros_per_serving)
+    : { protein_g: sum('protein_g'), carbs_g: sum('carbs_g'), fat_g: sum('fat_g') };
+  return {
+    key: 'planned',
+    kind: 'planned',
+    id: p.recipe_id ?? 'planned',
+    name: p.name,
+    sub: 'from your week',
+    kcal,
+    macros,
+  };
 }
 
 export function useShelves(
   kind: MealKind,
   date: string,
   today: string,
-  draft: { log_id: string; date: string; parts: MealPart[] } | null,
+  /** The meal in front of you — never its own leftover. */
+  draftLogId: string | null,
 ): { keys: ShelfKey[]; planned: PlannedMeal | null; tiles: Record<ShelfKey, ShelfTile[]> } {
   const { planned } = usePlannedMeal(kind, date);
   const usual = useUsualAtSlot(kind);
   const { data: cookbook } = useRecipes(true);
-  // Eight days is what the Food room already asks for, so the read is shared; the shelf only
-  // looks LEFTOVER_WINDOW_DAYS back inside it.
-  const { data: recent } = useRecentMeals(8);
+  const windowDays = useLeftoverWindow();
+  // Eight days is what the Food room already asks for, so the default seven-day window (today
+  // plus seven back) shares that read; a longer window asks for its own.
+  const { data: recent } = useRecentMeals(Math.max(8, windowDays + 1));
 
   return useMemo(() => {
     const recipes = cookbook?.recipes ?? [];
@@ -89,6 +117,7 @@ export function useShelves(
         name: u.name,
         sub: recipe ? ingredientWords(recipe) : (u.serving_label ?? undefined),
         kcal: u.kcal,
+        macros: pcf(u),
         ...(recipe ? { yield: recipe.servings } : {}),
       };
     });
@@ -101,23 +130,20 @@ export function useShelves(
         name: r.name,
         sub: ingredientWords(r),
         kcal: recipeKcal(r),
+        macros: pcf(r.macros_per_serving),
         yield: 1,
       });
     }
 
-    const sources = [
-      ...(recent ?? []).filter((m) => !draft || m.log_id !== draft.log_id).map((m) => ({ ...m, parts: m.parts })),
-      ...(draft ? [draft] : []),
-    ];
-    const leftoverTiles: ShelfTile[] = deriveLeftovers(sources, recipes, today).map((l) => ({
-      key: `leftover:${l.recipe_id}`,
+    const leftoverTiles: ShelfTile[] = deriveLeftovers(recent ?? [], today, windowDays, draftLogId).map((l) => ({
+      key: `leftover:${l.log_id}`,
       kind: 'leftover',
-      id: l.recipe_id,
+      id: l.log_id,
       name: l.name,
       sub: leftoverLine(l, today),
       kcal: l.kcal,
-      yield: l.yield,
-      left: l.left,
+      macros: pcf(l.macros),
+      source: { items: l.items, parts: l.parts },
     }));
 
     const cookbookTiles: ShelfTile[] = recipes.map((r) => ({
@@ -127,6 +153,7 @@ export function useShelves(
       name: r.name,
       sub: r.servings > 1 ? `makes ${r.servings}` : ingredientWords(r),
       kcal: recipeKcal(r),
+      macros: pcf(r.macros_per_serving),
       yield: r.servings,
     }));
 
@@ -142,5 +169,5 @@ export function useShelves(
         cookbook: cookbookTiles,
       },
     };
-  }, [cookbook, draft, planned, recent, today, usual]);
+  }, [cookbook, draftLogId, planned, recent, today, usual, windowDays]);
 }

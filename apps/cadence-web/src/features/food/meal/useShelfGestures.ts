@@ -6,11 +6,14 @@
  *           scroller), so a swipe only starts once the finger has clearly gone sideways.
  *   hold  — a tile pressed and held opens its amount sheet; let go before that and it is a tap.
  *           Any real movement cancels the hold, so a swipe never opens a sheet and a scroll
- *           never adds a food.
+ *           never adds a food. The press is reported as it happens (the tile draws it, filling
+ *           toward the hold) and the hold landing ticks a haptic — so the gesture can be found
+ *           by feel, not only read about (owner, 2026-10-28).
  *
  * Pointer events only, no touch handlers: one code path for a finger, a mouse and a test.
  */
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { tickHaptic } from '../../../lib/haptics.ts';
 
 /** How far sideways before the pane commits to a swipe. */
 export const SWIPE_START_PX = 8;
@@ -85,8 +88,13 @@ export interface HoldTapHandlers {
  * Tap-or-hold for one tile. A pointer sequence decides for itself (up before HOLD_MS = tap,
  * the timer firing = hold); a keyboard activation arrives as a bare click with no pointer
  * sequence before it and is a tap. Holds are opt-in: a tile without `onHold` only ever taps.
+ * `onPress` hears true when a press starts and false when it ends, however it ends.
  */
-export function useHoldTap(onTap: () => void, onHold?: () => void): HoldTapHandlers {
+export function useHoldTap(
+  onTap: () => void,
+  onHold?: () => void,
+  onPress?: (pressing: boolean) => void,
+): HoldTapHandlers {
   const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> | null; held: boolean } | null>(
     null,
   );
@@ -95,8 +103,9 @@ export function useHoldTap(onTap: () => void, onHold?: () => void): HoldTapHandl
   const clear = useCallback(() => {
     const p = press.current;
     if (p?.timer) clearTimeout(p.timer);
+    if (p) onPress?.(false);
     press.current = null;
-  }, []);
+  }, [onPress]);
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLElement>) => {
@@ -108,12 +117,15 @@ export function useHoldTap(onTap: () => void, onHold?: () => void): HoldTapHandl
         p.timer = setTimeout(() => {
           p.held = true;
           p.timer = null;
+          onPress?.(false);
+          tickHaptic();
           onHold();
         }, HOLD_MS);
       }
       press.current = p;
+      onPress?.(true);
     },
-    [clear, onHold],
+    [clear, onHold, onPress],
   );
 
   const onPointerMove = useCallback(

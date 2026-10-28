@@ -1,36 +1,39 @@
 /**
- * The Leftovers shelf (quick log, 2026-10-28) — any logged recipe with yield > 1 in the last
- * four days, with the portions still unaccounted for: "2 of 4 left · Mon". Tapping one logs a
- * portion and the count comes down; gone when it hits zero or ages out.
+ * The Leftovers shelf — meals you logged recently, most recent at the top (owner, 2026-10-28,
+ * replacing the batch/yield reading the canvas drew: "2 of 4 left" asked the user to have cooked
+ * through a recipe with a yield, and nobody's Tuesday leftovers went through that door). Tapping
+ * one puts that meal's rows back in the cart, priced as they were logged.
  *
- * Pure over what the app already holds — the recent meals' brackets (`yield_servings`,
- * `servings_logged`) and the cookbook — so no new endpoint and no new column. The open draft is
- * a source too: a batch cooked INTO this very meal ("Shakshuka, makes 2", one portion in the
- * cart) is a leftover from the moment it lands, and a portion taken from the cart counts
- * against the batch before the recent-meals cache has heard about it.
+ * Pure over the recent-meals read the app already caches. The window is the user's
+ * (Settings → Nutrition, `leftoverWindow.ts`); seven days unless they change it.
+ *
+ * What is NOT a leftover: an open meal (it has not been eaten yet — the draft in front of you
+ * included), an empty one, and a second copy of a meal already on the shelf (the same name a
+ * day later is the same food; the newest stands for it).
  */
-import type { MealPart, Recipe } from '@cadence/shared';
-
-/** How far back a batch stays fresh. Four days is the canvas's number. */
-export const LEFTOVER_WINDOW_DAYS = 4;
+import type { Macros, MealItem, MealKind, MealPart, MealState } from '@cadence/shared';
+import { numberWord } from '../bracket/copy.ts';
 
 export interface LeftoverSource {
   log_id: string;
   /** YYYY-MM-DD */
   date: string;
+  meal: MealKind;
+  items: MealItem[];
   parts?: MealPart[] | null;
+  macros?: Macros;
+  state?: MealState;
 }
 
 export interface Leftover {
-  recipe_id: string;
+  log_id: string;
   name: string;
-  /** The batch's yield at cook time. */
-  yield: number;
-  /** Portions nobody has logged yet. Always ≥ 1 here — zero is dropped. */
-  left: number;
-  /** YYYY-MM-DD of the batch — the newest yield>1 bracket for this recipe. */
-  cookedOn: string;
+  date: string;
+  meal: MealKind;
   kcal: number | null;
+  macros: Macros;
+  items: MealItem[];
+  parts: MealPart[];
 }
 
 const DAY_MS = 86_400_000;
@@ -44,78 +47,83 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((b - a) / DAY_MS);
 }
 
-interface Portion {
-  date: string;
-  yield: number;
-  logged: number;
-  name: string | null;
-}
+/** Within one day, the later slot is the more recent meal. Snacks/drinks/other have no clock. */
+const SLOT_ORDER: Record<MealKind, number> = { breakfast: 0, lunch: 1, snack: 2, drink: 2, other: 2, dinner: 3 };
 
 /**
- * The shelf, newest batch first.
- *
- * Every bracket appended from a "makes 4" recipe carries `yield_servings: 4` — the cook and
- * the Tuesday portion look the same on the row — so a batch cannot be read off one bracket.
- * It is read off the COUNT: the portions of a recipe logged inside the window, in date order,
- * fill batches of its yield one after another. The batch in progress is whichever the last
- * portion fell in; what is left is the rest of it; it was cooked on the day its first portion
- * landed. Four portions of a makes-four is a finished batch (nothing on the shelf); a fifth
- * starts a new one with three to go.
+ * What the meal was, in its own words: named brackets by name, everything else by item, the first
+ * three and a count of the rest — "Lentil stew · Side salad + two more". A dot, not a comma: food
+ * names carry their own commas ("Eggs, scrambled").
  */
-export function deriveLeftovers(sources: LeftoverSource[], recipes: Recipe[], today: string): Leftover[] {
-  const byRecipe = new Map<string, Recipe>(recipes.map((r) => [r.recipe_id, r]));
-  const portions = new Map<string, Portion[]>();
-
-  const inWindow = sources
-    .filter((s) => {
-      const age = daysBetween(s.date, today);
-      return age >= 0 && age <= LEFTOVER_WINDOW_DAYS;
-    })
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-  for (const s of inWindow) {
-    for (const p of s.parts ?? []) {
-      if (!p.recipe_id) continue;
-      const list = portions.get(p.recipe_id) ?? [];
-      list.push({ date: s.date, yield: p.yield_servings ?? 1, logged: p.servings_logged ?? 1, name: p.name });
-      portions.set(p.recipe_id, list);
-    }
+export function mealName(items: MealItem[], parts: MealPart[]): string {
+  const named = new Map(parts.filter((p) => p.name).map((p) => [p.key, p.name!]));
+  const words: string[] = [];
+  const seen = new Set<string>();
+  for (const it of items) {
+    const word = it.part && named.has(it.part) ? named.get(it.part)! : it.name;
+    const key = it.part && named.has(it.part) ? `part:${it.part}` : `item:${word.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    words.push(word);
   }
-
-  const out: Leftover[] = [];
-  for (const [recipeId, list] of portions) {
-    const yieldN = Math.max(...list.map((p) => p.yield));
-    if (yieldN <= 1) continue;
-    let cum = 0;
-    let cookedOn = list[0]!.date;
-    for (const p of list) {
-      const before = cum;
-      cum += p.logged;
-      // The batch the last portion fell in; this entry holds its first portion when the
-      // running count crossed its lower edge here.
-      const batchStart = Math.floor((cum - 1) / yieldN) * yieldN + 1;
-      if (before < batchStart && batchStart <= cum) cookedOn = p.date;
-    }
-    const left = Math.ceil(cum / yieldN) * yieldN - cum;
-    if (left < 1) continue;
-    const recipe = byRecipe.get(recipeId);
-    out.push({
-      recipe_id: recipeId,
-      name: recipe?.name ?? list.find((p) => p.name)?.name ?? 'Leftovers',
-      yield: yieldN,
-      left,
-      cookedOn,
-      kcal: typeof recipe?.macros_per_serving?.kcal === 'number' ? recipe.macros_per_serving.kcal : null,
-    });
-  }
-  return out.sort((a, b) => (a.cookedOn < b.cookedOn ? 1 : a.cookedOn > b.cookedOn ? -1 : 0));
+  if (words.length <= 3) return words.join(' · ');
+  return `${words.slice(0, 2).join(' · ')} + ${numberWord(words.length - 2)} more`;
 }
 
-/** "2 of 4 left · Mon" — "today" for a batch cooked today. */
-export function leftoverLine(l: Leftover, today: string): string {
+function kcalOf(s: LeftoverSource): number | null {
+  if (typeof s.macros?.kcal === 'number') return s.macros.kcal;
+  let sum: number | null = null;
+  for (const it of s.items) if (typeof it.est?.kcal === 'number') sum = (sum ?? 0) + it.est.kcal;
+  return sum;
+}
+
+/** The shelf, newest first. `windowDays` back from today, today included. */
+export function deriveLeftovers(
+  sources: LeftoverSource[],
+  today: string,
+  windowDays: number,
+  excludeLogId?: string | null,
+): Leftover[] {
+  const fresh = sources
+    .filter((s) => {
+      if (s.log_id === excludeLogId || s.state === 'open' || s.items.length === 0) return false;
+      const age = daysBetween(s.date, today);
+      return age >= 0 && age <= windowDays;
+    })
+    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : SLOT_ORDER[b.meal] - SLOT_ORDER[a.meal]));
+
+  const out: Leftover[] = [];
+  const names = new Set<string>();
+  for (const s of fresh) {
+    const parts = s.parts ?? [];
+    const name = mealName(s.items, parts);
+    if (names.has(name.toLowerCase())) continue;
+    names.add(name.toLowerCase());
+    out.push({
+      log_id: s.log_id,
+      name,
+      date: s.date,
+      meal: s.meal,
+      kcal: kcalOf(s),
+      macros: s.macros ?? {},
+      items: s.items,
+      parts,
+    });
+  }
+  return out;
+}
+
+/** "yesterday · dinner" — "today", "yesterday", the weekday inside a week, the date past it. */
+export function leftoverLine(l: Pick<Leftover, 'date' | 'meal'>, today: string): string {
+  const age = daysBetween(l.date, today);
+  const d = new Date(`${l.date}T12:00:00`);
   const when =
-    l.cookedOn === today
+    age === 0
       ? 'today'
-      : new Date(`${l.cookedOn}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short' });
-  return `${l.left} of ${l.yield} left · ${when}`;
+      : age === 1
+        ? 'yesterday'
+        : age < 7
+          ? d.toLocaleDateString('en-GB', { weekday: 'short' })
+          : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return `${when} · ${l.meal}`;
 }

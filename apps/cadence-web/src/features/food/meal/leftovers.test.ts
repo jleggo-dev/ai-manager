@@ -1,47 +1,35 @@
 /**
- * The Leftovers shelf is a deterministic read over brackets — the wrong number is a quiet
- * number, so every rule gets a row: the window, the batch, the portions that come off it, the
- * draft as a source, and the zero that drops it.
+ * The Leftovers shelf is a deterministic read over recent meals — the wrong meal is a quiet
+ * wrong, so every rule gets a row: the window (both edges, and the user's own), the order, what
+ * is not a leftover (open, empty, the draft, a repeat), and how a meal is named.
  */
 import { describe, expect, it } from 'vitest';
-import type { Recipe } from '@cadence/shared';
-import { daysBetween, deriveLeftovers, leftoverLine, type LeftoverSource } from './leftovers.ts';
+import type { MealItem, MealKind, MealPart } from '@cadence/shared';
+import { daysBetween, deriveLeftovers, leftoverLine, mealName, type LeftoverSource } from './leftovers.ts';
 
 const TODAY = '2026-10-28';
-
-const recipe = (id: string, name: string, kcal = 380): Recipe => ({
-  recipe_id: id,
-  name,
-  source: 'user',
-  servings: 4,
-  ingredients: [],
-  steps: [],
-  macros_per_serving: { kcal },
-  tags: [],
-  saved: true,
-});
 
 const meal = (
   log_id: string,
   date: string,
-  parts: Array<{ recipe_id: string; yield?: number; logged?: number; name?: string | null }>,
+  kind: MealKind,
+  names: string[],
+  extra: Partial<LeftoverSource> = {},
 ): LeftoverSource => ({
   log_id,
   date,
-  parts: parts.map((p, i) => ({
-    key: `${log_id}-${i}`,
-    name: p.name ?? null,
-    recipe_id: p.recipe_id,
-    yield_servings: p.yield ?? 1,
-    servings_logged: p.logged ?? 1,
-  })),
+  meal: kind,
+  items: names.map((name) => ({ name, est: { kcal: 100 } })),
+  macros: { kcal: names.length * 100, protein_g: 10 },
+  state: 'closed',
+  ...extra,
 });
 
 describe('daysBetween', () => {
   it.each([
     ['2026-10-28', '2026-10-28', 0],
-    ['2026-10-24', '2026-10-28', 4],
-    ['2026-10-23', '2026-10-28', 5],
+    ['2026-10-21', '2026-10-28', 7],
+    ['2026-10-20', '2026-10-28', 8],
     ['2026-10-29', '2026-10-28', -1],
     ['2026-09-30', '2026-10-01', 1],
   ])('%s → %s is %i days', (from, to, days) => {
@@ -50,139 +38,123 @@ describe('daysBetween', () => {
 });
 
 describe('deriveLeftovers', () => {
-  const stew = recipe('r-stew', 'Lentil stew');
-
-  it('a batch cooked in multiples shows the portions nobody has logged', () => {
-    const out = deriveLeftovers(
-      [meal('m1', '2026-10-26', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }])],
-      [stew],
-      TODAY,
-    );
+  it('a meal logged recently is a leftover, priced and named as it was logged', () => {
+    const out = deriveLeftovers([meal('m1', '2026-10-27', 'dinner', ['Lentil stew'])], TODAY, 7);
     expect(out).toEqual([
-      { recipe_id: 'r-stew', name: 'Lentil stew', yield: 4, left: 3, cookedOn: '2026-10-26', kcal: 380 },
+      expect.objectContaining({
+        log_id: 'm1',
+        name: 'Lentil stew',
+        date: '2026-10-27',
+        meal: 'dinner',
+        kcal: 100,
+        macros: { kcal: 100, protein_g: 10 },
+      }),
     ]);
   });
 
-  it('every portion logged on or after the cook comes off the batch', () => {
+  it('most recent at the top — newer day first, the later slot first within a day', () => {
     const out = deriveLeftovers(
       [
-        meal('m1', '2026-10-26', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }]),
-        meal('m2', '2026-10-27', [{ recipe_id: 'r-stew', yield: 4, logged: 2 }]),
+        meal('a', '2026-10-25', 'dinner', ['Chili']),
+        meal('b', '2026-10-27', 'breakfast', ['Oats']),
+        meal('c', '2026-10-27', 'dinner', ['Stew']),
+        meal('d', '2026-10-27', 'lunch', ['Wrap']),
       ],
-      [stew],
       TODAY,
+      7,
     );
-    expect(out[0]?.left).toBe(1);
+    expect(out.map((l) => l.name)).toEqual(['Stew', 'Wrap', 'Oats', 'Chili']);
   });
 
-  it('is gone at zero', () => {
+  it.each([
+    [7, '2026-10-21', 1],
+    [7, '2026-10-20', 0],
+    [3, '2026-10-25', 1],
+    [3, '2026-10-24', 0],
+    [14, '2026-10-14', 1],
+  ])('a %i-day window: a meal on %s → %i on the shelf', (window, date, n) => {
+    expect(deriveLeftovers([meal('m', date, 'dinner', ['Stew'])], TODAY, window)).toHaveLength(n);
+  });
+
+  it('a meal dated in the future is not a leftover', () => {
+    expect(deriveLeftovers([meal('m', '2026-10-29', 'dinner', ['Stew'])], TODAY, 7)).toEqual([]);
+  });
+
+  it('an open meal has not been eaten yet — not a leftover', () => {
+    expect(deriveLeftovers([meal('m', TODAY, 'lunch', ['Wrap'], { state: 'open' })], TODAY, 7)).toEqual([]);
+  });
+
+  it('a legacy row with no state counts as logged', () => {
+    expect(deriveLeftovers([meal('m', TODAY, 'lunch', ['Wrap'], { state: undefined })], TODAY, 7)).toHaveLength(1);
+  });
+
+  it('the draft in front of you is never its own leftover', () => {
+    expect(deriveLeftovers([meal('draft', TODAY, 'lunch', ['Wrap'])], TODAY, 7, 'draft')).toEqual([]);
+  });
+
+  it('an empty meal is not a leftover', () => {
+    expect(deriveLeftovers([meal('m', TODAY, 'lunch', [])], TODAY, 7)).toEqual([]);
+  });
+
+  it('the same meal twice shows once — the newest stands for it', () => {
     const out = deriveLeftovers(
-      [
-        meal('m1', '2026-10-26', [{ recipe_id: 'r-stew', yield: 2, logged: 1 }]),
-        meal('m2', '2026-10-27', [{ recipe_id: 'r-stew', logged: 1 }]),
-      ],
-      [stew],
+      [meal('old', '2026-10-25', 'dinner', ['Stew']), meal('new', '2026-10-27', 'lunch', ['stew'])],
       TODAY,
+      7,
     );
-    expect(out).toEqual([]);
+    expect(out.map((l) => l.log_id)).toEqual(['new']);
   });
 
-  it('ages out after four days — a five-day-old batch is not a leftover', () => {
-    const four = deriveLeftovers([meal('m1', '2026-10-24', [{ recipe_id: 'r-stew', yield: 4 }])], [stew], TODAY);
-    const five = deriveLeftovers([meal('m1', '2026-10-23', [{ recipe_id: 'r-stew', yield: 4 }])], [stew], TODAY);
-    expect(four).toHaveLength(1);
-    expect(five).toEqual([]);
+  it('kcal falls back to the rows when the meal carries no total', () => {
+    const out = deriveLeftovers([meal('m', TODAY, 'lunch', ['A', 'B'], { macros: undefined })], TODAY, 7);
+    expect(out[0]).toMatchObject({ kcal: 200, macros: {} });
   });
+});
 
-  it('a one-portion recipe is never a leftover, however often it is logged', () => {
-    const out = deriveLeftovers([meal('m1', '2026-10-27', [{ recipe_id: 'r-stew', yield: 1 }])], [stew], TODAY);
-    expect(out).toEqual([]);
-  });
+describe('mealName', () => {
+  const items = (rows: Array<[string, string?]>): MealItem[] =>
+    rows.map(([name, part]) => ({ name, ...(part ? { part } : {}) }));
 
-  it('a loose bracket with no recipe is not a leftover', () => {
-    const src: LeftoverSource = {
-      log_id: 'm1',
-      date: '2026-10-27',
-      parts: [{ key: 'a', name: null, yield_servings: 4, servings_logged: 1 }],
-    };
-    expect(deriveLeftovers([src], [stew], TODAY)).toEqual([]);
-  });
-
-  it('every bracket carries the yield, so a batch is read off the count: four of four is finished', () => {
-    const out = deriveLeftovers(
-      [
-        meal('m1', '2026-10-25', [{ recipe_id: 'r-stew', yield: 4, logged: 3 }]),
-        meal('m2', '2026-10-27', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }]),
-      ],
-      [stew],
-      TODAY,
-    );
-    expect(out).toEqual([]);
-  });
-
-  it('a fifth portion starts a new batch, cooked the day it landed, with three to go', () => {
-    const out = deriveLeftovers(
-      [
-        meal('m1', '2026-10-25', [{ recipe_id: 'r-stew', yield: 4, logged: 3 }]),
-        meal('m2', '2026-10-26', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }]),
-        meal('m3', '2026-10-27', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }]),
-      ],
-      [stew],
-      TODAY,
-    );
-    expect(out).toEqual([expect.objectContaining({ cookedOn: '2026-10-27', left: 3 })]);
-  });
-
-  it('a batch logged two portions at a time still dates from its first portion', () => {
-    const out = deriveLeftovers(
-      [
-        meal('m1', '2026-10-26', [{ recipe_id: 'r-stew', yield: 4, logged: 2 }]),
-        meal('m2', '2026-10-27', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }]),
-      ],
-      [stew],
-      TODAY,
-    );
-    expect(out).toEqual([expect.objectContaining({ cookedOn: '2026-10-26', left: 1 })]);
-  });
-
-  it('the open draft is a source — a portion in the cart already comes off the batch', () => {
-    const out = deriveLeftovers(
-      [
-        meal('m1', '2026-10-26', [{ recipe_id: 'r-stew', yield: 4, logged: 1 }]),
-        meal('draft', TODAY, [{ recipe_id: 'r-stew', logged: 1 }]),
-      ],
-      [stew],
-      TODAY,
-    );
-    expect(out[0]?.left).toBe(2);
-  });
-
-  it('falls back to the bracket name when the recipe has left the cookbook', () => {
-    const out = deriveLeftovers(
-      [meal('m1', '2026-10-27', [{ recipe_id: 'r-gone', yield: 3, name: 'Chili' }])],
-      [],
-      TODAY,
-    );
-    expect(out[0]).toMatchObject({ name: 'Chili', kcal: null, left: 2 });
-  });
-
-  it('newest batch first', () => {
-    const out = deriveLeftovers(
-      [
-        meal('m1', '2026-10-25', [{ recipe_id: 'r-a', yield: 3 }]),
-        meal('m2', '2026-10-27', [{ recipe_id: 'r-b', yield: 3 }]),
-      ],
-      [recipe('r-a', 'A'), recipe('r-b', 'B')],
-      TODAY,
-    );
-    expect(out.map((l) => l.name)).toEqual(['B', 'A']);
+  it.each<[string, MealItem[], MealPart[], string]>([
+    ['one item', items([['Toast']]), [], 'Toast'],
+    [
+      'a named bracket reads as its name',
+      items([
+        ['lentils', 'p'],
+        ['onion', 'p'],
+      ]),
+      [{ key: 'p', name: 'Lentil stew' }],
+      'Lentil stew',
+    ],
+    [
+      'a bracket and a loose item',
+      items([['lentils', 'p'], ['onion', 'p'], ['Side salad']]),
+      [{ key: 'p', name: 'Lentil stew' }],
+      'Lentil stew · Side salad',
+    ],
+    [
+      'an unnamed bracket reads by its members',
+      items([
+        ['yogurt', 'p'],
+        ['chia', 'p'],
+      ]),
+      [{ key: 'p', name: null }],
+      'yogurt · chia',
+    ],
+    ['four things: the first two and a count', items([['A'], ['B'], ['C'], ['D']]), [], 'A · B + two more'],
+    ['the same item twice is said once', items([['Coffee'], ['coffee']]), [], 'Coffee'],
+  ])('%s', (_label, its, parts, want) => {
+    expect(mealName(its, parts)).toBe(want);
   });
 });
 
 describe('leftoverLine', () => {
-  it('names the day, or "today"', () => {
-    const base = { recipe_id: 'r', name: 'Stew', yield: 4, left: 2, kcal: null };
-    expect(leftoverLine({ ...base, cookedOn: '2026-10-26' }, TODAY)).toBe('2 of 4 left · Mon');
-    expect(leftoverLine({ ...base, cookedOn: TODAY }, TODAY)).toBe('2 of 4 left · today');
+  it.each([
+    [TODAY, 'lunch', 'today · lunch'],
+    ['2026-10-27', 'dinner', 'yesterday · dinner'],
+    ['2026-10-26', 'dinner', 'Mon · dinner'],
+    ['2026-10-20', 'breakfast', '20 Oct · breakfast'],
+  ] as const)('%s %s → "%s"', (date, kind, want) => {
+    expect(leftoverLine({ date, meal: kind }, TODAY)).toBe(want);
   });
 });

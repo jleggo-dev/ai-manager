@@ -201,10 +201,10 @@
   align-items: center;
   gap: 7px;
 }
-/* Named in full — "protein", never "P" (BRAND.md, owner 2026-09-08). */
+/* P / C / F — this surface only (owner 2026-10-28; scoped exception to BRAND.md). */
 .ms-day-bar-l {
   flex: none;
-  width: 44px;
+  width: 10px;
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.05em;
@@ -303,10 +303,49 @@
   cursor: pointer;
   touch-action: pan-y;
   -webkit-touch-callout: none;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease;
 }
 .ms-tile.is-on {
   background: oklch(96% 0.03 152);
   border-color: oklch(62% 0.12 152);
+}
+/* The press draws itself: the tile sinks, and one that can be held fills toward the hold. */
+.ms-tile.is-pressing {
+  transform: scale(0.97);
+  border-color: oklch(62% 0.12 152);
+}
+.ms-tile.can-hold::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: oklch(62% 0.12 152);
+  transform: scaleX(0);
+  transform-origin: left;
+  opacity: 0;
+  pointer-events: none;
+}
+.ms-tile.can-hold.is-pressing::after {
+  opacity: 1;
+  animation: ms-hold-fill var(--hold-ms, 450ms) linear forwards;
+}
+@keyframes ms-hold-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-tile.is-pressing {
+    transform: none;
+  }
 }
 .ms-tile:disabled {
   opacity: 0.6;
@@ -329,6 +368,13 @@
   font-weight: 800;
   color: oklch(56% 0.02 120);
   margin-top: 2px;
+}
+.ms-tile-m {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: oklch(50% 0.03 150);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 .ms-tile-k {
   flex: none;
@@ -366,6 +412,13 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px oklch(0% 0 0 / 0.15);
+}
+.ms-hold-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: oklch(45% 0.09 152);
 }
 .ms-shelf-empty {
   grid-column: 1 / -1;

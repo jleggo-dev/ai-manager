@@ -45,9 +45,27 @@ export function recipePortions(parts: MealPart[], recipeId: string): number {
   return n;
 }
 
+const rowKey = (it: MealItem): string => `${it.food_id ?? it.name.trim().toLowerCase()}|${it.qty ?? ''}`;
+
+/**
+ * How many whole copies of a past meal the cart holds — a leftover's badge. Read off the rows
+ * (same food or name, same amount), so taking a chip out takes the badge down with it; nothing
+ * on a row says which tile put it there.
+ */
+export function mealCopies(items: readonly MealItem[], source: readonly MealItem[]): number {
+  if (!source.length) return 0;
+  const need = new Map<string, number>();
+  for (const it of source) need.set(rowKey(it), (need.get(rowKey(it)) ?? 0) + 1);
+  const have = new Map<string, number>();
+  for (const it of items) have.set(rowKey(it), (have.get(rowKey(it)) ?? 0) + 1);
+  let copies = Infinity;
+  for (const [k, n] of need) copies = Math.min(copies, Math.floor((have.get(k) ?? 0) / n));
+  return copies;
+}
+
 /** The badge a tile wears: 0 = none, 1 = ✓, n = ×n. */
 export function tileCount(
-  tile: { kind: 'food' | 'recipe' | 'leftover' | 'planned'; id: string },
+  tile: { kind: 'food' | 'recipe' | 'leftover' | 'planned'; id: string; source?: { items: readonly MealItem[] } },
   items: MealItem[],
   parts: MealPart[],
   bases: Bases,
@@ -56,6 +74,7 @@ export function tileCount(
     const i = looseIndexOf(items, tile.id);
     return i < 0 ? 0 : tapsOf(items[i]!, bases.get(tile.id));
   }
+  if (tile.kind === 'leftover') return mealCopies(items, tile.source?.items ?? []);
   return recipePortions(parts, tile.id);
 }
 

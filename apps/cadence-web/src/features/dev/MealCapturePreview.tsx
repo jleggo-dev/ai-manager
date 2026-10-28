@@ -96,8 +96,26 @@ export function MealCapturePreview() {
       recipeOf('r-shak', 'Shakshuka', 2, [itemOf('f-eggs', 2), itemOf('f-toast')]),
     ];
     const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
-    /** The week behind: two days ago a portion of the stew — three of four left on the shelf. */
+    /** The week behind, for the Leftovers shelf: yesterday's two meals, the stew two days ago. */
     const recentMeals = [
+      {
+        log_id: 'm-past-3',
+        date: daysAgo(1),
+        meal: 'dinner',
+        items: [itemOf('f-eggs', 2), itemOf('f-toast')],
+        parts: [],
+        macros: sum([itemOf('f-eggs', 2), itemOf('f-toast')]),
+        state: 'closed',
+      },
+      {
+        log_id: 'm-past-2',
+        date: daysAgo(1),
+        meal: 'lunch',
+        items: [itemOf('f-skyr'), itemOf('f-granola'), itemOf('f-blueberries')],
+        parts: [],
+        macros: sum([itemOf('f-skyr'), itemOf('f-granola'), itemOf('f-blueberries')]),
+        state: 'closed',
+      },
       {
         log_id: 'm-past-1',
         date: daysAgo(2),
@@ -224,6 +242,9 @@ export function MealCapturePreview() {
                 name: r.name,
                 serving_label: `${(r.ingredients as unknown[]).length} ingredients`,
                 kcal: (r.macros_per_serving as { kcal?: number }).kcal ?? null,
+                protein_g: (r.macros_per_serving as { protein_g?: number }).protein_g ?? null,
+                carbs_g: (r.macros_per_serving as { carbs_g?: number }).carbs_g ?? null,
+                fat_g: (r.macros_per_serving as { fat_g?: number }).fat_g ?? null,
                 count: 6,
               })),
             ...[
@@ -245,6 +266,9 @@ export function MealCapturePreview() {
               name: FOODS[id]!.name,
               serving_label: FOODS[id]!.label,
               kcal: FOODS[id]!.kcal,
+              protein_g: FOODS[id]!.p,
+              carbs_g: FOODS[id]!.c,
+              fat_g: FOODS[id]!.f,
               count: 12 - i,
             })),
           ],

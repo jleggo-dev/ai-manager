@@ -27,7 +27,7 @@
  *   onOpenDay? — the day card's tap: the whole day in Food (omit and the card is plain)
  *   onCoach?   — the face: hand the conversation to the coach with an app-authored note (omit to hide)
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { MealKind } from '@cadence/shared';
 import { localTodayIso, useNutritionDay } from '../../../lib/query/index.ts';
 import { AmountSheet, ServingsSheet } from './AmountSheet.tsx';
@@ -45,6 +45,7 @@ import { ShelfTabs } from './ShelfTabs.tsx';
 import { useDrawerDrag } from './useDrawerDrag.ts';
 import { useMealDraft } from './useMealDraft.ts';
 import { useQuickLogCart } from './useQuickLogCart.ts';
+import { useHoldHint } from './useHoldHint.ts';
 import { useShelves, type ShelfKey, type ShelfTile } from './useShelves.ts';
 
 export interface MealScreenProps {
@@ -77,11 +78,7 @@ export function MealScreen({
 
   const logId = draft.meal?.log_id;
   const parts = draft.meal?.parts;
-  const draftSource = useMemo(
-    () => (logId ? { log_id: logId, date: mealDate, parts: parts ?? [] } : null),
-    [logId, mealDate, parts],
-  );
-  const shelves = useShelves(kind, mealDate, today, draftSource);
+  const shelves = useShelves(kind, mealDate, today, logId ?? null);
   const cart = useQuickLogCart(draft, shelves.planned);
 
   const [shelf, setShelf] = useState<ShelfKey | null>(null);
@@ -91,6 +88,7 @@ export function MealScreen({
   const [saveFlow, setSaveFlow] = useState<SaveFlow | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const drag = useDrawerDrag(onClose);
+  const holdHint = useHoldHint();
 
   const busy = draft.busy || draft.loading;
   const afterLogged = onLogged ?? onClose;
@@ -120,8 +118,9 @@ export function MealScreen({
   };
 
   const hold = (tile: ShelfTile) => {
+    holdHint.retire();
     if (tile.kind === 'food') setSheet({ kind: 'amount', tile });
-    else if (tile.kind === 'recipe' || tile.kind === 'leftover') setSheet({ kind: 'servings', tile });
+    else if (tile.kind === 'recipe') setSheet({ kind: 'servings', tile });
   };
 
   const talk = () =>
@@ -182,6 +181,7 @@ export function MealScreen({
         onTap={(t) => void cart.tap(t)}
         onHold={hold}
         onSwipe={stepShelf}
+        hint={holdHint.show}
       />
       {draft.err && <div className="food-empty ms-err">{draft.err}</div>}
       <CartBar
@@ -228,7 +228,6 @@ export function MealScreen({
           name={sheet.tile.name}
           sub={sheet.tile.sub}
           kcalPerServing={sheet.tile.kcal}
-          max={sheet.tile.left}
           busy={draft.busy}
           onAdd={(n) => {
             setSheet(null);

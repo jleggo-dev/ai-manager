@@ -6,6 +6,7 @@
  *                   the row (its quantity + what the first tap was worth)
  *   tap a dish      append one portion (a bracket); another tap, another portion
  *   tap Planned     the week's dish, exactly as the planner priced it
+ *   tap a leftover  the past meal's rows, priced as they were logged, its brackets redrawn
  *   hold → Add      a chosen amount: replaces the row a tap made, if there is one
  *   × on a chip     the row, or every row of the bracket
  *
@@ -13,7 +14,7 @@
  * badge can count taps and a second tap can double. Session-only, per food.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { MealPart } from '@cadence/shared';
+import type { MealItem, MealPart } from '@cadence/shared';
 import type { PlannedMeal } from '../../plan/occurrence/usePlannedMeal.ts';
 import { cartChips, looseIndexOf, recipePortions, tileCount, type Bases, type CartChip } from './cartModel.ts';
 import type { Portion } from './AmountSheet.tsx';
@@ -35,6 +36,18 @@ function plannedRows(meal: PlannedMeal): ParsedAppendItem[] {
       ...(typeof it.carbs_g === 'number' ? { carbs_g: it.carbs_g } : {}),
       ...(typeof it.fat_g === 'number' ? { fat_g: it.fat_g } : {}),
     },
+  }));
+}
+
+/** A past meal's rows, carried over verbatim — the numbers it was logged with, never re-priced. */
+export function leftoverRows(items: MealItem[]): ParsedAppendItem[] {
+  return items.map((it) => ({
+    name: it.name,
+    ...(it.brand ? { brand: it.brand } : {}),
+    ...(it.qty != null ? { qty: it.qty } : {}),
+    ...(it.unit ? { unit: it.unit } : {}),
+    ...(it.food_id ? { food_id: it.food_id } : {}),
+    ...(it.est ? { est: it.est } : {}),
   }));
 }
 
@@ -66,6 +79,21 @@ export function useQuickLogCart(draft: MealDraft, planned: PlannedMeal | null) {
     [draft, remember],
   );
 
+  /** The meal's rows land loose, then each named bracket of two or more is drawn round its rows again. */
+  const appendLeftover = useCallback(
+    async (source: { items: MealItem[]; parts: MealPart[] }) => {
+      const m = await draft.appendParsed(leftoverRows(source.items), 'searched');
+      if (!m) return;
+      // Where the rows landed, from the server's reply — grouping never reorders rows.
+      const start = m.items.length - source.items.length;
+      for (const part of source.parts) {
+        const idx = source.items.flatMap((it, i) => (it.part === part.key ? [start + i] : []));
+        if (idx.length >= 2) await draft.groupLoose(idx, part.name);
+      }
+    },
+    [draft],
+  );
+
   const tap = useCallback(
     async (tile: ShelfTile): Promise<void> => {
       if (tile.kind === 'food') {
@@ -89,9 +117,14 @@ export function useQuickLogCart(draft: MealDraft, planned: PlannedMeal | null) {
         if (m && !planned.recipe_id) setPlannedTaps((n) => n + 1);
         return;
       }
+      if (tile.kind === 'leftover') {
+        if (!tile.source) return;
+        await appendLeftover(tile.source);
+        return;
+      }
       await draft.appendRecipe({ recipe_id: tile.id, servings: 1 });
     },
-    [appendFoodDefault, bases, draft, items, planned, remember],
+    [appendFoodDefault, appendLeftover, bases, draft, items, planned, remember],
   );
 
   /** A chosen amount for a food: the row a tap made (if any) goes, the chosen one lands. */

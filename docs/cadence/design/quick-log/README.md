@@ -25,9 +25,8 @@ The meal drawer, redrawn as a **shelf of your foods, not a form**. One sentence:
 - **What "Usual" ranks on** — foods and one-portion recipes logged at this slot, most-often
   first, recency as tiebreak (`useUsualAtSlot`). No kind markers — the shelf you're on already
   says what these are.
-- **Leftovers** — any logged recipe with yield > 1 in the last 4 days, showing portions still
-  unaccounted for ("2 of 4 left · Mon"). Tapping logs one portion and decrements. Gone when it
-  hits zero or ages out.
+- **Leftovers** — ~~any logged recipe with yield > 1 in the last 4 days, "2 of 4 left · Mon"~~
+  superseded 2026-10-28 (see below): meals logged recently, most recent at the top.
 - **The amount sheet (1b)** — only when the default isn't right. Chips come from
   `servingPicker` (volume leads for produce, printed weight for brands), so most foods never
   open it.
@@ -45,6 +44,16 @@ The meal drawer, redrawn as a **shelf of your foods, not a form**. One sentence:
   or what was logged, and a pointer to `get_food_log` / `get_nutrition` / her goals context) —
   the app has one coach, not an in-drawer chat.
 - **No Undo** after logging — entries can already be deleted from the day.
+- **Leftovers = meals logged recently** (owner, 2026-10-28, replacing the canvas's batch/yield
+  reading): logged meals in the window, newest first, the later slot first within a day; one
+  tile per meal ("Lentil stew · Side salad", "yesterday · dinner"), a repeat shown once. Tap puts
+  that meal's rows back in the cart priced as logged, its named brackets redrawn; no hold. The
+  window is seven days by default, 3 / 7 / 14 in Settings → Nutrition (device-local, user-scoped).
+- **P / C / F on this surface** (owner, 2026-10-28) — the day bars' labels and a
+  "P 12 · C 30 · F 8" line on each tile. A scoped exception to BRAND.md's abbreviation rule.
+- **Hold is findable** (owner, 2026-10-28) — a pressed tile sinks and, if it can be held, fills
+  toward the hold; the hold landing ticks a haptic (Capacitor Haptics on iOS, `navigator.vibrate`
+  on the web); a one-time line "Hold a tile to choose how much." until the first hold.
 - This **replaces** the shipped meal screen in both hosts (the trail's capture sheet and the
   Food screen); it is a redesign of the one quick-log surface, not a second one.
 
