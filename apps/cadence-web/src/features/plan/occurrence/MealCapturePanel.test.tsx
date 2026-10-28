@@ -1,10 +1,10 @@
 /**
- * The capture from the trail is the cart (owner, 2026-09-07): the ring shows only what is
- * logged, the meal screen is the body, the doors are one row with Find first, and each door
- * opens its own surface — a tile-to-surface router fails silently (the wrong screen opens and
- * nothing throws), so every tile gets a row here naming the thing that can only be true if the
- * method travelled, plus the negative that pins the old bug: none of them lands on the meal's
- * own picker.
+ * The capture from the trail is the quick log (2026-10-28, over the cart ruling of 2026-09-07):
+ * the day card shows only what is logged, the meal screen is the whole body, the doors are one
+ * icon-only row with Find first, and each door opens its own surface — a tile-to-surface router
+ * fails silently (the wrong screen opens and nothing throws), so every tile gets a row here
+ * naming the thing that can only be true if the method travelled, plus the negative that pins
+ * the old bug: none of them lands on the meal's own shelves.
  *
  * REGRESSION kept from 2026-09-06 (owner, on device): "Press Log breakfast, select Chat… there's
  * no chat." The tapped method must travel into the meal screen.
@@ -123,7 +123,7 @@ describe('MealCapturePanel — the tapped tile is the door', () => {
       expect(await screen.findAllByText(landmark)).not.toHaveLength(0);
     }
     // The bug, stated: every tile used to land here instead.
-    expect(screen.queryByText('Add everything you had')).toBeNull();
+    expect(screen.queryByRole('tablist', { name: 'Shelves' })).toBeNull();
   });
 
   it('chat and voice open the SAME composer — voice is not a second screen', async () => {
@@ -144,7 +144,7 @@ describe('MealCapturePanel — the tapped tile is the door', () => {
     await screen.findByLabelText('Find a food');
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     // The door closed into the meal it appends to — the draft is still open behind it.
-    await waitFor(() => expect(screen.getByText('Add everything you had')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('tablist', { name: 'Shelves' })).toBeInTheDocument());
   });
 });
 
@@ -152,12 +152,12 @@ describe('MealCapturePanel — the cart', () => {
   it('opens on the slot the trail named, on its day, before the detail has landed', async () => {
     renderPanel({ detail: null, known: { title: 'Log breakfast', date: '2026-09-05' } });
     await waitFor(() => expect(draftApi.openMealDraft).toHaveBeenCalledWith({ meal: 'breakfast', date: '2026-09-05' }));
-    expect(await screen.findByText('Add everything you had')).toBeInTheDocument();
+    expect(await screen.findByRole('tablist', { name: 'Shelves' })).toBeInTheDocument();
     // No band above the meal repeating its name and the old "nothing counts" line.
     expect(screen.queryByText(/CAPTURE/)).toBeNull();
   });
 
-  it('the ring shows only what is logged — an open draft is taken back out of the day', async () => {
+  it('the day card shows only what is logged — an open draft is taken back out of the day', async () => {
     day.data = {
       date: '2026-09-06',
       meals: [
@@ -177,10 +177,10 @@ describe('MealCapturePanel — the cart', () => {
     renderPanel();
     // 2150 − 300 logged = 1,850 — not 1,700, which would have counted the open lunch.
     expect(await screen.findByText('1,850')).toBeInTheDocument();
-    expect(screen.getByText('LEFT TODAY')).toBeInTheDocument();
-    expect(screen.getByText('20 / 160g')).toBeInTheDocument();
-    // One kcal figure on the strip, not two that disagree.
-    expect(screen.queryByText(/left today/)).toBeNull();
+    expect(screen.getByText('LEFT')).toBeInTheDocument();
+    expect(screen.getByText('20 / 160')).toBeInTheDocument();
+    // One kcal figure, not two that disagree.
+    expect(screen.queryByText(/left today/i)).toBeNull();
     expect(screen.queryByText(/LEFT AFTER THIS/)).toBeNull();
   });
 

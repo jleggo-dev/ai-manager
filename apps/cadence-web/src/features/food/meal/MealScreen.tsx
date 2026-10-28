@@ -1,217 +1,201 @@
 /**
- * The meal is the screen (owner ruling 1 — canvas 1b). You open Breakfast, not Log: the draft
- * is a real, persistent object; every picker is a sub-surface that returns into it; the window
- * is visible; and logging is the one write. The greater Food screen stays reachable (the quiet
- * "Your whole day ›" link), and a one-food express lane survives via `onExpressSingle`.
+ * The quick log — the meal drawer, simplified (owner's "too much to read" steer, canvas
+ * "Cadence Quick Log", 2026-10-28). Tap what you ate: the drawer is a shelf of your foods, not
+ * a form. Top to bottom:
  *
- * Since the cart ruling (owner, 2026-09-07) it reads top to bottom as a cart: the things in it,
- * "＋ Add more", the doors as one row (Find first), then the shelf of what they usually have at
- * this slot — one tap each — and the totals with "Log breakfast" pinned at the bottom. Every
- * door returns here. Once logged, the same screen stays open to adds, which count as they land.
+ *   the title (it IS the slot picker) · Cadence's face · ⋯
+ *   the day — kcal ring and three bars, the cart previewed as a pale arc and a hatched tail
+ *   five doors, icon-only, Find first — each a keyboard that returns here
+ *   four shelves — Planned (absent when the week names nothing) · Usual · Leftovers · Cookbook
+ *   two-column tiles that scroll on: tap = +1, tap again = ×2, hold = the amount sheet
+ *   the cart — chips with ×, one button: "Log breakfast · kcal"
+ *
+ * Gone: the OPEN pill, ‹ (the drawer swipes down), "change ⌄", the window line, the empty-state
+ * paragraph, labels under the doors, the express lane, photos. Advice lives elsewhere — the
+ * face is the one door, and it hops to the coach with the cart in her note.
+ *
+ * The draft is still a real, persistent object (`useMealDraft`): every door appends into it,
+ * logging is the one write, and reopening a slot rejoins it. Adds on a logged meal count as
+ * they land (the cart ruling, 2026-09-07).
  *
  * Props contract (for the integrator):
- *   meal?            — the slot; the header chip stays changeable in one tap, asked once
- *   date?            — the slot's date (a missed breakfast from yesterday is yesterday's)
- *   planned?         — the week's menu for the slot, when there is one — leads the shelf
- *   openAt?          — the door the caller ALREADY chose (a capture tile) — open in it, don't ask again
- *   onClose          — ‹ back; the draft itself stays open server-side
- *   onLogged?        — after "Log breakfast" lands (or Done on a logged meal); defaults to onClose
- *   onExpressSingle? — "Just one thing and you're done? Log a single food instead ›" (omit to hide)
- *   onOpenDay?       — the quiet "Your whole day ›" link (omit to hide it)
+ *   meal?      — the slot; inferred from the clock when absent
+ *   date?      — the slot's date (a missed breakfast from yesterday is yesterday's)
+ *   openAt?    — the door the caller ALREADY chose (a capture tile) — open in it, don't ask again
+ *   onClose    — the drawer swiped down; the draft itself stays open server-side
+ *   onLogged?  — after "Log breakfast" lands (or Done on a logged meal); defaults to onClose
+ *   onOpenDay? — the day card's tap: the whole day in Food (omit and the card is plain)
+ *   onCoach?   — the face: hand the conversation to the coach with an app-authored note (omit to hide)
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { MealKind } from '@cadence/shared';
-import type { PlannedMeal } from '../../plan/occurrence/usePlannedMeal.ts';
-import { NamePartCard } from '../bracket/NamePartCard.tsx';
-import { looseItems, membersOf, partTotal } from '../bracket/partModel.ts';
-import { nameChips } from './nameChips.ts';
-import { MealBody } from './MealBody.tsx';
+import { localTodayIso, useNutritionDay } from '../../../lib/query/index.ts';
+import { AmountSheet, ServingsSheet } from './AmountSheet.tsx';
+import { CartBar } from './CartBar.tsx';
+import { quickLogCoachNote } from './coachNote.ts';
+import { DayMacros } from './DayMacros.tsx';
 import { MealDoors, type MealDoor } from './MealDoors.tsx';
 import { MealDoorsRow } from './MealDoorsRow.tsx';
-import { MealEmptyState } from './MealEmptyState.tsx';
-import { MealFooter } from './MealFooter.tsx';
-import { MealHeader } from './MealHeader.tsx';
+import { MealItemSheet } from './MealItemSheet.tsx';
 import { MealMenu } from './MealMenu.tsx';
-import { MealUsualList } from './MealUsualList.tsx';
-import { useGroupOffer } from './useGroupOffer.ts';
-import { useMealDraft, type ParsedAppendItem } from './useMealDraft.ts';
+import { MealTitle } from './MealTitle.tsx';
+import { SaveFlowCard, type SaveFlow } from './SaveFlowCard.tsx';
+import { ShelfGrid } from './ShelfGrid.tsx';
+import { ShelfTabs } from './ShelfTabs.tsx';
+import { useDrawerDrag } from './useDrawerDrag.ts';
+import { useMealDraft } from './useMealDraft.ts';
+import { useQuickLogCart } from './useQuickLogCart.ts';
+import { useShelves, type ShelfKey, type ShelfTile } from './useShelves.ts';
 
 export interface MealScreenProps {
   meal?: MealKind;
   date?: string;
-  planned?: PlannedMeal | null;
-  /**
-   * The door to open in. A caller that already asked "how do you want to add this" — the capture
-   * sheet's method tiles — answers it here, so the tap lands IN chat / search / the scanner
-   * instead of on the meal's own picker asking the same question a second time.
-   */
   openAt?: MealDoor;
   onClose: () => void;
   onLogged?: () => void;
-  onExpressSingle?: () => void;
   onOpenDay?: () => void;
+  onCoach?: (note: string) => void;
 }
 
-type SaveFlow = { part: string; to: 'meal' | 'recipe' | 'rename' };
-
-/** A planned dish's rows, as the parser would hand them over — never re-parsed, never priced twice. */
-function plannedRows(meal: PlannedMeal): ParsedAppendItem[] {
-  return (meal.items ?? []).map((it) => ({
-    name: it.name,
-    qty: it.qty,
-    ...(it.unit ? { unit: it.unit } : {}),
-    ...(it.kind === 'food' ? { food_id: it.id } : {}),
-    est: {
-      ...(typeof it.kcal === 'number' ? { kcal: it.kcal } : {}),
-      ...(typeof it.protein_g === 'number' ? { protein_g: it.protein_g } : {}),
-      ...(typeof it.carbs_g === 'number' ? { carbs_g: it.carbs_g } : {}),
-      ...(typeof it.fat_g === 'number' ? { fat_g: it.fat_g } : {}),
-    },
-  }));
-}
+type Sheet =
+  { kind: 'amount'; tile: ShelfTile } | { kind: 'servings'; tile: ShelfTile } | { kind: 'item'; index: number };
 
 export function MealScreen({
   meal: initialMeal,
   date,
-  planned,
   openAt,
   onClose,
   onLogged,
-  onExpressSingle,
   onOpenDay,
+  onCoach,
 }: MealScreenProps) {
+  const today = localTodayIso();
   const draft = useMealDraft(initialMeal, date);
-  const offer = useGroupOffer();
+  const kind = draft.meal?.meal ?? initialMeal ?? 'breakfast';
+  const mealDate = draft.meal?.date ?? date ?? today;
+  const { data: day } = useNutritionDay(mealDate);
+
+  const logId = draft.meal?.log_id;
+  const parts = draft.meal?.parts;
+  const draftSource = useMemo(
+    () => (logId ? { log_id: logId, date: mealDate, parts: parts ?? [] } : null),
+    [logId, mealDate, parts],
+  );
+  const shelves = useShelves(kind, mealDate, today, draftSource);
+  const cart = useQuickLogCart(draft, shelves.planned);
+
+  const [shelf, setShelf] = useState<ShelfKey | null>(null);
+  const active: ShelfKey = shelf && shelves.keys.includes(shelf) ? shelf : (shelves.keys[0] ?? 'usual');
   const [door, setDoor] = useState<MealDoor | null>(openAt ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [saveFlow, setSaveFlow] = useState<SaveFlow | null>(null);
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const drag = useDrawerDrag(onClose);
 
-  const kind = draft.meal?.meal ?? initialMeal ?? 'breakfast';
-  const logId = draft.meal?.log_id;
+  const busy = draft.busy || draft.loading;
   const afterLogged = onLogged ?? onClose;
-
-  const recordAppend = () => {
-    if (logId) offer.recordAppend(logId);
-  };
 
   const doLog = async () => {
     const r = await draft.close();
     if (r.ok) afterLogged();
   };
 
-  const addPlanned = (p: PlannedMeal) => {
-    const landed = p.recipe_id
-      ? draft.appendRecipe({ recipe_id: p.recipe_id })
-      : draft.appendParsed(plannedRows(p), 'assumed');
-    void landed.then((m) => m && recordAppend());
-  };
-
-  /** Save-as targets the meal's one bracket, making it first when the meal is still flat.
-   *  The key is the server's answer, never a guess — see groupLoose. */
-  const wholePart = async (): Promise<string | null> => {
-    const parts = draft.meal?.parts ?? [];
-    if (parts.length > 0) return parts[0]!.key;
-    if (draft.items.length < 2) return null;
-    return draft.groupLoose(draft.items.map((_, i) => i));
-  };
-
+  /** Save-as targets the meal's one bracket, making it first when the meal is still flat. */
   const openSaveFlow = async (to: SaveFlow['to']) => {
     setMenuOpen(false);
-    const part = await wholePart();
+    const existing = draft.meal?.parts ?? [];
+    const part =
+      existing.length > 0
+        ? existing[0]!.key
+        : draft.items.length < 2
+          ? null
+          : await draft.groupLoose(draft.items.map((_, i) => i));
     if (part) setSaveFlow({ part, to });
   };
 
+  const stepShelf = (dir: 1 | -1) => {
+    const i = shelves.keys.indexOf(active);
+    const next = shelves.keys[Math.min(shelves.keys.length - 1, Math.max(0, i + dir))];
+    if (next && next !== active) setShelf(next);
+  };
+
+  const hold = (tile: ShelfTile) => {
+    if (tile.kind === 'food') setSheet({ kind: 'amount', tile });
+    else if (tile.kind === 'recipe' || tile.kind === 'leftover') setSheet({ kind: 'servings', tile });
+  };
+
+  const talk = () =>
+    onCoach?.(
+      quickLogCoachNote(
+        {
+          meal: kind,
+          date: mealDate,
+          items: draft.items,
+          parts: parts ?? [],
+          total: draft.total,
+          logged: draft.logged,
+        },
+        today,
+      ),
+    );
+
   if (door) {
-    // `ms-in-door` lets the host fold its own chrome (the capture's ring strip) away while a
-    // keyboard-shaped surface is up — with the keyboard raised, those 110px were a third of
-    // what the chat had left (measured at a 480px visible height, 2026-09-07).
+    // `ms-in-door` lets the host fold its own chrome away while a keyboard-shaped surface is up.
     return (
       <div className="ms ms-in-door">
-        <MealDoors
-          door={door}
-          draft={draft}
-          onSwitch={setDoor}
-          onClose={() => setDoor(null)}
-          onAppended={recordAppend}
-        />
+        <MealDoors door={door} draft={draft} onSwitch={setDoor} onClose={() => setDoor(null)} />
       </div>
     );
   }
 
-  const empty = draft.items.length === 0;
+  const openItem = sheet?.kind === 'item' ? draft.items[sheet.index] : null;
 
   return (
-    <div className="ms" aria-busy={draft.loading || undefined}>
-      <MealHeader
-        kind={kind}
-        count={draft.items.length}
-        loose={looseItems(draft.items, draft.meal?.parts ?? []).length}
-        logged={draft.logged}
-        openLabel={draft.openLabel}
-        addsUntil={draft.addsUntil}
-        busy={draft.busy || draft.loading}
-        onBack={onClose}
-        onKind={(k) => void draft.setMealKind(k)}
-        onMenu={() => setMenuOpen(true)}
-      />
-      <div className="ms-scroll">
-        {draft.loading ? (
-          <div className="ms-empty-mark" aria-hidden="true">
-            ◌
-          </div>
-        ) : empty ? (
-          <MealEmptyState onExpressSingle={onExpressSingle} />
-        ) : (
-          <MealBody
-            draft={draft}
-            offerVisible={offer.shouldOffer(draft.meal)}
-            onOfferAccept={(name) => {
-              // "Yes, together" with a name is a save, same as naming from the pill — a bracket
-              // named and never in the cookbook is one the shelf can never offer back.
-              void draft
-                .groupLoose(
-                  draft.items.map((_, i) => i),
-                  name,
-                )
-                .then((key) => {
-                  if (key && name) void draft.saveAs({ part: key, name });
-                });
-            }}
-            onOfferDecline={() => {
-              if (logId) offer.decline(logId);
-            }}
-            onAddMore={() => setDoor({ at: 'add' })}
-          />
-        )}
-        <MealDoorsRow busy={draft.busy || draft.loading} onOpen={setDoor} onShelf={() => setDoor({ at: 'shelf' })} />
-        <MealUsualList
+    <div
+      className="ms ms-quick"
+      aria-busy={draft.loading || undefined}
+      style={{
+        transform: drag.dy ? `translateY(${drag.dy}px)` : undefined,
+        transition: drag.dragging ? 'none' : 'transform 0.3s cubic-bezier(.2,.8,.2,1)',
+      }}
+    >
+      {/* The drag zone: handle, title, the day. The shelf below keeps its own gestures. */}
+      <div className="ms-drag" {...drag.handlers}>
+        <div className="ms-grab" aria-hidden="true" />
+        <MealTitle
           kind={kind}
-          planned={planned ?? null}
-          busy={draft.busy || draft.loading}
-          onAddFood={(foodId) =>
-            void draft.appendFood({ food_id: foodId }, 'searched').then((m) => m && recordAppend())
-          }
-          onAddRecipe={(recipeId) => void draft.appendRecipe({ recipe_id: recipeId }).then((m) => m && recordAppend())}
-          onAddPlanned={planned ? () => addPlanned(planned) : undefined}
+          busy={busy}
+          locked={draft.logged}
+          onKind={(k) => void draft.setMealKind(k)}
+          onCoach={onCoach ? talk : undefined}
+          onMenu={() => setMenuOpen(true)}
         />
-        {onOpenDay && (
-          <button type="button" className="ms-day-link" onClick={onOpenDay}>
-            Your whole day ›
-          </button>
-        )}
-        {draft.err && <div className="food-empty">{draft.err}</div>}
+        <DayMacros day={day} cart={draft.logged ? {} : draft.total} onOpenDay={onOpenDay} />
       </div>
-      {!empty && (
-        <MealFooter
-          kind={kind}
-          total={draft.total}
-          askedCount={draft.askedCount}
-          logged={draft.logged}
-          busy={draft.busy}
-          onLog={() => void doLog()}
-          onDone={afterLogged}
-        />
-      )}
+      <MealDoorsRow busy={busy} onOpen={setDoor} />
+      <ShelfTabs keys={shelves.keys} active={active} onPick={setShelf} />
+      <ShelfGrid
+        shelf={active}
+        tiles={shelves.tiles[active]}
+        countOf={cart.countOf}
+        busy={busy}
+        onTap={(t) => void cart.tap(t)}
+        onHold={hold}
+        onSwipe={stepShelf}
+      />
+      {draft.err && <div className="food-empty ms-err">{draft.err}</div>}
+      <CartBar
+        kind={kind}
+        chips={cart.chips}
+        total={draft.total}
+        askedCount={draft.askedCount}
+        logged={draft.logged}
+        busy={draft.busy}
+        onOpenChip={(c) => setSheet({ kind: 'item', index: c.indexes[0]! })}
+        onRemoveChip={(c) => void cart.removeChip(c)}
+        onLog={() => void doLog()}
+        onDone={afterLogged}
+      />
       {menuOpen && (
         <MealMenu
           canSave={draft.items.length >= 2 || (draft.meal?.parts ?? []).length > 0}
@@ -227,52 +211,43 @@ export function MealScreen({
         />
       )}
       {saveFlow && <SaveFlowCard draft={draft} flow={saveFlow} onClose={() => setSaveFlow(null)} />}
-    </div>
-  );
-}
-
-/**
- * "What do you call this?" over the meal's bracket. With a name, saving and naming are the
- * same act (savePartAsRecipe); renaming alone never touches the cookbook — grouping is not
- * saving. Yield rides the same card (canvas C3).
- */
-function SaveFlowCard({
-  draft,
-  flow,
-  onClose,
-}: {
-  draft: ReturnType<typeof useMealDraft>;
-  flow: SaveFlow;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState<string | null>(null);
-  const [servings, setServings] = useState(1);
-  const members = membersOf(draft.items, flow.part);
-  const count = members.length || draft.items.length;
-  return (
-    <div className="ms-sheet-backdrop" onClick={onClose}>
-      <div className="ms-sheet" role="dialog" aria-label="What do you call this?" onClick={(e) => e.stopPropagation()}>
-        <NamePartCard
-          count={count}
-          est={members.length ? partTotal(draft.items, flow.part) : draft.total}
-          chips={nameChips(
-            draft.rawTexts,
-            (members.length ? members : draft.items.map((_, i) => i)).map((i) => draft.items[i]?.name ?? ''),
-          )}
-          onName={setName}
-          onYield={setServings}
-          onSave={() => {
-            if (flow.to !== 'rename' && name) {
-              void draft.saveAs({ part: flow.part, name, yield_servings: servings });
-            } else {
-              draft.editParts({ op: 'rename', part: flow.part, name: name ?? '' });
-              if (servings > 1) draft.editParts({ op: 'set_yield', part: flow.part, yield_servings: servings });
-            }
-            onClose();
+      {sheet?.kind === 'amount' && (
+        <AmountSheet
+          foodId={sheet.tile.id}
+          name={sheet.tile.name}
+          busy={draft.busy}
+          onAdd={(p) => {
+            setSheet(null);
+            void cart.addFoodPortion(sheet.tile.id, p);
           }}
-          onCancel={onClose}
+          onClose={() => setSheet(null)}
         />
-      </div>
+      )}
+      {sheet?.kind === 'servings' && (
+        <ServingsSheet
+          name={sheet.tile.name}
+          sub={sheet.tile.sub}
+          kcalPerServing={sheet.tile.kcal}
+          max={sheet.tile.left}
+          busy={draft.busy}
+          onAdd={(n) => {
+            setSheet(null);
+            void cart.addRecipe(sheet.tile.id, n);
+          }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {openItem && sheet?.kind === 'item' && (
+        <MealItemSheet
+          item={openItem}
+          index={sheet.index}
+          tag={draft.provenance(sheet.index)}
+          busy={draft.busy}
+          onQty={draft.setAmount}
+          onRemove={(i) => void draft.removeItem(i)}
+          onClose={() => setSheet(null)}
+        />
+      )}
     </div>
   );
 }
