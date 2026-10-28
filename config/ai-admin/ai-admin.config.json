@@ -6,28 +6,28 @@
       "name": "Cadence Coach",
       "description": "Strong streaming chat model. Runs coaching conversation, plan synthesis, readouts, steer-back. Keep prompts model-agnostic so failover survives. NOTE: live profiles point at the devs-ai-v2 provider (set via apps/cadence-api/scripts/set-coach-v2.ts \u2014 the source of truth for provider pointing); model ids here MUST stay catalog-valid (check scripts/list-v2-models.ts \u2014 Devs.ai silently removes models).",
       "provider_id": "<DEVS_AI_PROVIDER_UUID>",
-      "external_ai_id": "claude-sonnet-5",
+      "external_ai_id": "claude-sonnet-5-5",
       "profile_type": "model",
       "mode": "completion",
       "runtime_options": {
         "temperature": 0.7
       },
       "failover_provider_id": "<DEVS_AI_PROVIDER_UUID>",
-      "failover_external_ai_id": "anthropic-claude-4-5-sonnet"
+      "failover_external_ai_id": "gpt-5.2"
     },
     {
       "slug": "cadence-evolve",
       "name": "Cadence Evolve",
-      "description": "Plan ADJUSTMENTS only (the evolve-plan job). Owner ruling 2026-09-01: evolve may run a faster model than genesis because the current plan anchors it, the edit grammar + vet + full-synthesis fallback net it, and the user approves via card \u2014 but it is briefed with the full goals/baseline/constraints context regardless (CI-gated by plan-evolve.prompt-safety.test.ts). anthropic-claude-4-5-sonnet PRIMARY on purpose: benchmarked 2026-09-01 (scripts/bench-evolve-models.ts) at 29.5s small-steer / 66-112s rebalance with on-ask edits, vs claude-sonnet-5 at 47s / 263-289s (~23K tokens of billed deliberation around a 2K edit list). sonnet-5 stays as the quality failover. gpt-5.4-mini measured 5-16s but once mis-read the ask - documented in PLAN-CHANGES.md as the aggressive candidate pending a quality eval. Model ids must stay catalog-valid (scripts/list-v2-models.ts).",
+      "description": "Plan ADJUSTMENTS only (the evolve-plan job). Owner ruling 2026-09-01: evolve may run a faster model than genesis because the current plan anchors it, the edit grammar + vet + full-synthesis fallback net it, and the user approves via card \u2014 but it is briefed with the full goals/baseline/constraints context regardless (CI-gated by plan-evolve.prompt-safety.test.ts). anthropic-claude-4-5-sonnet PRIMARY on purpose: benchmarked 2026-09-01 (scripts/bench-evolve-models.ts) at 29.5s small-steer / 66-112s rebalance with on-ask edits, vs claude-sonnet-5 at 47s / 263-289s (~23K tokens of billed deliberation around a 2K edit list). sonnet-5 stays as the quality failover. gpt-5.4-mini measured 5-16s but once mis-read the ask - documented in PLAN-CHANGES.md as the aggressive candidate pending a quality eval. Model ids must stay catalog-valid (scripts/list-v2-models.ts). REPOINTED 2026-10-28: Devs.ai stopped serving anthropic-claude-4-5-sonnet, claude-sonnet-5 and claude-opus-5 to this account (400 'not available for this request' on every call, while the catalog still listed them) — primary now claude-sonnet-5-5, failover gpt-5.2 (a second family, so one provider-side withdrawal cannot take both). The 2026-09-01 speed benchmark no longer applies; re-run scripts/bench-evolve-models.ts before choosing a faster primary.",
       "provider_id": "<DEVS_AI_PROVIDER_UUID>",
-      "external_ai_id": "anthropic-claude-4-5-sonnet",
+      "external_ai_id": "claude-sonnet-5-5",
       "profile_type": "model",
       "mode": "completion",
       "runtime_options": {
         "temperature": 0.7
       },
       "failover_provider_id": "<DEVS_AI_PROVIDER_UUID>",
-      "failover_external_ai_id": "claude-sonnet-5"
+      "failover_external_ai_id": "gpt-5.2"
     },
     {
       "slug": "cadence-broker",
