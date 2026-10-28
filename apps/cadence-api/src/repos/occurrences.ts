@@ -414,8 +414,18 @@ export async function findWeighInOccurrence(
   return row ?? null;
 }
 
-export async function listWeighInSeries(userId: string, days = 60): Promise<Array<{ date: string; kg: number }>> {
-  const from = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+/**
+ * Weigh-ins over the last `days` days, oldest first. `today` anchors the window: a caller that
+ * reads "as of" a date (calibration) passes it, so the window and the caller's own dates agree —
+ * left to the wall clock, a fixed-date caller silently loses every weigh-in once real time moves
+ * `days` past it.
+ */
+export async function listWeighInSeries(
+  userId: string,
+  days = 60,
+  today = new Date().toISOString().slice(0, 10),
+): Promise<Array<{ date: string; kg: number }>> {
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
   return sql<Array<{ date: string; kg: number }>>`
     select to_char(o.date, 'YYYY-MM-DD') as date, (o.value->>'weight_kg')::float as kg
     from cadence.occurrences o
