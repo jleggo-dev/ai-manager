@@ -3,6 +3,7 @@ import type { Recipe } from '@cadence/shared';
 import { getCurrentMealPlan, getRecipeById, setOccurrence } from '../../lib/api.ts';
 import { RecipeLogConfirm } from '../food/RecipeLogConfirm.tsx';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
+import { CoachUnreachable } from './occurrence/CoachUnreachable.tsx';
 
 const dishFromTitle = (title: string): string => title.replace(/^\s*cook\s+/i, '').trim() || 'dinner';
 
@@ -42,7 +43,7 @@ export function CookSheet({
   onClose: () => void;
   onLogged?: () => void;
 }) {
-  const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
+  const { detail, setDetail, state, retry } = useOccurrenceDetail(occurrenceId);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(0);
@@ -109,6 +110,8 @@ export function CookSheet({
               <i />
             </span>
           </div>
+        ) : state === 'unreachable' ? (
+          <CoachUnreachable onRetry={retry} />
         ) : !detail ? (
           <div className="sheet-msg">{"Couldn't open this just now — close and tap it again."}</div>
         ) : confirming && recipe ? (

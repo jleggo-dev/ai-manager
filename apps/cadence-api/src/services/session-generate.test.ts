@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The retry-on-normalize-null contract (REQ10 §11's named gap, closed): a provider blip that
@@ -41,6 +41,7 @@ import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/oc
 import { listOccurrences } from '../repos/occurrences.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
 import { getOccurrenceDetail, prefetchImminentSessions, reviseSession } from './session-generate.ts';
+import { CoachUnreachableError } from './session-generate-retry.ts';
 
 const GOOD = JSON.stringify({
   blocks: [{ label: 'Practice', items: [{ name: 'Settle', tool: 'breathing', breath_pattern: 'box' }] }],
@@ -97,10 +98,72 @@ describe('prescribe retry-on-normalize-null', () => {
     expect(runJobBySlug).toHaveBeenCalledTimes(2);
   });
 
-  it('a provider error still propagates — the retry is for bad output, not for transport', async () => {
-    vi.mocked(runJobBySlug).mockRejectedValue(new Error('502'));
-    await expect(getOccurrenceDetail('u1', 'o1')).rejects.toThrow('502');
+  it('our own 4xx still propagates at once — the re-roll is for bad output, not for transport', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(Object.assign(new Error('→ 400: variables invalid'), { status: 400 }));
+    await expect(getOccurrenceDetail('u1', 'o1')).rejects.toThrow('400');
     expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The transport retry (session-generate-retry.ts) under the generator: the 2026-10-27/28 outage
+ * shape. A provider blip on the first call is retried before anyone is answered, so the session
+ * opens on the later attempt with the person doing nothing; when every attempt fails the typed
+ * error reaches the route, nothing is cached, and the next open generates afresh.
+ */
+describe('prescribe survives a flaky provider', () => {
+  const transient = () =>
+    Object.assign(new Error('AI Admin POST /api/processing-jobs/x/test → 503: down'), { status: 503 });
+
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(setOccurrenceSessionIfEmpty).mockClear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    warn.mockRestore();
+  });
+
+  it('a transient failure then a success still opens — and caches — without the person doing anything', async () => {
+    vi.mocked(runJobBySlug)
+      .mockRejectedValueOnce(transient())
+      .mockResolvedValue({ raw: GOOD } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    const occ = await p;
+    expect(occ?.session?.blocks).toHaveLength(1);
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+    expect(setOccurrenceSessionIfEmpty).toHaveBeenCalledTimes(1);
+  });
+
+  it('when every attempt fails, the typed error surfaces and nothing is cached', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    const p = getOccurrenceDetail('u1', 'o1');
+    const settled = p.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    const err = await settled;
+    expect(err).toBeInstanceOf(CoachUnreachableError);
+    expect(runJobBySlug).toHaveBeenCalledTimes(3);
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('the transport retry and the output re-roll do not multiply', async () => {
+    // Call 1 fails transiently, call 2 gets through but is unusable, call 3 is good: 3 calls, one
+    // session. (Without the layering rule this could be 2 × 3 = 6.)
+    vi.mocked(runJobBySlug)
+      .mockRejectedValueOnce(transient())
+      .mockResolvedValueOnce({ raw: 'not json' } as never)
+      .mockResolvedValue({ raw: GOOD } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    const occ = await p;
+    expect(occ?.session?.blocks).toHaveLength(1);
+    expect(runJobBySlug).toHaveBeenCalledTimes(3);
   });
 });
 

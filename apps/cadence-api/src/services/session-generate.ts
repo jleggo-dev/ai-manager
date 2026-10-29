@@ -36,6 +36,7 @@ import { practiceVariables } from './session-practice-facts.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeSession } from './session-normalize.ts';
+import { withCoachRetry } from './session-generate-retry.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
 import { getWeatherForUser, isOutdoorActivity, type WeatherSnapshot } from './weather/weather.ts';
 
@@ -179,10 +180,18 @@ async function generateSession(
   // malformed block — and re-rolling once turns "the user taps retry" into "the user never
   // noticed". One retry only: two consecutive rejections means something real is wrong, and the
   // regenerate-on-next-open path is the right place for that to surface.
+  //
+  // The TRANSPORT retry is a layer underneath (session-generate-retry.ts): a provider 5xx, a
+  // timeout or a failed failover gets a bounded second and third try before anyone is told. The
+  // two never multiply — a call that gets through but comes back unusable is re-rolled once here,
+  // a call that never gets through is retried there, and when it is gone for good the typed
+  // error surfaces to the route as a 503 the sheet can say in words.
   let session: OccurrenceSession | null = null;
   let attempts = 0;
   for (; attempts < 2 && !session; attempts += 1) {
-    const res = await runJobBySlug(userId, 'prescribe-session', variables);
+    const res = await withCoachRetry(() => runJobBySlug(userId, 'prescribe-session', variables), {
+      label: 'prescribe-session',
+    });
     session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
   }
   // The coach WINS on tempo (owner ruling). She is now told the settled tempo in {{repertoire}},

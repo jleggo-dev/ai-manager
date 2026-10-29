@@ -4253,6 +4253,15 @@ html[data-native] .sheet-body {
   background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%);
   box-shadow: 0 5px 0 oklch(47% 0.08 250);
 }
+/* The coach could not be reached to build this one (occurrence/CoachUnreachable.tsx): one plain
+   sentence and a Try-again that re-fetches in place, instead of "close and tap it again". */
+.sheet-msg-line {
+  margin: 0 0 4px;
+}
+.ss-retry {
+  background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%);
+  box-shadow: 0 5px 0 oklch(47% 0.08 250);
+}
 /* The 33%/66%/other minute chips are gone: "I have less time" no longer asks for a number, it
    shows Cadence's proposed cut and asks you to confirm it (features/plan/start/trim.ts). Their
    rules were removed with them; the trim surface styles live in styles/coach.css. */
