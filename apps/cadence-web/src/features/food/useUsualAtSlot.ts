@@ -5,9 +5,10 @@ import { queryKeys } from '../../lib/query/keys.ts';
 /**
  * How many rows the meal screen asks for. It used to be six, and the owner's own breakfast list
  * ran out after four rows (on device, 2026-09-07: "the list is too short — I should be able to
- * scroll a few pages"). Forty is a few pages of a phone; the server caps above it.
+ * scroll a few pages"). Sixty is the server's own cap (USUAL_MAX) — the quick log's shelf
+ * scrolls on without end (2026-10-28), so the client asks for everything the server will give.
  */
-export const USUAL_AT_SLOT_LIMIT = 40;
+export const USUAL_AT_SLOT_LIMIT = 60;
 
 /**
  * What they usually have AT this slot, counted (design 05a). Empty is the honest answer for a new

@@ -1,206 +1,22 @@
 import { useEffect, useState } from 'react';
 import { CoachFaceProvider } from '../coach/CoachFaceProvider.tsx';
 import { CaptureSheet } from '../plan/CaptureSheet.tsx';
+import { FOODS, itemOf, json, sum, type Item, type Part } from './mealPreviewFixtures.ts';
 
 /**
- * `?preview=meal` (+ `&state=logged` | `&state=full`) — the trail's meal capture (the cart,
- * 2026-09-07) against a fixture draft, without auth, a plan, or the API. The sheet's whole
- * argument is how it fits a phone with the keyboard up, which is only judged by looking; this
- * is how it gets looked at. Every draft endpoint is answered in memory, so adds, the stepper,
- * grouping and "Log breakfast" all round-trip for real against the same contract the server
- * keeps (lib/api/meal-draft.ts).
+ * `?preview=meal` (+ `&state=logged` | `&state=full` | `&state=planned`) — the trail's meal
+ * capture, the quick log (2026-10-28), against a fixture draft, without auth, a plan, or the
+ * API. The drawer's whole argument is how it reads on a phone, which is only judged by
+ * looking; this is how it gets looked at. Every draft endpoint is answered in memory, so taps,
+ * holds, the chips' × and "Log breakfast" all round-trip for real against the same contract
+ * the server keeps (lib/api/meal-draft.ts). The cookbook holds a makes-four, and two days ago
+ * a portion of it was logged — so the Leftovers shelf has something to say.
  *
- *   default  — an empty breakfast: the doors and the shelf
+ *   default  — an empty breakfast: the doors and the shelves, opening on Usual
  *   full     — three things in the cart, one amount still to settle
  *   logged   — a breakfast already logged, still taking adds
+ *   planned  — the week names a dish for this slot: a Planned shelf, opening there
  */
-type Item = {
-  name: string;
-  brand?: string;
-  qty?: number;
-  unit?: string;
-  est?: Record<string, number>;
-  food_id?: string;
-};
-type Part = {
-  key: string;
-  name: string | null;
-  recipe_id?: string | null;
-  yield_servings?: number;
-  servings_logged?: number;
-};
-
-const FOODS: Record<
-  string,
-  {
-    name: string;
-    brand: string | null;
-    kcal: number;
-    p: number;
-    c: number;
-    f: number;
-    unit: string;
-    label: string;
-    ambiguous: boolean;
-  }
-> = {
-  'f-espresso': {
-    name: 'Espresso',
-    brand: null,
-    kcal: 1,
-    p: 0,
-    c: 0,
-    f: 0,
-    unit: 'capsule',
-    label: '1 capsule',
-    ambiguous: false,
-  },
-  'f-milk': {
-    name: 'Milk, 2%',
-    brand: null,
-    kcal: 122,
-    p: 8,
-    c: 12,
-    f: 5,
-    unit: 'cup',
-    label: '1 cup (244g)',
-    ambiguous: false,
-  },
-  'f-blueberries': {
-    name: 'Frozen blueberries',
-    brand: null,
-    kcal: 79,
-    p: 1,
-    c: 19,
-    f: 1,
-    unit: 'cup',
-    label: '1 cup (155g)',
-    ambiguous: false,
-  },
-  'f-strawberries': {
-    name: 'Frozen strawberries',
-    brand: null,
-    kcal: 50,
-    p: 1,
-    c: 13,
-    f: 0,
-    unit: 'cup',
-    label: '1 cup (149g)',
-    ambiguous: false,
-  },
-  'f-skyr': {
-    name: 'Creamy skyr, plain',
-    brand: 'Siggi’s',
-    kcal: 100,
-    p: 12,
-    c: 5,
-    f: 4,
-    unit: 'serving',
-    label: '1 container (150g)',
-    ambiguous: false,
-  },
-  'f-oats': {
-    name: 'Rolled oats',
-    brand: null,
-    kcal: 150,
-    p: 5,
-    c: 27,
-    f: 3,
-    unit: 'cup',
-    label: '½ cup dry (40g)',
-    ambiguous: false,
-  },
-  'f-banana': {
-    name: 'Banana, raw',
-    brand: null,
-    kcal: 121,
-    p: 1.5,
-    c: 31,
-    f: 0.4,
-    unit: 'large',
-    label: '1 Large (20cm To 22.5cm Long) (136g)',
-    ambiguous: true,
-  },
-  'f-eggs': {
-    name: 'Eggs, scrambled',
-    brand: null,
-    kcal: 91,
-    p: 6,
-    c: 1,
-    f: 7,
-    unit: 'egg',
-    label: '1 large egg',
-    ambiguous: false,
-  },
-  'f-toast': {
-    name: 'Sourdough toast',
-    brand: null,
-    kcal: 120,
-    p: 4,
-    c: 23,
-    f: 1,
-    unit: 'slice',
-    label: '1 slice (45g)',
-    ambiguous: false,
-  },
-  'f-pb': {
-    name: 'Peanut butter',
-    brand: null,
-    kcal: 95,
-    p: 4,
-    c: 3,
-    f: 8,
-    unit: 'tbsp',
-    label: '1 tbsp (16g)',
-    ambiguous: false,
-  },
-  'f-honey': {
-    name: 'Honey',
-    brand: null,
-    kcal: 64,
-    p: 0,
-    c: 17,
-    f: 0,
-    unit: 'tbsp',
-    label: '1 tbsp (21g)',
-    ambiguous: false,
-  },
-  'f-granola': {
-    name: 'Granola',
-    brand: null,
-    kcal: 210,
-    p: 5,
-    c: 32,
-    f: 7,
-    unit: 'cup',
-    label: '½ cup (55g)',
-    ambiguous: false,
-  },
-};
-
-const itemOf = (id: string, qty = 1): Item => {
-  const f = FOODS[id]!;
-  return {
-    name: f.name,
-    ...(f.brand ? { brand: f.brand } : {}),
-    qty,
-    unit: f.unit,
-    est: { kcal: f.kcal * qty, protein_g: f.p * qty, carbs_g: f.c * qty, fat_g: f.f * qty },
-    food_id: id,
-  };
-};
-
-const sum = (items: Item[]) =>
-  items.reduce(
-    (t, it) => {
-      for (const k of ['kcal', 'protein_g', 'carbs_g', 'fat_g'] as const) t[k] = (t[k] ?? 0) + (it.est?.[k] ?? 0);
-      return t;
-    },
-    {} as Record<string, number>,
-  );
-
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-
 export function MealCapturePreview() {
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(true);
@@ -259,8 +75,57 @@ export function MealCapturePreview() {
     };
 
     const reply = () => json({ meal });
-    /** Recipes minted in this session by "Name this recipe" — the cookbook and the shelf read them. */
-    const savedRecipes: Array<Record<string, unknown> & { recipe_id: string; name: string; servings: number }> = [];
+    const recipeOf = (id: string, name: string, servings: number, members: Item[]) => ({
+      recipe_id: id,
+      name,
+      servings,
+      ingredients: members.map((m) => ({ name: m.name, qty: m.qty ?? 1, ...(m.unit ? { unit: m.unit } : {}) })),
+      steps: [],
+      macros_per_serving: sum(members),
+      tags: [],
+      saved: true,
+      source: 'user',
+    });
+    const BOWL = [itemOf('f-skyr'), itemOf('f-blueberries'), itemOf('f-granola', 0.5)];
+    const STEW = [itemOf('f-oats', 2), itemOf('f-toast', 2)];
+    /** The cookbook: a one-portion bowl, a makes-four stew, plus whatever "Name this recipe"
+     *  mints in this session — the cookbook shelf and the usual shelf read them. */
+    const savedRecipes: Array<Record<string, unknown> & { recipe_id: string; name: string; servings: number }> = [
+      recipeOf('r-bowl', 'Chia bowl', 1, BOWL),
+      recipeOf('r-stew', 'Lentil stew', 4, STEW),
+      recipeOf('r-shak', 'Shakshuka', 2, [itemOf('f-eggs', 2), itemOf('f-toast')]),
+    ];
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+    /** The week behind, for the Leftovers shelf: yesterday's two meals, the stew two days ago. */
+    const recentMeals = [
+      {
+        log_id: 'm-past-3',
+        date: daysAgo(1),
+        meal: 'dinner',
+        items: [itemOf('f-eggs', 2), itemOf('f-toast')],
+        parts: [],
+        macros: sum([itemOf('f-eggs', 2), itemOf('f-toast')]),
+        state: 'closed',
+      },
+      {
+        log_id: 'm-past-2',
+        date: daysAgo(1),
+        meal: 'lunch',
+        items: [itemOf('f-skyr'), itemOf('f-granola'), itemOf('f-blueberries')],
+        parts: [],
+        macros: sum([itemOf('f-skyr'), itemOf('f-granola'), itemOf('f-blueberries')]),
+        state: 'closed',
+      },
+      {
+        log_id: 'm-past-1',
+        date: daysAgo(2),
+        meal: 'dinner',
+        items: STEW.map((it) => ({ ...it, part: 'pp1' })),
+        parts: [{ key: 'pp1', name: 'Lentil stew', recipe_id: 'r-stew', yield_servings: 4, servings_logged: 1 }],
+        macros: sum(STEW),
+        state: 'closed',
+      },
+    ];
     const orig = window.fetch;
     window.fetch = (async (u: RequestInfo | URL, o?: RequestInit) => {
       const url = String(u);
@@ -288,17 +153,27 @@ export function MealCapturePreview() {
           if (typeof body.food_id === 'string') meal.items.push(itemOf(body.food_id, (body.quantity as number) ?? 1));
           else if (typeof body.recipe_id === 'string') {
             const key = `p${++partSeq}`;
+            const recipe = savedRecipes.find((r) => r.recipe_id === body.recipe_id);
+            const n = (body.servings as number | undefined) ?? 1;
             meal.parts.push({
               key,
-              name: 'Chia bowl',
+              name: recipe?.name ?? 'Chia bowl',
               recipe_id: body.recipe_id,
-              yield_servings: 1,
-              servings_logged: 1,
+              yield_servings: recipe?.servings ?? 1,
+              servings_logged: n,
             });
+            const members = body.recipe_id === 'r-stew' ? STEW : BOWL;
+            const scale = n / (recipe?.servings ?? 1);
             meal.items.push(
-              { ...itemOf('f-skyr'), part: key } as Item,
-              { ...itemOf('f-blueberries'), part: key } as Item,
-              { ...itemOf('f-granola', 0.5), part: key } as Item,
+              ...members.map(
+                (it) =>
+                  ({
+                    ...it,
+                    qty: Math.round((it.qty ?? 1) * scale * 100) / 100,
+                    est: Object.fromEntries(Object.entries(it.est ?? {}).map(([k, v]) => [k, Math.round(v * scale)])),
+                    part: key,
+                  }) as Item,
+              ),
             );
           } else if (Array.isArray(body.parsed)) meal.items.push(...(body.parsed as Item[]));
         } else if (verb === 'items/remove') meal.items.splice(body.index as number, 1);
@@ -359,15 +234,19 @@ export function MealCapturePreview() {
       if (path.startsWith('/nutrition/foods/usual')) {
         return json({
           items: [
-            ...savedRecipes.map((r) => ({
-              kind: 'recipe',
-              id: r.recipe_id,
-              name: r.name,
-              serving_label: `${(r.ingredients as unknown[]).length} ingredients`,
-              kcal: (r.macros_per_serving as { kcal?: number }).kcal ?? null,
-              count: 1,
-            })),
-            { kind: 'recipe', id: 'r-bowl', name: 'Chia bowl', serving_label: '3 ingredients', kcal: 284, count: 6 },
+            ...savedRecipes
+              .filter((r) => r.servings === 1)
+              .map((r) => ({
+                kind: 'recipe',
+                id: r.recipe_id,
+                name: r.name,
+                serving_label: `${(r.ingredients as unknown[]).length} ingredients`,
+                kcal: (r.macros_per_serving as { kcal?: number }).kcal ?? null,
+                protein_g: (r.macros_per_serving as { protein_g?: number }).protein_g ?? null,
+                carbs_g: (r.macros_per_serving as { carbs_g?: number }).carbs_g ?? null,
+                fat_g: (r.macros_per_serving as { fat_g?: number }).fat_g ?? null,
+                count: 6,
+              })),
             ...[
               'f-espresso',
               'f-milk',
@@ -387,6 +266,9 @@ export function MealCapturePreview() {
               name: FOODS[id]!.name,
               serving_label: FOODS[id]!.label,
               kcal: FOODS[id]!.kcal,
+              protein_g: FOODS[id]!.p,
+              carbs_g: FOODS[id]!.c,
+              fat_g: FOODS[id]!.f,
               count: 12 - i,
             })),
           ],
@@ -436,7 +318,54 @@ export function MealCapturePreview() {
         });
       }
       if (path.startsWith('/nutrition/recipes')) return json({ status: 'ok', recipes: savedRecipes });
-      if (path.startsWith('/nutrition/meal-plans')) return json({ status: 'ok', plan: null });
+      if (path.startsWith('/nutrition/recent')) return json({ meals: [...dayLogged, ...recentMeals] });
+      if (path.startsWith('/nutrition/meal-plans')) {
+        if (state !== 'planned') return json({ status: 'ok', plan: null });
+        return json({
+          status: 'ok',
+          plan: {
+            meal_plan_id: 'mp-preview',
+            week_of: daysAgo(new Date().getDay()),
+            days: [
+              {
+                day: today,
+                meals: [
+                  {
+                    slot: 'breakfast',
+                    name: 'Overnight oats',
+                    items: [
+                      {
+                        kind: 'food',
+                        id: 'f-oats',
+                        name: 'Rolled oats',
+                        qty: 1,
+                        unit: 'cup',
+                        kcal: 150,
+                        protein_g: 5,
+                        carbs_g: 27,
+                        fat_g: 3,
+                      },
+                      {
+                        kind: 'food',
+                        id: 'f-milk',
+                        name: 'Milk, 2%',
+                        qty: 1,
+                        unit: 'cup',
+                        kcal: 122,
+                        protein_g: 8,
+                        carbs_g: 12,
+                        fat_g: 5,
+                      },
+                      { kind: 'food', id: 'f-honey', name: 'Honey', qty: 1, unit: 'tbsp', kcal: 64, carbs_g: 17 },
+                    ],
+                  },
+                ],
+              },
+            ],
+            shopping_list: [],
+          },
+        });
+      }
       if (path === '/nutrition/meals/preview') {
         return json({
           meal: 'breakfast',
@@ -477,6 +406,7 @@ export function MealCapturePreview() {
             onClose={() => setOpen(false)}
             onLogged={() => undefined}
             onOpenFood={() => undefined}
+            onCoach={(note) => console.log('[preview] coach note:', note)}
           />
         )}
       </div>

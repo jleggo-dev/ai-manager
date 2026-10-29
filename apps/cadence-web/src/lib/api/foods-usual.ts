@@ -11,8 +11,13 @@ export interface UsualAtSlot {
   name: string;
   serving_label: string | null;
   kcal: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
   count: number;
 }
+
+const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 
 function parseUsual(body: unknown): UsualAtSlot[] {
   const raw = body && typeof body === 'object' ? (body as { items?: unknown }).items : null;
@@ -27,7 +32,10 @@ function parseUsual(body: unknown): UsualAtSlot[] {
       id: o.id,
       name: o.name,
       serving_label: typeof o.serving_label === 'string' ? o.serving_label : null,
-      kcal: typeof o.kcal === 'number' ? o.kcal : null,
+      kcal: num(o.kcal),
+      protein_g: num(o.protein_g),
+      carbs_g: num(o.carbs_g),
+      fat_g: num(o.fat_g),
       count: typeof o.count === 'number' ? o.count : 0,
     });
   }

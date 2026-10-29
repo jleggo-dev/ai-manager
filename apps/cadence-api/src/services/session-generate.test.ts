@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The retry-on-normalize-null contract (REQ10 §11's named gap, closed): a provider blip that
@@ -35,6 +35,7 @@ vi.mock('../repos/repertoire.ts', () => ({
 }));
 
 import { runJobBySlug } from '../ai/aim.ts';
+import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
 import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
@@ -463,5 +464,49 @@ describe('reviseSession', () => {
     const result = await reviseSession('u1', 'o1', 'add chest and abs');
     expect(result.status).toBe('revised');
     if (result.status === 'revised') expect(result.session.note).toBe('what landed');
+  });
+});
+
+describe("the first-open gate counts the USER's day, not the server's", () => {
+  // 01:00 UTC on the 29th is 21:00 on the 28th in Montreal — the person is still in their evening.
+  const AT = new Date('2026-10-29T01:00:00Z');
+  const theirToday = '2026-10-28';
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: AT, toFake: ['Date'] });
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: GOOD } as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), date: theirToday } as never);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.mocked(getUser).mockResolvedValue(null as never);
+  });
+
+  it("a session dated today in the person's zone still generates after UTC midnight", async () => {
+    vi.mocked(getUser).mockResolvedValue({ timezone: 'America/Montreal' } as never);
+    const occ = await getOccurrenceDetail('u1', 'o1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(1);
+    expect(occ?.session?.blocks).toHaveLength(1);
+  });
+
+  it('with no stored zone the floor is UTC, so the same row reads as past and is left bare', async () => {
+    const occ = await getOccurrenceDetail('u1', 'o1');
+    expect(runJobBySlug).not.toHaveBeenCalled();
+    expect(occ?.session ?? null).toBeNull();
+  });
+
+  it('a revision honours the same day: today in their zone is revisable, not "past"', async () => {
+    vi.mocked(getUser).mockResolvedValue({ timezone: 'America/Montreal' } as never);
+    vi.mocked(clearOccurrenceSession).mockResolvedValue(true as never);
+    const r = await reviseSession('u1', 'o1', 'shorter tonight');
+    expect(r.status).toBe('revised');
+  });
+
+  it('yesterday in their zone is still past', async () => {
+    vi.mocked(getUser).mockResolvedValue({ timezone: 'America/Montreal' } as never);
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), date: '2026-10-27' } as never);
+    expect(await getOccurrenceDetail('u1', 'o1')).toMatchObject({ date: '2026-10-27' });
+    expect(runJobBySlug).not.toHaveBeenCalled();
+    expect((await reviseSession('u1', 'o1', 'x')).status).toBe('not_revisable');
   });
 });

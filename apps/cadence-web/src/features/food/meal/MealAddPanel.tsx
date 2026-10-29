@@ -97,7 +97,6 @@ export function MealAddPanel({
   seed = '',
   onDone,
   onDescribe,
-  onAppended,
 }: {
   draft: MealDraft;
   /** Words already typed into the meal's own field — they carry over, never retype. */
@@ -105,8 +104,6 @@ export function MealAddPanel({
   onDone: () => void;
   /** Hand the words to the chat door — "Search, or just describe it…" keeps both promises. */
   onDescribe?: (text: string) => void;
-  /** Fired after every successful append — the B3 offer counts these. */
-  onAppended?: (meal: Meal) => void;
 }) {
   const kind = draft.meal?.meal ?? 'breakfast';
   const [query, setQuery] = useState(seed);
@@ -180,7 +177,6 @@ export function MealAddPanel({
     const index = m.items.length - 1;
     setJustAdded((j) => [...j.filter((i) => i !== index), index]);
     setAddedByFood((map) => ({ ...map, [foodId]: index }));
-    onAppended?.(m);
     backToSearch();
   };
 

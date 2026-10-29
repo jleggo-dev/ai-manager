@@ -24,6 +24,7 @@ export function CaptureSheet({
   onClose,
   onLogged,
   onOpenFood,
+  onCoach,
 }: {
   occurrenceId: string;
   /**
@@ -39,8 +40,10 @@ export function CaptureSheet({
   known?: { title: string; time_of_day?: string; date?: string };
   onClose: () => void;
   onLogged?: () => void;
-  /** Leave the capture for the Food screen — the meal ring is the door (device report, 2026-08-20). */
+  /** Leave the capture for the Food screen — the day card is the door (device report, 2026-08-20). */
   onOpenFood?: () => void;
+  /** Cadence's face on the quick log: the coach, with the meal in her note. */
+  onCoach?: (note: string) => void;
 }) {
   const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
   const title = detail?.title ?? known?.title ?? '';
@@ -55,7 +58,7 @@ export function CaptureSheet({
     <>
       <div className="sheet-scrim" onClick={onClose} aria-hidden />
       <div className="sheet ss" role="dialog" aria-label="Log">
-        <div className="sheet-grab" aria-hidden />
+        {!(isMeal && headable) && <div className="sheet-grab" aria-hidden />}
         {state === 'gone' ? (
           <div className="sheet-msg">This one moved with your new plan — close and take a fresh look at your week.</div>
         ) : state === 'error' || (state === 'ready' && !detail) ? (
@@ -68,6 +71,7 @@ export function CaptureSheet({
             onLogged={onLogged}
             onClose={onClose}
             onOpenFood={onOpenFood}
+            onCoach={onCoach}
           />
         ) : (
           <>

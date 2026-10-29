@@ -28,6 +28,10 @@ export interface UsualAtSlot {
   /** The serving this would add ("2/3 cup"), when the food names one. */
   serving_label: string | null;
   kcal: number | null;
+  /** Grams per serving — the tile's "P 12 · C 30 · F 8" line (quick log, 2026-10-28). */
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
   /** How many times it has been logged at this slot inside the window. */
   count: number;
 }
@@ -59,6 +63,9 @@ export async function usualAtSlot(userId: string, meal: MealKind, limit = 6): Pr
           name: food.name,
           serving_label: serving?.label ?? null,
           kcal: macros.kcal ?? null,
+          protein_g: macros.protein_g ?? null,
+          carbs_g: macros.carbs_g ?? null,
+          fat_g: macros.fat_g ?? null,
           count: t.count,
         };
       }
@@ -70,6 +77,9 @@ export async function usualAtSlot(userId: string, meal: MealKind, limit = 6): Pr
         name: recipe.name,
         serving_label: recipe.ingredients.length ? `${recipe.ingredients.length} ingredients` : null,
         kcal: recipe.macros_per_serving?.kcal ?? null,
+        protein_g: recipe.macros_per_serving?.protein_g ?? null,
+        carbs_g: recipe.macros_per_serving?.carbs_g ?? null,
+        fat_g: recipe.macros_per_serving?.fat_g ?? null,
         count: t.count,
       };
     }),

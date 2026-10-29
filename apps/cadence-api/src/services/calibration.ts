@@ -127,7 +127,7 @@ export async function getCalibration(
 
   const [logs, weights, goals, user] = await Promise.all([
     listNutritionLogs(userId, from, today),
-    listWeighInSeries(userId),
+    listWeighInSeries(userId, undefined, today),
     listGoalsByStatus(userId, ['confirmed', 'committed']),
     getUser(userId),
   ]);

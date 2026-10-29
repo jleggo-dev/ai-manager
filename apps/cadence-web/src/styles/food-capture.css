@@ -65,6 +65,51 @@
   color: oklch(60% 0.02 120);
 }
 
+/* The quick log's doors (2026-10-28): five round pucks, the glyph alone. Find leads and wears
+   ink — it is the fastest and most exact way in (owner, 2026-09-07) — the rest are white with
+   each door's own tint, as the capture set draws them everywhere else. */
+.fm-tiles-icons {
+  justify-content: space-between;
+  gap: 0;
+}
+.fm-tiles-icons .fm-tile {
+  flex: none;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid oklch(90% 0.015 85);
+  box-shadow: none;
+}
+.fm-tiles-icons .fm-tile-i {
+  width: auto;
+  height: auto;
+  background: transparent;
+  border-radius: 0;
+  color: inherit;
+}
+.fm-tiles-icons .fm-tile-i svg {
+  width: 22px;
+  height: 22px;
+}
+.fm-tiles-icons .fm-tile-search {
+  background: oklch(28% 0.03 150);
+  border-color: oklch(28% 0.03 150);
+  color: #fff;
+}
+.fm-tiles-icons .fm-tile-chat {
+  color: oklch(42% 0.06 152);
+}
+.fm-tiles-icons .fm-tile-voice {
+  color: oklch(42% 0.08 250);
+}
+.fm-tiles-icons .fm-tile-picture {
+  color: oklch(46% 0.09 66);
+}
+.fm-tiles-icons .fm-tile-barcode {
+  color: oklch(44% 0.06 152);
+}
+
 /* ── Addable rows + section heads (quick add and the Log screen share them) ──────────────── */
 .fq {
   display: flex;
