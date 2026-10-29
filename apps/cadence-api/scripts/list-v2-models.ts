@@ -1,4 +1,5 @@
 /** Query the devs-ai-v2 provider's model catalog from the AI Admin API. */
+// A listed model is not a promise it answers — prove it with POST /api/providers/:id/liveness (AI Admin → Providers → "Check models answer").
 import { config as dotenv } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -288,6 +288,41 @@ export interface SyncModelsResult {
   refreshedAt?: string;
 }
 
+/* ── Model liveness (does each configured model actually answer?) ── */
+
+export type LivenessVerdict = 'ok' | 'refused' | 'timeout' | 'empty' | 'error' | 'skipped';
+
+export interface ModelLiveness {
+  model: string;
+  verdict: LivenessVerdict;
+  /** The provider's own words for a refusal or error. */
+  message: string | null;
+  duration_ms: number;
+}
+
+export interface ProfilePointerLiveness {
+  model: string;
+  verdict: LivenessVerdict;
+}
+
+export interface ProfileLiveness {
+  id: string;
+  name: string;
+  primary: ProfilePointerLiveness | null;
+  failover: ProfilePointerLiveness | null;
+  /** True when the primary or the failover on this provider does not answer. */
+  dead: boolean;
+}
+
+export interface ProviderLivenessReport {
+  provider_id: string;
+  provider_name: string;
+  checked_at: string;
+  duration_ms: number;
+  models: ModelLiveness[];
+  profiles: ProfileLiveness[];
+}
+
 export interface HealthCheckResult {
   status: string;
   tables: Record<string, boolean>;

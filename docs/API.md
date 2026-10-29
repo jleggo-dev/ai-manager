@@ -143,13 +143,18 @@ All endpoints validate request bodies with Zod schemas (structural) and semantic
 | GET | `/api/providers/:id` | JWT/Key | Get one provider |
 | PUT | `/api/providers/:id` | JWT/Key | Update provider |
 | DELETE | `/api/providers/:id` | JWT/Key | Delete (409 if profiles depend on it) |
-| POST | `/api/providers/:id/test` | JWT/Key | Connectivity test |
+| POST | `/api/providers/:id/test` | JWT/Key | Connectivity test (key works, models listed) |
+| POST | `/api/providers/:id/liveness` | JWT/Key (owner/admin) | Check models answer: one short completion per model the provider's active profiles point at; stores and returns the report |
+| GET | `/api/providers/:id/liveness` | JWT/Key | Last liveness report (404 until one has run) |
 | GET | `/api/providers/:id/ais` | JWT/Key | List remote AIs (Devs.ai) |
 | GET | `/api/providers/:id/models` | JWT/Key | List LLM models for provider |
 | POST | `/api/providers/:id/models/sync` | JWT/Key | Discover/sync models |
 | POST | `/api/providers/:id/models` | JWT/Key | Add model(s) |
 | PUT | `/api/providers/:providerId/models/:modelId` | JWT/Key | Update model |
 | DELETE | `/api/providers/:providerId/models/:modelId` | JWT/Key | Delete model |
+
+### POST .../liveness
+**Response**: `{ provider_id, provider_name, checked_at, duration_ms, models: [{ model, verdict, message, duration_ms }], profiles: [{ id, name, primary: { model, verdict } | null, failover: { model, verdict } | null, dead }] }` — `verdict` is `ok | refused | timeout | empty | error | skipped`; `message` carries the provider's own words for a refusal or error. The catalog is a listing, not a promise (see CONCEPTS.md → Providers): this is the check that proves a model answers.
 
 ### POST /api/providers
 **Body**: `{ name, type, base_url, api_key?, is_active?, request_timeout_ms? }`

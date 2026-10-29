@@ -1,5 +1,12 @@
 import { request } from './client';
-import type { Provider, AiProfile, LlmModel, SyncModelsResult, PaginatedResponse } from '../../types/api';
+import type {
+  Provider,
+  AiProfile,
+  LlmModel,
+  SyncModelsResult,
+  PaginatedResponse,
+  ProviderLivenessReport,
+} from '../../types/api';
 
 /* ── Providers API ─────────────────────────────────────────────── */
 
@@ -31,6 +38,21 @@ export function deleteProvider(id: string): Promise<void> {
 
 export function testProvider(id: string): Promise<Record<string, unknown>> {
   return request(`/api/providers/${id}/test`, { method: 'POST' });
+}
+
+/** Send one minimal completion per model the provider's profiles point at; stores and returns the report. */
+export function runProviderLiveness(id: string): Promise<ProviderLivenessReport> {
+  return request(`/api/providers/${id}/liveness`, { method: 'POST' });
+}
+
+/** The last stored liveness report, or null when none has run yet. */
+export async function getProviderLiveness(id: string): Promise<ProviderLivenessReport | null> {
+  try {
+    return await request<ProviderLivenessReport>(`/api/providers/${id}/liveness`);
+  } catch (err) {
+    if ((err as { status?: number }).status === 404) return null;
+    throw err;
+  }
 }
 
 export function listProviderAis(id: string, scope?: string): Promise<AiProfile[]> {

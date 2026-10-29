@@ -2,7 +2,8 @@
  * Routes – Providers
  * -------------------
  * Admin CRUD for LLM providers (Devs.ai, OpenAI, Anthropic, etc.).
- * Also exposes a "test" endpoint and a proxy to fetch available AIs.
+ * Also exposes a "test" endpoint (lists models), a model liveness check (proves they answer —
+ * providers-liveness.ts) and a proxy to fetch available AIs.
  */
 
 import { Router, Request, Response } from 'express';
@@ -25,6 +26,7 @@ import { validateBody } from '../middleware/validate.ts';
 import { requireRole } from '../middleware/require-role.ts';
 import { createProviderSchema, updateProviderSchema } from '../schemas/providers.ts';
 import { sanitizeProvider } from '../lib/sanitize.ts';
+import livenessRouter from './providers-liveness.ts';
 import { z } from 'zod';
 import type { LlmModelRow, AiProfileRow } from '../types.ts';
 
@@ -55,6 +57,9 @@ const updateModelSchema = z.object({
 });
 
 const router = Router();
+
+/* Model liveness (POST/GET /:id/liveness) — does each configured model actually answer? */
+router.use(livenessRouter);
 
 function filterModelsForProvider(providerType: string, models: LlmModelRow[] = []): LlmModelRow[] {
   if (providerType === 'google-gemini') {

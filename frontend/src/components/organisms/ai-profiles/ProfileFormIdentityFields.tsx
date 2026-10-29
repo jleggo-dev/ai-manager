@@ -7,6 +7,7 @@
  */
 
 import { Select, SegmentedControl, Text, TextInput } from '@mantine/core';
+import ModelVerdict from '../../molecules/ModelVerdict';
 import type { LlmModel } from '../../../types/api';
 
 export interface ProviderAi {
@@ -167,6 +168,9 @@ export default function ProfileFormIdentityFields({
             required
           />
         ))}
+
+      {/* Last liveness verdict for the chosen model — a dead pointer is visible where it gets chosen. */}
+      {effectiveProfileType === 'model' && <ModelVerdict providerId={providerId} model={externalAiId} />}
 
       {!externalAiId && selectedProvider && effectiveProfileType === 'agent' && (
         <Text size="xs" c="dimmed">
