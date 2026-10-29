@@ -36,6 +36,8 @@ import { practiceVariables } from './session-practice-facts.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeSession } from './session-normalize.ts';
+import { CoachUnreachableError, withCoachRetry } from './session-generate-retry.ts';
+import { fallbackSessionFor } from './session-fallback.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
 import { getWeatherForUser, isOutdoorActivity, type WeatherSnapshot } from './weather/weather.ts';
 import { localDayIso } from './plan-day.ts';
@@ -193,10 +195,18 @@ async function generateSession(
   // malformed block — and re-rolling once turns "the user taps retry" into "the user never
   // noticed". One retry only: two consecutive rejections means something real is wrong, and the
   // regenerate-on-next-open path is the right place for that to surface.
+  //
+  // The TRANSPORT retry is a layer underneath (session-generate-retry.ts): a provider 5xx, a
+  // timeout or a failed failover gets a bounded second and third try before anyone is told. The
+  // two never multiply — a call that gets through but comes back unusable is re-rolled once here,
+  // a call that never gets through is retried there, and when it is gone for good the typed
+  // error surfaces to the route as a 503 the sheet can say in words.
   let session: OccurrenceSession | null = null;
   let attempts = 0;
   for (; attempts < 2 && !session; attempts += 1) {
-    const res = await runJobBySlug(userId, 'prescribe-session', variables);
+    const res = await withCoachRetry(() => runJobBySlug(userId, 'prescribe-session', variables), {
+      label: 'prescribe-session',
+    });
     session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
   }
   // The coach WINS on tempo (owner ruling). She is now told the settled tempo in {{repertoire}},
@@ -283,7 +293,24 @@ export async function getOccurrenceDetail(
     p = generateSession(userId, occ).finally(() => inflight.delete(occurrenceId));
     inflight.set(occurrenceId, p);
   }
-  const session = await p;
+  let session: OccurrenceSession | null;
+  try {
+    session = await p;
+  } catch (err) {
+    // Every bounded attempt to reach the coach failed. Hand back a plain version built from what is
+    // on file (session-fallback.ts) — marked, and NOT cached, so the next open asks her again. When
+    // nothing on file gives a shape, the error goes on to the route and the sheet says so.
+    if (!(err instanceof CoachUnreachableError)) throw err;
+    const plain = await fallbackSessionFor(userId, occ);
+    if (!plain) throw err;
+    void logAi(userId, {
+      kind: 'prescribe_session',
+      input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date },
+      output: plain,
+      meta: { fallback: 'coach_unreachable', attempts: err.attempts, blocks: plain.blocks.length },
+    });
+    return { ...occ, session: plain };
+  }
   if (!session) return occ; // generation failed — client offers a retry, nothing cached
 
   const won = await setOccurrenceSessionIfEmpty(userId, occurrenceId, session);

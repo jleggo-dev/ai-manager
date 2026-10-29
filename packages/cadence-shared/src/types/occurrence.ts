@@ -132,6 +132,11 @@ export interface OccurrenceSession {
   note: string; // coach's one-liner: progression rationale or first-session framing
   generated_at: string;
   version: number;
+  /** Set ONLY on a session built without the coach because she could not be reached
+   *  (session-fallback.ts): carried forward from an earlier session of the same title, or a plain
+   *  block from the activity's own shape. Never stored — the next open asks her again — and the
+   *  sheet says so in words. Absent on every session she prescribed. */
+  fallback?: 'coach_unreachable';
 }
 
 /** One reported item in the user's post-session log (parsed from their own words). */

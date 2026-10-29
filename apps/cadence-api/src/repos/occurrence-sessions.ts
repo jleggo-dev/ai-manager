@@ -84,3 +84,22 @@ export async function listUpcomingForRevision(
     order by o.date asc
     limit ${limit}`;
 }
+
+/**
+ * The MOST RECENT same-title occurrence with a cached session — what the person last did under
+ * this name, for the plain version built when the coach cannot be reached (session-fallback.ts).
+ * Same title key and shape as occurrences.ts's getAnchorSessionByTitle; only the direction differs.
+ */
+export async function getLatestSessionByTitle(
+  userId: string,
+  title: string,
+): Promise<{ date: string; session: OccurrenceSession } | null> {
+  const [row] = await sql<Array<{ date: string; session: OccurrenceSession }>>`
+    select to_char(o.date, 'YYYY-MM-DD') as date, o.session
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and lower(a.title) = ${title.toLowerCase()} and o.session is not null
+    order by o.date desc
+    limit 1`;
+  return row ?? null;
+}

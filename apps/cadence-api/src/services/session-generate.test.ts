@@ -23,6 +23,7 @@ vi.mock('../repos/occurrences.ts', () => ({
   setOccurrenceWeatherIfEmpty: vi.fn().mockResolvedValue(true),
 }));
 vi.mock('../repos/occurrence-sessions.ts', () => ({
+  getLatestSessionByTitle: vi.fn().mockResolvedValue(null),
   clearOccurrenceSession: vi.fn().mockResolvedValue(true),
   setOccurrenceSessionIfEmpty: vi.fn().mockResolvedValue(true),
 }));
@@ -38,10 +39,15 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
 import { getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
-import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
+import {
+  clearOccurrenceSession,
+  getLatestSessionByTitle,
+  setOccurrenceSessionIfEmpty,
+} from '../repos/occurrence-sessions.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
 import { getOccurrenceDetail, prefetchImminentSessions, reviseSession } from './session-generate.ts';
+import { CoachUnreachableError } from './session-generate-retry.ts';
 
 const GOOD = JSON.stringify({
   blocks: [{ label: 'Practice', items: [{ name: 'Settle', tool: 'breathing', breath_pattern: 'box' }] }],
@@ -98,10 +104,109 @@ describe('prescribe retry-on-normalize-null', () => {
     expect(runJobBySlug).toHaveBeenCalledTimes(2);
   });
 
-  it('a provider error still propagates — the retry is for bad output, not for transport', async () => {
-    vi.mocked(runJobBySlug).mockRejectedValue(new Error('502'));
-    await expect(getOccurrenceDetail('u1', 'o1')).rejects.toThrow('502');
+  it('our own 4xx still propagates at once — the re-roll is for bad output, not for transport', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(Object.assign(new Error('→ 400: variables invalid'), { status: 400 }));
+    await expect(getOccurrenceDetail('u1', 'o1')).rejects.toThrow('400');
     expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The transport retry (session-generate-retry.ts) under the generator: the 2026-10-27/28 outage
+ * shape. A provider blip on the first call is retried before anyone is answered, so the session
+ * opens on the later attempt with the person doing nothing; when every attempt fails the typed
+ * error reaches the route, nothing is cached, and the next open generates afresh.
+ */
+describe('prescribe survives a flaky provider', () => {
+  const transient = () =>
+    Object.assign(new Error('AI Admin POST /api/processing-jobs/x/test → 503: down'), { status: 503 });
+
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(setOccurrenceSessionIfEmpty).mockClear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    warn.mockRestore();
+  });
+
+  it('a transient failure then a success still opens — and caches — without the person doing anything', async () => {
+    vi.mocked(runJobBySlug)
+      .mockRejectedValueOnce(transient())
+      .mockResolvedValue({ raw: GOOD } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    const occ = await p;
+    expect(occ?.session?.blocks).toHaveLength(1);
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+    expect(setOccurrenceSessionIfEmpty).toHaveBeenCalledTimes(1);
+  });
+
+  it('when every attempt fails and nothing on file gives a shape, the typed error surfaces and nothing is cached', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), schedule: null } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    const settled = p.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    const err = await settled;
+    expect(err).toBeInstanceOf(CoachUnreachableError);
+    expect(runJobBySlug).toHaveBeenCalledTimes(3);
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('when every attempt fails, a plain version comes back from what is on file — marked, and NOT cached', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    vi.mocked(getLatestSessionByTitle).mockResolvedValueOnce({
+      date: '2026-10-22',
+      session: {
+        blocks: [{ label: 'Main', items: [{ name: 'Press', sets: 3, reps: 10 }] }],
+        note: 'old',
+        generated_at: 'x',
+        version: 1,
+      },
+    });
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(10_000);
+    const occ = await p;
+    expect(occ?.session?.fallback).toBe('coach_unreachable');
+    expect(occ?.session?.blocks[0]?.items[0]?.name).toBe('Press');
+    expect(runJobBySlug).toHaveBeenCalledTimes(3);
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('with no prior session, the plain version is one block from the activity\u2019s length', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({
+      ...pendingOccurrence(),
+      schedule: { recurrence: 'daily', duration_min: 15 },
+    } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(10_000);
+    const occ = await p;
+    expect(occ?.session?.fallback).toBe('coach_unreachable');
+    expect(occ?.session?.blocks).toEqual([
+      { label: 'Today', items: [{ name: 'Morning practice', tool: 'meditate', duration_min: 15 }] },
+    ]);
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('the transport retry and the output re-roll do not multiply', async () => {
+    // Call 1 fails transiently, call 2 gets through but is unusable, call 3 is good: 3 calls, one
+    // session. (Without the layering rule this could be 2 × 3 = 6.)
+    vi.mocked(runJobBySlug)
+      .mockRejectedValueOnce(transient())
+      .mockResolvedValueOnce({ raw: 'not json' } as never)
+      .mockResolvedValue({ raw: GOOD } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(5_000);
+    const occ = await p;
+    expect(occ?.session?.blocks).toHaveLength(1);
+    expect(runJobBySlug).toHaveBeenCalledTimes(3);
   });
 });
 

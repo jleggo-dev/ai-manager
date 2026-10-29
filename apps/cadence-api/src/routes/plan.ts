@@ -4,6 +4,7 @@ import { previewLock, dismissLock } from '../services/lock.ts';
 import { buildPlanView } from '../services/plan-view.ts';
 import { assessIfDue } from '../services/situation.ts';
 import { getOccurrenceDetail, prefetchImminentSessions } from '../services/session-generate.ts';
+import { CoachUnreachableError } from '../services/session-generate-retry.ts';
 import { runInBackground } from '../services/background.ts';
 import { logOccurrence } from '../services/session-log.ts';
 import { sessionTexts, touchPracticedFromText } from '../services/repertoire-practice.ts';
@@ -209,6 +210,13 @@ router.get('/occurrences/:id', async (req: Request, res: Response) => {
       : undefined;
     res.json(area ? { ...detail, area } : detail);
   } catch (err) {
+    // Every bounded attempt to reach the coach failed on a transient fault (a provider outage,
+    // a timeout). Nothing is cached, the plan is untouched, and the sheet gets a code it can
+    // turn into one honest sentence and a Try-again — not the generic 500 that read as "broken".
+    if (err instanceof CoachUnreachableError) {
+      console.warn(`[GET /plan/occurrences/:id] coach unreachable after ${err.attempts} attempts:`, err.message);
+      return void res.status(503).json({ error: 'coach_unreachable', attempts: err.attempts });
+    }
     console.error('[GET /plan/occurrences/:id]', err);
     res.status(500).json({ error: 'failed to load session' });
   }

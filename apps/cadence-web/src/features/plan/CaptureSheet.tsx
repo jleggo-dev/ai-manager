@@ -1,4 +1,5 @@
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
+import { CoachUnreachable } from './occurrence/CoachUnreachable.tsx';
 import { isFoodRow } from './occurrence/format.ts';
 import { MealCapturePanel } from './occurrence/MealCapturePanel.tsx';
 import { WeighInPanel } from './occurrence/WeighInPanel.tsx';
@@ -45,7 +46,7 @@ export function CaptureSheet({
   /** Cadence's face on the quick log: the coach, with the meal in her note. */
   onCoach?: (note: string) => void;
 }) {
-  const { detail, setDetail, state } = useOccurrenceDetail(occurrenceId);
+  const { detail, setDetail, state, retry } = useOccurrenceDetail(occurrenceId);
   const title = detail?.title ?? known?.title ?? '';
   const isWeigh = isWeighTitle(title);
   const time = detail?.schedule?.time_of_day ?? known?.time_of_day ?? null;
@@ -61,6 +62,8 @@ export function CaptureSheet({
         {!(isMeal && headable) && <div className="sheet-grab" aria-hidden />}
         {state === 'gone' ? (
           <div className="sheet-msg">This one moved with your new plan — close and take a fresh look at your week.</div>
+        ) : state === 'unreachable' ? (
+          <CoachUnreachable onRetry={retry} />
         ) : state === 'error' || (state === 'ready' && !detail) ? (
           <div className="sheet-msg">{"Couldn't open this just now — close and tap it again in a moment."}</div>
         ) : isMeal && headable ? (

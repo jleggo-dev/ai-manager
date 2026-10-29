@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deriveWalkthrough, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
+import { CoachPlainVersion, CoachUnreachable } from './occurrence/CoachUnreachable.tsx';
 import { WatchHandoffRow } from './occurrence/WatchHandoffRow.tsx';
 import { coachingMessages, useRotatingMessage } from './coaching-progress.ts';
 import { StartCoachAsk } from './start/StartCoachAsk.tsx';
@@ -50,7 +51,7 @@ export function StartSheet({
   /** Opens the coach from the post-session celebration. */
   onTalk?: () => void;
 }) {
-  const { detail, state } = useOccurrenceDetail(occurrenceId);
+  const { detail, state, retry } = useOccurrenceDetail(occurrenceId);
   const messages = useMemo(() => coachingMessages(title), [title]);
   const loadingMsg = useRotatingMessage(state === 'loading', messages);
   const [run, setRun] = useState<WalkthroughData | null>(null);
@@ -121,6 +122,8 @@ export function StartSheet({
           </div>
         ) : state === 'gone' ? (
           <div className="sheet-msg">This one moved with your new plan — close and take a fresh look at your week.</div>
+        ) : state === 'unreachable' ? (
+          <CoachUnreachable onRetry={retry} />
         ) : state === 'error' || !detail || !wt ? (
           <div className="sheet-msg">{"Couldn't open this just now — close and tap it again in a moment."}</div>
         ) : detail.status !== 'pending' ? (
@@ -137,6 +140,7 @@ export function StartSheet({
           />
         ) : (
           <>
+            {detail.session?.fallback === 'coach_unreachable' && <CoachPlainVersion onRetry={retry} />}
             <StartCoachAsk
               title={detail.title}
               timeOfDay={detail.schedule?.time_of_day}

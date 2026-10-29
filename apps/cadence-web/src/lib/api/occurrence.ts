@@ -24,11 +24,20 @@ export interface OccurrenceDetail {
 /**
  * Occurrence + the coach's concrete session (generated on first open — the slow path is one
  * coach-tier call, so callers show a loading state). Throws with status 404 after a replan
- * removed the row; the sheet turns that into "this session moved with your new plan".
+ * removed the row; the sheet turns that into "this session moved with your new plan". Throws with
+ * status 503 and code `coach_unreachable` when the server could not reach the coach to build it.
  */
 export async function getOccurrenceDetail(id: string): Promise<OccurrenceDetail> {
   const res = await fetch(`${BASE}/plan/occurrences/${id}`, { headers: headers() });
-  if (!res.ok) throw Object.assign(new Error(`detail failed: ${res.status}`), { status: res.status });
+  if (!res.ok) {
+    // The body's `error` is the server's name for what happened — `coach_unreachable` (a 503
+    // after every attempt to build the session failed) is the one the sheet tells apart.
+    const code = await res
+      .json()
+      .then((b: { error?: unknown }) => (typeof b?.error === 'string' ? b.error : undefined))
+      .catch(() => undefined);
+    throw Object.assign(new Error(`detail failed: ${res.status}`), { status: res.status, code });
+  }
   return res.json();
 }
 
