@@ -18,6 +18,10 @@ const META: Record<CaptureMethod, { label: string; hint: string; icon: () => Rea
  * Every method is a tile, so nothing here is a dead end (design 05a/05b). The picture tile is a
  * file input rather than a button — the camera has to be opened by a real label for iOS to hand
  * back the photo — so the row renders one or the other per method.
+ *
+ * `icons` is the quick log's row (2026-10-28): five round doors, the glyph alone, the word only
+ * for a screen reader. Each door keeps its name in the DOM (`data-method`) so a test can still
+ * tell Find from Chat without reading pixels.
  */
 export function MethodTiles({
   methods,
@@ -27,13 +31,15 @@ export function MethodTiles({
   onPhoto,
 }: {
   methods: CaptureMethod[];
-  /** `compact` is the sheet's icon-and-label row; `wide` is the Log screen's tile with a hint. */
-  variant?: 'compact' | 'wide';
+  /** `compact` is the sheet's icon-and-label row; `wide` is the Log screen's tile with a hint;
+   *  `icons` is the quick log's icon-only round doors. */
+  variant?: 'compact' | 'wide' | 'icons';
   disabled?: boolean;
   onPick: (m: CaptureMethod) => void;
   /** Given for the picture tile; without it, picture behaves like any other tile. */
   onPhoto?: (file: File | undefined) => void;
 }) {
+  const iconsOnly = variant === 'icons';
   return (
     <div className={`fm-tiles fm-tiles-${variant}`}>
       {methods.map((m) => {
@@ -43,13 +49,18 @@ export function MethodTiles({
             <span className="fm-tile-i">
               <Icon />
             </span>
-            <span className="fm-tile-l">{label}</span>
+            {!iconsOnly && <span className="fm-tile-l">{label}</span>}
             {variant === 'wide' && <span className="fm-tile-h">{hint}</span>}
           </>
         );
         if (m === 'picture' && onPhoto) {
           return (
-            <label className="fm-tile" key={m}>
+            <label
+              className={`fm-tile fm-tile-${m}`}
+              key={m}
+              aria-label={iconsOnly ? label : undefined}
+              data-method={m}
+            >
               {inner}
               <input
                 type="file"
@@ -66,7 +77,15 @@ export function MethodTiles({
           );
         }
         return (
-          <button type="button" className="fm-tile" key={m} disabled={disabled} onClick={() => onPick(m)}>
+          <button
+            type="button"
+            className={`fm-tile fm-tile-${m}`}
+            key={m}
+            disabled={disabled}
+            aria-label={iconsOnly ? label : undefined}
+            data-method={m}
+            onClick={() => onPick(m)}
+          >
             {inner}
           </button>
         );

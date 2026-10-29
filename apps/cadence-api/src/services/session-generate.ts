@@ -40,6 +40,20 @@ import { CoachUnreachableError, withCoachRetry } from './session-generate-retry.
 import { fallbackSessionFor } from './session-fallback.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
 import { getWeatherForUser, isOutdoorActivity, type WeatherSnapshot } from './weather/weather.ts';
+import { localDayIso } from './plan-day.ts';
+
+/**
+ * THEIR today, not the server's. The gates below used the UTC date, so from 20:00 in Montreal
+ * (00:00 UTC) every session still left in the person's evening was "yesterday": the first open
+ * declined to generate, returned the row bare, and the sheet drew its no-session fallback — a
+ * single "Done" step with none of the tools, pieces or run data (owner, on device, 2026-10-28:
+ * "Easy run just opens to log-this-done"). Same precedence as the horizon and the plan view
+ * (plan-day.ts): the stored zone, else UTC.
+ */
+async function userTodayIso(userId: string): Promise<string> {
+  const timezone = (await getUser(userId).catch(() => null))?.timezone;
+  return localDayIso(new Date(), timezone);
+}
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -270,12 +284,12 @@ export async function getOccurrenceDetail(
   if (!base) return null;
   const occ = await attachOutdoorWeather(userId, base);
 
-  const utcToday = new Date().toISOString().slice(0, 10);
-  const shouldGenerate = occ.kind === 'user' && occ.status === 'pending' && occ.date >= utcToday && !occ.session;
-  if (!shouldGenerate) return occ;
-
+  // A generation already running for this row has passed every gate — join it first, so the
+  // day lookup below never costs a racing tap the chance to share the coach call.
   let p = inflight.get(occurrenceId);
   if (!p) {
+    if (occ.kind !== 'user' || occ.status !== 'pending' || occ.session) return occ;
+    if (occ.date < (await userTodayIso(userId))) return occ;
     p = generateSession(userId, occ).finally(() => inflight.delete(occurrenceId));
     inflight.set(occurrenceId, p);
   }
@@ -322,18 +336,19 @@ export type ReviseSessionResult =
  * Order matters and is the whole trick: `setOccurrenceSessionIfEmpty` is compare-and-set on
  * EMPTY, so the stored session is cleared FIRST and the rebuilt one lands through the same guarded
  * write every other writer uses. Same gates as first-open generation (user-kind, still pending,
- * today or later — UTC, matching ensureHorizon's convention), and the same single-flight map: a
+ * today or later — the user's day, as ensureHorizon counts it), and the same single-flight map: a
  * generation already running for this occurrence is awaited out before the clear, and the rebuild
  * registers under the same key, so a tap racing the revise joins the steered generation instead
  * of spending a second coach call.
  */
 export async function reviseSession(userId: string, occurrenceId: string, steer: string): Promise<ReviseSessionResult> {
-  const occ = await getOccurrenceWithActivity(userId, occurrenceId);
+  // One await, not two: the gates must stay synchronous up to the single-flight registration
+  // below, or a tap racing the revise starts its own generation in the gap.
+  const [occ, today] = await Promise.all([getOccurrenceWithActivity(userId, occurrenceId), userTodayIso(userId)]);
   if (!occ) return { status: 'not_found' };
   if (occ.kind !== 'user') return { status: 'not_revisable', reason: 'system_row', occ };
   if (occ.status !== 'pending') return { status: 'not_revisable', reason: 'not_pending', occ };
-  const utcToday = new Date().toISOString().slice(0, 10);
-  if (occ.date < utcToday) return { status: 'not_revisable', reason: 'past', occ };
+  if (occ.date < today) return { status: 'not_revisable', reason: 'past', occ };
 
   // A first-open or prefetch generation mid-flight would race the clear below — let it finish
   // (or fail) first. The rebuild replaces whatever it cached anyway.

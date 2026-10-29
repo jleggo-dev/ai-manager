@@ -9,7 +9,7 @@ either is silent, the rulings ledger below wins.
 
 **A meal contains items and recipes. Nothing else.** There is no "group" object:
 
-- Bracketing rows together *is* making a recipe — at first unnamed, scoped to that meal.
+- Bracketing rows together _is_ making a recipe — at first unnamed, scoped to that meal.
 - Naming it and saving it are the same act: give it a name and it's in the cookbook.
 - One object, one number: a recipe has a **yield**. Yield 1 is what a person would call a saved
   meal ("Chia bowl"); yield N is what they'd call a recipe ("Chickpea stew, makes 4"). The
@@ -26,20 +26,20 @@ orphan snack. Later food starts a new meal.
 
 ## Owner rulings (2026-09-02, build kickoff)
 
-1. **Structure: 1b — the meal is the screen.** You open *Breakfast*, not *Log*. The draft meal is
+1. **Structure: 1b — the meal is the screen.** You open _Breakfast_, not _Log_. The draft meal is
    a real, persistent object; pickers are sub-sheets that return into it. **Constraint added by
    the owner: the greater Food screen (Day/Week/Kitchen) must stay reachable — the meal screen is
    the logging surface, not a wall.** A one-food express lane survives.
 2. **Add flow: B2 — ＋ on the row.** Search results and recents carry a ＋ that adds at the food's
    default serving and becomes a stepper in place. The serving sheet only opens for foods with
    genuinely ambiguous servings (marked ›). The sheet that does open never dismisses to nowhere:
-   its button says *Add to breakfast* and returns to search with the field cleared and the
+   its button says _Add to breakfast_ and returns to search with the field cleared and the
    keyboard up.
 3. **Gestures: the full set now**, plus every gesture's "boring twin" in the ⋯ menu. Pull the
    notch down over rows → they bracket into a recipe. Drag a row left out of the indent → it
    leaves. Drag a loose row right into the indent → it joins. Grab either end of the bracket →
-   resize. Last one out ungroups automatically. Menu twins: *Group things · Take something out
-   (tick-list) · Add to this · Ungroup · It makes several portions (yield)*.
+   resize. Last one out ungroups automatically. Menu twins: _Group things · Take something out
+   (tick-list) · Add to this · Ungroup · It makes several portions (yield)_.
 4. **Scope: everything in one push**, including the Sunday sweep (S3) and the retroactive tidy
    (S4).
 
@@ -88,10 +88,55 @@ for "Make it lighter" (the steer goes to the coach); nothing is sent on a tap; n
 the options; "Shift evenings earlier" is no longer offered (a static guess, never read from the
 week — its code stays accepted for stored rows).
 
+### Owner steer (2026-10-28) — the quick log: "too much to read"
+
+The meal drawer is redrawn as a shelf of your foods, not a form (canvas "Cadence Quick Log",
+`docs/cadence/design/quick-log/`). The model above is unchanged — one draft per date+slot,
+every door appends into it, logging is the one write, a logged meal keeps taking adds — only the
+reading changed:
+
+1. **Cut:** the OPEN pill, ‹ (the drawer swipes down from its top — handle, title, the day),
+   the "change ⌄" hint (the title IS the picker), the window line, the empty-state paragraph,
+   the labels under the doors, the express lane, the bracket rows. The ⋯ keeps save-as / rename.
+2. **Kept:** the day's ring and three bars at the top — now previewing the cart (a pale arc, a
+   hatched tail) before it is logged; open meals are still taken back out, logged means
+   logged. The five doors, icon-only, Find first. One button: "Log breakfast · kcal".
+3. **Four shelves, one tap each:** Planned (the tab is absent, not greyed, when the week names
+   nothing for the slot) · Usual (opens here; `useUsualAtSlot`, most-often first, plus the
+   saved one-portion recipes) · Leftovers (meals logged recently, newest first — see the
+   follow-up below; the first cut read batches off the brackets' yield) · Cookbook.
+   Two-column tiles — words and kcal, no photos — scrolling on without end.
+4. **Tap grammar:** tap = +1 default serving (✓), tap again = ×2 (the same row, doubled; a
+   dish gets another portion), hold = the amount sheet (chips from the food's default serving
+   at ½ · 1 · 1½ and its other servings in the picker's order, a stepper, "Other…", Add). × on a
+   chip removes the row or the whole bracket; a loose chip's words open the row, which is where
+   an amount the chat door left unsettled still gets settled — the button waits on that as
+   before. The first tap's quantity is remembered client-side (`bases`) so the badge can count.
+5. **Advice lives elsewhere.** Cadence's face in the title row is the one door: it hops to the
+   coach with an app-authored note (`coachNote.ts`) — which meal, what is in the cart or was
+   logged, and a pointer to `get_food_log` / `get_nutrition`; her goals are already in her
+   context. Nothing on the drawer speaks. No Undo after logging — entries are deleted from the
+   day (owner, 2026-10-28).
+6. **Follow-up the same day (owner, 2026-10-28):**
+   - **Leftovers = meals logged recently**, most recent at the top (the later slot first within
+     a day), one tile per meal named in its own words ("Lentil stew · Side salad"), a repeat shown
+     once, open meals and the draft itself left off. A tap appends the meal's rows exactly as
+     logged and redraws its named brackets; the badge counts whole copies read off the rows
+     (`mealCopies`). Window: seven days by default, 3 / 7 / 14 in Settings → Nutrition — stored
+     on the device, cleared on an account switch (`leftoverWindow.ts`). Leftovers have no hold.
+   - **P / C / F here** — the day bars' labels and a "P 12 · C 30 · F 8" line on every tile.
+     The full words do not fit; a **scoped exception** to BRAND.md's no-abbreviation rule, this
+     drawer only (recorded in BRAND.md). Screen readers still hear the words.
+   - **Hold is findable** — the pressed tile sinks and a holdable one fills toward the hold
+     (450 ms); the hold landing ticks a haptic (Capacitor Haptics on iOS — a new native plugin,
+     so the phone needs a rebuild — and `navigator.vibrate` on the web); a one-time line, "Hold a
+     tile to choose how much.", retires on the first hold.
+
 ## Rulings ledger (from the canvas — binding)
 
 **The bracket grammar** (one mark, learned once, drawn identically in the meal, the diary, the
 cookbook, and coach proposals):
+
 - Open bracket: name pill at the head, member rows indented beneath.
 - Collapsed: one row — `Chia bowl · 4 things · 348` with a ⌄.
 - Loose item: no bracket, no indent.
@@ -101,16 +146,18 @@ cookbook, and coach proposals):
   day.
 
 **Making and unmaking:**
+
 - Grouping changes no numbers, ever ("it's counted either way — this only changes how your day
   reads back").
 - Naming is skippable; unnamed reads as "4 things" and still collapses.
 - Suggested names come from the user's own raw words (she typed "chia bowl" → first chip is
-  *Chia bowl*). Nothing invents a cheerful name.
+  _Chia bowl_). Nothing invents a cheerful name.
 - Grouping is not saving. Saving to the cookbook is a separate, refusable act.
 - Ungrouping never removes food from the day — same kcal, read as five things instead of three.
 - A recipe of one item isn't a recipe: taking the second-to-last member out dissolves the bracket.
 
 **The add flow (B2 + the non-closing sheet):**
+
 - The field clears, the keyboard stays. Focus never leaves search between adds.
 - **Added is not logged.** Items land in the open meal; the meal is what commits. The strip reads
   `4 things · not counted yet`.
@@ -124,6 +171,7 @@ cookbook, and coach proposals):
   sizes worth asking about.
 
 **The meal screen (1b):**
+
 - Header chip carries the meal kind, inferred from the clock, changeable in one tap, asked once.
 - Open, then closed by the clock; the window is visible on-surface, never a silent rule.
 - An empty draft leaves no trace — no ghost diary row, nothing for the coach to see.
@@ -135,12 +183,12 @@ cookbook, and coach proposals):
   adds — "Four things, one after another. Do they go together?" — a preview of the bracket, not a
   dialog. Declining is free; the Sunday sweep is the fallback.
 
-**Editing a saved recipe does not reach backwards.** A logged meal keeps the recipe *as it was*;
+**Editing a saved recipe does not reach backwards.** A logged meal keeps the recipe _as it was_;
 the cookbook version moves on. (Designer's proposal, adopted — snapshot at log time.)
 
 **The cookbook shelf (S2):** one shelf, no Recipes/Meals/Foods tab triple. Bracketed rows; the
 only on-screen distinction is yield ("ONE PORTION · TAP AND IT'S LOGGED" vs "MAKES SEVERAL · PICK
-A PORTION"). This is the *logging-side* picker (the meal screen's "start from one of yours" /
+A PORTION"). This is the _logging-side_ picker (the meal screen's "start from one of yours" /
 My meals door). The Kitchen tab keeps its prep framing and its own no-logging ruling — the two
 surfaces read the same data.
 
@@ -148,6 +196,7 @@ surfaces read the same data.
 TIME", drawn with the same bracket — a five-item breakfast is two taps.
 
 **The Sunday sweep (S3) — deterministic finds, the model judges, the coach proposes:**
+
 - Deterministic: which item sets co-occur, how often, in which slot; whether a cooked thing was
   eaten more times than it was logged as made. Counts, not opinions.
 - The model's job: naming from the user's own words, "a two-item set isn't worth a row", spotting
@@ -162,12 +211,12 @@ TIME", drawn with the same bracket — a five-item breakfast is two taps.
 
 ## Nomenclature (schema/prompts vs UI)
 
-| Canonical (code/DB/prompts) | User-facing |
-|---|---|
-| `recipe` with `yield_servings` (existing `servings`) | "recipe" only on the cookbook shelf and in the coach's mouth |
-| meal `parts` (a recipe instance inside a meal) + loose `items` | the bracket; "4 things" |
-| `draft` / `open` / `closed` meal state | "OPEN · adds until 10:30" |
-| sweep `candidates` → coach `proposals` | "What I noticed" |
+| Canonical (code/DB/prompts)                                    | User-facing                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------ |
+| `recipe` with `yield_servings` (existing `servings`)           | "recipe" only on the cookbook shelf and in the coach's mouth |
+| meal `parts` (a recipe instance inside a meal) + loose `items` | the bracket; "4 things"                                      |
+| `draft` / `open` / `closed` meal state                         | "OPEN · adds until 10:30"                                    |
+| sweep `candidates` → coach `proposals`                         | "What I noticed"                                             |
 
 Banned words stay banned ("captured" in user copy; no streak-shame; the sweep proposes, never
 applies).
@@ -215,7 +264,7 @@ enforced (reads close overdue drafts; empty ones are deleted). Draft dates respe
   `tidy_ready[]`); `GET /nutrition/sweep` reports null once proposals are empty, so the residue
   never re-surfaces the card and never blocks next week's sweep. External contract unchanged.
 - "Cooked more than logged" ships as the identical-meal signal (`identical_meal_days ≥ 3` → yield
-  hint). Bracketing flat logs onto an *existing* cookbook recipe is a different commit contract —
+  hint). Bracketing flat logs onto an _existing_ cookbook recipe is a different commit contract —
   logged as a follow-up, not built.
 - The `sweep-food-recipes` job is in config but **not synced** — `sync-jobs.ts` is a post-merge
   step, called out in the PR.
@@ -233,6 +282,7 @@ enforced (reads close overdue drafts; empty ones are deleted). Draft dates respe
 ## Parcels
 
 Wave 1 (parallel, disjoint files):
+
 - **P1 SERVER-CORE** — migration apply, draft lifecycle + parts services, routes, day-read
   integration (open meals counted, marked open), `ambiguous` flag on food summaries, tests.
 - **P2 BRACKET-UI** — the bracket grammar as props-only components + the full gesture set +
@@ -241,6 +291,7 @@ Wave 1 (parallel, disjoint files):
   strict schema), pending rail + routes, tidy/revert, tests. Own route file; no shared-file edits.
 
 Wave 2 (after wave 1):
+
 - **P4 MEAL-SCREEN** — `useMealDraft`, `MealScreen` (1b), `MealAddPanel` (B2), door rewires
   (photo/chat/voice/barcode append into the draft), B3 offer, express lane.
 - **P5 INTEGRATION** — mount-point rewiring (FoodHome, MealCapturePanel, quick-add), deletion of

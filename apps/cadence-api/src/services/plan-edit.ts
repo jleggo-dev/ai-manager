@@ -1,4 +1,5 @@
 import type { Activity, PendingPlanActivity } from '@cadence/shared';
+import { matchGoalForActivity } from './plan-match.ts';
 import { describeRecurrence, parseRecurrence } from './scheduling.ts';
 import { sameTitleIntent } from './plan-edit-intent.ts';
 
@@ -449,7 +450,13 @@ function applyAdd(
     return { reject: `"${title}" was not added: days is required. Pass the days it repeats on.` };
   }
   const recurrence = `FREQ=WEEKLY;BYDAY=${byday}`;
-  const goalId = Object.keys(goalTitleById).find((id) => goalTitleById[id] === edit.goal_title);
+  // The same link the planner draws (plan-match.ts): the stated goal first, the title's own words
+  // when the Coach's tag matched nothing — an added "Sunday piano practice" still gets its area.
+  const goalId = matchGoalForActivity(
+    edit.goal_title,
+    title,
+    Object.entries(goalTitleById).map(([goal_id, t]) => ({ goal_id, title: t })),
+  )?.goal_id;
   const added: PendingPlanActivity = {
     title,
     kind: 'user',

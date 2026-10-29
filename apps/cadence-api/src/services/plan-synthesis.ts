@@ -15,7 +15,7 @@ import { carriedBuiltThrough, carriedWeekStart } from './week-clock.ts';
 import { prefetchImminentSessions } from './session-generate.ts';
 import { runInBackground } from './background.ts';
 import { toRRule, describeRecurrence } from './scheduling.ts';
-import { matchGoal } from './plan-match.ts';
+import { matchGoalForActivity } from './plan-match.ts';
 import { splitCoverage } from './plan-coverage.ts';
 import { readDensity, densityRepairSteer } from './plan-density.ts';
 import type { Activity, Goal, PendingPlanActivity, Plan, PlanRunStage, PlanVetResult } from '@cadence/shared';
@@ -206,7 +206,8 @@ function shapeActivity(a: Partial<Activity>, goals: Goal[]): PendingPlanActivity
   // accomplishments auto-attach to the right goal's progress). Rides on the spread `a` as an untyped
   // extra field from the model's JSON. `why` is the coach's one-line rationale — display-only, capped.
   const stated = (a as Record<string, unknown>).goal_title;
-  const matched = matchGoal(typeof stated === 'string' ? stated : undefined, goals);
+  // The stated title first; failing that, the activity's own words (plan-match.ts says why).
+  const matched = matchGoalForActivity(typeof stated === 'string' ? stated : undefined, a.title, goals);
   const why = (a as Record<string, unknown>).why;
   return {
     title: a.title ?? '',

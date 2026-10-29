@@ -4313,16 +4313,6 @@ html[data-native] .sheet-body {
   margin-top: 12px;
   padding-bottom: 2px;
 }
-/* Rings strip — logged (solid) / this meal (pale) / free (grey), all recomputing live */
-.mc-rings {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: #fff;
-  border: 1px solid oklch(91% 0.015 85);
-  border-radius: 16px;
-  padding: 12px 14px;
-}
 .nring {
   position: relative;
   flex: 0 0 auto;
@@ -4349,55 +4339,6 @@ html[data-native] .sheet-body {
   letter-spacing: 0.05em;
   color: oklch(58% 0.02 120);
   margin-top: 1px;
-}
-.mc-rings-r {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.mc-left {
-  font-size: 12px;
-  font-weight: 800;
-  color: oklch(34% 0.02 150);
-}
-.mc-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.mc-bar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.mc-bar-l {
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  color: oklch(58% 0.02 120);
-  width: 44px;
-  flex: 0 0 auto;
-}
-.mc-bar-track {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: oklch(93% 0.01 120);
-  overflow: hidden;
-}
-.mc-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-}
-.mc-bar-v {
-  font-size: 10px;
-  font-weight: 800;
-  color: oklch(45% 0.02 150);
-  width: 58px;
-  flex: 0 0 auto;
-  text-align: right;
 }
 /* The four capture routes — Snap is the tone-filled fast path */
 .mc-routes {
@@ -7648,7 +7589,6 @@ html[data-native] .sheet-body {
   cursor: pointer;
   display: block;
 }
-
 /* ── The Kitchen (Food Journey 10, 10a–c) ───────────────────────────────────────────────────
    The Food screen's third tab and its PREP surface: paste a recipe, read it per serving, put it
    on a day, buy what it needs. It borrows the reading tabs' card language deliberately — same

@@ -10,7 +10,6 @@ import {
   useRecipes,
 } from '../../lib/query/index.ts';
 import type { MealKind } from '@cadence/shared';
-import { ExpressFood } from '../food/ExpressFood.tsx';
 import { MealScreen } from '../food/meal/MealScreen.tsx';
 import { FoodSweepCard } from '../food/sweep/FoodSweepCard.tsx';
 import { FoodSweepSheet } from '../food/sweep/FoodSweepSheet.tsx';
@@ -83,8 +82,8 @@ export function FoodHome({
   /** Which Kitchen section the tab opens on — the Day tab's pills and doors steer it. */
   const [kitchenView, setKitchenView] = useState<KitchenView>(initialKitchen ?? 'recipes');
   const [nutrients, setNutrients] = useState(false);
-  /** The full-screen Log (05b), opened by "Log a meal" or an empty meal slot. */
-  const [logMeal, setLogMeal] = useState<MealKind | 'any' | 'express' | null>(initialLogMeal ? 'any' : null);
+  /** The quick log, opened by "Log a meal" or an empty meal slot. */
+  const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(initialLogMeal ? 'any' : null);
   // The Sunday sweep's ride-along: fetched once, carried through client state (the pending row
   // clears itself after commit). The card only shows on today's Day read.
   const sweep = useFoodSweep();
@@ -151,33 +150,17 @@ export function FoodHome({
   const loggedDates = new Set(recent.map((m) => m.date));
   const cookbookTail = recipeCount == null ? '' : recipeCount === 0 ? ' · nothing saved yet' : ` · ${recipeCount}`;
 
-  if (logMeal === 'express') {
-    return (
-      <ExpressFood
-        onClose={() => setLogMeal(null)}
-        onLogged={() => {
-          void invalidate();
-          onLogged?.();
-        }}
-      />
-    );
-  }
-
   if (logMeal) {
     // The meal is the screen (1b): you open Breakfast, not Log. The draft rejoins its window on
-    // its own; closing it lands back on the Day read with the day already invalidated by the hook.
+    // its own; leaving it lands back on the Day read with the day already invalidated by the hook.
+    const leave = () => {
+      setLogMeal(null);
+      void invalidateFoodLibrary();
+      void refetch();
+      onLogged?.();
+    };
     return (
-      <MealScreen
-        meal={logMeal === 'any' ? undefined : logMeal}
-        onClose={() => {
-          setLogMeal(null);
-          void invalidateFoodLibrary();
-          void refetch();
-          onLogged?.();
-        }}
-        onExpressSingle={() => setLogMeal('express')}
-        onOpenDay={() => setLogMeal(null)}
-      />
+      <MealScreen meal={logMeal === 'any' ? undefined : logMeal} onClose={leave} onOpenDay={leave} onCoach={onCoach} />
     );
   }
 

@@ -1,17 +1,13 @@
 import type { OccurrenceDetail } from '../../../lib/api.ts';
-import { useNutritionDay } from '../../../lib/query/index.ts';
 import { localTodayIso } from '../../../lib/query/keys.ts';
 import { MealScreen } from '../../food/meal/MealScreen.tsx';
-import { MealCaptureRings } from './MealCaptureRings.tsx';
 import { mealForNow, mealFromTitle } from './format.ts';
-import { usePlannedMeal } from './usePlannedMeal.ts';
 
 /**
- * The meal capture, from the trail — the cart (owner, 2026-09-07). Today's ring sits in context
- * showing only what is logged, and under it the meal IS the screen: what is in the cart, the
- * doors as one row, the shelf of what they usually have at this slot, and "Log breakfast" pinned
- * at the bottom. Nothing counts before that tap; after it, the same screen stays open to adds,
- * which count as they land.
+ * The meal capture, from the trail — the quick log (2026-10-28). The meal IS the sheet: its
+ * own title row, the day's ring and bars with the cart previewed on them, the doors, the
+ * shelves, and "Log breakfast" pinned at the bottom. The ring strip that used to sit above the
+ * meal is inside it now, so there is nothing of the capture's own left to draw.
  *
  * `detail` may still be on its way: the trail already knows the title and the day, and that is
  * everything the meal needs to open (PERF-06 — the screen is real on the first frame, the plate
@@ -24,6 +20,7 @@ export function MealCapturePanel({
   onLogged,
   onClose,
   onOpenFood,
+  onCoach,
 }: {
   detail: OccurrenceDetail | null;
   known: { title: string; date?: string };
@@ -32,12 +29,12 @@ export function MealCapturePanel({
   onClose?: () => void;
   /** Leave the capture for the Food screen — the day's whole read, and the way into Nutrients. */
   onOpenFood?: () => void;
+  /** Cadence's face: hand the conversation to the coach with the meal in her note. */
+  onCoach?: (note: string) => void;
 }) {
   const title = detail?.title ?? known.title;
   const date = detail?.date ?? known.date ?? localTodayIso();
   const mealKind = mealFromTitle(title) ?? mealForNow();
-  const { data: day } = useNutritionDay(date);
-  const { planned } = usePlannedMeal(mealKind, date);
 
   /** The row ticks server-side when the meal closes; this keeps the sheet's own copy honest. */
   const markLogged = () => {
@@ -48,8 +45,14 @@ export function MealCapturePanel({
 
   return (
     <div className="mc mc-cart">
-      <MealCaptureRings day={day} {...(onOpenFood ? { onOpenFood } : {})} />
-      <MealScreen meal={mealKind} date={date} planned={planned} onClose={() => onClose?.()} onLogged={markLogged} />
+      <MealScreen
+        meal={mealKind}
+        date={date}
+        onClose={() => onClose?.()}
+        onLogged={markLogged}
+        onOpenDay={onOpenFood}
+        onCoach={onCoach}
+      />
     </div>
   );
 }
