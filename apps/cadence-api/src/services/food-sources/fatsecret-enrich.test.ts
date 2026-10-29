@@ -21,7 +21,17 @@ vi.mock('./fatsecret.ts', () => ({
 
 import { expireFatSecretFood, findFoodByFatSecretId, upsertFatSecretFood } from '../../repos/foods.ts';
 import { fetchFatSecretFood, isFatSecretConfigured, searchFatSecretFoods } from './fatsecret.ts';
-import { FATSECRET_TTL_MS, findFatSecretMatch, isFatSecretRowFresh, refreshFatSecretFood } from './fatsecret-enrich.ts';
+import {
+  FATSECRET_TTL_MS,
+  fatSecretQuery,
+  findFatSecretMatch,
+  isFatSecretRowFresh,
+  matchFatSecret,
+  rankFatSecretHits,
+  refreshFatSecretFood,
+  topTie,
+} from './fatsecret-enrich.ts';
+import type { FatSecretHit } from './fatsecret-map.ts';
 
 function row(over: Partial<Food> = {}): Food {
   return {
@@ -146,5 +156,101 @@ describe('findFatSecretMatch', () => {
 
   it('needs something to search for', async () => {
     expect(await findFatSecretMatch('   ')).toBeNull();
+  });
+});
+
+/**
+ * Starbucks' real menu rows, as FatSecret returned them on 2026-10-29. "Starbucks, Venti latte"
+ * logged a Matcha Latte (Grande): every one of these scored the same, and the first listed won.
+ */
+const STARBUCKS: FatSecretHit[] = [
+  ['m-g', 'Matcha Latte (Grande)', '220kcal'],
+  ['c-g', 'Caff\u00e8 Latte (Grande)', '190kcal'],
+  ['psl', 'Pumpkin Spice Latte', '470kcal'],
+  ['ch-v', 'Chai Latte (Venti)', '240kcal'],
+  ['m-v', 'Matcha Latte (Venti)', '290kcal'],
+  ['c-v', 'Caff\u00e8 Latte (Venti)', '250kcal'],
+  ['ic-v', 'Iced Caff\u00e8 Latte (Venti)', '180kcal'],
+  ['nf-v', 'Hot Caff\u00e8 Latte - Nonfat Milk (Venti)', '170kcal'],
+  ['c-t', 'Caff\u00e8 Latte (Tall)', '150kcal'],
+].map(([food_id, name, kcal]) => ({ food_id: food_id!, name: name!, brand: 'Starbucks', description: kcal! }));
+
+function pick(said: string, size?: string): string[] {
+  return topTie(rankFatSecretHits(fatSecretQuery(said, 'Starbucks', size), STARBUCKS)).map((r) => r.hit.food_id);
+}
+
+describe('fatSecretQuery', () => {
+  it.each([
+    ['latte', 'Starbucks', 'Venti', 'Starbucks venti latte'],
+    ['latte', 'Starbucks', 'grande', 'Starbucks grande latte'],
+    ['latte', 'Starbucks', 'cup', 'Starbucks latte'], // a measure, not a size
+    ['latte', 'Starbucks', 'g', 'Starbucks latte'],
+    ['latte', 'Starbucks', null, 'Starbucks latte'],
+    ['peanuts', null, null, 'peanuts'],
+  ])('%j + %j + %j → %j', (q, brand, size, out) => {
+    expect(fatSecretQuery(q, brand, size)).toBe(out);
+  });
+});
+
+describe("choosing among a chain's menu rows", () => {
+  it.each([
+    // The exact drink, accent or not, at the size they said.
+    ['caffe latte', 'Venti', ['c-v']],
+    ['caff\u00e8 latte', 'venti', ['c-v']],
+    ['caffe latte', 'Tall', ['c-t']],
+    ['matcha latte', 'Venti', ['m-v']],
+    ['pumpkin spice latte', undefined, ['psl']],
+    ['iced caffe latte', 'Venti', ['ic-v']],
+  ])('%j (%s) takes exactly that row', (said, size, want) => {
+    expect(pick(said, size)).toEqual(want);
+  });
+
+  it.each([
+    // Near-misses: "latte" alone names no one drink here — Caff\u00e8, Chai and Matcha each add one word.
+    ['latte', 'Venti'],
+    ['latte', undefined],
+    // No size said: the Grande and the Tall are different foods with different labels.
+    ['caffe latte', undefined],
+  ])('%j (%s) is a tie, and nothing is taken', (said, size) => {
+    expect(pick(said, size).length).toBeGreaterThan(1);
+  });
+
+  it('never takes the Matcha for a latte, whatever order the rows arrive in', () => {
+    expect(pick('latte', 'Venti')).not.toEqual(['m-g']);
+    expect(pick('latte', 'Venti')).not.toEqual(['m-v']);
+  });
+
+  it('treats the same food listed twice as one food, not a tie', () => {
+    const twice: FatSecretHit[] = [
+      { food_id: 'a', name: 'Caff\u00e8 Latte (Venti)', brand: 'Starbucks', description: '' },
+      { food_id: 'b', name: 'Caffe Latte (Venti)', brand: 'Starbucks', description: '' },
+    ];
+    const top = topTie(rankFatSecretHits('Starbucks venti caffe latte', twice));
+    expect(top.map((r) => r.hit.food_id)).toEqual(['a']);
+  });
+});
+
+describe('matchFatSecret', () => {
+  it('reports a tie instead of importing one of it', async () => {
+    vi.mocked(searchFatSecretFoods).mockResolvedValue(STARBUCKS);
+    const out = await matchFatSecret('latte', 'Starbucks', 'Venti');
+    expect(out.food).toBeNull();
+    expect(out.tied.map((h) => h.food_id).sort()).toEqual(['c-v', 'ch-v', 'm-v']);
+    expect(findFoodByFatSecretId).not.toHaveBeenCalled();
+    expect(fetchFatSecretFood).not.toHaveBeenCalled();
+  });
+
+  it('searches with the size, so the right size is on the page at all', async () => {
+    vi.mocked(searchFatSecretFoods).mockResolvedValue([]);
+    await matchFatSecret('caffe latte', 'Starbucks', 'Venti');
+    expect(vi.mocked(searchFatSecretFoods).mock.calls[0]?.[0]).toBe('Starbucks venti caffe latte');
+  });
+
+  it('imports the one clear row', async () => {
+    vi.mocked(searchFatSecretFoods).mockResolvedValue(STARBUCKS);
+    vi.mocked(findFoodByFatSecretId).mockResolvedValue(row({ fatsecret_id: 'c-v', name: 'Caff\u00e8 Latte (Venti)' }));
+    const out = await findFatSecretMatch('caffe latte', 'Starbucks', 'Venti');
+    expect(out?.fatsecret_id).toBe('c-v');
+    expect(findFoodByFatSecretId).toHaveBeenCalledWith('c-v');
   });
 });

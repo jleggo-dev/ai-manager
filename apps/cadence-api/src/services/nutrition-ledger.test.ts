@@ -18,6 +18,15 @@ import { testUserId } from './test-user.ts';
 
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env') });
 
+/**
+ * The owner's venti latte, under this suite's own token. It was the plain words 'venti latte' until
+ * 2026-10-29, when the SHARED foods table gained a real "Starbucks Caffè Latte (Venti)" from
+ * FatSecret — every one of those words is in it, so it out-ranked the row this suite pins and the
+ * price became Starbucks' 250 instead of the test's 190. Real data will keep arriving; a fixture
+ * named in everyday words will keep losing to it.
+ */
+const LATTE = 'zzqledger latte';
+
 const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PASSWORD);
 const d = HAS_DB ? describe : describe.skip;
 
@@ -102,7 +111,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     // Each DB suite owns a DISTINCT token. These patterns are case-insensitive and the suites run
     // in parallel against one database, so a shared prefix means one suite deletes another's
     // fixtures mid-run — 'zzq test' did exactly that to test-foods.test.ts.
-    await clearUnusedSharedFoods(['venti latte', 'yogurt parfait', 'oat bowl', 'mystery stew', 'zzqmicro']);
+    await clearUnusedSharedFoods([LATTE, 'yogurt parfait', 'oat bowl', 'mystery stew', 'zzqmicro']);
   });
 
   afterEach(() => {
@@ -119,7 +128,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
 
     const rows = [];
     for (const est of drift) {
-      runJobBySlug.mockResolvedValueOnce(parse('venti latte', est, { qty: 1, unit: 'latte' }));
+      runJobBySlug.mockResolvedValueOnce(parse(LATTE, est, { qty: 1, unit: 'latte' }));
       rows.push(await logMeal(USER, { text: 'a venti latte from starbucks', date: today() }));
     }
 
@@ -137,13 +146,13 @@ d('A23 — the food ledger keeps a price (DB)', () => {
   });
 
   it('marks a fully ledger-priced meal as such, and never as provisional', async () => {
-    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
     const first = await logMeal(USER, { text: 'a venti latte', date: today() });
     expect(first.items[0]?.food_id).toBeTruthy();
 
     // Second time it resolves to the pinned row — and a low-confidence parse no longer matters,
     // because there is no guess left in the numbers.
-    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 999 }, { qty: 1, unit: 'latte', confidence: 0.2 }));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 999 }, { qty: 1, unit: 'latte', confidence: 0.2 }));
     const second = await logMeal(USER, { text: 'a venti latte', date: today() });
 
     expect(second.macros?.source).toBe('ledger');
@@ -202,7 +211,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
    * from must leave nothing behind — the same rule the two-stage photo read follows.
    */
   it('previewMealParse prices without pinning anything', async () => {
-    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
     const preview = await previewMealParse(USER, 'a venti latte');
 
     expect(preview.macros?.kcal).toBe(190);
@@ -211,10 +220,10 @@ d('A23 — the food ledger keeps a price (DB)', () => {
   });
 
   it('previewMealParse prices from a food already on file', async () => {
-    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
     await logMeal(USER, { text: 'a venti latte', date: today() });
 
-    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 260 }, { qty: 1, unit: 'latte' }));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 260 }, { qty: 1, unit: 'latte' }));
     const preview = await previewMealParse(USER, 'a venti latte');
 
     expect(preview.items[0]?.food_id).toBeTruthy();
@@ -384,7 +393,7 @@ d('A23 — the food ledger keeps a price (DB)', () => {
 
   /** Removing the meal must NOT remove the food it pinned — the price stays learned. */
   it('leaves the pinned food behind when a meal is removed', async () => {
-    runJobBySlug.mockResolvedValueOnce(parse('venti latte', { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
     const row = await logMeal(USER, { text: 'a venti latte', date: today() });
     expect(await ownFoodCount()).toBe(1);
 

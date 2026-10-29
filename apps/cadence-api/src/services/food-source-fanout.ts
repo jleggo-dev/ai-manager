@@ -30,7 +30,8 @@
  */
 import { searchFoods } from '../repos/foods.ts';
 import { enrichFoodsWithUsda } from './food-sources/usda-enrich.ts';
-import { findFatSecretMatch } from './food-sources/fatsecret-enrich.ts';
+import { matchFatSecret } from './food-sources/fatsecret-enrich.ts';
+import type { FatSecretHit } from './food-sources/fatsecret-map.ts';
 import { isGenericWholeFoodQuery } from './food-sources/usda-gate.ts';
 import { isUsdaConfigured } from './food-sources/usda.ts';
 import { findDisagreements, toCandidate, type FoodSourceName, type SourceCandidate } from './food-source-report.ts';
@@ -153,10 +154,21 @@ async function usdaRung(
   };
 }
 
+/**
+ * A tie, read out: each row FatSecret could not be told apart from, with its own one-line label.
+ * Those labels ARE facts (per-serving kcal and macros, as printed), so she can choose between them
+ * — or ask the person — instead of being handed whichever row happened to be listed first.
+ */
+export function describeTie(tied: readonly FatSecretHit[]): string {
+  const rows = tied.map((h) => `${[h.brand, h.name].filter(Boolean).join(' ')} (${h.description})`);
+  return `${tied.length} equally close matches, none taken: ${rows.join('; ')}`;
+}
+
 /** Billed per reprice, so opt-in. Skipping says so out loud rather than silently not appearing. */
 async function fatSecretRung(
   query: string,
   brand: string | null,
+  measure: string | null,
   include: boolean,
 ): Promise<{ foods: Food[]; check: SourceCheck }> {
   if (!include) {
@@ -165,12 +177,13 @@ async function fatSecretRung(
       check: { source: 'fatsecret', status: 'skipped', ms: 0, detail: 'not requested — billed per call' },
     };
   }
-  const { value, check } = await timed('fatsecret', () => findFatSecretMatch(query, brand));
-  if (check.status === 'error') return { foods: [], check };
-  return {
-    foods: value ? [value] : [],
-    check: { ...check, status: value ? 'hit' : 'miss', detail: value ? value.name : 'no match' },
-  };
+  // "1 Venti" → "Venti": a menu size picks the row, so it goes to the matcher as well as the pricer.
+  const size = measure?.replace(/^[\d./\s]+/, '') ?? null;
+  const { value, check } = await timed('fatsecret', () => matchFatSecret(query, brand, size));
+  if (check.status === 'error' || !value) return { foods: [], check };
+  if (value.food) return { foods: [value.food], check: { ...check, status: 'hit', detail: value.food.name } };
+  const detail = value.tied.length > 0 ? describeTie(value.tied) : 'no match';
+  return { foods: [], check: { ...check, status: 'miss', detail } };
 }
 
 /**
@@ -193,7 +206,7 @@ export async function fanOutFoodSources(userId: string, input: FanOutInput): Pro
   // real data dependency, not a preference. FatSecret has none, so it runs alongside both.
   const [ledger, fatsecret] = await Promise.all([
     ledgerRung(userId, query),
-    fatSecretRung(query, brand, input.includeFatSecret === true),
+    fatSecretRung(query, brand, measure, input.includeFatSecret === true),
   ]);
   const usda = await usdaRung(userId, query, ledger.foods, brand);
 

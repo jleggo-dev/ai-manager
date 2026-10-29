@@ -144,7 +144,7 @@ describe('priceMealItems — a matched food earns research when it is THIN, not 
     expect(out.fully_priced).toBe(true);
     expect(out.wants_research).toEqual([0]);
     // The completeness check above this line already tried the next deterministic rung first.
-    expect(findFatSecretMatch).toHaveBeenCalledWith('mystery bar', 'Couche-Tard');
+    expect(findFatSecretMatch).toHaveBeenCalledWith('mystery bar', 'Couche-Tard', 'container');
   });
 
   it('does not flag an item with no vendor named, even matched to the same thin row', async () => {

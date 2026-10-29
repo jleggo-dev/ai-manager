@@ -25,6 +25,7 @@ export * from './types/nutrition.ts';
 export * from './types/food.ts';
 export * from './types/dietary.ts';
 export * from './dietary-safety.ts';
+export * from './named-sizes.ts';
 export * from './types/episode.ts';
 export * from './types/health.ts';
 export * from './types/conversation.ts';

@@ -16,13 +16,13 @@ import type { Food } from '@cadence/shared';
 
 const searchFoods = vi.hoisted(() => vi.fn());
 const enrichFoodsWithUsda = vi.hoisted(() => vi.fn());
-const findFatSecretMatch = vi.hoisted(() => vi.fn());
+const matchFatSecret = vi.hoisted(() => vi.fn());
 
 vi.mock('../repos/foods.ts', () => ({ searchFoods }));
 vi.mock('./food-sources/usda-enrich.ts', () => ({ enrichFoodsWithUsda }));
 const isUsdaConfigured = vi.hoisted(() => vi.fn(() => true));
 vi.mock('./food-sources/usda.ts', () => ({ isUsdaConfigured }));
-vi.mock('./food-sources/fatsecret-enrich.ts', () => ({ findFatSecretMatch }));
+vi.mock('./food-sources/fatsecret-enrich.ts', () => ({ matchFatSecret }));
 
 const { fanOutFoodSources } = await import('./food-source-fanout.ts');
 
@@ -45,10 +45,10 @@ const check = (r: Awaited<ReturnType<typeof fanOutFoodSources>>, source: string)
   r.sources_checked.find((c) => c.source === source);
 
 beforeEach(() => {
-  for (const m of [searchFoods, enrichFoodsWithUsda, findFatSecretMatch]) m.mockReset();
+  for (const m of [searchFoods, enrichFoodsWithUsda, matchFatSecret]) m.mockReset();
   searchFoods.mockResolvedValue([]);
   enrichFoodsWithUsda.mockImplementation(async (_u: string, _q: string, local: Food[]) => local);
-  findFatSecretMatch.mockResolvedValue(null);
+  matchFatSecret.mockResolvedValue({ food: null, tied: [] });
   isUsdaConfigured.mockReturnValue(true);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -60,7 +60,10 @@ describe('every eligible source is asked, and all of them come back', () => {
       food({ food_id: 'own-1', source: 'llm', name: 'my shallots' }),
       food({ food_id: 'usda-1' }),
     ]);
-    findFatSecretMatch.mockResolvedValue(food({ food_id: 'fs-1', source: 'fatsecret', name: 'Shallot' }));
+    matchFatSecret.mockResolvedValue({
+      food: food({ food_id: 'fs-1', source: 'fatsecret', name: 'Shallot' }),
+      tied: [],
+    });
 
     const r = await fanOutFoodSources('u1', { query: 'shallots', includeFatSecret: true });
 
@@ -109,12 +112,36 @@ describe('the trace says what really happened', () => {
 
     expect(fs?.status).toBe('skipped');
     expect(fs?.detail).toContain('billed');
-    expect(findFatSecretMatch).not.toHaveBeenCalled();
+    expect(matchFatSecret).not.toHaveBeenCalled();
   });
 
   it('calls FatSecret only when asked', async () => {
     await fanOutFoodSources('u1', { query: 'shallots', includeFatSecret: true });
-    expect(findFatSecretMatch).toHaveBeenCalledOnce();
+    expect(matchFatSecret).toHaveBeenCalledOnce();
+  });
+
+  /** A tie is a fact about the menu, not "nothing found" — she gets every row, labels included. */
+  it('reads a FatSecret tie out instead of hiding it as a miss', async () => {
+    matchFatSecret.mockResolvedValue({
+      food: null,
+      tied: [
+        { food_id: 'c-v', name: 'Caff\u00e8 Latte (Venti)', brand: 'Starbucks', description: '250kcal' },
+        { food_id: 'm-v', name: 'Matcha Latte (Venti)', brand: 'Starbucks', description: '290kcal' },
+      ],
+    });
+    const r = await fanOutFoodSources('u1', {
+      query: 'latte',
+      brand: 'Starbucks',
+      measure: '1 Venti',
+      includeFatSecret: true,
+    });
+    const fs = check(r, 'fatsecret');
+
+    expect(matchFatSecret).toHaveBeenCalledWith('latte', 'Starbucks', 'Venti');
+    expect(fs?.status).toBe('miss');
+    expect(fs?.detail).toContain('2 equally close matches, none taken');
+    expect(fs?.detail).toContain('Starbucks Caff\u00e8 Latte (Venti) (250kcal)');
+    expect(fs?.detail).toContain('Starbucks Matcha Latte (Venti) (290kcal)');
   });
 
   it('skips USDA for a barcode rather than calling it', async () => {
