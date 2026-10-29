@@ -183,3 +183,11 @@ export async function listNutritionLogs(userId: string, fromDate: string, toDate
     where user_id = ${userId} and date >= ${fromDate} and date <= ${toDate}
     order by date desc, created_at desc`;
 }
+
+/** Every meal ever logged at one slot, newest first — the Usual shelf's whole-history read. */
+export async function listNutritionLogsAtSlot(userId: string, meal: NutritionLog['meal']): Promise<NutritionLog[]> {
+  return sql<NutritionLog[]>`
+    select ${COLS} from cadence.nutrition_logs
+    where user_id = ${userId} and meal = ${meal}
+    order by date desc, created_at desc`;
+}

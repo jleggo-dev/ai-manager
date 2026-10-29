@@ -102,8 +102,10 @@ reading changed:
    hatched tail) before it is logged; open meals are still taken back out, logged means
    logged. The five doors, icon-only, Find first. One button: "Log breakfast · kcal".
 3. **Four shelves, one tap each:** Planned (the tab is absent, not greyed, when the week names
-   nothing for the slot) · Usual (opens here; `useUsualAtSlot`, most-often first, plus the
-   saved one-portion recipes) · Leftovers (meals logged recently, newest first — see the
+   nothing for the slot) · Usual (opens here; `useUsualAtSlot` — everything ever logged at the
+   slot, most recently logged first, no time window, paged 30 at a time as the shelf scrolls
+   (owner, 2026-10-29); the saved one-portion recipes never logged there follow the last page)
+   · Leftovers (meals logged recently, newest first — see the
    follow-up below; the first cut read batches off the brackets' yield) · Cookbook.
    Two-column tiles — words and kcal, no photos — scrolling on without end.
 4. **Tap grammar:** tap = +1 default serving (✓), tap again = ×2 (the same row, doubled; a

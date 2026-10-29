@@ -1,6 +1,6 @@
 /**
- * "You usually have at breakfast" — the quick-add sheet's slot-aware list (design 05a).
- * Day-wide recents live in `foods.ts`; this one is counted and scoped to one meal.
+ * What you have at breakfast — the meal screen's Usual shelf: everything ever logged at one slot,
+ * most recently logged first, one page at a time. Day-wide recents live in `foods.ts`.
  */
 import { BASE, headers } from './http.ts';
 import type { MealKind } from './nutrition.ts';
@@ -15,6 +15,14 @@ export interface UsualAtSlot {
   carbs_g: number | null;
   fat_g: number | null;
   count: number;
+  /** When it was last logged at this slot (YYYY-MM-DD) — what the list is ordered by. */
+  last_date: string | null;
+}
+
+export interface UsualPage {
+  items: UsualAtSlot[];
+  /** Hand back as `cursor` for the next page; null when the list is done. */
+  nextCursor: string | null;
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
@@ -37,20 +45,23 @@ function parseUsual(body: unknown): UsualAtSlot[] {
       carbs_g: num(o.carbs_g),
       fat_g: num(o.fat_g),
       count: typeof o.count === 'number' ? o.count : 0,
+      last_date: typeof o.last_date === 'string' ? o.last_date : null,
     });
   }
   return out;
 }
 
-/** GET /nutrition/foods/usual?meal= — never throws; an empty list just means no habit yet. */
-export async function getUsualAtSlot(meal: MealKind, limit = 6): Promise<UsualAtSlot[]> {
-  try {
-    const res = await fetch(`${BASE}/nutrition/foods/usual?meal=${encodeURIComponent(meal)}&limit=${limit}`, {
-      headers: headers(),
-    });
-    if (!res.ok) return [];
-    return parseUsual(await res.json().catch(() => null));
-  } catch {
-    return [];
-  }
+/**
+ * GET /nutrition/foods/usual?meal=&limit=&cursor= — one page. THROWS on failure: it backs a
+ * persisted query, and a soft-failed empty page would be cached as "nothing logged here" and
+ * painted again on the next launch (the soft-fail-is-not-an-answer rule).
+ */
+export async function getUsualAtSlot(meal: MealKind, limit = 30, cursor: string | null = null): Promise<UsualPage> {
+  const q = new URLSearchParams({ meal, limit: String(limit) });
+  if (cursor) q.set('cursor', cursor);
+  const res = await fetch(`${BASE}/nutrition/foods/usual?${q}`, { headers: headers() });
+  if (!res.ok) throw new Error(`usual foods: ${res.status}`);
+  const body: unknown = await res.json();
+  const next = body && typeof body === 'object' ? (body as { next_cursor?: unknown }).next_cursor : null;
+  return { items: parseUsual(body), nextCursor: typeof next === 'string' ? next : null };
 }

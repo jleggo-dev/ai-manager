@@ -1,27 +1,44 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { getUsualAtSlot, type MealKind, type UsualAtSlot } from '../../lib/api.ts';
 import { queryKeys } from '../../lib/query/keys.ts';
 
 /**
- * How many rows the meal screen asks for. It used to be six, and the owner's own breakfast list
- * ran out after four rows (on device, 2026-09-07: "the list is too short — I should be able to
- * scroll a few pages"). Sixty is the server's own cap (USUAL_MAX) — the quick log's shelf
- * scrolls on without end (2026-10-28), so the client asks for everything the server will give.
+ * One page of the shelf. The list is everything ever logged at this slot, newest first, and
+ * scrolls without end (owner, 2026-10-29): the shelf asks for the next page as its bottom comes
+ * into view, so the whole history is never loaded at once.
  */
-export const USUAL_AT_SLOT_LIMIT = 60;
+export const USUAL_PAGE_SIZE = 30;
+
+export interface UsualShelf {
+  items: UsualAtSlot[];
+  hasMore: boolean;
+  /** Ask for the next page. Safe to call repeatedly — a second call while one is loading is a no-op. */
+  loadMore: () => void;
+}
 
 /**
- * What they usually have AT this slot, counted (design 05a). Empty is the honest answer for a new
- * user and for a slot they have never logged, so there is no loading state to show — the section
- * simply isn't there until there is a habit to show.
- *
- * Through the query cache since 2026-09-07 so the list paints from last launch's snapshot: it is
- * the first thing under the doors when a meal opens, and it used to arrive a round trip late.
+ * What they have AT this slot, newest first. Empty is the honest answer for a new user and for a
+ * slot they have never logged. Through the query cache (persisted) so the list paints from last
+ * launch's snapshot; the fetch throws on failure, so a blip is never cached as an empty shelf.
  */
-export function useUsualAtSlot(meal: MealKind, limit = USUAL_AT_SLOT_LIMIT): UsualAtSlot[] {
-  const { data } = useQuery({
-    queryKey: queryKeys.usualAtSlot.scoped(meal, limit),
-    queryFn: () => getUsualAtSlot(meal, limit),
+export function useUsualAtSlot(meal: MealKind): UsualShelf {
+  const q = useInfiniteQuery({
+    queryKey: queryKeys.usualAtSlot.paged(meal),
+    queryFn: ({ pageParam }) => getUsualAtSlot(meal, USUAL_PAGE_SIZE, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
   });
-  return data ?? [];
+  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = q;
+  // Stable while nothing changes, so the shelves (a useMemo on this) do not rebuild every render.
+  return useMemo(
+    () => ({
+      items: data?.pages.flatMap((p) => p.items) ?? [],
+      hasMore: !!hasNextPage,
+      loadMore: () => {
+        if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+      },
+    }),
+    [data, hasNextPage, isFetchingNextPage, fetchNextPage],
+  );
 }

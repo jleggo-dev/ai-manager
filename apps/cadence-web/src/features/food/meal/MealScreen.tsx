@@ -182,6 +182,7 @@ export function MealScreen({
         onHold={hold}
         onSwipe={stepShelf}
         hint={holdHint.show}
+        onEnd={shelves.more[active]}
       />
       {draft.err && <div className="food-empty ms-err">{draft.err}</div>}
       <CartBar

@@ -161,10 +161,10 @@ export const queryKeys = {
   coachFace: {
     all: ['coachFace'] as const,
   },
-  /** `/nutrition/foods/usual?meal=&limit=` — what they usually have at one slot, counted. Keyed
-   *  by slot and limit; persisted so the meal opens on the list, not on a round trip. */
+  /** `/nutrition/foods/usual?meal=&cursor=` — everything logged at one slot, newest first, as
+   *  pages (an infinite query). Persisted so the meal opens on the list, not on a round trip. */
   usualAtSlot: {
-    scoped: (meal: string, limit: number) => ['usualAtSlot', meal, limit] as const,
+    paged: (meal: string) => ['usualAtSlot', meal, 'pages'] as const,
   },
 } as const;
 

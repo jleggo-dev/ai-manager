@@ -2,7 +2,8 @@
  * The four shelves under the doors (quick log, 2026-10-28) — one tap each:
  *
  *   Planned   the week's dish for this slot; the tab is absent, not greyed, when there is none
- *   Usual     foods and one-portion recipes logged at this slot, most-often first (useUsualAtSlot)
+ *   Usual     everything logged at this slot, most recent first, paged as you scroll (useUsualAtSlot);
+ *             then the one-portion recipes never logged here, once the last page is in
  *   Leftovers meals logged recently, most recent first — the window is the user's (seven days)
  *   Cookbook  every saved recipe
  *
@@ -95,7 +96,13 @@ export function useShelves(
   today: string,
   /** The meal in front of you — never its own leftover. */
   draftLogId: string | null,
-): { keys: ShelfKey[]; planned: PlannedMeal | null; tiles: Record<ShelfKey, ShelfTile[]> } {
+): {
+  keys: ShelfKey[];
+  planned: PlannedMeal | null;
+  tiles: Record<ShelfKey, ShelfTile[]>;
+  /** The shelf whose next page is still to come, and how to ask for it. */
+  more: Partial<Record<ShelfKey, () => void>>;
+} {
   const { planned } = usePlannedMeal(kind, date);
   const usual = useUsualAtSlot(kind);
   const { data: cookbook } = useRecipes(true);
@@ -108,7 +115,7 @@ export function useShelves(
     const recipes = cookbook?.recipes ?? [];
     const byId = new Map(recipes.map((r) => [r.recipe_id, r]));
 
-    const usualTiles: ShelfTile[] = usual.map((u) => {
+    const usualTiles: ShelfTile[] = usual.items.map((u) => {
       const recipe = u.kind === 'recipe' ? byId.get(u.id) : undefined;
       return {
         key: `${u.kind}:${u.id}`,
@@ -121,7 +128,8 @@ export function useShelves(
         ...(recipe ? { yield: recipe.servings } : {}),
       };
     });
-    for (const r of recipes) {
+    // Recipes never logged here go after everything that was — so only once the last page is in.
+    for (const r of usual.hasMore ? [] : recipes) {
       if (r.servings > 1 || usualTiles.some((t) => t.kind === 'recipe' && t.id === r.recipe_id)) continue;
       usualTiles.push({
         key: `recipe:${r.recipe_id}`,
@@ -168,6 +176,7 @@ export function useShelves(
         leftovers: leftoverTiles,
         cookbook: cookbookTiles,
       },
+      more: usual.hasMore ? { usual: usual.loadMore } : {},
     };
   }, [cookbook, draftLogId, planned, recent, today, usual, windowDays]);
 }

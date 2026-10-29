@@ -1,7 +1,8 @@
 /**
  * The tiles (quick log, 2026-10-28): two columns, words and kcal, no photos — no library covers
  * every food, and a name with a number is faster to scan than a picture. The list scrolls on
- * without end (the shelf's own reads cap it, not this). Tap = +1, tap again = ×2 (the badge),
+ * without end: a shelf that pages (Usual) hands `onEnd`, and a marker under the last tile asks
+ * for the next page as it comes into view. Tap = +1, tap again = ×2 (the badge),
  * hold = the amount sheet. A swipe across the pane moves to the next shelf.
  *
  * Under the name, one tap's macros as "P 12 · C 30 · F 8" — single letters on THIS surface only
@@ -14,7 +15,7 @@
  * Empty shelves say one honest line each; the Planned shelf is never empty because its tab is
  * absent when there is nothing planned.
  */
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { badgeFor } from './cartModel.ts';
 import { fmtKcal } from '../bracket/copy.ts';
 import { HOLD_MS, useHoldTap, useSwipe } from './useShelfGestures.ts';
@@ -24,7 +25,7 @@ import type { ShelfKey, ShelfTile } from './useShelves.ts';
 
 const EMPTY: Record<ShelfKey, string> = {
   planned: '',
-  usual: 'Nothing here yet — what you log at this meal lands here, most-often first.',
+  usual: 'Nothing here yet — what you log at this meal lands here, most recent first.',
   leftovers: 'Nothing logged in that window yet — meals you log land here, newest first.',
   cookbook: 'Nothing saved yet. Name a bracket in any meal and it lands here.',
 };
@@ -72,6 +73,27 @@ function Tile({
   );
 }
 
+/** Calls `onEnd` when it scrolls into view (or straight away where there is no observer). */
+function EndMarker({ onEnd }: { onEnd: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const latest = useRef(onEnd);
+  latest.current = onEnd;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      latest.current();
+      return;
+    }
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && latest.current(), {
+      rootMargin: '300px',
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return <div ref={ref} className="ms-shelf-end" aria-hidden />;
+}
+
 export function ShelfGrid({
   shelf,
   tiles,
@@ -81,6 +103,7 @@ export function ShelfGrid({
   onHold,
   onSwipe,
   hint,
+  onEnd,
 }: {
   shelf: ShelfKey;
   tiles: ShelfTile[];
@@ -92,6 +115,8 @@ export function ShelfGrid({
   onSwipe: (dir: 1 | -1) => void;
   /** The one-time "hold a tile" line — shown only where a tile on this shelf can be held. */
   hint?: boolean;
+  /** This shelf has another page: called as its bottom comes into view. */
+  onEnd?: () => void;
 }) {
   const swipe = useSwipe(onSwipe);
   return (
@@ -118,7 +143,8 @@ export function ShelfGrid({
             onHold={t.kind === 'food' || t.kind === 'recipe' ? onHold : undefined}
           />
         ))}
-        {tiles.length === 0 && EMPTY[shelf] && <p className="ms-shelf-empty">{EMPTY[shelf]}</p>}
+        {tiles.length === 0 && !onEnd && EMPTY[shelf] && <p className="ms-shelf-empty">{EMPTY[shelf]}</p>}
+        {onEnd && <EndMarker key={`${shelf}:${tiles.length}`} onEnd={onEnd} />}
       </div>
     </div>
   );
