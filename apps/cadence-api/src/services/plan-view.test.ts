@@ -488,7 +488,13 @@ describe('buildPlanView — the preview behind the wall', () => {
   it('leaves a day alone when it already carries rows of its own', async () => {
     q.getActivePlan.mockImplementation(slow(MID_WEEK));
     q.listActivities.mockImplementation(slow([DAILY]));
-    const lastDate = new Date(Date.now() + 6 * 86_400_000).toISOString().slice(0, 10);
+    // The view's last day in TORONTO, as buildPlanView counts it — not UTC's. From 20:00 Toronto
+    // the UTC date is already tomorrow, and a UTC-derived date fell outside the seven-day window
+    // (cadence-ci-runs-at-utc: this went red on CI after 00:00 UTC on 2026-10-29).
+    const { planDayBase } = await import('./plan-day.ts');
+    const lastDate = new Date(planDayBase(new Date(), 'America/Toronto', null) + 6 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     q.listOccurrences.mockImplementation(
       slow([{ occurrence_id: 'o9', activity_id: 'a1', date: lastDate, status: 'pending', kind: 'user' }]),
     );

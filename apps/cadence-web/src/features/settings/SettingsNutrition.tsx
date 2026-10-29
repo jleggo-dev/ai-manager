@@ -25,6 +25,7 @@ import {
   useNutritionDay,
   useSetDietaryProfile,
 } from '../../lib/query/index.ts';
+import { SettingsLeftovers } from './SettingsLeftovers.tsx';
 import '../../styles/settings-editors.css';
 
 type MacroKey = 'kcal' | 'protein_g' | 'carbs_g' | 'fat_g' | 'sodium_mg';
@@ -64,6 +65,8 @@ export function SettingsNutrition({ onBack, onCoach }: { onBack: () => void; onC
         )}
 
         <AllergyPrefsCard />
+
+        <SettingsLeftovers />
       </div>
     </div>
   );

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:oklch(96% 0.025 76); font-family:'Nunito Sans',sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:oklch(45% 0.09 152); text-decoration:none; border-bottom:1px solid oklch(80% 0.06 152); }
+  a:hover { color:oklch(38% 0.09 152); border-bottom-color:oklch(60% 0.08 152); }
+  .ql-scroll::-webkit-scrollbar { display:none; }
+</style>
+</helmet>
+
+<section style="padding:56px 60px 40px;display:flex;flex-direction:column;gap:36px;width:max-content;">
+
+  <div style="display:flex;flex-direction:column;gap:14px;max-width:1240px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="background:oklch(45% 0.09 152);color:white;font-size:11px;font-weight:900;letter-spacing:0.08em;padding:5px 10px;border-radius:999px;">TURN 1</div>
+      <div style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:oklch(52% 0.02 120);">Quick log · the meal drawer, simplified</div>
+    </div>
+    <div style="font-family:'Fraunces',serif;font-weight:600;font-size:36px;line-height:1.1;color:oklch(26% 0.03 150);max-width:980px;text-wrap:pretty;">Tap what you ate. The drawer is a shelf of your foods, not a form.</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+      <div style="width:400px;background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:16px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:7px;">
+        <div style="font-size:10.5px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:oklch(52% 0.02 120);">Cut</div>
+        <div style="font-size:12.5px;line-height:1.6;color:oklch(38% 0.02 150);">OPEN pill · ‹ back (swipe the drawer down instead) · “change” button · the window line · the empty-state paragraph · tile labels · the express-lane link · photos (no library covers every food; words + kcal are faster to scan).</div>
+      </div>
+      <div style="width:400px;background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:16px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:7px;">
+        <div style="font-size:10.5px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:oklch(52% 0.02 120);">Kept</div>
+        <div style="font-size:12.5px;line-height:1.6;color:oklch(38% 0.02 150);">Day macros at the top — now they preview the cart as a hatched segment before you log. The five doors, icon-only. One button: <strong>Log breakfast · kcal</strong>.</div>
+      </div>
+      <div style="width:400px;background:oklch(93% 0.045 152);border-radius:16px;padding:16px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:7px;">
+        <div style="font-size:10.5px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:oklch(38% 0.07 152);">New</div>
+        <div style="font-size:12.5px;line-height:1.6;color:oklch(30% 0.06 152);">Four shelves, one tap each: <strong>Planned</strong> (hidden when the week has nothing) · <strong>Usual</strong> (opens here) · <strong>Leftovers</strong> (cooked in multiples, still fresh) · <strong>Cookbook</strong>. Tap = +1, tap again = ×2, hold = amount. ~14 foods above the fold; the list scrolls on without end.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:28px;align-items:flex-start;">
+
+    <div id="1a" style="width:390px;flex:none;display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="background:oklch(28% 0.03 150);color:white;font-family:'Fraunces',serif;font-weight:600;font-size:16px;padding:3px 11px;border-radius:999px;">1a</div>
+        <div style="font-size:10.5px;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;color:oklch(52% 0.02 120);">Live · tap to add</div>
+        <div style="flex:1;height:1px;background:oklch(90% 0.015 85);"></div>
+      </div>
+      <div style="width:390px;height:844px;border-radius:44px;overflow:hidden;box-shadow:0 18px 44px oklch(25% 0.05 265 / 0.18);background:linear-gradient(180deg, oklch(86% 0.05 72) 0%, oklch(90% 0.03 200) 60%);position:relative;">
+        <div onClick="{{ openDrawer }}" style="position:absolute;inset:0;background:oklch(20% 0.02 150 / 0.42);opacity:{{ scrimOpacity }};transition:opacity 0.3s;"></div>
+        <div onClick="{{ openDrawer }}" style="position:absolute;left:0;right:0;bottom:0;padding:16px 20px 30px;display:flex;align-items:center;gap:10px;cursor:pointer;opacity:{{ reopenOpacity }};transition:opacity 0.3s;">
+          <div style="flex:1;background:linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%);box-shadow:0 3px 0 oklch(39% 0.08 152);border-radius:16px;padding:13px 15px;color:white;font-size:14px;font-weight:900;display:flex;align-items:center;gap:10px;"><div style="flex:1;">Log a meal</div><div style="opacity:0.85;">›</div></div>
+        </div>
+        <div onPointerDown="{{ dragStart }}" onPointerMove="{{ dragMove }}" onPointerUp="{{ dragEnd }}" onPointerCancel="{{ dragEnd }}" style="position:absolute;left:0;right:0;top:72px;bottom:0;background:oklch(97% 0.012 85);border-radius:28px 28px 0 0;display:flex;flex-direction:column;overflow:hidden;transform:translateY({{ drawerY }});transition:{{ drawerTransition }};touch-action:pan-y;user-select:none;">
+          <div style="display:flex;justify-content:center;padding:8px 0 2px;cursor:grab;"><div style="width:40px;height:5px;border-radius:3px;background:oklch(84% 0.015 85);"></div></div>
+
+          <div style="padding:6px 20px 0;display:flex;align-items:center;gap:8px;position:relative;">
+            <div onClick="{{ togglePicker }}" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <div style="font-family:'Fraunces',serif;font-weight:600;font-size:28px;line-height:1;color:oklch(26% 0.03 150);text-transform:capitalize;">{{ mealName }}</div>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="color:oklch(58% 0.02 120);margin-top:3px;"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <div style="flex:1;"></div>
+            <div onClick="{{ openChat }}" style="display:flex;align-items:center;cursor:pointer;">
+              <div style="width:44px;height:44px;border-radius:50%;background:#fff;box-shadow:0 4px 0 oklch(88% 0.02 60),0 8px 14px oklch(25% 0.05 265 / 0.18);display:flex;align-items:center;justify-content:center;">
+                <div style="position:relative;width:27px;height:27px;">
+                  <div style="position:absolute;inset:0;clip-path:polygon(0% 0%, 100% 0%, 100% 16.6%, 16.6% 100%, 0% 100%);"><svg viewBox="0 0 100 100" width="27" height="27"><path d="M 79.737 66.484 A 34 34 0 1 1 79.737 33.516 L 66.773 39.107 A 20 20 0 1 0 66.773 60.893 Z" fill="#d85a30"></path></svg></div>
+                  <div style="position:absolute;inset:0;clip-path:polygon(100% 23.4%, 100% 100%, 23.4% 100%);"><svg viewBox="0 0 100 100" width="27" height="27"><path d="M 79.737 66.484 A 34 34 0 1 1 79.737 33.516 L 66.773 39.107 A 20 20 0 1 0 66.773 60.893 Z" fill="#3e5c76"></path></svg></div>
+                </div>
+              </div>
+            </div>
+            <div style="font-size:18px;font-weight:900;color:oklch(60% 0.02 120);">⋯</div>
+            <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:20px;top:40px;z-index:5;background:white;border:1px solid oklch(90% 0.015 85);border-radius:14px;box-shadow:0 10px 30px oklch(25% 0.05 265 / 0.16);padding:6px;display:flex;flex-direction:column;min-width:150px;">
+                <sc-for list="{{ mealKinds }}" as="k" hint-placeholder-count="4">
+                  <div onClick="{{ k.pick }}" style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:9px;cursor:pointer;font-size:14px;font-weight:800;color:oklch(30% 0.02 150);text-transform:capitalize;background:{{ k.bg }};">
+                    <div style="flex:1;">{{ k.name }}</div>
+                    <div style="font-size:11px;font-weight:900;color:oklch(45% 0.09 152);">{{ k.tick }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="margin:12px 20px 0;background:white;border:1px solid oklch(91% 0.015 85);border-radius:18px;padding:11px 13px;display:flex;align-items:center;gap:13px;">
+            <div style="position:relative;width:66px;height:66px;flex:none;">
+              <svg width="66" height="66" viewBox="0 0 66 66" style="position:absolute;inset:0;" aria-hidden="true">
+                <circle cx="33" cy="33" r="28.5" fill="none" stroke="oklch(93% 0.02 80)" stroke-width="7"></circle>
+                <circle cx="33" cy="33" r="28.5" fill="none" stroke="oklch(72% 0.15 68)" stroke-width="7" stroke-linecap="round" pathLength="100" stroke-dasharray="{{ kcalDash }}" transform="rotate(-90 33 33)"></circle>
+                <circle cx="33" cy="33" r="28.5" fill="none" stroke="oklch(85% 0.10 72)" stroke-width="7" pathLength="100" stroke-dasharray="{{ cartDash }}" stroke-dashoffset="{{ cartOffset }}" transform="rotate(-90 33 33)"></circle>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div style="font-family:'Fraunces',serif;font-weight:600;font-size:17px;line-height:1;color:oklch(28% 0.02 150);">{{ kcalLeft }}</div>
+                <div style="font-size:7.5px;font-weight:900;letter-spacing:0.06em;color:oklch(58% 0.02 120);margin-top:2px;">LEFT</div>
+              </div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+              <sc-for list="{{ macros }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:7px;">
+                  <div style="width:14px;flex:none;font-size:9px;font-weight:900;color:{{ m.color }};">{{ m.key }}</div>
+                  <div style="flex:1;height:8px;border-radius:4px;background:oklch(94% 0.015 80);overflow:hidden;display:flex;">
+                    <div style="height:8px;background:{{ m.color }};width:{{ m.done }};"></div>
+                    <div style="height:8px;width:{{ m.cart }};background:repeating-linear-gradient(135deg, {{ m.color }} 0 3px, transparent 3px 6px);opacity:0.6;"></div>
+                  </div>
+                  <div style="flex:none;min-width:52px;text-align:right;font-size:10px;font-weight:900;color:oklch(44% 0.02 120);font-variant-numeric:tabular-nums;">{{ m.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin:12px 20px 0;display:flex;justify-content:space-between;">
+            <div style="width:50px;height:50px;border-radius:50%;background:oklch(28% 0.03 150);display:flex;align-items:center;justify-content:center;color:white;"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></circle><path d="M15.4 15.4 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path></svg></div>
+            <div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);display:flex;align-items:center;justify-content:center;color:oklch(42% 0.06 152);"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20 12.5a7 7 0 0 1-7 7H8.5L4 22v-4.2A7 7 0 0 1 11 4h2a7 7 0 0 1 7 7v1.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+            <div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);display:flex;align-items:center;justify-content:center;color:oklch(42% 0.08 250);"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="9.2" y="2.8" width="5.6" height="11" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.7"></rect><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path></svg></div>
+            <div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);display:flex;align-items:center;justify-content:center;color:oklch(46% 0.09 66);"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5h3l1.2-2h5.6L15 8.5h3a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 18 18.5H4A1.5 1.5 0 0 1 2.5 17v-7A1.5 1.5 0 0 1 4 8.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path><circle cx="11" cy="13" r="2.7" fill="none" stroke="currentColor" stroke-width="1.7"></circle></svg></div>
+            <div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);display:flex;align-items:center;justify-content:center;color:oklch(44% 0.06 152);"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path><path d="M7.5 8.5v7M10 8.5v7M13 8.5v7M16.5 8.5v7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"></path></svg></div>
+          </div>
+
+          <div style="margin:14px 20px 0;display:flex;gap:4px;background:oklch(93% 0.015 85);border-radius:999px;padding:3px;">
+            <sc-for list="{{ shelves }}" as="s" hint-placeholder-count="4">
+              <div onClick="{{ s.pick }}" style="flex:1;text-align:center;padding:8px 0;border-radius:999px;font-size:12px;font-weight:900;cursor:pointer;background:{{ s.bg }};color:{{ s.color }};box-shadow:{{ s.shadow }};">{{ s.label }}</div>
+            </sc-for>
+          </div>
+
+          <div onPointerDown="{{ swipeStart }}" onPointerMove="{{ swipeMove }}" onPointerUp="{{ swipeEnd }}" onPointerCancel="{{ swipeEnd }}" class="ql-scroll" style="flex:1;overflow-y:auto;position:relative;touch-action:pan-y;scrollbar-width:none;">
+            <div style="padding:12px 20px 16px;display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:8px;transform:translateX({{ paneX }});opacity:{{ paneOpacity }};transition:{{ paneTransition }};">
+              <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="12">
+                <div onClick="{{ t.add }}" style="position:relative;background:{{ t.bg }};border:1.5px solid {{ t.border }};border-radius:14px;padding:10px 11px;cursor:pointer;display:flex;align-items:center;gap:9px;box-sizing:border-box;min-height:54px;">
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:12.5px;line-height:1.2;font-weight:900;color:oklch(28% 0.02 150);">{{ t.name }}</div>
+                    <div style="font-size:9.5px;font-weight:800;color:oklch(56% 0.02 120);margin-top:2px;">{{ t.sub }}</div>
+                  </div>
+                  <div style="flex:none;text-align:right;"><div style="font-size:13px;font-weight:900;color:oklch(40% 0.02 150);font-variant-numeric:tabular-nums;">{{ t.kcal }}</div><div style="font-size:7.5px;font-weight:900;letter-spacing:0.05em;color:oklch(60% 0.02 120);">KCAL</div></div>
+                  <sc-if value="{{ t.on }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;top:-7px;right:-6px;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:oklch(45% 0.09 152);color:white;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px oklch(0% 0 0 / 0.15);box-sizing:border-box;">{{ t.badge }}</div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ hasCart }}" hint-placeholder-val="{{ true }}">
+            <div style="background:white;border-top:1px solid oklch(93% 0.012 90);padding:10px 20px 28px;display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <sc-for list="{{ cart }}" as="c" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:6px;background:oklch(93% 0.045 152);border-radius:999px;padding:5px 7px 5px 10px;font-size:11.5px;font-weight:900;color:oklch(30% 0.06 152);">
+                    <div>{{ c.label }}</div>
+                    <div onClick="{{ c.remove }}" style="width:16px;height:16px;border-radius:50%;background:oklch(100% 0 0 / 0.7);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;color:oklch(38% 0.06 152);">×</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ logMeal }}" style="background:linear-gradient(180deg, oklch(60% 0.10 152) 0%, oklch(52% 0.09 152) 46%);box-shadow:0 3px 0 oklch(39% 0.08 152);border-radius:16px;padding:14px;text-align:center;font-size:15px;font-weight:900;color:white;cursor:pointer;">{{ logLabel }}</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ justLogged }}" hint-placeholder-val="{{ false }}">
+            <div style="background:white;border-top:1px solid oklch(93% 0.012 90);padding:14px 20px 28px;display:flex;align-items:center;gap:10px;">
+              <div style="width:26px;height:26px;border-radius:50%;background:oklch(45% 0.09 152);color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;">✓</div>
+              <div style="flex:1;font-size:13.5px;font-weight:900;color:oklch(30% 0.02 150);">{{ loggedLine }}</div>
+              <div onClick="{{ resetAll }}" style="font-size:11px;font-weight:900;color:oklch(45% 0.09 152);cursor:pointer;">Undo</div>
+            </div>
+          </sc-if>
+        </div>
+        <sc-if value="{{ chatOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;background:oklch(97% 0.012 85);display:flex;flex-direction:column;padding-top:54px;">
+            <div style="padding:0 16px 12px;display:flex;align-items:center;gap:10px;">
+              <div onClick="{{ closeChat }}" style="width:30px;height:30px;border-radius:50%;background:white;box-shadow:0 2px 0 oklch(90% 0.015 95);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:oklch(45% 0.02 150);cursor:pointer;">‹</div>
+              <div style="flex:1;font-size:13px;font-weight:900;color:oklch(30% 0.02 150);text-transform:capitalize;">{{ chatTitle }}</div>
+            </div>
+            <div style="flex:1;padding:8px 18px;display:flex;flex-direction:column;gap:12px;">
+              <div style="align-self:flex-start;max-width:290px;background:white;border:1px solid oklch(91% 0.015 85);border-radius:4px 18px 18px 18px;padding:11px 13px;font-size:13.5px;line-height:1.5;color:oklch(30% 0.02 150);">{{ chatOpener }}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <div style="background:white;border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:900;color:oklch(36% 0.02 150);">Is this enough protein?</div>
+                <div style="background:white;border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:900;color:oklch(36% 0.02 150);">What should I swap?</div>
+                <div style="background:white;border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:8px 13px;font-size:12px;font-weight:900;color:oklch(36% 0.02 150);">Plan tomorrow's</div>
+              </div>
+            </div>
+            <div style="padding:10px 16px 30px;display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;background:white;border:1px solid oklch(91% 0.015 85);border-radius:999px;padding:12px 16px;font-size:13px;font-weight:700;color:oklch(64% 0.015 150);">Ask about this meal…</div>
+              <div style="width:42px;height:42px;border-radius:50%;background:oklch(28% 0.03 150);color:white;display:flex;align-items:center;justify-content:center;font-size:18px;">↑</div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="font-size:12px;line-height:1.5;color:oklch(46% 0.02 150);text-wrap:pretty;">Tap tiles · swipe left/right between shelves · drag the drawer down to dismiss (tap the scrim or the button to bring it back) · tap Cadence to talk about this meal.</div>
+    </div>
+
+    <div id="1b" style="width:390px;flex:none;display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="background:oklch(28% 0.03 150);color:white;font-family:'Fraunces',serif;font-weight:600;font-size:16px;padding:3px 11px;border-radius:999px;">1b</div>
+        <div style="font-size:10.5px;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;color:oklch(52% 0.02 120);">Hold a tile · amount</div>
+        <div style="flex:1;height:1px;background:oklch(90% 0.015 85);"></div>
+      </div>
+      <div style="width:390px;height:844px;border-radius:44px;overflow:hidden;box-shadow:0 18px 44px oklch(25% 0.05 265 / 0.18);background:oklch(97% 0.012 85);position:relative;">
+        <div style="position:absolute;inset:0;background:oklch(97% 0.012 85);"></div>
+        <div style="position:absolute;left:0;right:0;top:72px;bottom:0;background:oklch(97% 0.012 85);border-radius:28px 28px 0 0;display:flex;flex-direction:column;overflow:hidden;filter:blur(1.5px);opacity:0.55;">
+          <div style="display:flex;justify-content:center;padding:8px 0 2px;"><div style="width:40px;height:5px;border-radius:3px;background:oklch(84% 0.015 85);"></div></div>
+          <div style="padding:6px 20px 0;display:flex;align-items:center;gap:6px;"><div style="font-family:'Fraunces',serif;font-weight:600;font-size:28px;line-height:1;color:oklch(26% 0.03 150);">Breakfast</div><div style="font-size:14px;color:oklch(58% 0.02 120);">⌄</div></div>
+          <div style="margin:12px 20px 0;height:90px;background:white;border:1px solid oklch(91% 0.015 85);border-radius:18px;"></div>
+          <div style="margin:12px 20px 0;display:flex;justify-content:space-between;"><div style="width:50px;height:50px;border-radius:50%;background:oklch(28% 0.03 150);"></div><div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);"></div><div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);"></div><div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);"></div><div style="width:50px;height:50px;border-radius:50%;background:white;border:1px solid oklch(90% 0.015 85);"></div></div>
+          <div style="margin:14px 20px 0;height:38px;background:oklch(93% 0.015 85);border-radius:999px;"></div>
+          <div style="padding:12px 20px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div style="height:54px;background:white;border:1.5px solid oklch(91% 0.015 85);border-radius:14px;"></div><div style="height:54px;background:white;border:1.5px solid oklch(91% 0.015 85);border-radius:14px;"></div><div style="height:54px;background:white;border:1.5px solid oklch(91% 0.015 85);border-radius:14px;"></div><div style="height:54px;background:white;border:1.5px solid oklch(91% 0.015 85);border-radius:14px;"></div><div style="height:54px;background:white;border:1.5px solid oklch(91% 0.015 85);border-radius:14px;"></div><div style="height:54px;background:white;border:1.5px solid oklch(91% 0.015 85);border-radius:14px;"></div></div>
+        </div>
+        <div style="position:absolute;inset:0;background:oklch(20% 0.02 150 / 0.25);"></div>
+        <div style="position:absolute;left:20px;right:20px;top:296px;background:white;border-radius:20px;box-shadow:0 20px 50px oklch(25% 0.05 265 / 0.25);padding:16px;display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="flex:1;font-size:15px;font-weight:900;color:oklch(28% 0.02 150);">Greek yogurt, 2%</div>
+            <div style="font-size:13px;font-weight:900;color:oklch(40% 0.02 150);">146 <span style="font-size:8px;letter-spacing:0.05em;color:oklch(60% 0.02 120);">KCAL</span></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div style="background:oklch(97% 0.012 85);border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:9px 14px;font-size:12.5px;font-weight:900;white-space:nowrap;color:oklch(40% 0.02 150);">½ cup</div>
+            <div style="background:oklch(45% 0.09 152);border:1px solid oklch(45% 0.09 152);border-radius:999px;padding:9px 14px;font-size:12.5px;font-weight:900;white-space:nowrap;color:white;">1 cup</div>
+            <div style="background:oklch(97% 0.012 85);border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:9px 14px;font-size:12.5px;font-weight:900;white-space:nowrap;color:oklch(40% 0.02 150);">1½ cups</div>
+            <div style="background:oklch(97% 0.012 85);border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:9px 14px;font-size:12.5px;font-weight:900;white-space:nowrap;color:oklch(40% 0.02 150);">170 g</div>
+            <div style="background:oklch(97% 0.012 85);border:1px solid oklch(90% 0.015 85);border-radius:999px;padding:9px 14px;font-size:12.5px;font-weight:900;white-space:nowrap;color:oklch(40% 0.02 150);">Other…</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;display:flex;align-items:center;gap:6px;background:oklch(97% 0.012 85);border-radius:999px;padding:4px 5px;">
+              <div style="width:30px;height:30px;border-radius:50%;background:white;box-shadow:0 1px 2px oklch(0% 0 0 / 0.08);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:oklch(46% 0.02 150);">−</div>
+              <div style="flex:1;text-align:center;font-size:13px;font-weight:900;color:oklch(30% 0.02 150);">1 cup</div>
+              <div style="width:30px;height:30px;border-radius:50%;background:white;box-shadow:0 1px 2px oklch(0% 0 0 / 0.08);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:oklch(46% 0.02 150);">＋</div>
+            </div>
+            <div style="background:oklch(28% 0.03 150);color:white;border-radius:999px;padding:11px 18px;font-size:13px;font-weight:900;">Add</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;line-height:1.5;color:oklch(46% 0.02 150);text-wrap:pretty;">Only when the default isn't right. Chips come from <em>servingPicker</em> — volume leads for produce, printed weight for brands — so most foods never open this.</div>
+    </div>
+
+    <div style="width:420px;flex:none;display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="font-size:10.5px;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;color:oklch(52% 0.02 120);">Rules &amp; calls</div>
+        <div style="flex:1;height:1px;background:oklch(90% 0.015 85);"></div>
+      </div>
+      <div style="background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:13px;font-weight:900;color:oklch(28% 0.02 150);">Which shelf opens</div>
+        <div style="font-size:12.5px;line-height:1.55;color:oklch(38% 0.02 150);">Planned if the week names a dish for this slot, else Usual. The Planned tab is absent, not greyed, when there's nothing — three tabs that day.</div>
+      </div>
+      <div style="background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:13px;font-weight:900;color:oklch(28% 0.02 150);">What “Usual” ranks on</div>
+        <div style="font-size:12.5px;line-height:1.55;color:oklch(38% 0.02 150);">Foods and one-portion recipes logged at this slot, most-often first, recency as tiebreak (<em>useUsualAtSlot</em> already does this). No kind markers — the shelf you're on already says what these are.</div>
+      </div>
+      <div style="background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:13px;font-weight:900;color:oklch(28% 0.02 150);">Leftovers</div>
+        <div style="font-size:12.5px;line-height:1.55;color:oklch(38% 0.02 150);">Any logged recipe with yield &gt; 1 in the last 4 days, showing portions still unaccounted for (“2 of 4 left”). Tapping logs one portion and decrements. Gone when it hits zero or ages out.</div>
+      </div>
+      <div style="background:white;border:1px solid oklch(91% 0.015 85);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:13px;font-weight:900;color:oklch(28% 0.02 150);">Tap grammar</div>
+        <div style="font-size:12.5px;line-height:1.55;color:oklch(38% 0.02 150);">Tap = +1 default serving (badge). Tap again = ×2. Hold = amount sheet (<a href="#1b">1b</a>). × on the chip removes. No row ever opens a form on first tap.</div>
+      </div>
+      <div style="background:oklch(93% 0.045 152);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:13px;font-weight:900;color:oklch(30% 0.07 152);">Advice lives elsewhere</div>
+        <div style="font-size:12.5px;line-height:1.55;color:oklch(32% 0.06 152);">One door: Cadence's mark in the title row opens a chat <em>scoped to this meal</em> — the cart (or what was logged) is already in her context, so the first question needs no setup. Nothing else on this drawer talks. The coach's read of the meal arrives in chat after the log, never in the logging path. The hatched preview on the macros is the only “advice” — and it's just arithmetic.</div>
+      </div>
+      <div style="background:oklch(95% 0.02 250);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:13px;font-weight:900;color:oklch(30% 0.05 250);">Open forks</div>
+        <div style="font-size:12.5px;line-height:1.55;color:oklch(32% 0.05 250);">Two columns (shown) vs one denser list · whether Cookbook merges into Usual once it ranks well · whether Find should autofocus when all shelves are empty (first week).</div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;hasPlanned&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Scenario&quot;}}">
+class Component extends DCLogic {
+  state = { meal: 'breakfast', shelf: 'usual', pickerOpen: false, cart: {}, logged: null, drawerOpen: true, dragY: 0, dragging: false, swipeX: 0, swiping: false, chatOpen: false };
+  drag = null; swipe = null;
+  data = {
+    planned: [
+      { id: 'p1', name: 'Overnight oats', sub: 'from your week', kcal: 390, kind: 'planned' },
+    ],
+    usual: [
+      { id: 'u1', name: 'Yogurt bowl', sub: 'yogurt · chia · whey · berries', kcal: 348, kind: 'recipe' },
+      { id: 'u2', name: 'Eggs on toast', sub: '2 eggs · sourdough', kcal: 412, kind: 'recipe' },
+      { id: 'u3', name: 'Flat white', sub: 'oat milk', kcal: 120, kind: 'food' },
+      { id: 'u4', name: 'Banana', sub: '1 medium', kcal: 105, kind: 'food' },
+      { id: 'u5', name: 'Greek yogurt, 2%', sub: '1 cup', kcal: 146, kind: 'food' },
+      { id: 'u6', name: 'Whey, vanilla', sub: '1 scoop', kcal: 120, kind: 'food' },
+      { id: 'u7', name: 'Granola', sub: '½ cup', kcal: 210, kind: 'food' },
+      { id: 'u8', name: 'Blueberries', sub: '½ cup', kcal: 42, kind: 'food' },
+      { id: 'u9', name: 'Sourdough, toasted', sub: '1 slice', kcal: 110, kind: 'food' },
+      { id: 'u10', name: 'Peanut butter', sub: '1 tbsp', kcal: 95, kind: 'food' },
+      { id: 'u11', name: 'Orange juice', sub: '1 glass', kcal: 112, kind: 'food' },
+      { id: 'u12', name: 'Protein pancakes', sub: '3 pancakes', kcal: 310, kind: 'recipe' },
+      { id: 'u13', name: 'Black coffee', sub: '1 mug', kcal: 5, kind: 'food' },
+      { id: 'u14', name: 'Avocado', sub: '½', kcal: 120, kind: 'food' },
+      { id: 'u15', name: 'Porridge', sub: '1 bowl', kcal: 230, kind: 'food' },
+      { id: 'u16', name: 'Almond butter', sub: '1 tbsp', kcal: 98, kind: 'food' },
+      { id: 'u17', name: 'Boiled egg', sub: '1 large', kcal: 78, kind: 'food' },
+      { id: 'u18', name: 'Croissant', sub: '1', kcal: 270, kind: 'food' },
+      { id: 'u19', name: 'Cottage cheese', sub: '½ cup', kcal: 110, kind: 'food' },
+      { id: 'u20', name: 'Apple', sub: '1 medium', kcal: 95, kind: 'food' },
+      { id: 'u21', name: 'Bagel, plain', sub: '1', kcal: 280, kind: 'food' },
+      { id: 'u22', name: 'Cream cheese', sub: '2 tbsp', kcal: 100, kind: 'food' },
+      { id: 'u23', name: 'Oat milk latte', sub: '12 oz', kcal: 130, kind: 'food' },
+      { id: 'u24', name: 'Bacon', sub: '2 rashers', kcal: 90, kind: 'food' },
+    ],
+    leftovers: [
+      { id: 'l1', name: 'Lentil stew', sub: '2 of 4 left · Mon', kcal: 380, kind: 'leftover' },
+      { id: 'l2', name: 'Chicken & rice', sub: '1 of 3 left · Sun', kcal: 520, kind: 'leftover' },
+    ],
+    cookbook: [
+      { id: 'c1', name: 'Shakshuka', sub: 'makes 2', kcal: 330, kind: 'recipe' },
+      { id: 'c2', name: 'Chia pudding', sub: 'makes 1', kcal: 290, kind: 'recipe' },
+      { id: 'c3', name: 'Smoothie, green', sub: 'makes 1', kcal: 240, kind: 'recipe' },
+      { id: 'c4', name: 'Breakfast burrito', sub: 'makes 4', kcal: 450, kind: 'recipe' },
+      { id: 'c5', name: 'Oat muffins', sub: 'makes 12', kcal: 180, kind: 'recipe' },
+      { id: 'c6', name: 'Egg bites', sub: 'makes 6', kcal: 95, kind: 'recipe' },
+    ],
+  };
+  dots = { planned: 'oklch(78% 0.12 72)', recipe: 'oklch(62% 0.12 152)', food: 'oklch(80% 0.015 85)', leftover: 'oklch(68% 0.10 250)' };
+  all() { return Object.values(this.data).flat(); }
+  renderVals() {
+    const { meal, shelf, cart, logged, pickerOpen } = this.state;
+    const dayDone = { kcal: 0, p: 0, c: 0, f: 0 };
+    const target = { kcal: 1800, p: 130, c: 190, f: 60 };
+    const items = Object.entries(cart).map(([id, n]) => ({ it: this.all().find((x) => x.id === id), n }));
+    const cartKcal = items.reduce((s, x) => s + x.it.kcal * x.n, 0);
+    const loggedKcal = logged ? logged.kcal : 0;
+    const est = (k, ratio) => Math.round(k * ratio / 4);
+    const cartP = est(cartKcal, 0.25), cartC = est(cartKcal, 0.45), cartF = Math.round(cartKcal * 0.3 / 9);
+    const doneP = est(loggedKcal, 0.25), doneC = est(loggedKcal, 0.45), doneF = Math.round(loggedKcal * 0.3 / 9);
+    const pct = (v, t) => Math.min(100, Math.round(v / t * 100));
+    const kcalDone = pct(loggedKcal, target.kcal), kcalCart = Math.min(100 - kcalDone, pct(cartKcal, target.kcal));
+    const showPlanned = this.props.hasPlanned ?? true;
+    const shelfKeys = (showPlanned ? ['planned'] : []).concat(['usual', 'leftovers', 'cookbook']);
+    const labels = { planned: 'Planned', usual: 'Usual', leftovers: 'Leftovers', cookbook: 'Cookbook' };
+    const activeShelf = shelfKeys.includes(shelf) ? shelf : 'usual';
+    const H = 772;
+    const drawerY = this.state.drawerOpen ? this.state.dragY : H;
+    const nextShelf = (dir) => { const i = shelfKeys.indexOf(activeShelf); const j = Math.min(shelfKeys.length - 1, Math.max(0, i + dir)); if (j !== i) this.setState({ shelf: shelfKeys[j] }); };
+    return {
+      drawerY: drawerY + 'px',
+      drawerTransition: this.state.dragging ? 'none' : 'transform 0.35s cubic-bezier(.2,.8,.2,1)',
+      scrimOpacity: this.state.drawerOpen ? 1 - Math.min(1, this.state.dragY / H) : 0,
+      reopenOpacity: this.state.drawerOpen ? 0 : 1,
+      openDrawer: () => this.setState({ drawerOpen: true, dragY: 0 }),
+      dragStart: (e) => { const top = e.currentTarget.getBoundingClientRect().top; if (e.clientY - top > 120) return; this.drag = { y: e.clientY, t: Date.now(), el: e.currentTarget, id: e.pointerId }; },
+      dragMove: (e) => { if (!this.drag) return; const d = Math.max(0, e.clientY - this.drag.y); if (!this.state.dragging && d > 8) { try { this.drag.el.setPointerCapture(this.drag.id); } catch (_) {} } if (d > 8 || this.state.dragging) this.setState({ dragY: d, dragging: true }); },
+      dragEnd: (e) => { if (!this.drag) return; if (!this.state.dragging) { this.drag = null; return; } const d = Math.max(0, e.clientY - this.drag.y), v = d / Math.max(1, Date.now() - this.drag.t); this.drag = null; const close = d > 200 || v > 0.6; this.setState({ dragging: false, dragY: 0, drawerOpen: !close, pickerOpen: false }); },
+      swipeStart: (e) => { this.swipe = { x: e.clientX, y: e.clientY, moved: false }; },
+      swipeMove: (e) => { if (!this.swipe) return; const dx = e.clientX - this.swipe.x, dy = e.clientY - this.swipe.y; if (!this.swipe.moved && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) { this.swipe.moved = true; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} } if (this.swipe.moved) this.setState({ swipeX: dx, swiping: true }); },
+      swipeEnd: (e) => { if (!this.swipe) return; const dx = e.clientX - this.swipe.x, moved = this.swipe.moved; this.swipe = null; this.setState({ swipeX: 0, swiping: false }); if (moved && Math.abs(dx) > 60) nextShelf(dx < 0 ? 1 : -1); },
+      paneX: this.state.swipeX + 'px',
+      paneOpacity: 1 - Math.min(0.5, Math.abs(this.state.swipeX) / 300),
+      paneTransition: this.state.swiping ? 'none' : 'transform 0.25s ease, opacity 0.25s ease',
+      chatOpen: this.state.chatOpen,
+      openChat: () => this.setState({ chatOpen: true }),
+      closeChat: () => this.setState({ chatOpen: false }),
+      chatTitle: 'Cadence · ' + meal,
+      coachLine: items.length ? 'All good?' : logged ? 'Nice one.' : 'What are we having?',
+      chatOpener: items.length ? 'I can see your ' + meal + ' so far — ' + items.map((x) => x.it.name.toLowerCase()).join(', ') + ', about ' + cartKcal + ' kcal. What do you want to know?' : logged ? 'Your ' + meal + ' is logged at ' + logged.kcal + ' kcal. Want a read on it, or thinking about the next one?' : 'Nothing in your ' + meal + ' yet. Tell me what you\'re thinking of having and I\'ll weigh in.',
+      mealName: meal,
+      pickerOpen,
+      togglePicker: () => this.setState({ pickerOpen: !pickerOpen }),
+      mealKinds: ['breakfast', 'lunch', 'dinner', 'snack'].map((k) => ({ name: k, tick: k === meal ? '✓' : '', bg: k === meal ? 'oklch(97% 0.012 85)' : 'transparent', pick: () => this.setState({ meal: k, pickerOpen: false }) })),
+      kcalLeft: target.kcal - loggedKcal - cartKcal,
+      kcalDash: kcalDone + ' 100',
+      cartDash: kcalCart + ' 100',
+      cartOffset: -kcalDone,
+      macros: [
+        { key: 'P', color: 'oklch(62% 0.12 152)', done: pct(doneP, target.p) + '%', cart: Math.min(100 - pct(doneP, target.p), pct(cartP, target.p)) + '%', label: (doneP + cartP) + ' / ' + target.p },
+        { key: 'C', color: 'oklch(64% 0.11 250)', done: pct(doneC, target.c) + '%', cart: Math.min(100 - pct(doneC, target.c), pct(cartC, target.c)) + '%', label: (doneC + cartC) + ' / ' + target.c },
+        { key: 'F', color: 'oklch(66% 0.12 268)', done: pct(doneF, target.f) + '%', cart: Math.min(100 - pct(doneF, target.f), pct(cartF, target.f)) + '%', label: (doneF + cartF) + ' / ' + target.f },
+      ],
+      shelves: shelfKeys.map((k) => ({ label: labels[k], bg: k === activeShelf ? 'white' : 'transparent', color: k === activeShelf ? 'oklch(28% 0.02 150)' : 'oklch(50% 0.02 120)', shadow: k === activeShelf ? '0 1px 3px oklch(0% 0 0 / 0.08)' : 'none', pick: () => this.setState({ shelf: k }) })),
+      tiles: this.data[activeShelf].map((t) => {
+        const n = cart[t.id] || 0;
+        return { ...t, on: n > 0, badge: n > 1 ? '×' + n : '✓', dot: this.dots[t.kind], bg: n ? 'oklch(96% 0.03 152)' : 'white', border: n ? 'oklch(62% 0.12 152)' : 'oklch(91% 0.015 85)',
+          add: () => this.setState({ cart: { ...cart, [t.id]: n + 1 }, logged: null }) };
+      }),
+      hasCart: items.length > 0,
+      cart: items.map(({ it, n }) => ({ label: (n > 1 ? n + '× ' : '') + it.name, remove: () => { const c = { ...cart }; delete c[it.id]; this.setState({ cart: c }); } })),
+      logLabel: 'Log ' + meal + ' · ' + cartKcal + ' kcal',
+      logMeal: () => this.setState({ cart: {}, logged: { kcal: loggedKcal + cartKcal, n: items.length } }),
+      justLogged: !!logged && items.length === 0,
+      loggedLine: logged ? meal[0].toUpperCase() + meal.slice(1) + ' logged · ' + logged.kcal + ' kcal' : '',
+      resetAll: () => this.setState({ logged: null, cart: {} }),
+    };
+  }
+}
+</script>
+</body>
+</html>

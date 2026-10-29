@@ -53,6 +53,10 @@ export const USER_SCOPED_KEYS = [
   // yours to be offered, and the pill offers it on sight. The draft ALSO stamps its owner and
   // refuses to read on a mismatch — this sweep is what stops it sitting on disk afterwards.
   'cadence.builderDraft',
+  // How far back the meal drawer's Leftovers shelf looks (features/food/meal/leftoverWindow.ts),
+  // and whether its one-time "hold for an amount" line has been seen — one person's choices.
+  'cadence.leftoverWindowDays',
+  'cadence.holdHintSeen',
 ] as const;
 
 function read(key: string): string | null {

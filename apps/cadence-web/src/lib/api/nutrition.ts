@@ -1,4 +1,4 @@
-import type { Macros, MealKind, MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
+import type { Macros, MealKind, MealPart, MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
@@ -28,6 +28,8 @@ export interface Meal {
   /** `open` while a draft is still taking adds (meal-logging rework 1b); absent on legacy rows,
    *  which are closed. The capture's rings subtract open meals: only logged food shows there. */
   state?: 'open' | 'closed';
+  /** The brackets (`NutritionLog.parts`) — the Leftovers shelf reads yield and portions off them. */
+  parts?: MealPart[];
 }
 
 export interface NutritionDayData {

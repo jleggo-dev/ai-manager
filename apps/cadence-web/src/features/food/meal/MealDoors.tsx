@@ -6,7 +6,6 @@
  */
 import { useState } from 'react';
 import type { Food } from '@cadence/shared';
-import type { Meal } from '../../../lib/api/meal-draft.ts';
 import { AddFoodSheet } from '../AddFoodSheet.tsx';
 import { FoodBarcodePanel } from '../FoodBarcodePanel.tsx';
 import { LogByChat } from '../LogByChat.tsx';
@@ -29,13 +28,11 @@ export function MealDoors({
   draft,
   onSwitch,
   onClose,
-  onAppended,
 }: {
   door: MealDoor;
   draft: MealDraft;
   onSwitch: (door: MealDoor) => void;
   onClose: () => void;
-  onAppended: (meal: Meal) => void;
 }) {
   const kind = draft.meal?.meal ?? 'breakfast';
   const [scanSheet, setScanSheet] = useState<Food | null>(null);
@@ -51,7 +48,6 @@ export function MealDoors({
       )
       .then((m) => {
         if (m) {
-          onAppended(m);
           setScanSheet(null);
           onClose();
         }
@@ -59,15 +55,7 @@ export function MealDoors({
   };
 
   if (door.at === 'add') {
-    return (
-      <MealAddPanel
-        draft={draft}
-        seed={door.seed}
-        onDone={onClose}
-        onDescribe={() => onSwitch({ at: 'chat' })}
-        onAppended={onAppended}
-      />
-    );
+    return <MealAddPanel draft={draft} seed={door.seed} onDone={onClose} onDescribe={() => onSwitch({ at: 'chat' })} />;
   }
 
   if (door.at === 'chat') {
@@ -79,7 +67,6 @@ export function MealDoors({
         mealLabel={kind}
         onAppend={async (preview) => {
           const m = await draft.appendParsed(preview.items, door.listening ? 'heard' : 'typed', preview.raw_text);
-          if (m) onAppended(m);
           return !!m;
         }}
         onLogged={onClose}
@@ -96,10 +83,7 @@ export function MealDoors({
         mode="draft"
         appendDraft={async (items, rawText) => {
           const m = await draft.appendParsed(items, 'assumed', rawText);
-          if (m) {
-            onAppended(m);
-            onClose();
-          }
+          if (m) onClose();
           return !!m;
         }}
         onLogged={onClose}
@@ -113,10 +97,7 @@ export function MealDoors({
       <CookbookShelf
         onPick={(recipe, servings) => {
           void draft.appendRecipe({ recipe_id: recipe.recipe_id, servings }).then((m) => {
-            if (m) {
-              onAppended(m);
-              onClose();
-            }
+            if (m) onClose();
           });
         }}
         onClose={onClose}

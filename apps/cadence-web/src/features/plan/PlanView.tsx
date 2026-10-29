@@ -470,6 +470,12 @@ export function PlanView({
             setCaptureOcc(null);
             onOpenFood();
           }}
+          // The quick log's face — the one door to advice on that surface. The note names the
+          // meal and what is in the cart, so she opens on it rather than asking what they had.
+          onCoach={(note) => {
+            setCaptureOcc(null);
+            onCoach(note);
+          }}
         />
       )}
       {cookOcc && (
