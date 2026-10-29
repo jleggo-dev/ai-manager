@@ -90,6 +90,29 @@ describe('StartSheet — when the detail does not come', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy());
   });
 
+  it('a plain version (built without the coach) opens with its line, its steps and a way to ask her again', async () => {
+    const plain = { ...detail(), session: { ...detail().session, fallback: 'coach_unreachable' as const } };
+    getOccurrenceDetail.mockResolvedValueOnce(plain).mockResolvedValue(detail());
+    const { container } = mount();
+    await waitFor(() => expect(screen.getByText(/plain version of today's session/i)).toBeTruthy());
+    // It is a real session: the steps and Start are there, and it is not the dead-end state.
+    expect(screen.getByText('Press')).toBeTruthy();
+    expect(container.querySelector('.ss-start')?.textContent).toMatch(/I've got time/);
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    // Asking for her again re-fetches; when she answers, the line goes.
+    fireEvent.click(screen.getByRole('button', { name: 'Try the coach again' }));
+    await waitFor(() => expect(getOccurrenceDetail).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(/plain version/i)).toBeNull());
+  });
+
+  it('a session the coach built shows no plain-version line', async () => {
+    getOccurrenceDetail.mockResolvedValue(detail());
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelector('.ss-start')).toBeTruthy());
+    expect(screen.queryByText(/plain version/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try the coach again' })).toBeNull();
+  });
+
   it('any other failure keeps the plain error line, without a retry', async () => {
     getOccurrenceDetail.mockRejectedValue(Object.assign(new Error('detail failed: 500'), { status: 500 }));
     mount();

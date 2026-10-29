@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deriveWalkthrough, type Walkthrough as WalkthroughData } from '@cadence/shared';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
-import { CoachUnreachable } from './occurrence/CoachUnreachable.tsx';
+import { CoachPlainVersion, CoachUnreachable } from './occurrence/CoachUnreachable.tsx';
 import { WatchHandoffRow } from './occurrence/WatchHandoffRow.tsx';
 import { coachingMessages, useRotatingMessage } from './coaching-progress.ts';
 import { StartCoachAsk } from './start/StartCoachAsk.tsx';
@@ -140,6 +140,7 @@ export function StartSheet({
           />
         ) : (
           <>
+            {detail.session?.fallback === 'coach_unreachable' && <CoachPlainVersion onRetry={retry} />}
             <StartCoachAsk
               title={detail.title}
               timeOfDay={detail.schedule?.time_of_day}

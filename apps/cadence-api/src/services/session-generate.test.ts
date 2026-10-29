@@ -20,6 +20,7 @@ vi.mock('../repos/occurrences.ts', () => ({
   listOccurrences: vi.fn().mockResolvedValue([]),
   listRecentLogsByTitle: vi.fn().mockResolvedValue([]),
   getAnchorSessionByTitle: vi.fn().mockResolvedValue(null),
+  getLatestSessionByTitle: vi.fn().mockResolvedValue(null),
   setOccurrenceWeatherIfEmpty: vi.fn().mockResolvedValue(true),
 }));
 vi.mock('../repos/occurrence-sessions.ts', () => ({
@@ -36,7 +37,7 @@ vi.mock('../repos/repertoire.ts', () => ({
 
 import { runJobBySlug } from '../ai/aim.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
-import { getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
+import { getLatestSessionByTitle, getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
 import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
@@ -138,8 +139,9 @@ describe('prescribe survives a flaky provider', () => {
     expect(setOccurrenceSessionIfEmpty).toHaveBeenCalledTimes(1);
   });
 
-  it('when every attempt fails, the typed error surfaces and nothing is cached', async () => {
+  it('when every attempt fails and nothing on file gives a shape, the typed error surfaces and nothing is cached', async () => {
     vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({ ...pendingOccurrence(), schedule: null } as never);
     const p = getOccurrenceDetail('u1', 'o1');
     const settled = p.then(
       () => null,
@@ -149,6 +151,42 @@ describe('prescribe survives a flaky provider', () => {
     const err = await settled;
     expect(err).toBeInstanceOf(CoachUnreachableError);
     expect(runJobBySlug).toHaveBeenCalledTimes(3);
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('when every attempt fails, a plain version comes back from what is on file — marked, and NOT cached', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    vi.mocked(getLatestSessionByTitle).mockResolvedValueOnce({
+      date: '2026-10-22',
+      session: {
+        blocks: [{ label: 'Main', items: [{ name: 'Press', sets: 3, reps: 10 }] }],
+        note: 'old',
+        generated_at: 'x',
+        version: 1,
+      },
+    });
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(10_000);
+    const occ = await p;
+    expect(occ?.session?.fallback).toBe('coach_unreachable');
+    expect(occ?.session?.blocks[0]?.items[0]?.name).toBe('Press');
+    expect(runJobBySlug).toHaveBeenCalledTimes(3);
+    expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('with no prior session, the plain version is one block from the activity\u2019s length', async () => {
+    vi.mocked(runJobBySlug).mockRejectedValue(transient());
+    vi.mocked(getOccurrenceWithActivity).mockResolvedValue({
+      ...pendingOccurrence(),
+      schedule: { recurrence: 'daily', duration_min: 15 },
+    } as never);
+    const p = getOccurrenceDetail('u1', 'o1');
+    await vi.advanceTimersByTimeAsync(10_000);
+    const occ = await p;
+    expect(occ?.session?.fallback).toBe('coach_unreachable');
+    expect(occ?.session?.blocks).toEqual([
+      { label: 'Today', items: [{ name: 'Morning practice', tool: 'meditate', duration_min: 15 }] },
+    ]);
     expect(setOccurrenceSessionIfEmpty).not.toHaveBeenCalled();
   });
 

@@ -23,3 +23,22 @@ export function CoachUnreachable({ onRetry }: { onRetry: () => void }) {
     </div>
   );
 }
+
+/**
+ * The line over a PLAIN version — a session built without the coach after she could not be
+ * reached (the server marks it `fallback: 'coach_unreachable'` and never stores it). The person
+ * can do it as it stands, or ask for her again in one tap.
+ */
+export const COACH_PLAIN_VERSION_LINE =
+  "I couldn't reach the coach just now, so this is a plain version of today's session. She'll refine it next time.";
+
+export function CoachPlainVersion({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="sheet-msg ss-plain" role="status">
+      <p className="sheet-msg-line">{COACH_PLAIN_VERSION_LINE}</p>
+      <button type="button" className="ss-link" onClick={onRetry}>
+        Try the coach again
+      </button>
+    </div>
+  );
+}
