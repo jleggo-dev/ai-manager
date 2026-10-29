@@ -4249,18 +4249,16 @@ html[data-native] .sheet-body {
   background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
   box-shadow: 0 5px 0 oklch(39% 0.08 152);
 }
-.ss-less {
+.ss-less,
+.ss-retry {
   background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%);
   box-shadow: 0 5px 0 oklch(47% 0.08 250);
 }
 /* The coach could not be reached to build this one (occurrence/CoachUnreachable.tsx): one plain
-   sentence and a Try-again that re-fetches in place, instead of "close and tap it again". */
+   sentence and a Try-again that re-fetches in place, instead of "close and tap it again". The
+   retry button shares `.ss-less`'s rule above — the quiet blue, not a second copy of it. */
 .sheet-msg-line {
   margin: 0 0 4px;
-}
-.ss-retry {
-  background: linear-gradient(180deg, oklch(70% 0.08 250) 0%, oklch(62% 0.08 250) 46%);
-  box-shadow: 0 5px 0 oklch(47% 0.08 250);
 }
 /* The plain version's line sits over the coach's ask; its "try the coach again" is a quiet link,
    not a button competing with Start. */

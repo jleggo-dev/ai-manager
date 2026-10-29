@@ -20,10 +20,10 @@ vi.mock('../repos/occurrences.ts', () => ({
   listOccurrences: vi.fn().mockResolvedValue([]),
   listRecentLogsByTitle: vi.fn().mockResolvedValue([]),
   getAnchorSessionByTitle: vi.fn().mockResolvedValue(null),
-  getLatestSessionByTitle: vi.fn().mockResolvedValue(null),
   setOccurrenceWeatherIfEmpty: vi.fn().mockResolvedValue(true),
 }));
 vi.mock('../repos/occurrence-sessions.ts', () => ({
+  getLatestSessionByTitle: vi.fn().mockResolvedValue(null),
   clearOccurrenceSession: vi.fn().mockResolvedValue(true),
   setOccurrenceSessionIfEmpty: vi.fn().mockResolvedValue(true),
 }));
@@ -38,8 +38,12 @@ vi.mock('../repos/repertoire.ts', () => ({
 import { runJobBySlug } from '../ai/aim.ts';
 import { getUser } from '../repos/users.ts';
 import { listGoalsByStatus } from '../repos/goals.ts';
-import { getLatestSessionByTitle, getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
-import { clearOccurrenceSession, setOccurrenceSessionIfEmpty } from '../repos/occurrence-sessions.ts';
+import { getOccurrenceWithActivity, listRecentLogsByTitle } from '../repos/occurrences.ts';
+import {
+  clearOccurrenceSession,
+  getLatestSessionByTitle,
+  setOccurrenceSessionIfEmpty,
+} from '../repos/occurrence-sessions.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { listRepertoire } from '../repos/repertoire.ts';
 import { getOccurrenceDetail, prefetchImminentSessions, reviseSession } from './session-generate.ts';

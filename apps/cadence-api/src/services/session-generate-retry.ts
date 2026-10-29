@@ -55,9 +55,18 @@ function statusOf(err: unknown): number {
  */
 export function isTransientCoachFailure(err: unknown): boolean {
   const msg = AimError.messageOf(err);
-  // First, because its tail quotes the provider's own words — "… also failed: 400 model not
-  // found" — and the generic classifier would read that tail as a not-found of ours.
-  if (/\bfailover\b.*\balso failed\b/i.test(msg)) return true;
+  // AI Admin's "Primary … failed and failover … also failed: <the provider's words>" line. The
+  // tail decides: a provider 5xx/429 there is a blip worth a second try; a 4xx there is the model
+  // itself refused — the 2026-10-27 shape, "400 Model … is not available for this request" on
+  // BOTH pointers — and no number of retries changes a withdrawn model. Retrying it three times
+  // per open would have turned 414 failed calls into ~1,200 and added ~5s to every tap.
+  const failover = /\bfailover\b.*?\balso failed\b(.*)$/is.exec(msg);
+  if (failover) {
+    const tail = /\b(\d{3})\b/.exec(failover[1] ?? '');
+    const code = tail ? Number(tail[1]) : NaN;
+    if (code >= 400 && code < 500 && code !== 429) return false;
+    return true;
+  }
   if (err instanceof AimError && (err.kind === 'config' || err.kind === 'not_found')) return false;
   const status = statusOf(err);
   if (Number.isFinite(status)) {

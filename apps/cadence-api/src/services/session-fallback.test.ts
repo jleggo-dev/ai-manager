@@ -64,6 +64,16 @@ describe('plainItemFor — one block from the activity’s own shape', () => {
       { distance_km: 3.22 },
     ],
     [
+      'a snake_case mile metric → converted',
+      { target: { metric: 'distance_mi', value: 3 }, schedule: null },
+      { distance_km: 4.83 },
+    ],
+    [
+      '"minutes" is not miles',
+      { target: { metric: 'minutes', value: 25 }, schedule: null },
+      { tool: 'timer', duration_min: 25 },
+    ],
+    [
       'a minutes target beats the schedule length',
       { target: { metric: 'minutes', value: 25 } },
       { tool: 'timer', duration_min: 25 },

@@ -14,7 +14,10 @@ import {
 } from './session-generate-retry.ts';
 
 const FAILOVER_LINE =
-  'Primary model "claude-sonnet-5" failed and failover "gemini-3.5-flash" on provider "Devs.ai" also failed: 400 model not found';
+  'Primary model "claude-sonnet-5" failed and failover "gemini-3.5-flash" on provider "Devs.ai" also failed: Devs.ai v2 API error (503): upstream unavailable';
+/** The 2026-10-27 shape: the model itself withdrawn — no retry mends it. */
+const FAILOVER_DEAD_MODEL =
+  'Primary model "claude-sonnet-5" failed and failover "anthropic-claude-4-5-sonnet" on provider "Devs.ai v2" also failed: Devs.ai v2 API error (400): {"error":{"type":"invalid_request_error","message":"Model \\"anthropic-claude-4-5-sonnet\\" is not available for this request."}}';
 
 describe('isTransientCoachFailure — the decision table', () => {
   it.each<[string, unknown, boolean]>([
@@ -38,7 +41,9 @@ describe('isTransientCoachFailure — the decision table', () => {
       true,
     ],
     ['a bare timeout', new Error('Request timeout'), true],
-    ['AI Admin’s failover-also-failed line', new Error(FAILOVER_LINE), true],
+    ['AI Admin’s failover-also-failed line with a 5xx in its tail', new Error(FAILOVER_LINE), true],
+    ['the failover line with a 429 in its tail', new Error(FAILOVER_LINE.replace('(503)', '(429)')), true],
+    ['the failover line with no status in its tail', new Error(FAILOVER_LINE.replace(/:[^:]*$/, ': down')), true],
     ['the same line wrapped as an AimError (kind unknown)', AimError.fromUnknown(new Error(FAILOVER_LINE)), true],
     ['an AimError classified upstream', new AimError('upstream', 'provider unavailable'), true],
     ['a dropped socket', new Error('fetch failed'), true],
@@ -46,6 +51,8 @@ describe('isTransientCoachFailure — the decision table', () => {
     ['a rate-limit code', new Error('MODEL_REQUEST_RATE_LIMIT_EXCEEDED'), true],
     ['an overloaded provider', new Error('Overloaded'), true],
     // ── do not retry ──
+    ['the failover line with a 400 in its tail — a withdrawn model, not a blip', new Error(FAILOVER_DEAD_MODEL), false],
+    ['the failover line with a 404 in its tail', new Error(FAILOVER_LINE.replace('(503)', '(404)')), false],
     ['our own 400 (bad payload)', Object.assign(new Error('bad request'), { status: 400 }), false],
     ['a 401', Object.assign(new Error('unauthorized'), { status: 401 }), false],
     ['a 404', Object.assign(new Error('not found'), { status: 404 }), false],

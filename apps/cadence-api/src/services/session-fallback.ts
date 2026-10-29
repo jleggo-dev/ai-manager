@@ -17,7 +17,8 @@
  * is what lets her refine it the next time, and the marker is how the sheet tells the truth.
  */
 import type { OccurrenceSession, SessionItem } from '@cadence/shared';
-import { getLatestSessionByTitle, listRecentLogsByTitle, type OccurrenceWithActivity } from '../repos/occurrences.ts';
+import { listRecentLogsByTitle, type OccurrenceWithActivity } from '../repos/occurrences.ts';
+import { getLatestSessionByTitle } from '../repos/occurrence-sessions.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
 
 /** The note on a plain version — the app speaking about the coach, since she is the one missing. */
@@ -61,9 +62,10 @@ export function plainItemFor(
   const text = `${occ.category ?? ''} ${occ.title}`;
 
   if (value && /\brep/.test(metric)) return { name: occ.title, tool: 'reps', sets: 1, reps: Math.round(value) };
-  // No word boundaries around km/distance: metrics are snake_case ("distance_km").
-  if (value && /(km|kilomet|mile|distance|\bmi\b)/.test(metric)) {
-    const km = /mile|\bmi\b/.test(metric) || target?.unit === 'mi' ? value * 1.609 : value;
+  // No word boundaries anywhere here: metrics are snake_case ("distance_km", "distance_mi"), and
+  // "_" is a word character, so \bmi\b would never match the mile one.
+  if (value && /(km|kilomet|mile|distance|(?:^|_)mi(?:$|_))/.test(metric)) {
+    const km = /mile|(?:^|_)mi(?:$|_)/.test(metric) || target?.unit === 'mi' ? value * 1.609 : value;
     return { name: occ.title, distance_km: Math.round(km * 100) / 100 };
   }
   const length = value && /\b(min|minute|duration|time)/.test(metric) ? value : minutes;

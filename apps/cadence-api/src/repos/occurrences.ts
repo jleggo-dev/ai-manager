@@ -329,25 +329,6 @@ export async function getAnchorSessionByTitle(
   return row ?? null;
 }
 
-/**
- * The MOST RECENT same-title occurrence with a cached session — what the person last did under
- * this name, for the plain version built when the coach cannot be reached (session-fallback.ts).
- * Same title key and shape as the anchor above; only the direction differs.
- */
-export async function getLatestSessionByTitle(
-  userId: string,
-  title: string,
-): Promise<{ date: string; session: OccurrenceSession } | null> {
-  const [row] = await sql<Array<{ date: string; session: OccurrenceSession }>>`
-    select to_char(o.date, 'YYYY-MM-DD') as date, o.session
-    from cadence.occurrences o
-    join cadence.activities a on a.activity_id = o.activity_id
-    where o.user_id = ${userId} and lower(a.title) = ${title.toLowerCase()} and o.session is not null
-    order by o.date desc
-    limit 1`;
-  return row ?? null;
-}
-
 /** Done occurrences with their value/log payloads (oldest first) — the progress engine's feed. */
 export async function listLoggedForProgress(
   userId: string,
