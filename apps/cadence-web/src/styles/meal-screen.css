@@ -427,6 +427,11 @@
   color: var(--text-mute);
   padding: 8px 4px;
 }
+/* Under the last tile of a shelf that pages: asks for the next page as it scrolls into view. */
+.ms-shelf-end {
+  grid-column: 1 / -1;
+  height: 1px;
+}
 .ms-err {
   margin: 8px 20px 0;
 }

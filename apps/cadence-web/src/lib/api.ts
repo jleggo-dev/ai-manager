@@ -211,7 +211,7 @@ export {
   updateFood,
 } from './api/foods.ts';
 
-export { getUsualAtSlot, type UsualAtSlot } from './api/foods-usual.ts';
+export { getUsualAtSlot, type UsualAtSlot, type UsualPage } from './api/foods-usual.ts';
 
 export {
   resolveFoods,

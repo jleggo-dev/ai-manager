@@ -16,7 +16,7 @@ import { renderWithQuery } from '../../../test/withQuery.tsx';
 
 const api = vi.hoisted(() => ({
   getFoodRecents: vi.fn(async () => ({ status: 'ok', foods: [] })),
-  getUsualAtSlot: vi.fn(async () => []),
+  getUsualAtSlot: vi.fn(async () => ({ items: [], nextCursor: null })),
   getCurrentMealPlan: vi.fn(async () => ({ status: 'ok', plan: null })),
   searchFoods: vi.fn(async () => ({ status: 'ok', foods: [] })),
   getFoodById: vi.fn(),
@@ -84,7 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   day.data = null;
   api.getFoodRecents.mockResolvedValue({ status: 'ok', foods: [] });
-  api.getUsualAtSlot.mockResolvedValue([]);
+  api.getUsualAtSlot.mockResolvedValue({ items: [], nextCursor: null });
   api.getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: null });
   api.searchFoods.mockResolvedValue({ status: 'ok', foods: [] });
   api.listRecipes.mockResolvedValue({ recipes: [] });

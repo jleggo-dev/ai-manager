@@ -127,17 +127,19 @@ router.get('/frequents', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /nutrition/foods/usual?meal=&limit= — what they usually have AT THAT SLOT, counted.
- * Recents are day-wide; this is the quick-add sheet's slot-aware list (design 05a). The cap is
- * wider than the other lists': this one is the meal screen's shelf and is meant to scroll a few
- * pages (owner, 2026-09-07 — "the list is too short").
+ * GET /nutrition/foods/usual?meal=&limit=&cursor= — everything ever logged AT THAT SLOT, most
+ * recently logged first, one page at a time: `{ items, next_cursor }`, and `next_cursor` goes
+ * back as `cursor` for the next page (null = done). The meal screen's shelf scrolls without end
+ * (owner, 2026-10-29); an old client that sends no cursor just gets the first page.
  */
 router.get('/usual', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const meal = req.query.meal;
   if (!isMeal(meal)) return res.status(400).json({ error: 'meal must be a meal kind' });
+  const cursor = req.query.cursor === undefined ? 0 : Number(req.query.cursor);
+  if (!Number.isInteger(cursor) || cursor < 0) return res.status(400).json({ error: 'cursor must be a next_cursor' });
   try {
-    res.json({ items: await usualAtSlot(userId, meal, limitFromQuery(req.query.limit, 6, USUAL_MAX)) });
+    res.json(await usualAtSlot(userId, meal, limitFromQuery(req.query.limit, 30, USUAL_MAX), cursor));
   } catch (err) {
     console.error('[GET /nutrition/foods/usual]', err);
     res.status(500).json({ error: 'failed to list usual foods' });

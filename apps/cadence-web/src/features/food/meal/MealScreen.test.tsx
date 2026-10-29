@@ -117,7 +117,7 @@ beforeEach(() => {
   window.localStorage.clear();
   getOpenMeal.mockResolvedValue(null);
   openMealDraft.mockResolvedValue(mkMeal());
-  getUsualAtSlot.mockResolvedValue([banana, yogurtBowl]);
+  getUsualAtSlot.mockResolvedValue({ items: [banana, yogurtBowl], nextCursor: null });
   listRecipes.mockResolvedValue({
     status: 'ok',
     recipes: [recipe('r-bowl', 'Yogurt bowl', 1, 348), recipe('r-stew', 'Lentil stew', 4, 380)],
@@ -548,5 +548,25 @@ describe('the doors — icon-only, Find first', () => {
     expect(screen.queryByRole('tablist', { name: 'Shelves' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(await screen.findByRole('tablist', { name: 'Shelves' })).toBeInTheDocument();
+  });
+});
+
+describe('the Usual shelf pages (owner, 2026-10-29: endless scroll, most recent first)', () => {
+  it('asks for the next page from the bottom of the shelf, and only then adds recipes never logged here', async () => {
+    const skyr = { kind: 'food', id: 'f-sky', name: 'Skyr', serving_label: '3/4 cup', kcal: 110, count: 2 };
+    getUsualAtSlot
+      .mockResolvedValueOnce({ items: [banana], nextCursor: '1' })
+      .mockResolvedValueOnce({ items: [skyr], nextCursor: null });
+    await mount();
+    // jsdom has no IntersectionObserver, so the bottom marker asks straight away — page two lands.
+    expect(await tile(/^Skyr, 3\/4 cup/)).toBeInTheDocument();
+    expect(getUsualAtSlot).toHaveBeenLastCalledWith('breakfast', 30, '1');
+    // The one-portion bowl was never logged at breakfast in this run: it comes after the last page.
+    const names = screen
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label') ?? '')
+      .filter((l) => /^(Banana|Skyr|Yogurt bowl)/.test(l))
+      .map((l) => l.split(',')[0]);
+    expect(names).toEqual(['Banana', 'Skyr', 'Yogurt bowl']);
   });
 });

@@ -221,13 +221,18 @@ export function healConstraintsShape(baseline: Record<string, unknown>, userId: 
 /**
  * Ensure a cadence.users row exists (the FK anchor for all per-user data). Idempotent. Used by
  * the auth middleware to lazily provision a row on a Supabase user's FIRST authenticated request
- * (no signup trigger needed) and by dev-reset to seed the scratch accounts. `email` is only set on
- * insert — an existing row is left untouched (on conflict do nothing).
+ * (no signup trigger needed) and by dev-reset to seed the scratch accounts.
+ *
+ * `email` fills a BLANK one on an existing row and never overwrites a set one. Accounts start as
+ * an anonymous session (email '') and sign in with Google/Apple later, so an insert-only write
+ * left the real account with no email for good (found 2026-10-29). The WHERE keeps the every-
+ * request call a no-op write once the email is on file.
  */
 export async function ensureUser(userId: string, email: string | null = null): Promise<void> {
   await sql`
     insert into cadence.users (id, email, baseline) values (${userId}, ${email}, ${json({})})
-    on conflict (id) do nothing`;
+    on conflict (id) do update set email = excluded.email, updated_at = now()
+    where coalesce(cadence.users.email, '') = '' and coalesce(excluded.email, '') <> ''`;
 }
 
 /** Set the user's display name (top-level column, not baseline). */
