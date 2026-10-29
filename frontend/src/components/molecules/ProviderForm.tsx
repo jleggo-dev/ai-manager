@@ -6,12 +6,15 @@ const PROVIDER_TYPES = [
   { value: 'devs-ai', label: 'Devs.ai (API v1)' },
   { value: 'devs-ai-v2', label: 'Devs.ai (API v2)' },
   { value: 'google-gemini', label: 'Google Gemini' },
+  { value: 'vercel-ai-gateway', label: 'Vercel AI Gateway' },
 ];
 
 const DEFAULT_BASE_URL_BY_TYPE: Record<string, string> = {
   'devs-ai': 'https://devs.ai',
   'devs-ai-v2': 'https://devs.ai',
   'google-gemini': 'https://generativelanguage.googleapis.com',
+  /* The gateway's OpenAI-compatible origin; model ids there are vendor/model, e.g. openai/gpt-4.1-mini. */
+  'vercel-ai-gateway': 'https://ai-gateway.vercel.sh/v1',
 };
 
 interface ProviderFormData {

@@ -172,9 +172,28 @@ const CATEGORY_RULES: CategoryRule[] = [
 /**
  * Determine the category for a model ID based on prefix rules.
  */
+/** Vercel AI Gateway ids are `vendor/model`; the vendor names the category outright. */
+const VENDOR_PREFIX_CATEGORY: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  google: 'Google',
+  perplexity: 'Perplexity',
+};
+
+/** `openai/gpt-4.1-mini` → `{ vendor: 'openai', rest: 'gpt-4.1-mini' }`; a bare id has no vendor. */
+export function splitVendorPrefix(modelId: string): { vendor: string | null; rest: string } {
+  const id = String(modelId || '');
+  const slash = id.indexOf('/');
+  if (slash <= 0 || slash === id.length - 1 || !/^[a-z0-9-]+$/i.test(id.slice(0, slash)))
+    return { vendor: null, rest: id };
+  return { vendor: id.slice(0, slash).toLowerCase(), rest: id.slice(slash + 1) };
+}
+
 export function categorizeModel(modelId: string): string {
+  const { vendor, rest } = splitVendorPrefix(modelId);
+  if (vendor && VENDOR_PREFIX_CATEGORY[vendor]) return VENDOR_PREFIX_CATEGORY[vendor];
   for (const rule of CATEGORY_RULES) {
-    if (rule.test(modelId)) return rule.category;
+    if (rule.test(rest)) return rule.category;
   }
   return 'Other';
 }
@@ -189,7 +208,8 @@ export function categorizeModel(modelId: string): string {
  *   auto                  → Auto
  */
 export function prettifyModelId(modelId: string): string {
-  return modelId
+  const { vendor, rest } = splitVendorPrefix(modelId);
+  const pretty = rest
     .split(/[-_]/)
     .map((segment) => {
       /* Preserve version-like segments as-is (e.g. "5.2", "3.5", "2.1", "16k") */
@@ -198,6 +218,7 @@ export function prettifyModelId(modelId: string): string {
       return segment.charAt(0).toUpperCase() + segment.slice(1);
     })
     .join(' ');
+  return vendor ? `${pretty} (${vendor})` : pretty;
 }
 
 /**

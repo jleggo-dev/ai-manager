@@ -55,7 +55,7 @@ A **provider** represents an LLM platform that AI Admin connects to.
 | Field | Purpose |
 |-------|---------|
 | **Name** | Human-readable label (e.g. "Production Devs.ai") |
-| **Type** | `devs-ai`, `devs-ai-v2`, or `google-gemini` — determines which client library is used |
+| **Type** | `devs-ai`, `devs-ai-v2`, `google-gemini`, or `vercel-ai-gateway` — determines which client library is used |
 | **Base URL** | The provider's API endpoint |
 | **API Key** | Platform credentials, encrypted at rest with AES-256-GCM |
 | **Request Timeout** | Optional per-provider timeout override (milliseconds) |
@@ -66,6 +66,7 @@ A **provider** represents an LLM platform that AI Admin connects to.
 - **Devs.ai (v1)** — `devs-ai`. Supports agents with MCP tools, OAuth integrations, data sources, and model-based chat. Uses `/api/v1/chats/*` and `/api/v1/chat/completions`.
 - **Devs.ai (v2)** — `devs-ai-v2`. Separate provider type using the Responses API (`POST /api/v2/responses`). Native JSON schema enforcement, threaded chat via `previous_response_id`, stream reconnect, and cancel. Does not replace v1 — existing v1 profiles continue unchanged.
 - **Google Gemini** — Direct model access via the Gemini API. Profiles on Gemini providers are automatically set to "model" type.
+- **Vercel AI Gateway** — `vercel-ai-gateway`. One key, every vendor, at provider list price; the gateway speaks the OpenAI Responses dialect at `https://ai-gateway.vercel.sh/v1` (the form's default base URL). Model ids are `vendor/model` — `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-5.5` — and pass through untouched. Nothing is stored server-side (`store: false` on every call): no threading, no file store, no remote purge. A job's Expected Schema is sent as a native `json_schema` and **enforced** on GPT and Claude (Devs.ai ignores it); a schema with a bare `{ type: "object" }` field goes out `strict: false`, see `backend/src/services/strict-json-schema.ts`. **Processing jobs only for now**: chat streaming is not supported yet on this type — a chat session pointed at it fails its first turn with a plain error — and no live profile has been repointed (owner's call, one profile at a time, `apps/cadence-api/scripts/repoint-profile.ts`). The measured case for it, and what is still open (streaming, Claude cache breakpoints, web search, file uploads), is in [cadence/AI-GATEWAY-EVALUATION.md](cadence/AI-GATEWAY-EVALUATION.md).
 
 ### The catalog is a listing, not a promise (2026-10-28)
 

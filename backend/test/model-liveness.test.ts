@@ -277,3 +277,78 @@ describe('runProviderLiveness', () => {
     expect(client.calls).toEqual([]);
   });
 });
+
+/**
+ * The check over the REAL gateway client with fetch stubbed — the client speaks Responses, its
+ * errors carry `(status)`, and the vendor/model id goes through untouched.
+ */
+describe('runProviderLiveness over a vercel-ai-gateway client', () => {
+  const gatewayProvider: ProviderRow = { ...provider, id: 'prov-gw', name: 'Gateway', type: 'vercel-ai-gateway' };
+
+  it('answers / refused / timeout verdicts come out of the gateway client unchanged', async () => {
+    const { VercelAiGatewayClient } = await import('../src/integrations/vercel-ai-gateway/client.ts');
+    const seen: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(init.body as string) as Record<string, unknown>;
+        seen.push(body);
+        if (body.model === 'openai/nope') {
+          return {
+            ok: false,
+            status: 400,
+            headers: new Headers(),
+            text: async () => JSON.stringify({ error: { message: 'Model openai/nope is not available' } }),
+            json: async () => ({}),
+          };
+        }
+        if (body.model === 'openai/slow') {
+          return new Promise((_r, reject) =>
+            init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('x'), { name: 'AbortError' }))),
+          );
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          text: async () => '',
+          json: async () => ({
+            status: 'completed',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: 'OK' }] }],
+            usage: { input_tokens: 14, output_tokens: 1 },
+          }),
+        };
+      }),
+    );
+    try {
+      const client = new VercelAiGatewayClient('https://ai-gateway.vercel.sh/v1', 'k');
+      const report = await runProviderLiveness(
+        gatewayProvider,
+        [
+          profile({ id: 'a', provider_id: 'prov-gw', external_ai_id: 'openai/gpt-4.1-mini' }),
+          profile({
+            id: 'b',
+            provider_id: 'prov-gw',
+            external_ai_id: 'openai/nope',
+            failover_provider_id: 'prov-gw',
+            failover_external_ai_id: 'openai/slow',
+          }),
+        ],
+        client,
+        { timeoutMs: 20 },
+      );
+      const byModel = Object.fromEntries(report.models.map((m) => [m.model, m.verdict]));
+      expect(byModel).toEqual({ 'openai/gpt-4.1-mini': 'ok', 'openai/nope': 'refused', 'openai/slow': 'timeout' });
+      expect(report.models.find((m) => m.model === 'openai/nope')?.message).toBe('Model openai/nope is not available');
+      expect(report.profiles.find((p) => p.id === 'a')?.dead).toBe(false);
+      expect(report.profiles.find((p) => p.id === 'b')?.dead).toBe(true);
+      // The per-type options reached the body: capped output, nothing stored, vendor id intact.
+      const ok = seen.find((b) => b.model === 'openai/gpt-4.1-mini') ?? {};
+      expect(ok.max_output_tokens).toBe(32);
+      expect(ok.store).toBe(false);
+      expect(ok).not.toHaveProperty('chat_mode');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

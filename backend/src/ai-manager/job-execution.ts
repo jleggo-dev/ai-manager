@@ -13,7 +13,7 @@ import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import type { ExpectedSchemaInput } from '../services/expected-schema-to-json-schema.ts';
 import { createLlmClientForProvider } from '../integrations/client-factory.ts';
 import { DiagnosticSession, shouldRunDiagnostics } from '../services/ai-diagnostics.ts';
-import { buildProviderChatOptions } from '../services/ai-profile-runtime-options.ts';
+import { buildProviderChatOptions, providerEnforcesSchema } from '../services/ai-profile-runtime-options.ts';
 import { resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
 import { getConfig } from '../config.ts';
 import { errorMessage } from '../lib/error-message.ts';
@@ -171,11 +171,8 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
 
     const client = createLlmClientForProvider(provider);
     const primaryModel = String(modelOverride || profile.external_ai_id || '').trim();
-    const providerTypeNorm = String(provider.type || '')
-      .trim()
-      .toLowerCase();
     const chatOptions = buildProviderChatOptions(provider.type, profile.runtime_options ?? undefined, {
-      expectedSchema: providerTypeNorm === 'devs-ai-v2' ? (jobConfig.expectedSchema ?? undefined) : undefined,
+      expectedSchema: providerEnforcesSchema(provider.type) ? (jobConfig.expectedSchema ?? undefined) : undefined,
     });
 
     if (fullDiagnostics) diag.endSupabaseTimer('resolve-ai-client', true);

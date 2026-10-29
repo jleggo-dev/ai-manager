@@ -11,6 +11,7 @@ import {
   groupModelsByCategory,
   prettifyModelId,
 } from './categoryUtils';
+import { isSyncableProviderType } from '../../../lib/provider-types';
 
 export function useManageLlmsModal(opened: boolean, providers: Provider[]) {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -29,8 +30,7 @@ export function useManageLlmsModal(opened: boolean, providers: Provider[]) {
 
   const providerOptions = (providers || []).map((p: Provider) => ({ value: p.id, label: `${p.name} (${p.type})` }));
   const selectedProviderRow = (providers || []).find((p: Provider) => p.id === selectedProvider) || null;
-  const syncableProvider =
-    selectedProviderRow && ['google-gemini', 'devs-ai', 'devs-ai-v2'].includes(selectedProviderRow.type);
+  const syncableProvider = selectedProviderRow && isSyncableProviderType(selectedProviderRow.type);
 
   useEffect(() => {
     if (opened && providers.length > 0 && !selectedProvider) {

@@ -1,14 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { isModelOnlyProviderType } from './provider-types';
+import { isModelOnlyProviderType, isSyncableProviderType, providerEnforcesSchema } from './provider-types';
 
 describe('isModelOnlyProviderType', () => {
-  it('returns true for google-gemini and devs-ai-v2', () => {
-    expect(isModelOnlyProviderType('google-gemini')).toBe(true);
-    expect(isModelOnlyProviderType('devs-ai-v2')).toBe(true);
+  it.each([
+    ['google-gemini', true],
+    ['devs-ai-v2', true],
+    ['vercel-ai-gateway', true],
+    ['devs-ai', false],
+    ['vercel', false],
+    ['', false],
+  ])('%j → %s', (type, expected) => {
+    expect(isModelOnlyProviderType(type)).toBe(expected);
   });
+});
 
-  it('returns false for devs-ai v1 and unknown types', () => {
-    expect(isModelOnlyProviderType('devs-ai')).toBe(false);
-    expect(isModelOnlyProviderType('')).toBe(false);
+describe('isSyncableProviderType', () => {
+  it.each([
+    ['google-gemini', true],
+    ['devs-ai', true],
+    ['devs-ai-v2', true],
+    ['vercel-ai-gateway', true],
+    ['vercel-ai', false],
+    ['', false],
+  ])('%j → %s', (type, expected) => {
+    expect(isSyncableProviderType(type)).toBe(expected);
+  });
+});
+
+describe('providerEnforcesSchema', () => {
+  it.each([
+    ['devs-ai-v2', true],
+    ['vercel-ai-gateway', true],
+    ['devs-ai', false],
+    ['google-gemini', false],
+    [undefined, false],
+    [null, false],
+  ])('%j → %s', (type, expected) => {
+    expect(providerEnforcesSchema(type)).toBe(expected);
   });
 });

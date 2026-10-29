@@ -20,6 +20,7 @@ import {
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
 import { GoogleGeminiClient } from '../integrations/google-gemini/client.ts';
+import { VercelAiGatewayClient } from '../integrations/vercel-ai-gateway/client.ts';
 import { isGoogleGeminiCatalogModel } from '../services/llm-models-seed.ts';
 import { syncProviderModels } from '../services/model-sync.ts';
 import { validateBody } from '../middleware/validate.ts';
@@ -202,6 +203,11 @@ router.post('/:id/test', requireRole('owner', 'admin'), async (req: Request, res
       const client = new GoogleGeminiClient(provider.base_url, provider.api_key);
       const models = await client.listModels();
       return res.json({ success: true, model_count: Array.isArray(models) ? models.length : 0 });
+    }
+    if (provider.type === 'vercel-ai-gateway') {
+      const client = new VercelAiGatewayClient(provider.base_url, provider.api_key);
+      const models = await client.listModels();
+      return res.json({ success: true, model_count: models.length, message: 'Vercel AI Gateway reachable' });
     }
 
     /* Future: add test logic for openai, anthropic, etc. */

@@ -228,6 +228,21 @@ export default function ProfileRuntimeOptions({
         </Paper>
       )}
 
+      {selectedProviderType === 'vercel-ai-gateway' && effectiveProfileType === 'model' && (
+        <Paper withBorder p="sm" radius="sm">
+          <Stack gap="xs">
+            <Text size="sm" fw={600}>
+              Vercel AI Gateway
+            </Text>
+            <Text size="xs" c="dimmed">
+              No provider-specific options. Model ids are vendor/model (for example openai/gpt-4.1-mini). A job&apos;s
+              expected schema is enforced natively on GPT and Claude models. Chat streaming is not supported on this
+              provider yet, so use it for processing jobs.
+            </Text>
+          </Stack>
+        </Paper>
+      )}
+
       {selectedProviderType === 'google-gemini' && (
         <Paper withBorder p="sm" radius="sm">
           <Stack gap="xs">

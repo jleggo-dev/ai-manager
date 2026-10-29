@@ -159,6 +159,17 @@ export function normaliseRuntimeOptions(raw: unknown = {}, providerType: string 
     options.devs_ai = { built_in_tools: [], generate_citations: false, parallel_tool_calls: false };
     options.google_gemini = { grounding_with_google_search: false };
   }
+  if (normalizedType === 'vercel-ai-gateway') {
+    options.devs_ai = { built_in_tools: [], generate_citations: false, parallel_tool_calls: false };
+    options.devs_ai_v2 = {
+      built_in_tools: [],
+      parallel_tool_calls: true,
+      chat_mode: 'execute',
+      thread_mode: 'collect',
+      threading: false,
+    };
+    options.google_gemini = { grounding_with_google_search: false };
+  }
 
   return options;
 }
