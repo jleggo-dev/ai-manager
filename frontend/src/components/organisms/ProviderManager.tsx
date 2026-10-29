@@ -1,8 +1,8 @@
 /**
  * Organism – ProviderManager
  * ----------------------------
- * Lists providers with CRUD actions, test connectivity,
- * and create/edit forms via modal.
+ * Lists providers with CRUD actions, test connectivity, "Check models answer"
+ * (model liveness), and create/edit forms via modal.
  *
  * CROSS-03: providers list via TanStack Query (`useProvidersQuery`); invalidate after mutate.
  */
@@ -25,8 +25,16 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconPlus, IconTrash, IconEdit, IconPlugConnected, IconAlertCircle } from '@tabler/icons-react';
+import {
+  IconPlus,
+  IconTrash,
+  IconEdit,
+  IconPlugConnected,
+  IconAlertCircle,
+  IconStethoscope,
+} from '@tabler/icons-react';
 import ProviderForm from '../molecules/ProviderForm';
+import ProviderLivenessModal from './provider-liveness/ProviderLivenessModal';
 import { useInvalidateProviders, useProvidersQuery } from '../../hooks/useProvidersQuery';
 import * as api from '../../services/api';
 import type { Provider } from '../../types/api';
@@ -38,6 +46,8 @@ export default function ProviderManager() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
   const [modalOpened, { open: openModal, close: closeModal }] = useDisclosure(false);
+  const [livenessProvider, setLivenessProvider] = useState<Provider | null>(null);
+  const [livenessOpened, { open: openLiveness, close: closeLiveness }] = useDisclosure(false);
 
   useEffect(() => {
     if (!isError) return;
@@ -142,6 +152,20 @@ export default function ProviderManager() {
                     <IconPlugConnected size={14} />
                   </ActionIcon>
                 </Tooltip>
+                <Tooltip label="Check models answer">
+                  <ActionIcon
+                    variant="subtle"
+                    color="teal"
+                    size="sm"
+                    aria-label="Check models answer"
+                    onClick={() => {
+                      setLivenessProvider(p);
+                      openLiveness();
+                    }}
+                  >
+                    <IconStethoscope size={14} />
+                  </ActionIcon>
+                </Tooltip>
                 <Tooltip label="Edit">
                   <ActionIcon
                     variant="subtle"
@@ -187,6 +211,15 @@ export default function ProviderManager() {
           loading={saving}
         />
       </Modal>
+
+      <ProviderLivenessModal
+        provider={livenessProvider}
+        opened={livenessOpened}
+        onClose={() => {
+          closeLiveness();
+          setLivenessProvider(null);
+        }}
+      />
     </Stack>
   );
 }

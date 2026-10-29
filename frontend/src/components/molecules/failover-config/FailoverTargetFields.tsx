@@ -1,4 +1,5 @@
 import { Text, Select, TextInput, SegmentedControl } from '@mantine/core';
+import ModelVerdict from '../ModelVerdict';
 
 interface SelectOption {
   value: string;
@@ -116,6 +117,11 @@ export function FailoverTargetFields({
             disabled={loadingAis}
           />
         ))}
+
+      {/* Last liveness verdict for the chosen failover model. */}
+      {failoverProviderId && profileType === 'model' && (
+        <ModelVerdict providerId={failoverProviderId} model={failoverAiId} />
+      )}
     </>
   );
 }

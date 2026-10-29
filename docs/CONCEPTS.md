@@ -67,6 +67,29 @@ A **provider** represents an LLM platform that AI Admin connects to.
 - **Devs.ai (v2)** — `devs-ai-v2`. Separate provider type using the Responses API (`POST /api/v2/responses`). Native JSON schema enforcement, threaded chat via `previous_response_id`, stream reconnect, and cancel. Does not replace v1 — existing v1 profiles continue unchanged.
 - **Google Gemini** — Direct model access via the Gemini API. Profiles on Gemini providers are automatically set to "model" type.
 
+### The catalog is a listing, not a promise (2026-10-28)
+
+The model catalog (`GET /api/providers/:id/models`, refreshed from the provider's model list by the
+daily sync) says what the provider **lists**. It does not say what the provider will **serve**.
+On 2026-10-27 Devs.ai kept listing six models as active while answering
+`400 "Model X is not available for this request"` to a one-line prompt; three profiles whose
+primary and failover were the same model family were dead on both pointers, and the catalog
+refresh showed nothing deprecated.
+
+So there are two checks on a provider:
+
+- **Test connection** (`POST /api/providers/:id/test`) — the key works and the provider lists models.
+- **Check models answer** (`POST /api/providers/:id/liveness`) — one short completion to every
+  model the provider's active profiles point at (primary and failover). Each model gets a plain
+  verdict: *answers*, *refused* (with the provider's own words), *timed out*, *answered with no
+  text* (a reasoning-class model given too small an output budget), or *error*. Any profile whose
+  primary or failover does not answer is marked, and the last verdict shows beside the model
+  picker on the profile form. `GET .../liveness` returns the last report.
+
+The check runs only when asked; nothing schedules it and nothing repoints a profile. Keep the
+primary and failover of a profile on different model families, and run the check before trusting
+a catalog entry. (Repointing: `apps/cadence-api/scripts/repoint-profile.ts`.)
+
 ### How API Keys Are Protected
 
 Provider API keys are encrypted before being stored in the database using AES-256-GCM (via the `CREDENTIAL_ENCRYPTION_KEY` environment variable). The encryption key is required in all non-development environments — the server will not start without it. API keys are completely stripped from all API responses; they never appear in any form.

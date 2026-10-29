@@ -9,4 +9,6 @@ export const providerKeys = {
   lists: () => [...providerKeys.all, 'list'] as const,
   /** Workspace-scoped list — API reads workspace from auth headers. */
   list: (workspaceId: string | null) => [...providerKeys.lists(), workspaceId ?? 'none'] as const,
+  /** Last model liveness report for one provider. */
+  liveness: (providerId: string) => [...providerKeys.all, 'liveness', providerId] as const,
 };

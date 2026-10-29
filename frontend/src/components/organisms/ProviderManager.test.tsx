@@ -10,6 +10,8 @@ vi.mock('../../services/api', () => ({
   updateProvider: vi.fn(),
   deleteProvider: vi.fn(),
   testProvider: vi.fn(),
+  runProviderLiveness: vi.fn(),
+  getProviderLiveness: vi.fn(),
 }));
 
 vi.mock('../../hooks/useConfirm', () => ({
@@ -134,7 +136,68 @@ describe('ProviderManager', () => {
       expect(screen.getByText('Devs.ai Corporate')).toBeInTheDocument();
     });
     const allButtons = screen.getAllByRole('button');
-    // 1 "Add Provider" button + 3 ActionIcons per provider (Test, Edit, Delete)
-    expect(allButtons.length).toBe(1 + mockProviders.length * 3);
+    // 1 "Add Provider" button + 4 ActionIcons per provider (Test, Check models answer, Edit, Delete)
+    expect(allButtons.length).toBe(1 + mockProviders.length * 4);
+  });
+});
+
+describe('ProviderManager — Check models answer', () => {
+  const report = {
+    provider_id: '1',
+    provider_name: 'Devs.ai Corporate',
+    checked_at: '2026-10-28T12:00:00.000Z',
+    duration_ms: 900,
+    models: [
+      { model: 'gpt-4.1', verdict: 'ok', message: null, duration_ms: 400 },
+      {
+        model: 'claude-sonnet-5',
+        verdict: 'refused',
+        message: 'Model claude-sonnet-5 is not available for this request',
+        duration_ms: 100,
+      },
+    ],
+    profiles: [
+      {
+        id: 'coach',
+        name: 'Coach',
+        primary: { model: 'claude-sonnet-5', verdict: 'refused' },
+        failover: null,
+        dead: true,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.listProviders as ReturnType<typeof vi.fn>).mockResolvedValue(paginatedProviders);
+    (api.getProviderLiveness as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (api.runProviderLiveness as ReturnType<typeof vi.fn>).mockResolvedValue(report);
+  });
+
+  it('runs the check for that provider in one click and lists the verdicts', async () => {
+    renderComponent();
+    await screen.findByText('Devs.ai Corporate');
+    const [button] = screen.getAllByRole('button', { name: 'Check models answer' });
+    fireEvent.click(button as HTMLElement);
+
+    await waitFor(() => expect(api.runProviderLiveness).toHaveBeenCalledWith('1'));
+    expect(
+      await screen.findByText('refused: Model claude-sonnet-5 is not available for this request'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('answers')).toBeInTheDocument();
+    expect(screen.getByTestId('liveness-profile-coach')).toHaveAttribute('data-dead', 'true');
+    expect(api.runProviderLiveness).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the failure instead of a verdict when the check itself fails', async () => {
+    (api.runProviderLiveness as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('Provider has no API key configured'),
+    );
+    renderComponent();
+    await screen.findByText('Google Gemini');
+    const buttons = screen.getAllByRole('button', { name: 'Check models answer' });
+    fireEvent.click(buttons[1] as HTMLElement);
+    expect(await screen.findByText('Provider has no API key configured')).toBeInTheDocument();
+    expect(screen.queryByTestId('liveness-models')).not.toBeInTheDocument();
   });
 });
