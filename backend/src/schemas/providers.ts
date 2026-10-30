@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const createProviderSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
-  type: z.enum(['devs-ai', 'devs-ai-v2', 'google-gemini'], {
-    message: 'Type must be one of: devs-ai, devs-ai-v2, google-gemini',
+  type: z.enum(['devs-ai', 'devs-ai-v2', 'google-gemini', 'vercel-ai-gateway'], {
+    message: 'Type must be one of: devs-ai, devs-ai-v2, google-gemini, vercel-ai-gateway',
   }),
   base_url: z.string().url('Must be a valid URL').max(500),
   api_key: z.string().max(500).optional().nullable(),

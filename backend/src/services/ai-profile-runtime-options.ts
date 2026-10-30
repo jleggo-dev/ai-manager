@@ -150,8 +150,33 @@ export function normaliseAiProfileRuntimeOptions(
     options.devs_ai = { built_in_tools: [], generate_citations: false, parallel_tool_calls: false };
     options.google_gemini = { grounding_with_google_search: false };
   }
+  if (normalizedProviderType === 'vercel-ai-gateway') {
+    // No provider-specific section yet: the gateway takes the plain Responses body. Every other
+    // provider's fragment is zeroed so nothing Devs.ai-shaped rides along.
+    options.devs_ai = { built_in_tools: [], generate_citations: false, parallel_tool_calls: false };
+    options.devs_ai_v2 = {
+      built_in_tools: [],
+      parallel_tool_calls: true,
+      chat_mode: 'execute',
+      thread_mode: 'collect',
+      threading: false,
+    };
+    options.google_gemini = { grounding_with_google_search: false };
+  }
 
   return options;
+}
+
+/**
+ * Does this provider type take a job's `expectedSchema` as a native `text.format` json_schema?
+ * Devs.ai v2 accepts the field (and, measured 2026-10-29, ignores it); the gateway enforces it on
+ * GPT and Claude. v1 and Gemini have no such field and get the schema as prompt text only.
+ */
+export function providerEnforcesSchema(providerType: string = ''): boolean {
+  const t = String(providerType || '')
+    .trim()
+    .toLowerCase();
+  return t === 'devs-ai-v2' || t === 'vercel-ai-gateway';
 }
 
 export interface BuildChatOptionsExtra {
@@ -226,6 +251,17 @@ export function buildProviderChatOptions(
     return {
       groundingWithGoogleSearch: normalized.google_gemini.grounding_with_google_search === true,
     };
+  }
+
+  if (normalizedProviderType === 'vercel-ai-gateway') {
+    // Only the schema travels. The gateway client strips anything Devs.ai-shaped anyway
+    // (`vercel-ai-gateway/request.ts`); this just never produces it.
+    const options: Record<string, unknown> = {};
+    if (extra.expectedSchema) {
+      const schemaFormat = expectedSchemaFieldsToJsonSchema(extra.expectedSchema);
+      if (schemaFormat) options.text = schemaFormat;
+    }
+    return options;
   }
 
   return {};

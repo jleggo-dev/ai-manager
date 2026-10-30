@@ -1,17 +1,24 @@
 import { DevsAiClient } from './devs-ai/client.ts';
 import { DevsAiV2Client } from './devs-ai-v2/client.ts';
 import { GoogleGeminiClient } from './google-gemini/client.ts';
+import { VercelAiGatewayClient } from './vercel-ai-gateway/client.ts';
 import { resolveApiKeyForUser } from '../models/user-provider-credentials.ts';
 import type { ProviderRow } from '../types.ts';
 
-export type LlmClientInstance = DevsAiClient | DevsAiV2Client | GoogleGeminiClient;
+export type LlmClientInstance = DevsAiClient | DevsAiV2Client | GoogleGeminiClient | VercelAiGatewayClient;
 
-function createClientForType(type: string, baseUrl: string, apiKey: string): LlmClientInstance {
+/**
+ * The one place a provider row's `type` becomes a client. Exact match after trim + lowercase;
+ * anything else (`vercel`, `vercel_ai_gateway`, `ai-gateway`) is refused rather than guessed —
+ * table-tested in `backend/test/client-factory.test.ts`.
+ */
+export function createClientForType(type: string, baseUrl: string, apiKey: string): LlmClientInstance {
   const normalized = String(type || '')
     .trim()
     .toLowerCase();
   if (normalized === 'devs-ai-v2') return new DevsAiV2Client(baseUrl, apiKey);
   if (normalized === 'google-gemini') return new GoogleGeminiClient(baseUrl, apiKey);
+  if (normalized === 'vercel-ai-gateway') return new VercelAiGatewayClient(baseUrl, apiKey);
   if (normalized === 'devs-ai' || !normalized) return new DevsAiClient(baseUrl, apiKey);
   throw new Error(`Unsupported provider type "${type}"`);
 }

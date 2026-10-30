@@ -27,6 +27,7 @@ import type { FormattingRule, AppliedRule } from './types';
 import { getJobConfig } from './types';
 import VariablesReference from './VariablesReference';
 import ResponseSchemaViewer from './ResponseSchemaViewer';
+import { providerEnforcesSchema } from '../../../lib/provider-types';
 
 export default function BuildRulesTab({
   selectedJob,
@@ -77,7 +78,7 @@ export default function BuildRulesTab({
       ? cfg.expectedSchema
       : null;
   const schemaFieldCount = expectedSchema?.fields ? Object.keys(expectedSchema.fields).length : 0;
-  const isV2Profile = selectedJobFull.ai_profile?.provider?.type === 'devs-ai-v2';
+  const isV2Profile = providerEnforcesSchema(selectedJobFull.ai_profile?.provider?.type);
   const hasNativeV2Schema = isV2Profile && schemaFieldCount > 0;
 
   function addRule(ruleType: string) {
@@ -135,15 +136,16 @@ export default function BuildRulesTab({
       <Title order={4}>{selectedJobFull.name} — Prompt & Rules Configuration</Title>
 
       {hasNativeV2Schema && (
-        <Alert variant="light" color="blue" title="Native structured output (v2)">
-          Structured output is enforced by the Devs.ai v2 provider when Expected Schema is set. JSON build rules such as
-          trim-to-json are optional — use them only if you need a post-processing validation layer.
+        <Alert variant="light" color="blue" title="Native structured output">
+          The Expected Schema is sent to the provider as a native JSON schema (Devs.ai v2 accepts it; Vercel AI Gateway
+          enforces it on GPT and Claude). JSON build rules such as trim-to-json are optional — use them only if you need
+          a post-processing validation layer.
         </Alert>
       )}
 
       {hasNativeV2Schema && (
         <Switch
-          label="Apply formatting rules after native v2 schema"
+          label="Apply formatting rules after the native schema"
           description="When off (default), formatting rules are skipped when the provider enforces expectedSchema."
           checked={applyFormattingRules}
           onChange={(e) => setApplyFormattingRules(e.currentTarget.checked)}

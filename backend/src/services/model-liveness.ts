@@ -89,7 +89,9 @@ export function isAgentPointer(pointer: string): boolean {
 /** Per-provider-type spelling of the output cap; Gemini's client takes none. */
 function completionOptions(providerType: string, model: string, timeoutMs: number): Record<string, unknown> {
   const budget = outputBudgetFor(model);
-  if (providerType === 'devs-ai-v2') return { max_output_tokens: budget, store: false, timeoutMs };
+  if (providerType === 'devs-ai-v2' || providerType === 'vercel-ai-gateway') {
+    return { max_output_tokens: budget, store: false, timeoutMs };
+  }
   if (providerType === 'devs-ai') return { max_tokens: budget, timeoutMs };
   return { timeoutMs };
 }

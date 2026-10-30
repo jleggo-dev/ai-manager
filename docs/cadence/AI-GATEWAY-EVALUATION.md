@@ -120,38 +120,82 @@ asks for `{"ok": true}`. An enforced schema returns `zebra-alpha`; an ignored on
   "Check models answer" (`model-liveness.ts`) works for any client with `chatCompletion`, so it
   covers a gateway provider unchanged.
 
-## What a migration would touch
+## What a migration would touch — and what has landed
 
-The gateway speaks the OpenAI Responses dialect we already build, so most of the client is
-reused.
+_Updated 2026-10-29 with the first build (PR "Vercel AI Gateway as a provider type"). Nothing is
+repointed: every live profile still runs on Devs.ai. The owner repoints one profile at a time with
+`apps/cadence-api/scripts/repoint-profile.ts`, Broker jobs first._
 
-1. **New provider type** `vercel-ai-gateway` in
-   [`client-factory.ts`](../../backend/src/integrations/client-factory.ts) plus a client beside
-   `devs-ai-v2/`. It reuses `messagesToV2Request` / `toolResultsToV2Request`, strips the Devs.ai
-   extensions (`chat_mode`, `thread_mode`), and sends `store: false`. Provider row, encrypted key,
-   and a provider-type switch in `ai-profile-runtime-options.ts`.
-2. **Model ids** become `openai/gpt-4.1-mini`, `anthropic/claude-sonnet-5.5` and so on. Repoint
-   profiles with `repoint-profile.ts`, one profile at a time. Failover can stay cross-provider:
-   gateway primary, Devs.ai failover.
-3. **Schemas**: close every object in `expected-schema-to-json-schema.ts` or send `strict: false`,
-   and pin it with a test. Keep schema jobs off Gemini until gateway Gemini enforcement is proven.
-4. **Coach streaming**: `sse-transform.ts` was written for Devs.ai's event stream. The gateway
-   emits standard OpenAI Responses events, which need a fixture test (`capture-turn-frames.ts`
-   pattern). `pauseV2ChatResponse` / `cancelV2ChatResponse` are Devs.ai endpoints; abort becomes
-   client-side.
-5. **Caching for Claude**: set breakpoints ourselves, or route Claude through `/v1/messages`
-   (section 3, open item).
-6. **Devs.ai-only features in use**: chat file uploads by `file_id` (`uploadChatSessionFile`, 2
-   call sites; the gateway has no file store, so files go inline as data URLs), remote-chat purge
-   (becomes a no-op), and the Research profile's built-in `web_search` (the gateway has its own
-   web-search tool at $10/1k calls, which needs mapping).
-7. **Unchanged**: `diagnostic_logs`, `ai_log`, the job/workflow engine, failover, liveness. The
+### Landed
+
+1. **New provider type `vercel-ai-gateway`** in
+   [`client-factory.ts`](../../backend/src/integrations/client-factory.ts) with its client in
+   [`backend/src/integrations/vercel-ai-gateway/`](../../backend/src/integrations/vercel-ai-gateway/).
+   The shared OpenAI Responses body now lives in
+   [`backend/src/integrations/openai-responses/request-builder.ts`](../../backend/src/integrations/openai-responses/request-builder.ts);
+   the Devs.ai v2 builder layers `chat_mode` / `thread_mode` on top of it, and the gateway client
+   strips those plus `previous_response_id` / `conversation` and sends `store: false` on every
+   call. Provider row, encrypted key, schema enum, `/providers/:id/test`, the Providers form
+   (default base URL `https://ai-gateway.vercel.sh/v1`), the profile runtime-options switch and
+   the Build Rules "native schema" gate all know the type.
+2. **Model ids** pass through untouched (`openai/gpt-4.1-mini`, `anthropic/claude-sonnet-5.5`).
+   The catalogue sync lists the gateway's models by id and files them by vendor prefix
+   (`categorizeModel`); **per-model prices are not stored yet** — `llm_models` has no price
+   columns, so that is a follow-up.
+3. **Schemas**: [`strict-json-schema.ts`](../../backend/src/services/strict-json-schema.ts)
+   closes every declared object and reports every bare one. Of the 29 schema jobs, **12 go out
+   `strict: true`** and **17 go out `strict: false`** because they carry a bare
+   `{ type: "object" }` somewhere (`parse_meal`'s `items[]`, `flags`, `est_macros`, for
+   example). The exact list is pinned in `backend/test/strict-json-schema.test.ts`; a job moves
+   to the strict list by declaring `fields` on those objects in
+   `config/ai-admin/ai-admin.config.json` and syncing.
+4. **Liveness** (`model-liveness.ts`) works over the new client unchanged, tested with a stubbed
+   gateway; the per-type output cap and `store: false` reach the body.
+
+**Live proof (2026-10-29, `parse_meal`, same prompt, direct against the client class because the
+dev machine has no `CREDENTIAL_ENCRYPTION_KEY` and so cannot create a scratch provider row):**
+
+| Route               | Model                | Prompt tokens | Completion | Time   | Validates against `expectedSchema` |
+| ------------------- | -------------------- | ------------: | ---------: | ------ | ---------------------------------- |
+| `vercel-ai-gateway` | `openai/gpt-4.1-mini` |         1,104 |        403 | 3.55 s | yes (6/6 fields), bare JSON        |
+| `devs-ai-v2`        | `gpt-4.1-mini`        |         3,663 |        592 | 4.98 s | yes (6/6 fields), fenced ```json   |
+
+And `structure_recipe`, one of the 12 jobs whose schema goes out `strict: true` (the gateway
+accepted the closed schema; before the closer it 400'd on `additionalProperties`):
+
+| Route               | Model                 | Prompt tokens | Completion | Time   | Validates |
+| ------------------- | --------------------- | ------------: | ---------: | ------ | --------- |
+| `vercel-ai-gateway` | `openai/gpt-4.1-mini` |           554 |        100 | 1.39 s | yes (4/4) |
+| `devs-ai-v2`        | `gpt-4.1-mini`        |         3,066 |        113 | 2.06 s | yes (4/4) |
+
+Same ~2,500-token Devs.ai overhead as section 1 on both jobs. On `parse_meal` the gateway answer
+came back as bare JSON because the `json_schema` format reached the model (non-strict for that
+job), where Devs.ai returned a fenced block that the trim-to-json rule has been quietly unwrapping.
+
+### Still open
+
+1. **Coach streaming**: `chatCompletionStream` on the gateway client throws
+   "Streaming is not supported yet on vercel-ai-gateway" rather than hanging. `sse-transform.ts`
+   was written for Devs.ai's event stream; the gateway emits standard OpenAI Responses events and
+   needs a fixture test (`capture-turn-frames.ts` pattern). `pauseV2ChatResponse` /
+   `cancelV2ChatResponse` are Devs.ai endpoints; abort becomes client-side.
+2. **Caching for Claude**: set breakpoints ourselves, or route Claude through `/v1/messages`
+   (section 3, open item). Not started.
+3. **Devs.ai-only features in use**: chat file uploads by `file_id` (`uploadChatSessionFile`, 2
+   call sites — the gateway client has no `uploadFile`, so the engine declines documents on it
+   rather than inlining them), remote-chat purge (a no-op on the gateway), and the Research
+   profile's built-in `web_search` (the gateway has its own web-search tool at $10/1k calls,
+   which needs mapping). None of these matter for the Broker jobs.
+4. **Gemini schema enforcement** on the gateway is unproven (section 4): keep schema jobs off
+   Gemini there.
+5. **Prices** from `/v1/models` into the catalogue (needs columns on `llm_models`).
+6. **Unchanged**: `diagnostic_logs`, `ai_log`, the job/workflow engine, failover, liveness. The
    audit trail does not move.
 
-Suggested order: (a) one Broker job, e.g. a per-meal check or capture extract, on a gateway
-profile with Devs.ai failover, compared on the same inputs through the job `/test` route; (b) the
-rest of the Broker jobs once schemas are fixed; (c) Evolve; (d) the coach last, after the streaming
-and caching tests.
+Suggested order: (a) one Broker job, e.g. `parse_meal`, on a gateway profile with Devs.ai
+failover, compared on the same inputs through the job `/test` route; (b) the rest of the Broker
+jobs, declaring `fields` on their bare objects as they go so they run strict; (c) Evolve; (d) the
+coach last, after the streaming and caching tests.
 
 ## For the owner to rule on
 

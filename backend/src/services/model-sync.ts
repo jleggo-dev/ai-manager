@@ -22,6 +22,7 @@
 import { DevsAiClient } from '../integrations/devs-ai/client.ts';
 import { DevsAiV2Client } from '../integrations/devs-ai-v2/client.ts';
 import { GoogleGeminiClient } from '../integrations/google-gemini/client.ts';
+import { VercelAiGatewayClient } from '../integrations/vercel-ai-gateway/client.ts';
 import { bulkCreateLlmModels, listLlmModels } from '../models/llm-models.ts';
 import {
   categorizeModel,
@@ -92,6 +93,15 @@ async function discover(
         note: 'Provider model list endpoint unavailable; used curated seed catalog',
       };
     }
+  }
+
+  if (provider.type === 'vercel-ai-gateway') {
+    // The gateway lists ~500 models with per-model prices. Ids are synced here; the prices are
+    // not, because `llm_models` has no price columns yet (docs/cadence/AI-GATEWAY-EVALUATION.md).
+    // No seed fallback: an unreachable gateway is an error, not a curated list.
+    const client = new VercelAiGatewayClient(provider.base_url, provider.api_key as string);
+    const ids = await client.listModels();
+    return { ids, source: 'provider-api', note: null };
   }
 
   throw new Error(`Model discovery is not supported for provider type "${provider.type}"`);
