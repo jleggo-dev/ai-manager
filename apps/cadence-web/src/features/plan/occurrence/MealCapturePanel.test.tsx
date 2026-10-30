@@ -1,7 +1,7 @@
 /**
  * The capture from the trail is the quick log (2026-10-28, over the cart ruling of 2026-09-07):
  * the day card shows only what is logged, the meal screen is the whole body, the doors are one
- * icon-only row with Find first, and each door opens its own surface — a tile-to-surface router
+ * icon-only row with type-it first (Find became the filter bar, 2026-10-29), and each door opens its surface — a tile-to-surface router
  * fails silently (the wrong screen opens and nothing throws), so every tile gets a row here
  * naming the thing that can only be true if the method travelled, plus the negative that pins
  * the old bug: none of them lands on the meal's own shelves.
@@ -105,46 +105,47 @@ function renderPanel(props: Partial<Parameters<typeof MealCapturePanel>[0]> = {}
   );
 }
 
-/** The tile, and the one thing that can only be on screen if the tapped method travelled. */
-const TILES: Array<{ tile: string; landmark: RegExp | string; how: 'label' | 'text' }> = [
-  { tile: 'Find', landmark: 'Find a food', how: 'label' },
-  { tile: 'Chat', landmark: 'What did you have?', how: 'label' },
-  { tile: 'Voice', landmark: 'What did you have?', how: 'label' },
-  { tile: 'Barcode', landmark: /Barcode/, how: 'text' },
-];
-
+/**
+ * Turn 1 (2026-10-29): typing and voice open "What did you have?" as a sheet OVER the shelves, so
+ * for them the proof the method travelled is the sheet itself; the barcode keeps its own surface,
+ * and there the old negative still holds — it must not land on the shelves.
+ */
 describe('MealCapturePanel — the tapped tile is the door', () => {
-  it.each(TILES)('$tile opens its own surface, not the meal picker', async ({ tile, landmark, how }) => {
+  it.each(['Type it', 'Voice'])('%s opens "What did you have?"', async (tile) => {
     renderPanel();
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${tile}$`) }));
-    if (how === 'label') {
-      expect(await screen.findByLabelText(landmark as string)).toBeInTheDocument();
-    } else {
-      expect(await screen.findAllByText(landmark)).not.toHaveLength(0);
-    }
+    expect(await screen.findByRole('dialog', { name: 'What did you have?' })).toBeInTheDocument();
+  });
+
+  it('Barcode opens its own surface, not the meal picker', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole('button', { name: /^Barcode$/ }));
+    expect(await screen.findAllByText(/Barcode/)).not.toHaveLength(0);
     // The bug, stated: every tile used to land here instead.
     expect(screen.queryByRole('tablist', { name: 'Shelves' })).toBeNull();
   });
 
-  it('chat and voice open the SAME composer — voice is not a second screen', async () => {
+  it('typing and voice open the SAME sheet — voice is not a second screen', async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole('button', { name: /^Chat$/ }));
-    expect(await screen.findByRole('heading', { name: /Add to breakfast/ })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /^Type it$/ }));
+    const typed = await screen.findByRole('dialog', { name: 'What did you have?' });
+    expect(typed.querySelector('h2')?.textContent).toBe('What did you have?');
     cleanup();
 
     renderPanel();
     fireEvent.click(await screen.findByRole('button', { name: /^Voice$/ }));
-    expect(await screen.findByRole('heading', { name: /Add to breakfast/ })).toBeInTheDocument();
-    expect(await screen.findByLabelText('What did you have?')).toBeInTheDocument();
+    const spoken = await screen.findByRole('dialog', { name: 'What did you have?' });
+    expect(spoken.querySelector('h2')?.textContent).toBe('What did you have?');
   });
 
-  it('backing out of a door lands on the meal, not out of the capture', async () => {
+  it('closing the sheet lands on the meal, not out of the capture', async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole('button', { name: /^Find$/ }));
-    await screen.findByLabelText('Find a food');
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    // The door closed into the meal it appends to — the draft is still open behind it.
-    await waitFor(() => expect(screen.getByRole('tablist', { name: 'Shelves' })).toBeInTheDocument());
+    fireEvent.click(await screen.findByRole('button', { name: /^Type it$/ }));
+    await screen.findByRole('dialog', { name: 'What did you have?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    // The sheet closed into the meal it appends to — the draft is still open behind it.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'What did you have?' })).toBeNull());
+    expect(screen.getByRole('tablist', { name: 'Shelves' })).toBeInTheDocument();
   });
 });
 

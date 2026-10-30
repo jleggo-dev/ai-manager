@@ -48,4 +48,11 @@ describe('quickLogCoachNote', () => {
     const note = quickLogCoachNote({ ...base, date: '2026-10-27', items: [], logged: false }, TODAY);
     expect(note).toContain('their breakfast for 2026-10-27');
   });
+
+  it('in the drawer, asks for replies that fit it — and only there', () => {
+    const m = { ...base, items: [], logged: false };
+    expect(quickLogCoachNote(m, TODAY, true)).toContain('inside the meal drawer');
+    expect(quickLogCoachNote(m, TODAY, true)).toContain('two sentences or fewer');
+    expect(quickLogCoachNote(m, TODAY)).not.toContain('meal drawer');
+  });
 });

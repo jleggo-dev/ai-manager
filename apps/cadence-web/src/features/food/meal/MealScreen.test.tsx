@@ -75,6 +75,21 @@ vi.mock('../../plan/occurrence/format.ts', () => ({
 vi.mock('../../../components/MicButton.tsx', () => ({ MicButton: () => null }));
 vi.mock('../FoodBarcodePanel.tsx', () => ({ FoodBarcodePanel: () => <div>barcode-door</div> }));
 
+/** The coach session, faked at its hook: the panel must open her on a note and send what's tapped. */
+const coach = {
+  turns: [] as { role: 'user' | 'coach'; text: string }[],
+  restored: true,
+  streaming: false,
+  input: '',
+  setInput: vi.fn(),
+  nudge: vi.fn(async () => {}),
+  sendText: vi.fn(async () => true),
+  send: vi.fn(async () => {}),
+};
+vi.mock('../../onboarding/useCoachChat.ts', () => ({ useCoachChat: () => coach }));
+
+const api = await import('../../../lib/api.ts');
+const previewMeal = vi.mocked(api.previewMeal);
 const { MealScreen } = await import('./MealScreen.tsx');
 
 const mkMeal = (over: Partial<Meal> = {}): Meal => ({
@@ -509,16 +524,28 @@ describe('the title row', () => {
     expect(screen.queryByText(/change/)).toBeNull();
   });
 
-  it('the face hops to the coach with the meal and the cart in her note — and is absent without a host', async () => {
+  it('the face opens a chat about this meal inside the drawer — she opens on a note naming the cart', async () => {
     openMealDraft.mockResolvedValue(mkMeal({ items: [{ name: 'Eggs on toast', qty: 1, est: { kcal: 412 } }] }));
     const onCoach = vi.fn();
     await mount({ onCoach });
     fireEvent.click(await screen.findByRole('button', { name: 'Talk to Cadence about this meal' }));
-    expect(onCoach).toHaveBeenCalledTimes(1);
-    const note = onCoach.mock.calls[0]![0] as string;
+    const panel = await screen.findByRole('dialog', { name: 'Talk about Breakfast' });
+    // No hop: the conversation happens here, and the host's hop is never called.
+    expect(onCoach).not.toHaveBeenCalled();
+    await waitFor(() => expect(coach.nudge).toHaveBeenCalledTimes(1));
+    const note = (coach.nudge.mock.calls[0] as unknown as [string])[0];
     expect(note).toContain('breakfast');
     expect(note).toContain('eggs on toast');
     expect(note).toContain('get_food_log');
+    expect(note).toContain('inside the meal drawer');
+    // The cart is pinned at the top; the quick questions are the in-the-cart set.
+    expect(within(panel).getByText('Eggs on toast')).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Enough protein?' }));
+    expect(coach.sendText).toHaveBeenCalledWith('Enough protein?');
+    // ‹ Breakfast returns to the shelves with the cart intact.
+    fireEvent.click(within(panel).getByRole('button', { name: /Breakfast/ }));
+    expect(screen.queryByRole('dialog', { name: 'Talk about Breakfast' })).toBeNull();
+    expect(screen.getByRole('tablist', { name: 'Shelves' })).toBeInTheDocument();
     cleanup();
     await mount();
     expect(screen.queryByRole('button', { name: 'Talk to Cadence about this meal' })).toBeNull();
@@ -532,22 +559,104 @@ describe('the title row', () => {
   });
 });
 
-describe('the doors — icon-only, Find first', () => {
-  it('five doors, named for a screen reader, Find leading', async () => {
+describe('the doors — four, icon-only, type it first (turn 1, 2026-10-29)', () => {
+  it('type it · voice · picture · barcode, in that order, and no Find or Chat door', async () => {
     await mount();
-    const names = ['Find', 'Chat', 'Voice', 'Picture', 'Barcode'];
-    const doors = names.map((n) => screen.getByLabelText(n));
+    const doors = ['Type it', 'Voice', 'Picture', 'Barcode'].map((n) => screen.getByLabelText(n));
     expect(doors.every((d) => d.textContent === '')).toBe(true);
-    expect(doors[0]!.compareDocumentPosition(doors[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (let i = 1; i < doors.length; i++)
+      expect(doors[i - 1]!.compareDocumentPosition(doors[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByLabelText('Find')).toBeNull();
+    expect(screen.queryByLabelText('Chat')).toBeNull();
   });
 
-  it('Find opens the search; closing it lands back on the shelves', async () => {
+  it('the pencil opens "What did you have?" over the shelves; the barcode still opens its own door', async () => {
     await mount();
-    fireEvent.click(screen.getByLabelText('Find'));
-    expect(await screen.findByLabelText('Find a food')).toBeInTheDocument();
-    expect(screen.queryByRole('tablist', { name: 'Shelves' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(await screen.findByRole('tablist', { name: 'Shelves' })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Type it'));
+    expect(await screen.findByRole('dialog', { name: 'What did you have?' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Shelves' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByLabelText('Barcode'));
+    expect(await screen.findByText('barcode-door')).toBeInTheDocument();
+  });
+
+  it('a capture tile that already chose voice opens the same sheet, not a second screen', async () => {
+    await mount({ openAt: { at: 'chat', listening: true } });
+    expect(await screen.findByRole('dialog', { name: 'What did you have?' })).toBeInTheDocument();
+  });
+});
+
+describe('the filter bar — your foods, every shelf', () => {
+  it('filters across shelves as you type, and clearing it brings the shelf back', async () => {
+    await mount();
+    expect(await tile(/^Banana/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search my foods'), { target: { value: 'stew' } });
+    // Lentil stew lives on the Cookbook shelf; Usual is the shelf that is open.
+    expect(await tile(/^Lentil stew/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Banana/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(await tile(/^Banana/)).toBeInTheDocument();
+  });
+
+  it('nothing of yours matches: one tap hands the words to the coach, seeded in the sheet', async () => {
+    await mount();
+    fireEvent.change(screen.getByLabelText('Search my foods'), { target: { value: 'starbucks latte' } });
+    expect(screen.getByText('Not in your foods yet')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Tell the coach “starbucks latte”' }));
+    const sheet = await screen.findByRole('dialog', { name: 'What did you have?' });
+    expect(within(sheet).getByLabelText('What did you have?')).toHaveValue('starbucks latte');
+    expect(screen.getByLabelText('Search my foods')).toHaveValue('');
+  });
+});
+
+describe('"What did you have?" — look it up, then Looks right', () => {
+  const read = {
+    meal: 'breakfast' as const,
+    items: [
+      { name: 'Eggs', qty: 2, unit: 'large', est: { kcal: 156, protein_g: 12, carbs_g: 1, fat_g: 10 } },
+      { name: 'Flat white', brand: 'Starbucks', est: { kcal: 120, protein_g: 7, carbs_g: 10, fat_g: 6 } },
+    ],
+    macros: null,
+    confidence: 0.8,
+    flags: {},
+    raw_text: '2 eggs and a flat white',
+  };
+
+  it('lists what she found, drops a row on ×, and adds exactly what is left', async () => {
+    previewMeal.mockResolvedValue(read);
+    appendParsed.mockResolvedValue(mkMeal({ items: [{ name: 'Eggs', qty: 2, est: { kcal: 156 } }] }));
+    await mount();
+    fireEvent.click(screen.getByLabelText('Type it'));
+    const sheet = await screen.findByRole('dialog', { name: 'What did you have?' });
+    fireEvent.change(within(sheet).getByLabelText('What did you have?'), {
+      target: { value: '2 eggs and a flat white' },
+    });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Look it up' }));
+    expect(await within(sheet).findByText("Here's what I found")).toBeInTheDocument();
+    expect(previewMeal).toHaveBeenCalledWith('2 eggs and a flat white', 'breakfast');
+    expect(within(sheet).getByText('2 large')).toBeInTheDocument();
+    // An amount nobody said is a question, never a number.
+    expect(within(sheet).getByText('how much?')).toBeInTheDocument();
+    expect(within(sheet).getByText('Starbucks Flat white')).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Drop Flat white' }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Looks right · 156 kcal' }));
+    await waitFor(() => expect(appendParsed).toHaveBeenCalledWith('m1', { items: [read.items[0]] }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'What did you have?' })).toBeNull());
+  });
+
+  it('editing the words after a lookup asks for a fresh one — a stale read never adds', async () => {
+    previewMeal.mockResolvedValue(read);
+    await mount();
+    fireEvent.click(screen.getByLabelText('Type it'));
+    const sheet = await screen.findByRole('dialog', { name: 'What did you have?' });
+    const box = within(sheet).getByLabelText('What did you have?');
+    fireEvent.change(box, { target: { value: '2 eggs' } });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Look it up' }));
+    await within(sheet).findByText("Here's what I found");
+    fireEvent.change(box, { target: { value: '3 eggs' } });
+    expect(within(sheet).getByRole('button', { name: 'Look it up' })).toBeInTheDocument();
+    expect(within(sheet).queryByText("Here's what I found")).toBeNull();
+    expect(appendParsed).not.toHaveBeenCalled();
   });
 });
 

@@ -5,14 +5,18 @@
  *
  *   the title (it IS the slot picker) · Cadence's face · ⋯
  *   the day — kcal ring and three bars, the cart previewed as a pale arc and a hatched tail
- *   five doors, icon-only, Find first — each a keyboard that returns here
+ *   four doors, icon-only — type it (primary) · voice · photo · barcode — all four LOG
+ *   a filter bar over the shelves: your foods, every shelf; no match hands the words to the coach
  *   four shelves — Planned (absent when the week names nothing) · Usual · Leftovers · Cookbook
  *   two-column tiles that scroll on: tap = +1, tap again = ×2, hold = the amount sheet
  *   the cart — chips with ×, one button: "Log breakfast · kcal"
  *
+ * Turn 1 of the canvas (2026-10-29): typing and voice open "What did you have?" as a sheet over the
+ * drawer, and her face opens a chat about this meal as a second panel inside it (MealChatPanel).
+ *
  * Gone: the OPEN pill, ‹ (the drawer swipes down), "change ⌄", the window line, the empty-state
  * paragraph, labels under the doors, the express lane, photos. Advice lives elsewhere — the
- * face is the one door, and it hops to the coach with the cart in her note.
+ * face is the one door to it, and the four doors never talk.
  *
  * The draft is still a real, persistent object (`useMealDraft`): every door appends into it,
  * logging is the one write, and reopening a slot rejoins it. Adds on a logged meal count as
@@ -25,7 +29,8 @@
  *   onClose    — the drawer swiped down; the draft itself stays open server-side
  *   onLogged?  — after "Log breakfast" lands (or Done on a logged meal); defaults to onClose
  *   onOpenDay? — the day card's tap: the whole day in Food (omit and the card is plain)
- *   onCoach?   — the face: hand the conversation to the coach with an app-authored note (omit to hide)
+ *   onCoach?   — shows her face, which opens the in-drawer meal chat (omit to hide). The note it was
+ *                once handed is now spoken inside the drawer; the prop stays the face's switch
  */
 import { useState } from 'react';
 import type { MealKind } from '@cadence/shared';
@@ -34,6 +39,10 @@ import { AmountSheet, ServingsSheet } from './AmountSheet.tsx';
 import { CartBar } from './CartBar.tsx';
 import { quickLogCoachNote } from './coachNote.ts';
 import { DayMacros } from './DayMacros.tsx';
+import { DescribeSheet } from './DescribeSheet.tsx';
+import { FindBar, FindEmpty } from './FindBar.tsx';
+import { findTiles } from './findTiles.ts';
+import { MealChatPanel } from './MealChatPanel.tsx';
 import { MealDoors, type MealDoor } from './MealDoors.tsx';
 import { MealDoorsRow } from './MealDoorsRow.tsx';
 import { MealItemSheet } from './MealItemSheet.tsx';
@@ -57,6 +66,9 @@ export interface MealScreenProps {
   onOpenDay?: () => void;
   onCoach?: (note: string) => void;
 }
+
+/** The pencil (or the mic) — "What did you have?" over the drawer, maybe carrying words already typed. */
+type Describe = { seed?: string; listening?: boolean };
 
 type Sheet =
   { kind: 'amount'; tile: ShelfTile } | { kind: 'servings'; tile: ShelfTile } | { kind: 'item'; index: number };
@@ -83,7 +95,13 @@ export function MealScreen({
 
   const [shelf, setShelf] = useState<ShelfKey | null>(null);
   const active: ShelfKey = shelf && shelves.keys.includes(shelf) ? shelf : (shelves.keys[0] ?? 'usual');
-  const [door, setDoor] = useState<MealDoor | null>(openAt ?? null);
+  // A capture tile that already chose typing or voice opens the sheet, not a screen of its own.
+  const [door, setDoor] = useState<MealDoor | null>(openAt?.at === 'chat' ? null : (openAt ?? null));
+  const [describe, setDescribe] = useState<Describe | null>(
+    openAt?.at === 'chat' ? { listening: openAt.listening } : null,
+  );
+  const [query, setQuery] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [saveFlow, setSaveFlow] = useState<SaveFlow | null>(null);
   const [sheet, setSheet] = useState<Sheet | null>(null);
@@ -123,19 +141,23 @@ export function MealScreen({
     else if (tile.kind === 'recipe') setSheet({ kind: 'servings', tile });
   };
 
-  const talk = () =>
-    onCoach?.(
-      quickLogCoachNote(
-        {
-          meal: kind,
-          date: mealDate,
-          items: draft.items,
-          parts: parts ?? [],
-          total: draft.total,
-          logged: draft.logged,
-        },
-        today,
-      ),
+  const openDoor = (d: MealDoor) => {
+    if (d.at === 'chat') setDescribe({ listening: d.listening });
+    else setDoor(d);
+  };
+
+  const chatNote = () =>
+    quickLogCoachNote(
+      {
+        meal: kind,
+        date: mealDate,
+        items: draft.items,
+        parts: parts ?? [],
+        total: draft.total,
+        logged: draft.logged,
+      },
+      today,
+      true,
     );
 
   if (door) {
@@ -148,6 +170,9 @@ export function MealScreen({
   }
 
   const openItem = sheet?.kind === 'item' ? draft.items[sheet.index] : null;
+  const searching = query.trim().length > 0;
+  const found = searching ? findTiles(shelves.tiles, shelves.keys, query) : [];
+  const mealTitle = kind[0]!.toUpperCase() + kind.slice(1);
 
   return (
     <div
@@ -166,24 +191,35 @@ export function MealScreen({
           busy={busy}
           locked={draft.logged}
           onKind={(k) => void draft.setMealKind(k)}
-          onCoach={onCoach ? talk : undefined}
+          onCoach={onCoach ? () => setChatOpen(true) : undefined}
           onMenu={() => setMenuOpen(true)}
         />
         <DayMacros day={day} cart={draft.logged ? {} : draft.total} onOpenDay={onOpenDay} />
       </div>
-      <MealDoorsRow busy={busy} onOpen={setDoor} />
+      <MealDoorsRow busy={busy} onOpen={openDoor} />
+      <FindBar query={query} onQuery={setQuery} />
       <ShelfTabs keys={shelves.keys} active={active} onPick={setShelf} />
-      <ShelfGrid
-        shelf={active}
-        tiles={shelves.tiles[active]}
-        countOf={cart.countOf}
-        busy={busy}
-        onTap={(t) => void cart.tap(t)}
-        onHold={hold}
-        onSwipe={stepShelf}
-        hint={holdHint.show}
-        onEnd={shelves.more[active]}
-      />
+      {searching && found.length === 0 ? (
+        <FindEmpty
+          query={query}
+          onTell={(words) => {
+            setQuery('');
+            setDescribe({ seed: words });
+          }}
+        />
+      ) : (
+        <ShelfGrid
+          shelf={active}
+          tiles={searching ? found : shelves.tiles[active]}
+          countOf={cart.countOf}
+          busy={busy}
+          onTap={(t) => void cart.tap(t)}
+          onHold={hold}
+          onSwipe={searching ? () => {} : stepShelf}
+          hint={holdHint.show}
+          onEnd={searching ? undefined : shelves.more[active]}
+        />
+      )}
       {draft.err && <div className="food-empty ms-err">{draft.err}</div>}
       <CartBar
         kind={kind}
@@ -209,6 +245,26 @@ export function MealScreen({
             void doLog();
           }}
           onClose={() => setMenuOpen(false)}
+        />
+      )}
+      {describe && (
+        <DescribeSheet
+          meal={kind}
+          seed={describe.seed}
+          listening={describe.listening}
+          busy={draft.busy}
+          onAdd={async (items, raw) => !!(await draft.appendParsed(items, describe.listening ? 'heard' : 'typed', raw))}
+          onClose={() => setDescribe(null)}
+        />
+      )}
+      {chatOpen && (
+        <MealChatPanel
+          mealTitle={mealTitle}
+          chips={cart.chips.map((c) => c.label)}
+          kcal={draft.total.kcal ?? 0}
+          state={draft.logged ? 'logged' : draft.items.length ? 'cart' : 'empty'}
+          note={chatNote()}
+          onBack={() => setChatOpen(false)}
         />
       )}
       {saveFlow && <SaveFlowCard draft={draft} flow={saveFlow} onClose={() => setSaveFlow(null)} />}

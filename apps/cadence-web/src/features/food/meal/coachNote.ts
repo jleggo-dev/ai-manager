@@ -37,9 +37,16 @@ export function cartWords(items: MealItem[], parts: MealPart[] = []): string {
   return words.join(', ');
 }
 
-export function quickLogCoachNote(m: MealForNote, today: string): string {
+/**
+ * `inDrawer`: the face opened a chat INSIDE the drawer (canvas 1c, 2026-10-29) rather than hopping
+ * to the coach tab, so the screen holds a line or two — the reply has to fit it.
+ */
+export function quickLogCoachNote(m: MealForNote, today: string, inDrawer = false): string {
   const when = m.date === today ? '' : ` for ${m.date}`;
   const where = `They are in the quick log, ${m.logged ? 'in' : 'logging'} their ${m.meal}${when}, and tapped you from it.`;
+  const fit = inDrawer
+    ? ' You are talking inside the meal drawer, under the cart: open with one short sentence, and keep every reply to two sentences or fewer.'
+    : '';
   const what =
     m.items.length === 0
       ? `Nothing in it yet.`
@@ -50,6 +57,7 @@ export function quickLogCoachNote(m: MealForNote, today: string): string {
     `${where} ${what} Open on THAT meal — a read on it, or help choosing. ` +
     'Their recent eating is on file: get_food_log for the last days, get_nutrition for today’s ' +
     'totals against their targets; their goals are already in your context. Weigh in against ' +
-    'those rather than asking them to repeat what the cart already says.'
+    'those rather than asking them to repeat what the cart already says.' +
+    fit
   );
 }
