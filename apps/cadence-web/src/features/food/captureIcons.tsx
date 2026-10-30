@@ -10,9 +10,25 @@ const S = {
   strokeLinejoin: 'round',
 } as const;
 
+/**
+ * A speech bubble: rounded box, tail at the lower left (canvas "Cadence Quick Log", 2026-10-29).
+ * The one it replaced drew its left arc between two points further apart than the arc's radius,
+ * so SVG stretched the curve and the bubble came out lopsided with its tail hanging below the box.
+ */
 export const ChatIcon = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-    <path d="M20 12.5a7 7 0 0 1-7 7H8.5L4 22v-4.2A7 7 0 0 1 11 4h2a7 7 0 0 1 7 7v1.5z" {...S} />
+    <path
+      d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17H6.5A2.5 2.5 0 0 1 4 14.5z"
+      {...S}
+    />
+  </svg>
+);
+
+/** "Type it" — the door for words. A pencil, because the bubble now means talking WITH her. */
+export const PencilIcon = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+    <path d="M4 20h4.5L19 9.5a2.1 2.1 0 0 0-3-3L5.5 17 4 20z" {...S} />
+    <path d="M13.5 8.5l3 3M11 20h9" {...S} />
   </svg>
 );
 

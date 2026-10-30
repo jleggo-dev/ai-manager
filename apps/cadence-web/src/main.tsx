@@ -26,6 +26,8 @@ import './styles/hold-menu.css';
 // The meal screen (.ms-*, meal-logging rework P4) — the draft surface. After bracket.css and
 // food-capture.css because it composes around both families without restating either.
 import './styles/meal-screen.css';
+// The quick log's turn 1 (.ms-find, .ms-ds, .ms-chat) — leans on the drawer meal-screen.css builds.
+import './styles/quick-log.css';
 // The Sunday sweep's surfaces (.sw-*, meal-logging rework P7) — rides the sheet chrome from
 // styles.css and the bracket's taxonomy (green/butter), so it loads after both.
 import './styles/sweep.css';

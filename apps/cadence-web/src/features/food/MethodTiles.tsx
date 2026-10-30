@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
-import { CameraIcon, ChatIcon, MicIcon, ScanIcon, SearchIcon } from './captureIcons.tsx';
+import { CameraIcon, MicIcon, PencilIcon, ScanIcon, SearchIcon } from './captureIcons.tsx';
 
 /** Every way in. `search` only appears where there is a fuller screen to open. */
 export type CaptureMethod = 'chat' | 'voice' | 'picture' | 'barcode' | 'search';
 
 const META: Record<CaptureMethod, { label: string; hint: string; icon: () => ReactNode }> = {
-  chat: { label: 'Chat', hint: 'say it in words', icon: ChatIcon },
+  // "Type it" with a pencil (canvas, 2026-10-29): the doors log, they never talk — the speech
+  // bubble belongs to her face, which is the one door to a conversation.
+  chat: { label: 'Type it', hint: 'say it in words', icon: PencilIcon },
   voice: { label: 'Voice', hint: 'same chat, mic live', icon: MicIcon },
   picture: { label: 'Picture', hint: 'one photo', icon: CameraIcon },
   barcode: { label: 'Barcode', hint: 'off the packet', icon: ScanIcon },
