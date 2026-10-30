@@ -6,6 +6,7 @@ import {
   inferServingIndex,
   lexicalMatchScore,
   newFoodCandidate,
+  normalizeResolveText,
   rankFoods,
   scoreFood,
   type FoodRankContext,
@@ -101,6 +102,25 @@ describe('inferServingIndex', () => {
 
   it('matches egg unit for "3 eggs"', () => {
     expect(inferServingIndex('3 eggs', egg())).toBe(0);
+  });
+});
+
+/** Accents fold to their letter; before the fold "Caffè" lost its last letter to the strip. */
+describe('normalizeResolveText', () => {
+  it.each([
+    ['Caffè Latte', 'caffe latte'],
+    ['Crème Brûlée', 'creme brulee'],
+    ['Jalapeño Bagel', 'jalapeno bagel'],
+    ['Açaí Bowl', 'acai bowl'],
+    ['Smoothie (Grande)', 'smoothie grande'],
+    ['plain latte', 'plain latte'],
+  ])('%j → %j', (raw, out) => {
+    expect(normalizeResolveText(raw)).toBe(out);
+  });
+
+  it('matches an unaccented query to an accented name exactly', () => {
+    const latte = egg({ name: 'Caffè Latte', brand: null });
+    expect(lexicalMatchScore('caffe latte', latte)).toBe(1);
   });
 });
 

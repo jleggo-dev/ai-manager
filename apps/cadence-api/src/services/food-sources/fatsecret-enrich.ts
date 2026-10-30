@@ -15,16 +15,20 @@
  * Never throws. A source that is absent, unconfigured or failing degrades to "no match", and the
  * caller falls through to pinning an estimate exactly as it did before this file existed.
  */
-import type { Food } from '@cadence/shared';
+import { namedSizeOf, type Food } from '@cadence/shared';
 import { expireFatSecretFood, findFoodByFatSecretId, upsertFatSecretFood } from '../../repos/foods.ts';
-import { lexicalMatchScore } from '../food-resolver-rank.ts';
+import { lexicalMatchScore, normalizeResolveText, tokens } from '../food-resolver-rank.ts';
 import { fetchFatSecretFood, isFatSecretConfigured, searchFatSecretFoods } from './fatsecret.ts';
+import type { FatSecretHit } from './fatsecret-map.ts';
 
 /** Their ToS: nothing but identifiers may outlive this. */
 export const FATSECRET_TTL_MS = 24 * 60 * 60 * 1000;
-/** How many hits to consider, and how many to actually fetch in full (each is a call). */
-const SEARCH_LIMIT = 5;
-const IMPORT_LIMIT = 1;
+/**
+ * How many hits to consider. One search is one call whatever the page size, so this is not a
+ * cost knob — it is how much of the menu we can SEE before deciding. At 5, "Starbucks latte" never
+ * showed a single Venti row.
+ */
+const SEARCH_LIMIT = 10;
 /** Below this the name is not the thing they said, and a wrong branded match is worse than none. */
 const MIN_MATCH = 0.5;
 
@@ -58,31 +62,92 @@ export async function refreshFatSecretFood(fatsecretId: string): Promise<Food | 
   }
 }
 
+export interface RankedFatSecretHit {
+  hit: FatSecretHit;
+  score: number;
+  /** Words in the row's name the person never said — "matcha" in "Matcha Latte" for "latte". */
+  unasked: number;
+}
+
+/** What the rung found: the row it took, or — when it would only be guessing — the rows it could not choose between. */
+export interface FatSecretMatch {
+  food: Food | null;
+  /** Equally close rows, none taken. Empty unless the search was a tie. */
+  tied: FatSecretHit[];
+}
+
+/** The search words: vendor, then a menu size when one was said ("Venti"), then the food. */
+export function fatSecretQuery(query: string, brand?: string | null, size?: string | null): string {
+  return [brand?.trim(), namedSizeOf(size) ?? '', query.trim()].filter(Boolean).join(' ').trim();
+}
+
 /**
- * The rung itself: given a query nothing local or USDA could answer, try FatSecret and return the
- * imported row. `brand` is the strongest signal we have that this is their kind of food, so it
- * joins the query and raises the bar the name has to clear.
+ * Close-enough rows, best first: by match score, then by fewest unasked words.
+ *
+ * The second key is the fix for "Starbucks latte". Every Starbucks latte contains both words, so
+ * Matcha, Chai and Pumpkin Spice all scored the same 0.82 as Caffè Latte, and the tie went to
+ * whatever FatSecret listed first. A row that adds a word nobody said is naming a different drink.
  */
-export async function findFatSecretMatch(query: string, brand?: string | null): Promise<Food | null> {
-  const q = [brand?.trim(), query.trim()].filter(Boolean).join(' ').trim();
-  if (!q || !isFatSecretConfigured()) return null;
+export function rankFatSecretHits(q: string, hits: readonly FatSecretHit[]): RankedFatSecretHit[] {
+  const said = new Set(tokens(q));
+  return hits
+    .map((hit) => ({
+      hit,
+      score: lexicalMatchScore(q, { name: hit.name, brand: hit.brand }),
+      unasked: tokens(`${hit.brand ?? ''} ${hit.name}`).filter((t) => !said.has(t)).length,
+    }))
+    .filter((r) => r.score >= MIN_MATCH)
+    .sort((a, b) => b.score - a.score || a.unasked - b.unasked);
+}
+
+/**
+ * The rows that share the best rank. One row — or several that are the same food listed twice —
+ * is a match; two different foods at the same rank is a guess, and a wrong branded match is worse
+ * than none (it prices the meal AND switches off the web lookup that would have got it right).
+ */
+export function topTie(ranked: readonly RankedFatSecretHit[]): RankedFatSecretHit[] {
+  const [first] = ranked;
+  if (!first) return [];
+  const top = ranked.filter((r) => r.score === first.score && r.unasked === first.unasked);
+  const distinct = new Set(top.map((r) => normalizeResolveText(`${r.hit.brand ?? ''} ${r.hit.name}`)));
+  return distinct.size > 1 ? top : [first];
+}
+
+/**
+ * The rung itself: given a query nothing local or USDA could answer, try FatSecret and report what
+ * it found. `brand` is the strongest signal we have that this is their kind of food, so it joins the
+ * query; a menu `size` joins it too, because chains list each size as its own row.
+ *
+ * It takes a row only when one row is clearly closest. A tie comes back as `tied`, so a caller that
+ * reports to the Coach can say so instead of handing her one arbitrary row as if it were the answer.
+ */
+export async function matchFatSecret(
+  query: string,
+  brand?: string | null,
+  size?: string | null,
+): Promise<FatSecretMatch> {
+  const none: FatSecretMatch = { food: null, tied: [] };
+  const q = fatSecretQuery(query, brand, size);
+  if (!q || !isFatSecretConfigured()) return none;
   try {
-    const hits = await searchFatSecretFoods(q, SEARCH_LIMIT);
-    if (hits.length === 0) return null;
-
-    const ranked = hits
-      .map((h) => ({ hit: h, score: lexicalMatchScore(q, { name: h.name, brand: h.brand }) }))
-      .filter((r) => r.score >= MIN_MATCH)
-      .sort((a, b) => b.score - a.score);
-    if (ranked.length === 0) return null;
-
-    for (const { hit } of ranked.slice(0, IMPORT_LIMIT)) {
-      const row = await refreshFatSecretFood(hit.food_id);
-      if (row) return row;
+    const top = topTie(rankFatSecretHits(q, await searchFatSecretFoods(q, SEARCH_LIMIT)));
+    if (top.length === 0) return none;
+    if (top.length > 1) {
+      console.info(`[fatsecret] "${q}" — ${top.length} equally close rows, none taken`);
+      return { food: null, tied: top.map((r) => r.hit) };
     }
-    return null;
+    return { food: await refreshFatSecretFood(top[0]!.hit.food_id), tied: [] };
   } catch (e) {
     console.warn('[fatsecret] lookup failed — falling through to an estimate:', e);
-    return null;
+    return none;
   }
+}
+
+/** The row alone, for pricing — which has no one to show a tie to, so a tie is no match. */
+export async function findFatSecretMatch(
+  query: string,
+  brand?: string | null,
+  size?: string | null,
+): Promise<Food | null> {
+  return (await matchFatSecret(query, brand, size)).food;
 }

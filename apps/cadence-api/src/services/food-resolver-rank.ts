@@ -44,9 +44,17 @@ export interface RankedFood {
   inferred_quantity: number;
 }
 
-/** Lowercase, collapse whitespace, strip light punctuation for matching. */
+/**
+ * Lowercase, fold accents, collapse whitespace, strip light punctuation for matching.
+ *
+ * The fold comes first: the punctuation strip below keeps a-z only, so without it "Caffè" became
+ * "caff" — and typing "caffe latte" scored LOWER against Starbucks' own "Caffè Latte" than typing
+ * just "latte" did.
+ */
 export function normalizeResolveText(raw: string): string {
   return raw
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[-_]+/g, ' ')
     .replace(/[^a-z0-9./\s]/g, ' ')
@@ -64,7 +72,8 @@ function stemToken(tok: string): string {
   return tok;
 }
 
-function tokens(text: string): string[] {
+/** The words matching compares: normalised, singular, stop-words and bare numbers dropped. */
+export function tokens(text: string): string[] {
   return normalizeResolveText(text)
     .split(/[\s/]+/)
     .map(stemToken)

@@ -241,7 +241,7 @@ async function priceOne(
     if (food) {
       console.info(`[food-pricing] "${food.name}" has no usable macros — trying the next source`);
     }
-    food = (await findFatSecretMatch(item.name, item.brand)) ?? food;
+    food = (await findFatSecretMatch(item.name, item.brand, item.unit)) ?? food;
   }
 
   /**
