@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { OnboardingChat } from './OnboardingChat.tsx';
@@ -82,9 +82,10 @@ describe('coach history in the Coach tab', () => {
     coachTab();
     await screen.findByText('how did the week go?');
     expect(screen.queryByRole('button', { name: /earlier conversations/i })).not.toBeInTheDocument();
+    expect(getEarlierCoachConversations).not.toHaveBeenCalled();
   });
 
-  it('reads back one conversation at a time, dated, above the one on screen', async () => {
+  it('loads earlier conversations on its own, dated, above the one on screen', async () => {
     getCurrentCoach.mockResolvedValueOnce({
       ok: true,
       sessionId: 'sess-1',
@@ -97,7 +98,7 @@ describe('coach history in the Coach tab', () => {
         {
           sessionId: 'sess-0',
           startedAt: '2026-08-12T09:00:00Z',
-          lastActiveAt: '2026-08-12T09:30:00Z',
+          lastActiveAt: '2026-08-12T09:00:00Z',
           turns: [{ role: 'coach', content: 'we agreed on three runs a week' }],
           truncated: false,
         },
@@ -107,25 +108,24 @@ describe('coach history in the Coach tab', () => {
     });
 
     coachTab();
-    await screen.findByText('how did the week go?');
-    fireEvent.click(await screen.findByRole('button', { name: /earlier conversations/i }));
-
+    // No tap (owner, 2026-10-31): the top of a short transcript is in view, so history fills in.
+    // (jsdom has no IntersectionObserver, so the marker asks straight away.)
     expect(await screen.findByText('we agreed on three runs a week')).toBeInTheDocument();
+    expect(screen.getByText('how did the week go?')).toBeInTheDocument();
     expect(getEarlierCoachConversations).toHaveBeenCalledWith('2026-08-19T10:00:00Z', 1);
-    // The date the conversation happened, so reading back places it in their week. Asserted on the
-    // parts rather than the ordering — the label is locale-formatted, and the runner's locale is
-    // not the user's.
-    const divider = screen.getAllByRole('separator').at(-1)!;
-    expect(divider.textContent).toMatch(/Wednesday/);
-    expect(divider.textContent).toMatch(/August/);
-    expect(divider.textContent).toMatch(/12/);
-    // Nothing further back: the control retires rather than sitting there doing nothing.
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: /earlier conversations/i })).not.toBeInTheDocument(),
-    );
+    // Two seams, both dated: where the archived conversation began, and where the one on screen
+    // did. Asserted on the parts rather than the ordering — the label is locale-formatted, and the
+    // runner's locale is not the user's.
+    const [archived, current] = screen.getAllByRole('separator').slice(-2);
+    expect(archived!.textContent).toMatch(/Wednesday/);
+    expect(archived!.textContent).toMatch(/August/);
+    expect(archived!.textContent).toMatch(/12/);
+    expect(current!.textContent).toMatch(/Wednesday/);
+    expect(current!.textContent).toMatch(/19/);
+    expect(screen.queryByRole('button', { name: /earlier conversations/i })).not.toBeInTheDocument();
   });
 
-  it('never loads the archive just because the tab opened', async () => {
+  it('keeps loading until the archive runs out, oldest at the top', async () => {
     getCurrentCoach.mockResolvedValueOnce({
       ok: true,
       sessionId: 'sess-1',
@@ -133,12 +133,87 @@ describe('coach history in the Coach tab', () => {
       startedAt: '2026-08-19T10:00:00Z',
       hasEarlier: true,
     });
+    getEarlierCoachConversations
+      .mockResolvedValueOnce({
+        conversations: [
+          {
+            sessionId: 's2',
+            startedAt: '2026-08-12T09:00:00Z',
+            lastActiveAt: '2026-08-12T09:00:00Z',
+            turns: [{ role: 'coach', content: 'second' }],
+            truncated: false,
+          },
+        ],
+        hasMore: true,
+        nextBefore: '2026-08-12T09:00:00Z',
+      })
+      // A stretch of empty rows: nothing to show, but the cursor moved, so it asks again.
+      .mockResolvedValueOnce({ conversations: [], hasMore: true, nextBefore: '2026-08-08T09:00:00Z' })
+      .mockResolvedValueOnce({
+        conversations: [
+          {
+            sessionId: 's1',
+            startedAt: '2026-08-05T09:00:00Z',
+            lastActiveAt: '2026-08-05T09:00:00Z',
+            turns: [{ role: 'coach', content: 'first' }],
+            truncated: false,
+          },
+        ],
+        hasMore: false,
+        nextBefore: '2026-08-05T09:00:00Z',
+      });
+
     coachTab();
-    await screen.findByText('how did the week go?');
-    await screen.findByRole('button', { name: /earlier conversations/i });
-    // The offer is on screen; nothing behind it has been fetched. This is the latency contract:
-    // opening Coach costs exactly what it did before history existed.
-    expect(getEarlierCoachConversations).not.toHaveBeenCalled();
+    const first = await screen.findByText('first');
+    const second = screen.getByText('second');
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(getEarlierCoachConversations).toHaveBeenCalledTimes(3);
+  });
+
+  it('offers a retry after a failed load instead of trying again on its own', async () => {
+    getCurrentCoach.mockResolvedValueOnce({
+      ok: true,
+      sessionId: 'sess-1',
+      messages: [{ role: 'coach', content: 'how did the week go?' }],
+      startedAt: '2026-08-19T10:00:00Z',
+      hasEarlier: true,
+    });
+    getEarlierCoachConversations
+      .mockResolvedValueOnce({ conversations: [], hasMore: true, nextBefore: null })
+      .mockResolvedValueOnce({
+        conversations: [
+          {
+            sessionId: 's0',
+            startedAt: '2026-08-12T09:00:00Z',
+            lastActiveAt: '2026-08-12T09:00:00Z',
+            turns: [{ role: 'coach', content: 'back again' }],
+            truncated: false,
+          },
+        ],
+        hasMore: false,
+        nextBefore: '2026-08-12T09:00:00Z',
+      });
+
+    coachTab();
+    const retry = await screen.findByRole('button', { name: /try loading earlier conversations again/i });
+    expect(getEarlierCoachConversations).toHaveBeenCalledTimes(1);
+    fireEvent.click(retry);
+    expect(await screen.findByText('back again')).toBeInTheDocument();
+  });
+
+  it('shows the conversation on screen without waiting for the archive', async () => {
+    getCurrentCoach.mockResolvedValueOnce({
+      ok: true,
+      sessionId: 'sess-1',
+      messages: [{ role: 'coach', content: 'how did the week go?' }],
+      startedAt: '2026-08-19T10:00:00Z',
+      hasEarlier: true,
+    });
+    // Never answers: the archive is slow, and the tab must not be.
+    getEarlierCoachConversations.mockReturnValueOnce(new Promise(() => {}));
+    coachTab();
+    expect(await screen.findByText('how did the week go?')).toBeInTheDocument();
+    expect(await screen.findByText('Looking back…')).toBeInTheDocument();
   });
 
   it('says so when an archived thread was too long to ship whole', async () => {
@@ -163,7 +238,6 @@ describe('coach history in the Coach tab', () => {
       nextBefore: '2026-08-12T09:00:00Z',
     });
     coachTab();
-    fireEvent.click(await screen.findByRole('button', { name: /earlier conversations/i }));
     expect(await screen.findByText(/only the last stretch/i)).toBeInTheDocument();
   });
 

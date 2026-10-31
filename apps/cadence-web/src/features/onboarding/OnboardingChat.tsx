@@ -328,7 +328,7 @@ export function OnboardingChat({
   // Declared AFTER the inset on purpose: both are layout effects and they run in declaration
   // order, so measuring the stack first means the follow scrolls against the padding this render
   // actually ends up with, rather than chasing it on a second pass.
-  const { onScroll, onTouchStart, onTouchEnd, stickNow, unstick } = useStickToBottom(chatRef);
+  const { onScroll, onTouchStart, onTouchEnd, stickNow } = useStickToBottom(chatRef);
   // Declared LAST of the layout effects on purpose — when older conversations land above the
   // viewport this has to have the final word on where the reader ends up (useAnchorOnPrepend).
   const markScroll = useAnchorOnPrepend(chatRef, history.earlier.length);
@@ -370,10 +370,12 @@ export function OnboardingChat({
           conversations={history.earlier}
           canLoad={history.canLoad}
           loading={history.loading}
+          failed={history.failed}
+          generation={history.loads}
+          currentStartedAt={cursor.startedAt}
           onLoad={() => {
-            // Both halves of "the viewport is theirs now": stop following the newest turn, and
-            // remember where they are so the incoming history lands above them rather than under.
-            unstick();
+            // Remember where they are so the incoming history lands above them rather than under —
+            // and someone still at the newest turn stays there.
             markScroll();
             void history.loadEarlier();
           }}

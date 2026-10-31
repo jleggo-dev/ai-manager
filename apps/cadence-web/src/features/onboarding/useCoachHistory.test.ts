@@ -102,4 +102,56 @@ describe('useCoachHistory', () => {
     expect(getEarlierCoachConversations).toHaveBeenCalledTimes(1);
     expect(result.current.earlier.map((c) => c.sessionId)).toEqual(['c2']);
   });
+
+  /**
+   * The chat re-checks the top of the transcript each time `loads` ticks — so it has to tick on a
+   * scan that found nothing worth showing, or loading would stop dead on a stretch of empty rows.
+   */
+  it('counts an answer that moved the cursor, even when it brought nothing back', async () => {
+    getEarlierCoachConversations.mockResolvedValueOnce({
+      conversations: [],
+      hasMore: true,
+      nextBefore: '2026-08-10T09:00:00Z',
+    });
+    const { result } = renderHook(() => useCoachHistory({ startedAt: '2026-08-19T10:00:00Z', hasEarlier: true }));
+    await act(async () => void (await result.current.loadEarlier()));
+    expect(result.current.loads).toBe(1);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it.each([
+    ['the request threw', () => getEarlierCoachConversations.mockRejectedValueOnce(new Error('offline'))],
+    [
+      'the server soft-failed',
+      () => getEarlierCoachConversations.mockResolvedValueOnce({ conversations: [], hasMore: true, nextBefore: null }),
+    ],
+  ])('marks the read failed, and does not count it, when %s', async (_label, arrange) => {
+    arrange();
+    const { result } = renderHook(() => useCoachHistory({ startedAt: '2026-08-19T10:00:00Z', hasEarlier: true }));
+    await act(async () => void (await result.current.loadEarlier()));
+    expect(result.current.failed).toBe(true);
+    expect(result.current.loads).toBe(0);
+  });
+
+  it('is not failed when the archive simply ran out', async () => {
+    getEarlierCoachConversations.mockResolvedValueOnce({ conversations: [], hasMore: false, nextBefore: null });
+    const { result } = renderHook(() => useCoachHistory({ startedAt: '2026-08-19T10:00:00Z', hasEarlier: true }));
+    await act(async () => void (await result.current.loadEarlier()));
+    expect(result.current.failed).toBe(false);
+    expect(result.current.canLoad).toBe(false);
+  });
+
+  it('clears the failure once a retry gets through', async () => {
+    getEarlierCoachConversations.mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useCoachHistory({ startedAt: '2026-08-19T10:00:00Z', hasEarlier: true }));
+    await act(async () => void (await result.current.loadEarlier()));
+    getEarlierCoachConversations.mockResolvedValueOnce({
+      conversations: [conv('c2', '2026-08-12T09:00:00Z')],
+      hasMore: false,
+      nextBefore: '2026-08-12T09:00:00Z',
+    });
+    await act(async () => void (await result.current.loadEarlier()));
+    expect(result.current.failed).toBe(false);
+    expect(result.current.earlier.map((c) => c.sessionId)).toEqual(['c2']);
+  });
 });

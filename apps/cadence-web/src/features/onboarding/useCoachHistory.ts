@@ -7,9 +7,11 @@
  * representation of that history isn't for the coach, it's for me. My memory isn't as good as the
  * coach's. I also need to remember what we talked about and why."*
  *
- * One conversation per request, and only when asked. Nothing here runs while the chat is opening:
- * the archive is a deliberate read, so it costs a round trip at the moment somebody is deliberately
- * waiting on it and never on the path that paints the tab.
+ * One conversation per request. The chat asks whenever the top of the transcript is in view
+ * (EarlierConversations), so history fills in on its own as someone scrolls up — owner, 2026-10-31:
+ * a "Read earlier conversations" tap per conversation meant two months of talking looked like two
+ * messages. It still never runs on the path that paints the tab: the conversation on screen is up
+ * first, and the archive arrives behind it.
  *
  * Display only, always. These threads are not adopted and their session ids are not handed to the
  * send path — an archived conversation's model context is gone, and resuming one would be the
@@ -45,6 +47,15 @@ export function useCoachHistory({ startedAt, hasEarlier }: UseCoachHistoryArgs) 
    * conversation into the transcript twice.
    */
   const busy = useRef(false);
+  /**
+   * Answers that moved the cursor. The top marker re-checks whether it is still in view each time
+   * this ticks, which is what keeps loading until the screen is full — counted on the CURSOR, not
+   * on conversations received, because a scan past nothing but empty rows still has to ask again.
+   */
+  const [loads, setLoads] = useState(0);
+  /** The last ask failed. Nothing retries on its own (a dead network would spin), so the chat
+   *  offers a tap instead. */
+  const [failed, setFailed] = useState(false);
 
   const canLoad = (more ?? hasEarlier) && !!(cursor.current ?? startedAt);
 
@@ -59,17 +70,20 @@ export function useCoachHistory({ startedAt, hasEarlier }: UseCoachHistoryArgs) 
       // Left alone on a soft-failed read, so a retry asks from the same place rather than
       // stepping silently over archive nobody actually saw.
       if (r.nextBefore) cursor.current = r.nextBefore;
+      setFailed(!r.nextBefore && r.hasMore);
+      if (r.nextBefore) setLoads((n) => n + 1);
       setMore(r.hasMore);
       // Server order is newest-first; the screen reads oldest-first, and all of it belongs ABOVE
       // whatever is already on screen.
       if (r.conversations.length) setEarlier((prev) => [...[...r.conversations].reverse(), ...prev]);
     } catch {
       // Keep the offer standing: a blip must not tell someone their history ended here.
+      setFailed(true);
     } finally {
       busy.current = false;
       setLoading(false);
     }
   }, [startedAt]);
 
-  return { earlier, loading, canLoad, loadEarlier };
+  return { earlier, loading, canLoad, loadEarlier, loads, failed };
 }

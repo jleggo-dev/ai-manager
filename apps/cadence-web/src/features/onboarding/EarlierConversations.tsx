@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ChatTurn } from './ChatTurn.tsx';
 import { viewTurns } from './coachTurns.ts';
 import type { ArchivedConversation } from '../../lib/api.ts';
@@ -62,32 +62,97 @@ function ArchivedThread({ conversation }: { conversation: ArchivedConversation }
   );
 }
 
+/**
+ * The pane that actually scrolls. Not simply the parent: the marker sits in a fixed-height slot,
+ * and an observer rooted on that would see the marker "in view" however far up it had scrolled —
+ * which loaded the whole archive on open.
+ */
+function scrollingParent(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  }
+  return null;
+}
+
+/**
+ * Asks for older history whenever the top of the transcript is within reach — or straight away
+ * where there is no observer to ask.
+ *
+ * Re-observed on every `generation`: an observer only reports CHANGES, and after a short
+ * conversation lands above it the marker is often still on screen, so a fresh observer is how it
+ * notices that and asks again, until the screen is full or the archive runs out.
+ */
+function TopMarker({ onTop, generation }: { onTop: () => void; generation: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const latest = useRef(onTop);
+  latest.current = onTop;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      latest.current();
+      return;
+    }
+    // Rooted on the transcript itself: against the window, the margin would be clipped away by
+    // the scrolling pane and the next conversation would only be asked for once the very top showed.
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && latest.current(), {
+      root: scrollingParent(el),
+      rootMargin: '400px 0px 0px 0px',
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [generation]);
+  return <div ref={ref} className="chat-earlier-top" aria-hidden />;
+}
+
 export function EarlierConversations({
   conversations,
   canLoad,
   loading,
+  failed,
+  generation,
+  currentStartedAt,
   onLoad,
 }: {
   /** Oldest first — they render in the order they happened. */
   conversations: readonly ArchivedConversation[];
   canLoad: boolean;
   loading: boolean;
+  /** The last ask failed — offer a tap rather than retrying on our own. */
+  failed: boolean;
+  /** Ticks each time an ask moves the cursor; see TopMarker. */
+  generation: number;
+  /** When the conversation below this began, so it gets a dated divider like the ones above it. */
+  currentStartedAt: string | null;
   onLoad: () => void;
 }) {
   if (!canLoad && !conversations.length) return null;
   return (
     <>
-      {/* At the TOP of the transcript, because that is where "further back" is. One conversation
-          per tap: nothing about the archive is loaded until somebody asks for it, so opening the
-          Coach tab costs exactly what it did before this existed. */}
-      {canLoad && (
-        <button className="chat-earlier-more" onClick={onLoad} disabled={loading}>
-          {loading ? 'Looking back…' : 'Read earlier conversations'}
+      {/* At the TOP of the transcript, because that is where "further back" is. It loads as it
+          comes into view (owner, 2026-10-31: no tap per conversation); a failed ask is the one
+          case that waits for a tap, so a dead network never spins. */}
+      {/* One fixed-height slot for the marker and the "Looking back…" line, so the line coming
+          and going never nudges the conversation someone is reading. */}
+      {canLoad && !failed && (
+        <div className="chat-earlier-slot">
+          {loading ? 'Looking back…' : <TopMarker onTop={onLoad} generation={generation} />}
+        </div>
+      )}
+      {canLoad && failed && !loading && (
+        <button className="chat-earlier-more" onClick={onLoad}>
+          Try loading earlier conversations again
         </button>
       )}
       {conversations.map((c) => (
         <ArchivedThread key={c.sessionId} conversation={c} />
       ))}
+      {/* The seam between the archive and the conversation on screen, dated like the rest. */}
+      {conversations.length > 0 && currentStartedAt && (
+        <div className="chat-earlier" role="separator">
+          {whenLabel(currentStartedAt)}
+        </div>
+      )}
     </>
   );
 }
