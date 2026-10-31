@@ -26,6 +26,7 @@ import {
   type ChatFileInput,
   updateV2ProviderMetadata,
   uploadChatSessionFile,
+  compactSessionAfterReply,
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
 import { rejectAsAimError } from './aim-errors.ts';
@@ -268,6 +269,17 @@ export function anchorCoachThread(cadenceUserId: string, sessionId: string, resp
 interface CoachDiag {
   endLlmTimer(request: Record<string, unknown>, response: Record<string, unknown>): void;
   complete(status: 'success' | 'error' | 'timeout', err?: string | null): Promise<unknown>;
+}
+
+/**
+ * Fold the oldest turns into the session summary once her history is big enough to need it —
+ * AFTER the reply is on file and the response has ended, so the summarizer's ~6 s lands on nobody's
+ * wait (it used to run before her reply). Awaited by the caller like the rest of the post-stream
+ * work: a promise left running past the handler is one this platform may never finish. Never
+ * throws; a failed run leaves the session as it was and the pre-send ceiling catches it.
+ */
+export function compactCoachSessionAfterReply(cadenceUserId: string, sessionId: string): Promise<void> {
+  return withAim(cadenceUserId, () => compactSessionAfterReply(sessionId, CALLING_APP));
 }
 
 /**

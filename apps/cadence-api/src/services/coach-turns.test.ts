@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRealTurn } from './coach-turns.ts';
+import { APP_AUTHORED, isRealTurn } from './coach-turns.ts';
 
 /**
  * The filter that decides what counts as part of the conversation. It feeds two things at once —
@@ -45,5 +45,23 @@ describe('app notes', () => {
 
   it('still lets a user write about a note', () => {
     expect(isRealTurn({ role: 'user', content: 'I left a note on the fridge' })).toBe(true);
+  });
+});
+
+/**
+ * AI Admin's compaction gets this pattern as a STRING (`appRowPattern`, set-coach-persona.ts) and
+ * rebuilds it with `new RegExp`. If the source stopped round-tripping, the kept tail would quietly go
+ * back to counting injected rows as turns — the defect HARNESS-V3 C1 fixed.
+ */
+describe('APP_AUTHORED as handed to compaction', () => {
+  const rebuilt = new RegExp(APP_AUTHORED.source);
+  it.each([
+    ['<context source="turn-context" version="1">…</context>', true],
+    ['  <note>They just shared Apple Health.</note>', true],
+    ['<open>legacy</open>', true],
+    ['the context is my knee', false],
+    ['I left a <note> on the fridge', false],
+  ])('%s → %s', (content, appRow) => {
+    expect(rebuilt.test(content)).toBe(appRow);
   });
 });

@@ -8,6 +8,7 @@ import {
   sendCoachMessage,
   submitCoachToolOutputs,
   recordCoachReply,
+  compactCoachSessionAfterReply,
   anchorCoachThread,
   getCoachPersona,
   cancelCoachTurn,
@@ -718,6 +719,8 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // only invocation time, which is the correct thing to spend to keep "never make you repeat
     // yourself" true.
     await runAmbientCapture(userId, req.params.id as string, message);
+    // Last, because nothing else waits on it: see compactCoachSessionAfterReply.
+    await compactCoachSessionAfterReply(userId, req.params.id as string);
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);

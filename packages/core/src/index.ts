@@ -96,6 +96,8 @@ export { getAiProfile, getAiProfileBySlug, updateAiProfile } from '../../../back
 export { extractFunctionCallsFromOutput } from '../../../backend/src/services/v2-stream-events.ts';
 export { submitV2ToolOutputs } from '../../../backend/src/ai-manager/chat-messaging.ts';
 export { updateV2ProviderMetadata } from '../../../backend/src/ai-manager/v2-metadata.ts';
+// Compaction after the reply is on file (HARNESS-V3 C1) — the caller decides when, so nobody waits.
+export { compactSessionAfterReply } from '../../../backend/src/services/session-compaction.ts';
 
 /* ── Processing jobs (create/update + id lookup for provisioning) ── */
 export {
