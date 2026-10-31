@@ -78,7 +78,7 @@ export {
   tenantClient,
 } from '../../../backend/src/db/tenant.ts';
 
-export type { RequestAuthContext, ChatFileInput } from '../../../backend/src/types.ts';
+export type { RequestAuthContext, ChatFileInput, ChatMessageRow, ChatSessionRow } from '../../../backend/src/types.ts';
 
 /* ── SSE line buffering (incremental; CROSS-02 shared contract with BE-02) ── */
 export { createSseLineBuffer, pushSseChunk } from './sse-line-reader.ts';
@@ -97,7 +97,14 @@ export { extractFunctionCallsFromOutput } from '../../../backend/src/services/v2
 export { submitV2ToolOutputs } from '../../../backend/src/ai-manager/chat-messaging.ts';
 export { updateV2ProviderMetadata } from '../../../backend/src/ai-manager/v2-metadata.ts';
 // Compaction after the reply is on file (HARNESS-V3 C1) — the caller decides when, so nobody waits.
-export { compactSessionAfterReply } from '../../../backend/src/services/session-compaction.ts';
+export {
+  compactSessionAfterReply,
+  // Pure planning, so eval-compaction.ts measures exactly the selection production makes.
+  planCompaction,
+  getSummarizerConfig,
+  buildCompactedHistory,
+  type CompactionPlan,
+} from '../../../backend/src/services/session-compaction.ts';
 
 /* ── Processing jobs (create/update + id lookup for provisioning) ── */
 export {
