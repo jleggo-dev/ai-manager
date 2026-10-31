@@ -39,7 +39,7 @@ import {
   type SessionItemTool,
 } from '@cadence/shared';
 import { normalizeSession } from '../src/services/session-normalize.ts';
-import { normalizeDetour, normalizeEquipmentUpdate } from '../src/services/detour-capture.ts';
+import { normalizeDetour, normalizeEquipmentUpdate } from '../src/services/detour-normalize.ts';
 import { flag, finish, parseJson, runJob, tally } from './probe-lib.ts';
 
 /* ══ 1 · prescribe-session — the coach composing with the full palette ═══════════════════════ */

@@ -10,36 +10,16 @@
 import { sql } from '../src/db/sql.ts';
 import { cadenceConfig } from '../src/config.ts';
 import { ensureUser as seed, resetUserData as reset, DEV_CHILD_TABLES } from '../src/services/dev-reset.ts';
+import { sweepSuiteUsers, SUITE_USER_IDLE_MINUTES } from '../src/services/suite-user-sweep.ts';
 
 function resolve(slugOrId: string | undefined): string {
-  const s = String(slugOrId ?? '').trim().toLowerCase();
+  const s = String(slugOrId ?? '')
+    .trim()
+    .toLowerCase();
   if (!s) throw new Error('account slug or uuid required');
   if (cadenceConfig.devAccounts[s]) return cadenceConfig.devAccounts[s];
   if (/^[0-9a-f-]{36}$/.test(s)) return s;
   throw new Error(`unknown account "${slugOrId}" (known: ${Object.keys(cadenceConfig.devAccounts).join(', ')})`);
-}
-
-/**
- * Delete the per-process users the DB-backed suites create (`services/test-user.ts`).
- *
- * Those ids carry the pid so two concurrent runs cannot wipe each other's rows, which means each
- * run leaves one user behind and `afterAll` cannot be relied on — a crashed or killed run never
- * gets there. The four scratch accounts above are RESET (kept, emptied) because a person signs in
- * as them; these are created per run and nobody owns them, so they are removed outright.
- *
- * Matched on the synthetic prefix plus the four-hex suite marker, which is narrower than the
- * scratch namespace and cannot touch a real auth user.
- */
-async function sweepSuiteUsers(): Promise<void> {
-  const rows = await sql<{ id: string }[]>`
-    select id::text from cadence.users
-     where id::text ~ '^00000000-0000-4000-a000-[0-9a-f]{4}[0-9a-f]{8}$'
-       and id::text !~ '^00000000-0000-4000-a000-0000000'`;
-  for (const { id } of rows) {
-    await reset(id);
-    await sql`delete from cadence.users where id = ${id}`;
-  }
-  console.log(`✓ swept ${rows.length} per-process suite user(s)`);
 }
 
 async function rowCounts(id: string): Promise<{ total: number; per: Record<string, number> }> {
@@ -75,7 +55,13 @@ async function main() {
       await reset(id);
       console.log(`✓ reset ${slug} → ${id}`);
     }
-    await sweepSuiteUsers();
+    const { swept, skippedLive } = await sweepSuiteUsers();
+    console.log(`✓ swept ${swept.length} per-process suite user(s)`);
+    if (skippedLive) {
+      console.log(
+        `  left ${skippedLive} touched in the last ${SUITE_USER_IDLE_MINUTES} min alone — a test run may be using them`,
+      );
+    }
     console.log('✓ reset-all complete (scratch accounts only — not real auth users)');
   } else {
     console.log('usage: account.ts <list|seed|reset|reset-all> [slug|uuid]');
