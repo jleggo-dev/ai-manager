@@ -273,14 +273,30 @@ notice.
      her general advice (hydration, stretching, pre-run food) that round 1 already held, and that
      she can give again. By kind: decisions 33%, constraints 67%, tried-and-failed 67%;
      corrections 100%, own words 89%, open items 89%.
-   - **Next (not in P3):** the `coach-compact` prompt needs two lines — the existing summary's
-     facts outrank anything new, and advice she gave is DROP (she can give it again; it is not
-     something they said) — then a re-run. That is a job prompt edit (sync-jobs, owner go).
+   - **The fix, measured the same day (3 runs, ~48K billed, `--prompt-from-config` so nothing was
+     synced first):** two lines in the `coach-compact` prompt — every fact the existing summary
+     holds outranks anything new, carried forward unless corrected; and advice she gave is DROP,
+     keep what THEY said, asked, decided, corrected or tried. **Retention 74% → 93%** (50/54).
+     Round-1 facts 61% → 88%; round-2 100%. Constraints, corrections, own words and open items
+     all 100%; decisions 33% → 78%; tried-and-failed 67% → 78%. Of the four misses, one was the
+     scorer ("6 a.m." with periods — term added, which reads the run as 94%); three were real:
+     one run lost the Thursday decision and the 6am runs together, one lost the Sunday batch-cook
+     decision to "lunches already prepared". Pinned by `coach-compact-fold.test.ts`; live after
+     sync-jobs.
+   - Fixture artifact to fix before the next run: the `{n}` counters in filler ("Note 58") get
+     summarized as "ratings increasing up to 58". Left as is for this comparison so both arms ran
+     the same input.
    - Caveat: the filler is repetitive by construction ("repeatedly asked whether to stretch"); a
      real conversation would not hand the summarizer twelve copies of one question. The fold
      dropping already-summarized facts is not caused by that.
    - Not measured yet: whether the COACH answers the probes from a compacted history. The eval
      scores the summary; asking her is the next arm.
+   - Found on the way: `interpolateTemplate` cuts every job variable at **10,000 characters**
+     (`job-execution-utils.ts`, `MAX_VARIABLE_LENGTH`), so one round's `transcript` can never hand
+     the summarizer more than ~2,500 units. A round today is ~1,500 units (~30 exchanges of
+     dialogue once injected rows are dropped), so there is room, but a chattier user would hit it
+     silently: the tail of the round would be "... [truncated]" and gone. Not fixed here; the right
+     answer is probably a per-job override of the cap, or compaction splitting a round in two.
 
 **Cost.** Mining is read-only SQL, essentially free. Smoke ≈ 300K tokens per run. The
 compaction eval ≈ 3 conversations × ~30 turns: owner-gated, like `eval:tools` is today.

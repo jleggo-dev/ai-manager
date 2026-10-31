@@ -123,10 +123,13 @@ export async function remoteRunJobById(
   jobId: string,
   callingApplication: string,
   variables: Record<string, unknown>,
+  promptOverride?: string,
 ): Promise<RemoteJobResult> {
   return api<RemoteJobResult>('POST', `/api/processing-jobs/${jobId}/test`, JOB_BUDGET_MS, {
     variables,
     callingApplication,
+    // Used verbatim by the engine (no interpolation) — the caller fills the template in first.
+    ...(promptOverride ? { promptOverride } : {}),
   });
 }
 
@@ -134,8 +137,9 @@ export async function remoteRunJobBySlug(
   slug: string,
   callingApplication: string,
   variables: Record<string, unknown>,
+  promptOverride?: string,
 ): Promise<RemoteJobResult> {
-  return remoteRunJobById(await resolveJobId(slug), callingApplication, variables);
+  return remoteRunJobById(await resolveJobId(slug), callingApplication, variables, promptOverride);
 }
 
 /** Where jobs are being run — logged once at startup so it's never a mystery which path is live. */
