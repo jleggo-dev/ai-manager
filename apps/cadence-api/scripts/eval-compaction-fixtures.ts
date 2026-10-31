@@ -118,7 +118,7 @@ const running: CompactionFixture = {
         coach: "Early mornings didn't work — fair enough. Evenings after work it is.",
       },
       probe: 'What did they try that did not work?',
-      expect: [['6am', '6 am', '6:00', 'early morning', 'early-morning', 'morning run']],
+      expect: [['6am', '6 am', '6 a.m', '6:00', 'early morning', 'early-morning', 'morning run']],
     },
   ],
   filler: [
