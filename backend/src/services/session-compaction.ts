@@ -36,15 +36,25 @@ export interface SummarizerConfig {
   ceilingTokens?: number;
   /** How many TURNS stay verbatim behind the summary. Rows matching `appRowPattern` don't count. */
   keepLastNTurns?: number;
-  /** Regex source for rows the calling app wrote into the conversation (injected context, notes). */
+  /**
+   * Regex source for rows the calling app wrote into the conversation (injected context, notes).
+   * They don't count as turns, and at compaction they are DROPPED, not summarized: they are the
+   * app's own data, which it can send again, and a summarizer reading them would take them for
+   * something the user said.
+   */
   appRowPattern?: string;
+  /**
+   * Regex source for app rows that are sent ONCE and must outlive every compaction (instructions
+   * delivered as conversation, e.g. a capability manifest). Kept verbatim like system rows.
+   */
+  pinnedRowPattern?: string;
 }
 
 export type CompactionThreshold = 'trigger' | 'ceiling';
 
 /** The policy with its defaults filled in. */
-export type ResolvedSummarizer = Required<Omit<SummarizerConfig, 'appRowPattern'>> &
-  Pick<SummarizerConfig, 'appRowPattern'>;
+export type ResolvedSummarizer = Required<Omit<SummarizerConfig, 'appRowPattern' | 'pinnedRowPattern'>> &
+  Pick<SummarizerConfig, 'appRowPattern' | 'pinnedRowPattern'>;
 
 /** Rough token estimate: ~4 chars per token (no tiktoken). */
 export function estimateTokenCount(text: string): number {
@@ -62,6 +72,7 @@ export function getSummarizerConfig(session: ChatSessionRow): ResolvedSummarizer
     ceilingTokens: Math.max(config.summarizer.ceilingTokens ?? triggerTokens, triggerTokens),
     keepLastNTurns: config.summarizer.keepLastNTurns ?? 6,
     appRowPattern: config.summarizer.appRowPattern,
+    pinnedRowPattern: config.summarizer.pinnedRowPattern,
   };
 }
 
@@ -89,14 +100,14 @@ export function estimateSessionTokens(_session: ChatSessionRow, messages: ChatMe
  */
 const isInstruction = (m: ChatMessageRow): boolean => m.role === 'system';
 
-/** A bad pattern in config must not take the conversation down with it — it just counts every row. */
-function appRowMatcher(pattern: string | undefined): (m: ChatMessageRow) => boolean {
+/** A bad pattern in config must not take the conversation down with it — it just matches nothing. */
+function rowMatcher(pattern: string | undefined): (m: ChatMessageRow) => boolean {
   if (!pattern) return () => false;
   try {
     const re = new RegExp(pattern);
     return (m) => re.test(m.content ?? '');
   } catch {
-    console.warn('[session-compaction] ignoring invalid appRowPattern:', pattern);
+    console.warn('[session-compaction] ignoring invalid row pattern:', pattern);
     return () => false;
   }
 }
@@ -112,7 +123,7 @@ export function splitForCompaction(
   keepN: number,
   appRowPattern?: string,
 ): { toSummarize: ChatMessageRow[]; kept: ChatMessageRow[] } {
-  const isAppRow = appRowMatcher(appRowPattern);
+  const isAppRow = rowMatcher(appRowPattern);
   let cut = pending.length;
   let turns = 0;
   while (cut > 0 && turns < keepN) {
@@ -126,7 +137,9 @@ export function splitForCompaction(
 }
 
 /**
- * Build message history for the LLM call: instructions + summary + every row after the mark.
+ * Build message history for the LLM call: instructions + pinned rows + summary + every row after
+ * the mark. Unpinned rows before the mark are gone from the request (still stored, still the audit
+ * trail): dialogue lives on in the summary, app rows are the app's to send again.
  *
  * A session summarized before `summary_through_at` existed has a summary and no mark; it keeps the
  * old shape (summary + last N rows) rather than suddenly re-sending its whole archive.
@@ -148,6 +161,11 @@ export function buildCompactedHistory(
     mark !== null && Number.isFinite(mark)
       ? conversation.filter((m) => Date.parse(m.created_at) > mark)
       : conversation.slice(-(summarizer?.keepLastNTurns ?? 6));
+  // Pinned rows the tail does not already carry, in their original order (MP33: the capability
+  // manifest and pick protocol used to be summarized away mid-session).
+  const isPinned = rowMatcher(summarizer?.pinnedRowPattern);
+  const kept = new Set(recent);
+  const pinned = conversation.filter((m) => isPinned(m) && !kept.has(m));
   const summaryMessage = {
     id: 'summary',
     chat_session_id: session.id,
@@ -156,7 +174,7 @@ export function buildCompactedHistory(
     created_at: new Date().toISOString(),
     workspace_id: session.workspace_id,
   } as ChatMessageRow;
-  return [...instructions, summaryMessage, ...recent];
+  return [...instructions, ...pinned, summaryMessage, ...recent];
 }
 
 interface CompactionResult {
@@ -184,14 +202,21 @@ export async function maybeCompactSession(
   const limit = threshold === 'ceiling' ? summarizer.ceilingTokens : summarizer.triggerTokens;
   if (estimatedTokens < limit) return unchanged;
 
-  // Instructions and the summary row are held out: they are re-attached by buildCompactedHistory.
-  const pending = sent.filter((m) => !isInstruction(m));
+  // Instructions, pinned rows and the summary row are held out: buildCompactedHistory re-attaches them.
+  const isPinned = rowMatcher(summarizer.pinnedRowPattern);
+  const pending = sent.filter((m) => !isInstruction(m) && !isPinned(m));
   const { toSummarize } = splitForCompaction(pending, summarizer.keepLastNTurns, summarizer.appRowPattern);
   const last = toSummarize[toSummarize.length - 1];
   if (!last) return unchanged;
 
+  // App rows are dropped, not summarized (see `appRowPattern`). `dialogue` is never empty:
+  // splitForCompaction keeps the app rows that lead into the first kept turn, so `toSummarize`
+  // always ends on a real turn.
+  const isAppRow = rowMatcher(summarizer.appRowPattern);
+  const dialogue = toSummarize.filter((m) => !isAppRow(m));
+
   try {
-    const transcript = toSummarize.map((m) => `${m.role}: ${m.content}`).join('\n\n');
+    const transcript = dialogue.map((m) => `${m.role}: ${m.content}`).join('\n\n');
     const job = await getProcessingJobBySlug(summarizer.jobSlug);
     if (!job) {
       console.warn('[session-compaction] summarizer job not found:', summarizer.jobSlug);
@@ -211,7 +236,8 @@ export async function maybeCompactSession(
     console.info('[session-compaction] compacted session', {
       sessionId: session.id,
       threshold,
-      summarizedRows: toSummarize.length,
+      summarizedRows: dialogue.length,
+      droppedAppRows: toSummarize.length - dialogue.length,
       estimatedTokens,
     });
     return { summary, estimatedTokens, compacted: true };

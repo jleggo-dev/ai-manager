@@ -116,6 +116,9 @@ const BLOCKS: BlockSpec[] = [
   },
 ];
 
+/** Every source this module injects — each must be pinned through compaction (coach-turns.ts). */
+export const REFRESHED_BLOCK_SOURCES: readonly string[] = BLOCKS.map((b) => b.source);
+
 /** The body actually injected: the supersede preamble, then the block. */
 function compose(spec: BlockSpec, opts: CoachBlockOpts): string {
   return `${supersedeHeader(spec.source)}\n${spec.render(opts)}`;

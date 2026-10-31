@@ -250,7 +250,7 @@ any of it worked.
 - **Duplicated replies.** A turn that runs the tool loop can come back with two complete drafts
   concatenated, which points at the accumulator carrying round-one content into the continuation.
   **Logged; fix before the tiering lands**, since tiering will make tool rounds more common.
-- **Compaction eats the capability manifest and the pick protocol (MP33).** They ride in as
+- **Compaction eats the capability manifest and the pick protocol (MP33).** **FIXED 2026-10-31 (HARNESS-V3 C2): pinned through compaction by `pinnedRowPattern`.** They ride in as
   `injectCoachContext`'s `role: 'user'` blocks (`ai/aim.ts:294`), but the session compactor's
   `isInstruction = (m) => m.role === 'system'` (`backend/src/services/session-compaction.ts:61`)
   only ever protects the persona row from being summarised away — everything Layer 1 depends on

@@ -28,7 +28,7 @@ import {
 } from '@ai-admin/core';
 import { withAim } from '../src/ai/aim.ts';
 import { cadenceConfig } from '../src/config.ts';
-import { APP_AUTHORED } from '../src/services/coach-turns.ts';
+import { APP_AUTHORED, PINNED_CONTEXT } from '../src/services/coach-turns.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const SEED = path.join(repoRoot, 'config/ai-admin/cadence-coach.system-prompt.md');
@@ -61,6 +61,9 @@ const SLUG = cadenceConfig.aim.coachJobSlug;
  *  - `keepLastNTurns: 20` counts real TURNS — ten exchanges verbatim behind the summary — because
  *    `appRowPattern` stops the injected `<context>`/`<note>` rows from using up the count. Before
  *    2026-10-31 they did, and "ten exchanges" was closer to four.
+ *  - At compaction, app rows behind the kept tail are DROPPED, not summarized — the per-turn
+ *    context is sent again every turn. `pinnedRowPattern` names the blocks sent once per session
+ *    (dossier, capability manifest, pick protocol), which stay verbatim (MP33, HARNESS-V3 C2).
  *
  * History: the old 32k fired near ~60k billed before the units were calibrated; 20k (2026-08-20)
  * fired once in 461 sessions, then re-ran on every message after it (fixed with the mark,
@@ -73,6 +76,7 @@ const SUMMARIZER = {
   ceilingTokens: 50_000,
   keepLastNTurns: 20,
   appRowPattern: APP_AUTHORED.source,
+  pinnedRowPattern: PINNED_CONTEXT.source,
 } as const;
 
 async function main() {

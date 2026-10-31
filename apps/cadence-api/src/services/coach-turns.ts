@@ -25,6 +25,17 @@
  */
 export const APP_AUTHORED = /^\s*<(context|open|note)\b/;
 
+/**
+ * The `<context>` blocks handed over ONCE per session that she needs for the whole of it: the
+ * session-open dossier and the two instruction blocks (`coach-block-refresh.ts`). Compaction drops
+ * every other app row once it ages behind the summary — the per-turn context is sent again each turn
+ * — but these are never sent again, so it keeps them verbatim (MP33, HARNESS-V3 C2). Handed to AI
+ * Admin as `pinnedRowPattern` (`set-coach-persona.ts`).
+ */
+export const REGISTRY_PACK_SOURCE = 'registry-pack';
+export const PINNED_CONTEXT_SOURCES = [REGISTRY_PACK_SOURCE, 'capabilities', 'pick-protocol'] as const;
+export const PINNED_CONTEXT = new RegExp(`^\\s*<context source="(${PINNED_CONTEXT_SOURCES.join('|')})"`);
+
 export const isRealTurn = (m: { role?: string; content?: string }) =>
   (m.role === 'user' || m.role === 'assistant') && !APP_AUTHORED.test(m.content ?? '');
 

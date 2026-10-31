@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APP_AUTHORED, isRealTurn } from './coach-turns.ts';
+import { APP_AUTHORED, PINNED_CONTEXT, isRealTurn } from './coach-turns.ts';
 
 /**
  * The filter that decides what counts as part of the conversation. It feeds two things at once —
@@ -63,5 +63,33 @@ describe('APP_AUTHORED as handed to compaction', () => {
     ['I left a <note> on the fridge', false],
   ])('%s → %s', (content, appRow) => {
     expect(rebuilt.test(content)).toBe(appRow);
+  });
+});
+
+/**
+ * Which injected blocks compaction keeps verbatim (HARNESS-V3 C2, MP33). Pinned = sent once per
+ * session; everything else is sent again each turn and may be dropped once it ages out. Matched
+ * against the exact wrapper `injectCoachContext` writes, rebuilt from the string AI Admin gets.
+ */
+describe('PINNED_CONTEXT as handed to compaction', () => {
+  const pinned = new RegExp(PINNED_CONTEXT.source);
+  const wrap = (source: string) =>
+    `<context source="${source}" version="1" built_at="2026-10-31T10:00:00.000Z">\nbody\n</context>`;
+  it.each([
+    ['registry-pack', true],
+    ['capabilities', true],
+    ['pick-protocol', true],
+    ['turn-context', false],
+    ['date', false],
+    ['goal-screen', false],
+    ['health-digest', false],
+    ['attachments', false],
+    ['capabilities-old', false],
+  ])('%s → %s', (source, kept) => {
+    expect(pinned.test(wrap(source))).toBe(kept);
+  });
+
+  it('near-miss: a user quoting a source name is not pinned', () => {
+    expect(pinned.test('I typed <context source="capabilities"> by accident')).toBe(false);
   });
 });
