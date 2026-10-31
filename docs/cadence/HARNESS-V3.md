@@ -1,7 +1,7 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: SPEC; P1 in review.** Written 2026-10-31. R1 ruled the same day (compact around 75K
-billed); P1 (C1 + the threshold) is the first parcel, on `fix/coach-compaction-once-after-reply`.
+**Status: SPEC; P1 shipped (#431), P2 in review.** Written 2026-10-31. R1 ruled the same day
+(compact around 75K billed).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
 [HARNESS-V2.md](HARNESS-V2.md) (progressive disclosure),
 [MEMORY-ARCHITECTURE.md](MEMORY-ARCHITECTURE.md) (the context pack). This doc does not repeat them.
@@ -145,9 +145,11 @@ MP33 (HARNESS-V2.md:253-265).
 **Design.**
 - At compaction, app rows before the kept tail are **dropped, not summarized**. Everything in them
   is in the store and is re-sent: the floor reads on every turn, the pack at session open.
-- **Exception: blocks that are sent once.** The capability manifest and pick protocol arrive once per
-  session (`coach-block-refresh.ts`). Mark them `<context source="… " pinned>`. Pinned rows are
-  kept, like instruction rows, and closes MP33.
+- **Exception: blocks that are sent once.** The session-open dossier (`registry-pack`) and the
+  capability manifest and pick protocol (`coach-block-refresh.ts`) arrive once per session. They
+  are matched by their `source` (`PINNED_CONTEXT` in `coach-turns.ts`, handed to the engine as
+  `pinnedRowPattern`), with no change to the tag, which the refresher compares exactly. Pinned rows
+  are kept like instruction rows, placed just before the summary. This closes MP33.
 - Do it only at compaction time, never per turn. Removing a row from the middle of the history
   changes the cached prefix, and the cache covers ~2/3 of every message
   (memory: prompt cache is global). Compaction already breaks the cache once; doing the dropping

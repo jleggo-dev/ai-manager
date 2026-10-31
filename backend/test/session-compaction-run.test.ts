@@ -59,6 +59,7 @@ const policy = {
   ceilingTokens: 2000,
   keepLastNTurns: 4,
   appRowPattern: APP,
+  pinnedRowPattern: '^\\s*<context source="capabilities"',
 };
 
 /** The current session row (set in beforeEach, so never null inside a test). */
@@ -170,5 +171,64 @@ describe('compactSessionAfterReply', () => {
 
     db.session = null;
     await expect(compactSessionAfterReply('gone', 'test')).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * HARNESS-V3 C2: app rows behind the kept tail are dropped, not summarized; pinned blocks — sent
+ * once per session — are kept verbatim through every compaction (MP33).
+ */
+describe('dropping app rows, keeping pinned ones', () => {
+  const manifest = () =>
+    row('user', '<context source="capabilities" version="3">DO THESE, DO NOT DESCRIBE THEM</context>');
+
+  it('the summarizer never reads injected context or notes', async () => {
+    for (let i = 0; i < 6; i++) db.rows.push(...exchange(i), row('user', '<note>They shared Apple Health.</note>'));
+    expect((await maybeCompactSession(session(), 'test')).compacted).toBe(true);
+    const vars = executeJob.mock.calls[0]?.[1].variables as { transcript: string };
+    expect(vars.transcript).toContain('user 0');
+    expect(vars.transcript).not.toContain('<context');
+    expect(vars.transcript).not.toContain('<note>');
+  });
+
+  it('after compaction, no unpinned app row from before the mark is sent', async () => {
+    for (let i = 0; i < 6; i++) db.rows.push(...exchange(i));
+    await maybeCompactSession(session(), 'test');
+    const sent = buildCompactedHistory(session(), db.rows, getSummarizerConfig(session()));
+    const contextRows = sent.filter((m) => m.content.startsWith('<context'));
+    // the kept tail is four turns = exchanges 4 and 5, each with its own context row
+    expect(contextRows).toHaveLength(2);
+  });
+
+  it('a pinned block survives two compactions, ahead of the summary', async () => {
+    db.rows.push(manifest());
+    for (let i = 0; i < 6; i++) db.rows.push(...exchange(i));
+    await maybeCompactSession(session(), 'test');
+    for (let i = 6; i < 12; i++) db.rows.push(...exchange(i));
+    expect((await maybeCompactSession(session(), 'test')).compacted).toBe(true);
+
+    const sent = buildCompactedHistory(session(), db.rows, getSummarizerConfig(session()));
+    const at = (needle: string) => sent.findIndex((m) => m.content.includes(needle));
+    expect(at('DO THESE')).toBeGreaterThan(at('persona'));
+    expect(at('DO THESE')).toBeLessThan(at('[Conversation summary]'));
+    for (const call of executeJob.mock.calls) {
+      expect((call[1].variables as { transcript: string }).transcript).not.toContain('DO THESE');
+    }
+  });
+
+  it('near-miss: a turn-context block is not pinned', async () => {
+    for (let i = 0; i < 6; i++) db.rows.push(...exchange(i));
+    await maybeCompactSession(session(), 'test');
+    const sent = buildCompactedHistory(session(), db.rows, getSummarizerConfig(session()));
+    expect(sent.findIndex((m) => m.content.startsWith('<context'))).toBeGreaterThan(
+      sent.findIndex((m) => m.content.includes('[Conversation summary]')),
+    );
+  });
+
+  it('what gets summarized always ends on a real turn, so the summarizer always has dialogue', () => {
+    const burst = Array.from({ length: 6 }, () => row('user', '<context source="turn-context">x</context>'));
+    const pending = [...exchange(1), ...burst, ...exchange(2), ...exchange(3)];
+    const { toSummarize } = splitForCompaction(pending, 4, APP);
+    expect(toSummarize.at(-1)?.content).toMatch(/^coach 1/);
   });
 });

@@ -44,6 +44,7 @@ import {
   touchConversation,
 } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
+import { REGISTRY_PACK_SOURCE } from '../services/coach-turns.ts';
 
 /** Build the capture window from the FULL conversation (user + coach turns), excluding the
  *  app-authored turns (see coach-transcript.ts). Falls back to the latest message if history
@@ -136,7 +137,7 @@ router.post('/sessions', async (req: Request, res: Response) => {
       healthAvailable === true
         ? `${pack.rendered}\nDevice: Apple Health is available on this device and the user has not shared activity yet.`
         : pack.rendered;
-    await injectCoachContext(userId, session.sessionId, rendered, { source: 'registry-pack', version: 1 });
+    await injectCoachContext(userId, session.sessionId, rendered, { source: REGISTRY_PACK_SOURCE, version: 1 });
     /**
      * The two blocks that ship in CODE rather than in the persona: what this build can actually do
      * (coach-capabilities.ts) + the quick-pick protocol the client's parser expects

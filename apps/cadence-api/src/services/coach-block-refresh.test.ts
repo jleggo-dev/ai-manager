@@ -23,8 +23,15 @@ vi.mock('../ai/aim.ts', () => ({
 
 // The renderers are REAL here on purpose: the whole mechanism is a comparison against what this
 // build actually renders, and a stubbed renderer would test the comparison against nothing.
-const { injectCoachBlocks, refreshChangedBlocks, parseContextTurn, supersedeHeader, __resetCoachBlockRefreshForTests } =
-  await import('./coach-block-refresh.ts');
+const {
+  injectCoachBlocks,
+  refreshChangedBlocks,
+  parseContextTurn,
+  supersedeHeader,
+  REFRESHED_BLOCK_SOURCES,
+  __resetCoachBlockRefreshForTests,
+} = await import('./coach-block-refresh.ts');
+const { PINNED_CONTEXT } = await import('./coach-turns.ts');
 type CoachBlockOpts = Parameters<typeof injectCoachBlocks>[2];
 
 /** How `injectCoachContext` wraps a block. `built_at` is a parameter here because it is the point. */
@@ -313,5 +320,16 @@ describe('parseContextTurn', () => {
     expect(parseContextTurn('<note>they just shared Apple Health</note>')).toBeNull();
     expect(parseContextTurn('<context version="2">no source</context>')).toBeNull();
     expect(parseContextTurn('<context source="capabilities">unterminated')).toBeNull();
+  });
+});
+
+/**
+ * These blocks are injected once and re-injected only when a deploy changes them, so they must
+ * survive compaction — AI Admin keeps rows matching `pinnedRowPattern` (HARNESS-V3 C2, MP33). A new
+ * block added to BLOCKS without being pinned would be summarized away mid-session again.
+ */
+describe('every refreshed block is pinned through compaction', () => {
+  it.each(REFRESHED_BLOCK_SOURCES.map((s) => [s]))('%s', (source) => {
+    expect(new RegExp(PINNED_CONTEXT.source).test(wrap(source, 'body'))).toBe(true);
   });
 });
