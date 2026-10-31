@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { isStoreFoodSource, macrosForLog, MEAL_KINDS, type Food } from '@cadence/shared';
+import { brandedFoodName, isStoreFoodSource, macrosForLog, MEAL_KINDS, type Food } from '@cadence/shared';
 import { FoodMacroCard } from './FoodMacroCard.tsx';
 import { compoundLabel } from './servingPicker.ts';
 import { UnitSheet } from './UnitSheet.tsx';
@@ -17,7 +17,7 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
  *
  * Two modes since the meal-logging rework (canvas turn-3 B1 — "the sheet · add and stay"):
  * the default `log` mode writes a meal on its own, exactly as it always has; `draft` mode
- * repices the same sheet for the open meal — the button says "Add to breakfast", the slot
+ * repurposes the same sheet for the open meal — the button says "Add to breakfast", the slot
  * question disappears (the draft owns it), the caller's strip rides underneath, and `onAdd`
  * hands the portion back so the sheet RETURNS to search instead of dismissing to nowhere.
  */
@@ -65,28 +65,12 @@ export function AddFoodSheet({
           ‹
         </button>
         <h2>Add food</h2>
-        <button
-          type="button"
-          className="fd-do"
-          disabled={busy}
-          onClick={() =>
-            mode === 'draft' && onAdd
-              ? onAdd({ servingIndex, quantity })
-              : onLog({ servingIndex, quantity, meal: slot })
-          }
-        >
-          {mode === 'draft' ? `Add to ${mealLabel ?? meal}` : busy ? 'Logging…' : 'Log'}
-        </button>
       </div>
 
       <div className="fd-card">
         <div className="fd-name">
-          <b>{food.name}</b>
-          <span>
-            {[food.brand, isStoreFoodSource(food.source) ? 'from the food list' : 'your saved food']
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
+          <b>{brandedFoodName(food.name, food.brand)}</b>
+          <span>{isStoreFoodSource(food.source) ? 'from the food list' : 'your saved food'}</span>
         </div>
 
         <div className="fd-field">
@@ -148,10 +132,7 @@ export function AddFoodSheet({
       <FoodMacroCard macros={macros} />
 
       {mode === 'draft' ? (
-        <>
-          <p className="ms-sheet-return">{"You'll come straight back here for the next one."}</p>
-          {strip}
-        </>
+        strip
       ) : (
         <p className="fd-note">
           Picked from a list, scanned, or quick-added: amounts work the way they do everywhere else — serving size, then
@@ -160,6 +141,23 @@ export function AddFoodSheet({
       )}
 
       {err && <div className="food-empty">{err}</div>}
+
+      {/* The one button, at the bottom and green like Done (owner, 2026-10-31: a word up in the
+          header read as a label, not the thing to press). */}
+      <div className="fd-foot">
+        <button
+          type="button"
+          className="ms-log"
+          disabled={busy}
+          onClick={() =>
+            mode === 'draft' && onAdd
+              ? onAdd({ servingIndex, quantity })
+              : onLog({ servingIndex, quantity, meal: slot })
+          }
+        >
+          {mode === 'draft' ? `Add to ${mealLabel ?? meal}` : busy ? 'Logging…' : 'Log'}
+        </button>
+      </div>
 
       {unitOpen && (
         <UnitSheet

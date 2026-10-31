@@ -122,7 +122,7 @@ export function DescribeSheet({
           <MicButton value={text} onChange={setText} disabled={looking} autoStart={listening} />
           <button
             type="button"
-            className={`ms-ds-go${ready ? ' is-ready' : ''}`}
+            className="ms-ds-go"
             disabled={!words || looking || busy}
             onClick={() => void (ready ? confirm() : lookUp())}
           >

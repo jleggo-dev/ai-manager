@@ -12,7 +12,14 @@
  * No kind markers on a tile: the shelf you are on already says what these are.
  */
 import { useMemo } from 'react';
-import type { Macros, MealItem, MealKind, MealPart, Recipe } from '@cadence/shared';
+import {
+  brandedFoodName,
+  type Macros,
+  type MealItem,
+  type MealKind,
+  type MealPart,
+  type Recipe,
+} from '@cadence/shared';
 import { useRecentMeals, useRecipes } from '../../../lib/query/index.ts';
 import { usePlannedMeal, type PlannedMeal } from '../../plan/occurrence/usePlannedMeal.ts';
 import { useUsualAtSlot } from '../useUsualAtSlot.ts';
@@ -121,7 +128,7 @@ export function useShelves(
         key: `${u.kind}:${u.id}`,
         kind: u.kind,
         id: u.id,
-        name: u.name,
+        name: brandedFoodName(u.name, u.brand),
         sub: recipe ? ingredientWords(recipe) : (u.serving_label ?? undefined),
         kcal: u.kcal,
         macros: pcf(u),

@@ -8,7 +8,7 @@
  * `bases`: food_id → the quantity the first tap landed, kept client-side for the session so a
  * second tap can double it and the badge can count it.
  */
-import type { MealItem, MealPart } from '@cadence/shared';
+import { brandedFoodName, type MealItem, type MealPart } from '@cadence/shared';
 import { numberWord } from '../bracket/copy.ts';
 
 export type Bases = ReadonlyMap<string, number>;
@@ -114,7 +114,7 @@ export function cartChips(items: MealItem[], parts: MealPart[], bases: Bases): C
     const taps = tapsOf(it, it.food_id ? bases.get(it.food_id) : undefined);
     chips.push({
       key: `item:${index}`,
-      label: taps > 1 ? `${taps}× ${it.name}` : it.name,
+      label: taps > 1 ? `${taps}× ${brandedFoodName(it.name, it.brand)}` : brandedFoodName(it.name, it.brand),
       indexes: [index],
       loose: true,
     });

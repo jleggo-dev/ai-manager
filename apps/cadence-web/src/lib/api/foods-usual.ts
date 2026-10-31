@@ -9,6 +9,7 @@ export interface UsualAtSlot {
   kind: 'food' | 'recipe';
   id: string;
   name: string;
+  brand: string | null;
   serving_label: string | null;
   kcal: number | null;
   protein_g: number | null;
@@ -39,6 +40,7 @@ function parseUsual(body: unknown): UsualAtSlot[] {
       kind: o.kind === 'recipe' ? 'recipe' : 'food',
       id: o.id,
       name: o.name,
+      brand: typeof o.brand === 'string' && o.brand.trim() ? o.brand : null,
       serving_label: typeof o.serving_label === 'string' ? o.serving_label : null,
       kcal: num(o.kcal),
       protein_g: num(o.protein_g),

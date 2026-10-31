@@ -147,7 +147,6 @@ it('an ambiguous food opens the repriced sheet — "Add to breakfast" — and re
   // the fold of a panel taller than the sheet hosting it, so a › tap looked like a dead button.
   // It has to be drawn over the panel — `.ms-cover` is that contract (pinned in cover.contract.test.ts).
   expect(addBtn.closest('.ms-cover')).not.toBeNull();
-  expect(screen.getByText("You'll come straight back here for the next one.")).toBeInTheDocument();
   // …and the panel behind it stays mounted, which is what lets the field keep its focus.
   expect(screen.getByLabelText('Find a food')).toBeInTheDocument();
   // The draft owns the slot — the sheet asks no meal question.
