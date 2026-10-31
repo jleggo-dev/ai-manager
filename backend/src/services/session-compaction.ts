@@ -183,6 +183,54 @@ interface CompactionResult {
   compacted: boolean;
 }
 
+/** What one compaction would do: the summarizer's input and where the mark moves to. */
+export interface CompactionPlan {
+  estimatedTokens: number;
+  /** The summarizer's `transcript` variable: the dialogue rows, `role: content`, blank-line joined. */
+  transcript: string;
+  summarizedRows: number;
+  droppedAppRows: number;
+  /** The new `summary_through_at`. */
+  through: string;
+}
+
+/**
+ * Decide whether a history needs compacting and, if so, exactly what gets summarized. Pure — the
+ * same function the live path and `eval-compaction.ts` run, so the eval measures what production
+ * does. Returns `{ estimatedTokens }` alone when nothing is due.
+ */
+export function planCompaction(
+  session: ChatSessionRow,
+  messages: ChatMessageRow[],
+  summarizer: ResolvedSummarizer,
+  threshold: CompactionThreshold,
+): CompactionPlan | { estimatedTokens: number; transcript?: undefined } {
+  const sent = buildCompactedHistory(session, messages, summarizer);
+  const estimatedTokens = estimateSessionTokens(session, sent);
+  const limit = threshold === 'ceiling' ? summarizer.ceilingTokens : summarizer.triggerTokens;
+  if (estimatedTokens < limit) return { estimatedTokens };
+
+  // Instructions, pinned rows and the summary row are held out: buildCompactedHistory re-attaches them.
+  const isPinned = rowMatcher(summarizer.pinnedRowPattern);
+  const pending = sent.filter((m) => !isInstruction(m) && !isPinned(m));
+  const { toSummarize } = splitForCompaction(pending, summarizer.keepLastNTurns, summarizer.appRowPattern);
+  const last = toSummarize[toSummarize.length - 1];
+  if (!last) return { estimatedTokens };
+
+  // App rows are dropped, not summarized (see `appRowPattern`). `dialogue` is never empty:
+  // splitForCompaction keeps the app rows that lead into the first kept turn, so `toSummarize`
+  // always ends on a real turn.
+  const isAppRow = rowMatcher(summarizer.appRowPattern);
+  const dialogue = toSummarize.filter((m) => !isAppRow(m));
+  return {
+    estimatedTokens,
+    transcript: dialogue.map((m) => `${m.role}: ${m.content}`).join('\n\n'),
+    summarizedRows: dialogue.length,
+    droppedAppRows: toSummarize.length - dialogue.length,
+    through: last.created_at,
+  };
+}
+
 /**
  * If the history to be sent is over the threshold, fold its oldest rows into the summary.
  * Returns the current summary either way; a failure is logged and leaves the session untouched.
@@ -194,29 +242,19 @@ export async function maybeCompactSession(
 ): Promise<CompactionResult> {
   const summarizer = getSummarizerConfig(session);
   const messages = await listChatMessages(session.id);
-  const sent = buildCompactedHistory(session, messages, summarizer);
-  const estimatedTokens = estimateSessionTokens(session, sent);
-  const unchanged = { summary: session.session_summary ?? null, estimatedTokens, compacted: false };
-
-  if (!summarizer) return unchanged;
-  const limit = threshold === 'ceiling' ? summarizer.ceilingTokens : summarizer.triggerTokens;
-  if (estimatedTokens < limit) return unchanged;
-
-  // Instructions, pinned rows and the summary row are held out: buildCompactedHistory re-attaches them.
-  const isPinned = rowMatcher(summarizer.pinnedRowPattern);
-  const pending = sent.filter((m) => !isInstruction(m) && !isPinned(m));
-  const { toSummarize } = splitForCompaction(pending, summarizer.keepLastNTurns, summarizer.appRowPattern);
-  const last = toSummarize[toSummarize.length - 1];
-  if (!last) return unchanged;
-
-  // App rows are dropped, not summarized (see `appRowPattern`). `dialogue` is never empty:
-  // splitForCompaction keeps the app rows that lead into the first kept turn, so `toSummarize`
-  // always ends on a real turn.
-  const isAppRow = rowMatcher(summarizer.appRowPattern);
-  const dialogue = toSummarize.filter((m) => !isAppRow(m));
+  if (!summarizer) {
+    const estimatedTokens = estimateSessionTokens(session, buildCompactedHistory(session, messages, null));
+    return { summary: session.session_summary ?? null, estimatedTokens, compacted: false };
+  }
+  const plan = planCompaction(session, messages, summarizer, threshold);
+  const unchanged = {
+    summary: session.session_summary ?? null,
+    estimatedTokens: plan.estimatedTokens,
+    compacted: false,
+  };
+  if (plan.transcript === undefined) return unchanged;
 
   try {
-    const transcript = dialogue.map((m) => `${m.role}: ${m.content}`).join('\n\n');
     const job = await getProcessingJobBySlug(summarizer.jobSlug);
     if (!job) {
       console.warn('[session-compaction] summarizer job not found:', summarizer.jobSlug);
@@ -225,22 +263,22 @@ export async function maybeCompactSession(
 
     const result = await executeJob(summarizer.jobSlug, {
       callingApplication,
-      variables: { transcript, existingSummary: session.session_summary || '' },
+      variables: { transcript: plan.transcript, existingSummary: session.session_summary || '' },
     });
 
     const summary = result.formatted || result.raw;
     await updateChatSession(session.id, {
       session_summary: summary,
-      summary_through_at: last.created_at,
+      summary_through_at: plan.through,
     });
     console.info('[session-compaction] compacted session', {
       sessionId: session.id,
       threshold,
-      summarizedRows: dialogue.length,
-      droppedAppRows: toSummarize.length - dialogue.length,
-      estimatedTokens,
+      summarizedRows: plan.summarizedRows,
+      droppedAppRows: plan.droppedAppRows,
+      estimatedTokens: plan.estimatedTokens,
     });
-    return { summary, estimatedTokens, compacted: true };
+    return { summary, estimatedTokens: plan.estimatedTokens, compacted: true };
   } catch (err) {
     console.warn('[session-compaction] failed:', errorMessage(err));
     return unchanged;

@@ -1,7 +1,8 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: SPEC; P1 shipped (#431), P2 in review.** Written 2026-10-31. R1 ruled the same day
-(compact around 75K billed).
+**Status: SPEC; P1 (#431) and P2 (#433) shipped, P3 in review.** Written 2026-10-31. R1 ruled the same
+day (compact around 75K billed) and checked by P3 the same day: the threshold holds, the fold does not
+(see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
 [HARNESS-V2.md](HARNESS-V2.md) (progressive disclosure),
 [MEMORY-ARCHITECTURE.md](MEMORY-ARCHITECTURE.md) (the context pack). This doc does not repeat them.
@@ -253,10 +254,33 @@ notice.
    the new pointer *before* writing it. It refuses on a miss unless `--force` is given with a
    reason, which is logged. This is the code version of the catalog-is-not-callable lesson: prove a
    model with a live call, and here, prove it with her tools.
-4. **Compaction gets its own eval** (C1/C2 cannot be judged by first-turn cases). Three long replayed
-   conversations, compacted, then probe questions whose answers sat only in the compacted part
-   ("what did I say about my knee?", "what did we agree for Thursday?"). Graded by
-   whether the answer matches the transcript. This is the gate for R1.
+4. **Compaction gets its own eval** (C1/C2 cannot be judged by first-turn cases). BUILT as P3:
+   `npm run eval:compaction` (`scripts/eval-compaction*.ts`). Three synthetic 80-exchange
+   conversations, each planting one fact per item on `coach-compact`'s KEEP list, built into the
+   rows a real session stores and compacted by the engine's own `planCompaction` under the live
+   policy. Scores whether each planted fact survives into the final summary. Synthetic because no
+   real conversation has reached the trigger yet, and a planted fact needs no judge. `--dry` is free.
+
+   **First reading (2026-10-31, 3 runs, ~65K billed tokens):**
+   - **R1 holds.** Compaction fired at ~75–76K billed, every ~30 exchanges, and the summarizer read
+     only ~1.4K units of dialogue each time: C2 dropped ~31 injected rows per round and nothing
+     injected leaked into any summary (0 leaks, 12 summaries).
+   - **Retention 74% (40/54)**, but split: facts first summarized in round 2 kept **95%**; facts
+     from round 1 kept **61%**. The half-marathon fixture lost the same three round-1 facts in 3 of 3
+     runs (the Thursday/30-minute decision, the left-knee constraint, the failed 6am runs).
+   - **The loss is in the fold, not the threshold.** Round 1's summary carried all three. Round 2,
+     told to "fold any existing summary into one", dropped them and spent its 250 words repeating
+     her general advice (hydration, stretching, pre-run food) that round 1 already held, and that
+     she can give again. By kind: decisions 33%, constraints 67%, tried-and-failed 67%;
+     corrections 100%, own words 89%, open items 89%.
+   - **Next (not in P3):** the `coach-compact` prompt needs two lines — the existing summary's
+     facts outrank anything new, and advice she gave is DROP (she can give it again; it is not
+     something they said) — then a re-run. That is a job prompt edit (sync-jobs, owner go).
+   - Caveat: the filler is repetitive by construction ("repeatedly asked whether to stretch"); a
+     real conversation would not hand the summarizer twelve copies of one question. The fold
+     dropping already-summarized facts is not caused by that.
+   - Not measured yet: whether the COACH answers the probes from a compacted history. The eval
+     scores the summary; asking her is the next arm.
 
 **Cost.** Mining is read-only SQL, essentially free. Smoke ≈ 300K tokens per run. The
 compaction eval ≈ 3 conversations × ~30 turns: owner-gated, like `eval:tools` is today.
@@ -314,7 +338,7 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 |---|---|---|---|---|
 | P1 | C1 engine: measure sent history, incremental summary, after-reply, dialogue-only tail | — | `backend/src/services/session-compaction.ts`, `chat-messaging.ts`, `chat-history.ts` | AI Admin migration 016 `summary_through_at` on `chat_sessions` |
 | P2 | C2: drop app rows at compaction, `pinned` blocks (closes MP33) | P1 | engine + `coach-block-refresh.ts`, `@cadence/shared` pattern | `set-coach-persona.ts` re-run |
-| P3 | C5.4 compaction eval | P1, P2 | new script | — |
+| P3 | C5.4 compaction eval — BUILT + first reading above | P1, P2 | `scripts/eval-compaction*.ts`, `coach-compaction-policy.ts` | — |
 | P4 | ~~R1 threshold~~ folded into P1 by the ruling; P3 checks it | — | — | — |
 | P5 | C4: bound actions, `mutates` field, `toolChangeText` | — | `coach-tools.ts`, action files, audit test | — |
 | P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint | — | `scripts/` | — |
@@ -330,7 +354,7 @@ as today.
 ## Owner rulings owed
 
 - **R1. Compaction threshold.** RULED 2026-10-31: around 75K billed (42k units trigger, 50k units
-  ceiling). P3 checks it.
+  ceiling). P3 checked it the same day: the threshold is not where facts are lost (C5.4).
 - **R2. AI Admin engine change.** C1/C2 change shared engine behaviour (`appRowPattern`,
   `summary_through_at`). Other callers have no summarizer configured today, so the change is invisible
   to them, but it is AI Admin code.

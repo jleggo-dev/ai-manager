@@ -36,6 +36,7 @@
     "probe:replan": "node --import tsx apps/cadence-api/scripts/probe-replan-preview.ts",
     "eval:tools": "node --import tsx apps/cadence-api/scripts/eval-tool-selection.ts",
     "eval:outcomes": "node --import tsx apps/cadence-api/scripts/eval-outcomes.ts",
+    "eval:compaction": "node --import tsx apps/cadence-api/scripts/eval-compaction.ts",
     "metrics:food-ledger": "node --import tsx apps/cadence-api/scripts/food-variance-baseline.ts",
     "smoke:food-sources": "node --import tsx apps/cadence-api/scripts/smoke-food-sources.ts",
     "import:cnf": "node --import tsx apps/cadence-api/scripts/import-cnf.ts",
