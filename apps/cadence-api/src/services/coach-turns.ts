@@ -19,8 +19,11 @@
  * that window still carry the nudge. The opening question is a constant now
  * (`@cadence/shared`'s OPENING_QUESTION, painted client-side and never sent), so nothing new
  * writes one — but dropping the pattern would make those existing transcripts render wrong.
+ *
+ * Also handed to AI Admin's compaction as `appRowPattern` (`set-coach-persona.ts`), so the turns it
+ * keeps verbatim are turns, not injected rows — exported, never hand-copied.
  */
-const APP_AUTHORED = /^\s*<(context|open|note)\b/;
+export const APP_AUTHORED = /^\s*<(context|open|note)\b/;
 
 export const isRealTurn = (m: { role?: string; content?: string }) =>
   (m.role === 'user' || m.role === 'assistant') && !APP_AUTHORED.test(m.content ?? '');

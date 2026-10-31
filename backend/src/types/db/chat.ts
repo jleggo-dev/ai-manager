@@ -17,6 +17,8 @@ export interface ChatSessionRow {
   workflow_variables?: Record<string, unknown>;
   config?: Record<string, unknown> | null;
   session_summary?: string | null;
+  /** created_at of the last row the summary covers (migration 016). */
+  summary_through_at?: string | null;
   provider_metadata?: Record<string, unknown> | null;
   uses_user_credentials?: boolean;
   processing_message_id?: string | null;
