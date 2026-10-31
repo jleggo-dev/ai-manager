@@ -321,9 +321,38 @@
   font-weight: 700;
   color: oklch(54% 0.02 120);
 }
-.fl-photo img {
+/* The photo door: the content scrolls INSIDE itself and the buttons are a fixed-height sibling
+   under it. Photo + caption + a long reading are taller than a phone and the host clips, so with
+   the buttons in the flow the confirm sat below the bottom edge — unreadable and unpressable
+   (owner, on device, 2026-10-31). Same shape as .fc-thread and its composer. */
+.fl-photo {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.fl-photo-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+}
+/* Capped so the reading and the numbers start on the first screen, not under a full-height photo. */
+.fl-photo-scroll > img {
+  flex: 0 0 auto;
   width: 100%;
+  max-height: 40vh;
+  object-fit: cover;
   border-radius: 16px;
+}
+.fl-photo-foot {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  border-top: 1px solid oklch(91% 0.02 85);
+  background: var(--ink);
 }
 .fl-drink {
   align-self: flex-start;

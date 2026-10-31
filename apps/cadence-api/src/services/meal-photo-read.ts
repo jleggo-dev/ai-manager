@@ -25,7 +25,7 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { putMealPhoto, signMealPhotoUrl } from './meal-photos.ts';
 import { logAi } from './ai-log.ts';
 import { insertNutritionLog } from '../repos/nutrition.ts';
-import { isMeal, parseMealResult, usageSlot, PROVISIONAL_BELOW } from './nutrition-parse.ts';
+import { isMeal, parseMealResult, usageSlot, PROVISIONAL_BELOW, type ParsedMealResult } from './nutrition-parse.ts';
 import { tickFoodLogOccurrence } from './nutrition.ts';
 import { priceParsedMeal } from './food-pricing.ts';
 import type { MealKind, Macros, NutritionLog } from '@cadence/shared';
@@ -184,4 +184,49 @@ export async function logMealFromReading(userId: string, input: ReadingLogInput)
   });
 
   return row;
+}
+
+/**
+ * Step 2 WITHOUT the row — the photo door inside an open meal (meal-logging rework, 1b).
+ *
+ * The draft owns the write, so the numbers come back for the user to see and confirm first: the
+ * same `parse-meal-description` job and the same ledger pass as `logMealFromReading`, but nothing
+ * is pinned and nothing is inserted. A preview they walk away from leaves no food behind.
+ *
+ * This replaced sending the reading to `/meals/preview`, whose words path caps text at 500
+ * characters: a photo reading runs well past that, so every photo added to an open meal came back
+ * "meal preview failed: 400" (owner, on device, 2026-10-31).
+ */
+export async function previewMealFromReading(
+  userId: string,
+  input: { reading: string; caption?: string; meal?: MealKind },
+): Promise<ParsedMealResult & { raw_text: string }> {
+  const hint = input.meal && isMeal(input.meal) ? input.meal : undefined;
+  const res = await runJobBySlug(userId, 'parse-meal-description', {
+    description: input.reading,
+    meal_text: input.caption ?? '',
+    meal_hint: input.meal ?? '',
+  });
+  const rawOut = res.formatted ?? res.raw ?? '';
+  const shaped = parseMealResult(rawOut, hint);
+  const date = new Date().toISOString().slice(0, 10);
+  const ledger = await priceParsedMeal(
+    userId,
+    { items: shaped.items, macros: shaped.macros, confidence: shaped.confidence },
+    { pin: false, slot: usageSlot(date, shaped.meal) },
+  );
+  void logAi(userId, {
+    kind: 'parse_meal_description',
+    input: { caption: input.caption ?? null, reading_words: input.reading.split(/\s+/).filter(Boolean).length },
+    output: { raw: rawOut.slice(0, 2000) },
+    meta: {
+      meal: shaped.meal,
+      items: shaped.items.length,
+      confidence: shaped.confidence,
+      preview: true,
+      two_stage: true,
+    },
+  });
+  const raw_text = [input.caption?.trim(), input.reading.trim()].filter(Boolean).join(' — ');
+  return { ...shaped, items: ledger.items, macros: ledger.macros, raw_text };
 }

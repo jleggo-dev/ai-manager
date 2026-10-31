@@ -167,6 +167,7 @@ export {
   logMeal,
   readMealPhoto,
   logMealFromReading,
+  previewMealFromReading,
   logMealFromFood,
   previewMeal,
   logPreviewedMeal,

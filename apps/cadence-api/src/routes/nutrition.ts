@@ -15,7 +15,7 @@ import {
   setEatbackPct,
   setTargets,
 } from '../services/nutrition.ts';
-import { readMealPhoto, logMealFromReading } from '../services/meal-photo-read.ts';
+import { readMealPhoto, logMealFromReading, previewMealFromReading } from '../services/meal-photo-read.ts';
 import { logWater } from '../services/water.ts';
 import { mergeItems, reachBackToPin, renameItem } from '../services/meal-corrections.ts';
 import { findNutritionLog } from '../repos/nutrition.ts';
@@ -30,6 +30,7 @@ import {
   waterBodySchema,
   readPhotoBodySchema,
   logFromReadingBodySchema,
+  previewFromReadingBodySchema,
 } from '../validation/body.ts';
 
 const router = Router();
@@ -115,6 +116,25 @@ router.post('/photo/log', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /nutrition/photo/log]', err);
     res.status(500).json({ error: 'failed to log the meal' });
+  }
+});
+
+/**
+ * POST /nutrition/photo/preview — step 2 inside an open meal: the reading (possibly edited) becomes
+ * priced rows the user sees BEFORE they join the meal. Writes nothing; the draft does the write.
+ */
+router.post('/photo/preview', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(previewFromReadingBodySchema, req.body);
+    if (!body.reading.trim() && !body.caption?.trim()) {
+      return void res.status(400).json({ error: 'a meal needs a reading or a caption' });
+    }
+    res.json(await previewMealFromReading(userId, body));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/photo/preview]', err);
+    res.status(500).json({ error: 'failed to work out that meal' });
   }
 });
 

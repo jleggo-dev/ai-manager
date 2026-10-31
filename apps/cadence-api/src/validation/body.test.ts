@@ -3,6 +3,8 @@ import {
   BodyValidationError,
   parseBody,
   logMealBodySchema,
+  previewMealBodySchema,
+  previewFromReadingBodySchema,
   macroTargetsBodySchema,
   occurrenceLogBodySchema,
   weighInBodySchema,
@@ -88,6 +90,33 @@ describe('parseBody / nutrition schemas', () => {
       kcal: 2200,
       protein_g: 110,
     });
+  });
+});
+
+// A photo reading is prose — the one in the 2026-10-31 report ran to a markdown summary with
+// six toppings and their grams — and sending it down the words path's 500-character preview
+// failed every photo added to an open meal with a bare 400.
+describe('parseBody / photo preview schema', () => {
+  const longReading = 'Pizza, hand-tossed crust, 14-inch, two slices. '.repeat(40);
+
+  it.each([
+    ['a long reading', { reading: longReading, meal: 'dinner' }],
+    ['a reading with a caption', { reading: 'two slices of Hawaiian', caption: 'Two slices. Hawaiian 14 inch.' }],
+    ['an empty reading (a failed read still prices from the caption)', { reading: '', caption: 'two slices' }],
+  ])('accepts %s', (_name, body) => {
+    expect(() => parseBody(previewFromReadingBodySchema, body)).not.toThrow();
+  });
+
+  it.each([
+    ['no reading at all', { caption: 'two slices' }],
+    ['a reading past 20,000 characters', { reading: 'x'.repeat(20_001) }],
+    ['an unknown meal kind', { reading: 'pizza', meal: 'brunch-ish' }],
+  ])('rejects %s', (_name, body) => {
+    expect(() => parseBody(previewFromReadingBodySchema, body)).toThrow(BodyValidationError);
+  });
+
+  it('is needed: the words preview still refuses a reading this long', () => {
+    expect(() => parseBody(previewMealBodySchema, { text: longReading })).toThrow(BodyValidationError);
   });
 });
 

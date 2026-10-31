@@ -112,6 +112,17 @@ export const progressPhotoBodySchema = z.object({
 /** PUT /progress/photos/enabled — the opt-in switch, both directions. */
 export const progressPhotosEnabledBodySchema = z.object({ enabled: z.boolean() });
 
+/**
+ * The photo door's preview (inside an open meal): the reading as the user stands behind it, priced
+ * but not written. Same caps as the log below — a photo reading is prose and runs long, which is
+ * why it cannot ride `previewMealBodySchema`'s 500-character words path.
+ */
+export const previewFromReadingBodySchema = z.object({
+  reading: z.string().max(20000),
+  caption: z.string().max(2000).optional(),
+  meal: mealKindSchema.optional(),
+});
+
 export const logFromReadingBodySchema = z.object({
   photo_ref: z.string().min(1, 'photo_ref is required').max(400),
   reading: z.string().max(20000),
