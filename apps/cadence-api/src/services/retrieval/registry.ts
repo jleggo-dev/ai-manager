@@ -38,6 +38,7 @@ import { PREVIEW_MEAL } from './food-log-function.ts';
 import { RESEARCH_FOOD } from './food-research-function.ts';
 import { GET_REPERTOIRE } from './repertoire-function.ts';
 import { GET_USER_BUILT_ACTIVITIES } from './user-built-function.ts';
+import { GET_FOLLOW_UPS } from './follow-ups-function.ts';
 import {
   addDays,
   CALENDAR_FLOOR_DAYS,
@@ -605,4 +606,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // The calendar as written, further than the 7 days get_active_plan carries (owner 2026-09-15).
   // Tail category `plan`.
   [GET_CALENDAR.name]: GET_CALENDAR,
+  // The things she said she would come back to (HARNESS-V3 C3). Dossier: in the pack's MANDATORY
+  // list and the per-turn floor, never a tail tool — the writes are note_/close_follow_up.
+  [GET_FOLLOW_UPS.name]: GET_FOLLOW_UPS,
 };
