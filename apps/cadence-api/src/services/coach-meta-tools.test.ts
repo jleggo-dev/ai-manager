@@ -60,7 +60,10 @@ describe('what she carries', () => {
     // drawer-label ruling (coach-tool-tiers.ts). Still far under the 18 reads this tiering
     // replaced. Bump deliberately, one at a time, rather than loosening it to something that
     // stops noticing growth.
-    expect(coachToolDefinitions().length).toBeLessThan(14);
+    // 14 as of 2026-09-15: `rebuild` joined ALWAYS_ACTIONS on the owner's ruling after that
+    // morning's eval had it called nothing from the tail on both rungs (~367 tok/turn measured;
+    // the ruling is recorded beside it in coach-tool-tiers.ts).
+    expect(coachToolDefinitions().length).toBeLessThan(15);
   });
 
   /** The whole point. A read in the tail costs zero tokens per turn, so reads are free to add. */
