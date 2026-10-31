@@ -150,13 +150,15 @@ export async function sendChatMessage(
      and the token estimate reflects them. `resolvedJob` was already fetched above. */
   await refreshSessionSystemPrompt(session, resolvedJob);
 
-  /* Session compaction: summarize older turns when over token threshold. STATELESS providers
-     only — with threading on, the provider's own ThreadWorkflow holds and budgets the history
-     (org contextBudgetPercentages), and compacting our local copy would just spend summarizer
-     tokens shrinking a transcript that no longer feeds requests. The local rows stay the audit
-     trail either way, and remain the fallback if the thread expires. */
+  /* Session compaction, the synchronous safety net: only past the CEILING, which defaults to the
+     trigger for callers with no after-reply hook. A caller that runs `compactSessionAfterReply`
+     sets it higher, so nobody waits on a summarizer here unless that run did not land.
+     STATELESS providers only — with threading on, the provider's own ThreadWorkflow holds and
+     budgets the history (org contextBudgetPercentages), and compacting our local copy would just
+     spend summarizer tokens shrinking a transcript that no longer feeds requests. The local rows
+     stay the audit trail either way, and remain the fallback if the thread expires. */
   if (!v2ThreadingEnabled(session.provider_type ?? '', session.ai_profile?.runtime_options || {})) {
-    await maybeCompactSession(session, session.calling_application || 'unknown');
+    await maybeCompactSession(session, session.calling_application || 'unknown', 'ceiling');
   }
   const refreshedSession = (await dbGetSession(sessionId)) || session;
 

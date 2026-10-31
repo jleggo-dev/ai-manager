@@ -28,6 +28,7 @@ import {
 } from '@ai-admin/core';
 import { withAim } from '../src/ai/aim.ts';
 import { cadenceConfig } from '../src/config.ts';
+import { APP_AUTHORED } from '../src/services/coach-turns.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const SEED = path.join(repoRoot, 'config/ai-admin/cadence-coach.system-prompt.md');
@@ -49,19 +50,30 @@ const SLUG = cadenceConfig.aim.coachJobSlug;
  * and an over-eager summary that eats live conversation is too. So the working set stays
  * generous and bounded:
  *
- *  - `triggerTokens` is in `estimateSessionTokens` units — char/4 over the stored history — and
- *    real billed tokens run ~1.78× that (solved against production billing, 2026-08-19). 20k
- *    units ≈ first compaction near ~36k billed. After compacting, context falls to persona +
- *    summary + the kept turns (~15k billed) and sawtooths in a ~15–40k band: far below the
- *    degradation zone, far above ever compacting a short chat. The old 32k was set before the
- *    units were calibrated and fired near ~60k billed — later than intended.
- *  - `keepLastNTurns` counts MESSAGES: 20 is ten exchanges verbatim behind the summary, because
- *    recency is where conversational quality lives; the summary only ever replaces the far past.
+ *  - Units are `estimateSessionTokens` units — char/4 over the history that will be SENT
+ *    (persona + summary + everything after the summary mark) — and real billed tokens run ~1.78×
+ *    that (solved against production billing, 2026-08-19).
+ *  - `triggerTokens: 42_000` ≈ **75K billed** (owner, 2026-10-31: "compact around 75K"). Runs AFTER
+ *    her reply (`compactCoachSessionAfterReply`), so nobody waits on it. Well under the measured
+ *    failure point: she stopped calling tools at ~119k.
+ *  - `ceilingTokens: 50_000` ≈ 89K billed: the only point where a send waits on a summarizer — when
+ *    the after-reply run failed or has not landed. Still under ~119k.
+ *  - `keepLastNTurns: 20` counts real TURNS — ten exchanges verbatim behind the summary — because
+ *    `appRowPattern` stops the injected `<context>`/`<note>` rows from using up the count. Before
+ *    2026-10-31 they did, and "ten exchanges" was closer to four.
  *
- * Both are build-rules-editable without a deploy — but note the engine copies this onto the
- * SESSION at open (`chat-session-open.ts`), so an edit reaches new sessions only.
+ * History: the old 32k fired near ~60k billed before the units were calibrated; 20k (2026-08-20)
+ * fired once in 461 sessions, then re-ran on every message after it (fixed with the mark,
+ * HARNESS-V3 C1). Changing these needs a re-run of this script and reaches new sessions only — the
+ * engine copies the policy onto the SESSION at open (`chat-session-open.ts`).
  */
-const SUMMARIZER = { jobSlug: 'coach-compact', triggerTokens: 20_000, keepLastNTurns: 20 } as const;
+const SUMMARIZER = {
+  jobSlug: 'coach-compact',
+  triggerTokens: 42_000,
+  ceilingTokens: 50_000,
+  keepLastNTurns: 20,
+  appRowPattern: APP_AUTHORED.source,
+} as const;
 
 async function main() {
   const profileId = cadenceConfig.aim.coachProfileId;
@@ -82,7 +94,8 @@ async function main() {
       const created = await createProcessingJob({
         slug: SLUG,
         name: 'Cadence Coach (chat)',
-        description: 'Streaming coaching conversation. Persona in config.systemPrompt; app appends the per-user dossier.',
+        description:
+          'Streaming coaching conversation. Persona in config.systemPrompt; app appends the per-user dossier.',
         ai_profile_id: profileId,
         config,
         is_active: true,
