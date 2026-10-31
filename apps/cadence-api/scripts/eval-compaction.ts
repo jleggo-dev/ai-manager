@@ -21,6 +21,7 @@
  *   npm run eval:compaction -- --dry                 # free: rounds, sizes, no model calls
  *   npm run eval:compaction                          # one run of every fixture
  *   npm run eval:compaction -- --runs 3 --fixture half-marathon --out /tmp/compaction.md
+ *   npm run eval:compaction -- --prompt-from-config   # the repo's coach-compact prompt, before sync
  *
  * Exit is non-zero only when a summarizer call fails; retention is reported, never gated.
  */
@@ -29,6 +30,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runJobBySlug } from '../src/ai/aim.ts';
+import { interpolateTemplate } from '@ai-admin/core';
 import { COACH_SUMMARIZER } from '../src/services/coach-compaction-policy.ts';
 import { COMPACTION_FIXTURES, FACT_KINDS } from './eval-compaction-fixtures.ts';
 import {
@@ -57,10 +59,25 @@ const DRY = process.argv.includes('--dry');
 const RUNS = Number(arg('runs') ?? 1);
 const ONLY = arg('fixture');
 const OUT = arg('out');
+/**
+ * `--prompt-from-config`: run the coach-compact prompt as it stands in the REPO config instead of
+ * the synced one, via promptOverride — so a prompt edit is measured before sync-jobs ships it.
+ * The engine uses an override verbatim, so the template is filled here with its own interpolator.
+ */
+const PROMPT_FROM_CONFIG = process.argv.includes('--prompt-from-config');
+const repoTemplate = (): string => {
+  const cfg = JSON.parse(readFileSync(path.join(root, 'config/ai-admin/ai-admin.config.json'), 'utf8')) as {
+    jobs: Array<{ slug: string; config: { promptTemplate?: string } }>;
+  };
+  const t = cfg.jobs.find((j) => j.slug === COACH_SUMMARIZER.jobSlug)?.config.promptTemplate;
+  if (!t) throw new Error(`${COACH_SUMMARIZER.jobSlug} has no promptTemplate in the repo config`);
+  return t;
+};
 
 const dryRun: Summarize = async () => '(dry run — no summarizer called) '.repeat(40);
 const liveRun: Summarize = async (vars) => {
-  const res = await runJobBySlug(EVAL_USER, COACH_SUMMARIZER.jobSlug, vars);
+  const opts = PROMPT_FROM_CONFIG ? { promptOverride: interpolateTemplate(repoTemplate(), vars) } : {};
+  const res = await runJobBySlug(EVAL_USER, COACH_SUMMARIZER.jobSlug, vars, opts);
   const text = (res.formatted ?? res.raw ?? '').trim();
   if (!text) throw new Error('coach-compact returned an empty summary');
   return text;
@@ -93,7 +110,10 @@ async function runOne(fixtureId: string, run: number): Promise<RunResult> {
 const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '—');
 
 function report(results: RunResult[]): string {
-  const lines: string[] = [`# Compaction eval — ${new Date().toISOString().slice(0, 16)}Z${DRY ? ' (DRY)' : ''}`, ''];
+  const lines: string[] = [
+    `# Compaction eval — ${new Date().toISOString().slice(0, 16)}Z${DRY ? ' (DRY)' : ''}${PROMPT_FROM_CONFIG ? ' (prompt from repo config)' : ''}`,
+    '',
+  ];
   lines.push(
     `Policy: trigger ${COACH_SUMMARIZER.triggerTokens} units (~${Math.round((COACH_SUMMARIZER.triggerTokens * BILLED_PER_UNIT) / 1000)}K billed), keep ${COACH_SUMMARIZER.keepLastNTurns} turns.`,
     '',

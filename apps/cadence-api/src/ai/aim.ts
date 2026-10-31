@@ -120,23 +120,29 @@ export function runJob(cadenceUserId: string, jobId: string, variables: Record<s
 
 /** Run a templated job by SLUG (resolves slug→job→id internally; self-instrumented diagnostics).
  *  opts.images: https URLs (short-lived signed Storage URLs) attached as vision content parts —
- *  the engine appends them AFTER template interpolation and logs URL refs, never image bytes. */
+ *  the engine appends them AFTER template interpolation and logs URL refs, never image bytes.
+ *  opts.promptOverride: the FULL prompt text to run instead of the job's template — the engine
+ *  uses it verbatim, so interpolate first. For evals measuring a prompt before it is synced;
+ *  the run is still the job's, audited as such. */
 export function runJobBySlug(
   cadenceUserId: string,
   slug: string,
   variables: Record<string, unknown>,
-  opts: { images?: string[] } = {},
+  opts: { images?: string[]; promptOverride?: string } = {},
 ) {
   refuseInTest(`job ${slug}`);
   const vars = { ...clockVars(), ...variables };
   // Images ride the in-process path only — the remote job endpoint takes attachments in a
   // different shape, and no image-bearing job has needed remote mode yet.
-  if (REMOTE_JOBS && !opts.images?.length) return remoteRunJobBySlug(slug, CALLING_APP, vars).catch(rejectAsAimError);
+  if (REMOTE_JOBS && !opts.images?.length) {
+    return remoteRunJobBySlug(slug, CALLING_APP, vars, opts.promptOverride).catch(rejectAsAimError);
+  }
   return withAim(cadenceUserId, () =>
     executeJob(slug, {
       callingApplication: CALLING_APP,
       variables: vars,
       ...(opts.images?.length ? { images: opts.images } : {}),
+      ...(opts.promptOverride ? { promptOverride: opts.promptOverride } : {}),
     }),
   );
 }
