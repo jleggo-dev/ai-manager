@@ -38,7 +38,6 @@ describe('log mode (the legacy callers)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More servings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect(onLog).toHaveBeenCalledWith({ servingIndex: 0, quantity: 1.25, meal: 'lunch' });
-    expect(screen.queryByText("You'll come straight back here for the next one.")).toBeNull();
   });
 });
 
@@ -60,11 +59,53 @@ describe('draft mode (the sheet · add and stay)', () => {
     );
     // The draft owns the slot — no meal question here.
     expect(screen.queryByLabelText('Meal')).toBeNull();
-    expect(screen.getByText("You'll come straight back here for the next one.")).toBeInTheDocument();
+    // No "you'll come straight back" line — the button says what happens (owner, 2026-10-31).
+    expect(screen.queryByText(/come straight back/)).toBeNull();
     expect(screen.getByText('Breakfast · 3 things · not counted yet')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Fewer servings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add to breakfast' }));
     expect(onAdd).toHaveBeenCalledWith({ servingIndex: 0, quantity: 0.75 });
     expect(onLog).not.toHaveBeenCalled();
+  });
+});
+
+describe('what the sheet shows', () => {
+  it('names a branded food with its brand in front — "Gatorade Lemon-lime", not "Lemon-lime"', () => {
+    const gatorade: Food = {
+      ...strawberries,
+      food_id: 'f-gat',
+      name: 'Lemon-lime',
+      brand: 'Gatorade',
+      source: 'fatsecret',
+    };
+    render(
+      <AddFoodSheet
+        food={gatorade}
+        meal="breakfast"
+        mode="draft"
+        mealLabel="breakfast"
+        onAdd={() => {}}
+        onLog={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    expect(screen.getByText('Gatorade Lemon-lime')).toBeInTheDocument();
+  });
+
+  it('puts the add button in the footer, not the header', () => {
+    const { container } = render(
+      <AddFoodSheet
+        food={strawberries}
+        meal="breakfast"
+        mode="draft"
+        mealLabel="breakfast"
+        onAdd={() => {}}
+        onLog={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: 'Add to breakfast' });
+    expect(btn.closest('.fd-foot')).not.toBeNull();
+    expect(container.querySelector('.fd-head')?.contains(btn)).toBe(false);
   });
 });

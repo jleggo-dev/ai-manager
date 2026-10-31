@@ -265,17 +265,6 @@
   color: oklch(32% 0.02 150);
   text-transform: capitalize;
 }
-.fd-do {
-  flex: 0 0 auto;
-  padding: 6px 4px;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 900;
-  color: oklch(44% 0.09 152);
-  cursor: pointer;
-}
 .fl-body {
   display: flex;
   flex: 1 1 auto;
@@ -640,6 +629,15 @@
   flex-direction: column;
   gap: 10px;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+/* The sheet's one button sits at the bottom, full width and green like Done — pinned while the
+   card scrolls under it. */
+.fd-foot {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding: 10px 16px 0;
+  background: var(--ink);
 }
 .fd-card,
 .fd-macro {

@@ -997,9 +997,3 @@ span.ms-cart-chip-w {
     transform: none;
   }
 }
-.ms-sheet-return {
-  font-size: 12px;
-  color: var(--text-mute);
-  text-align: center;
-  margin-top: 6px;
-}

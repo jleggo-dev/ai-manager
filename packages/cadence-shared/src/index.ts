@@ -23,6 +23,7 @@ export * from './types/progress.ts';
 export * from './types/progress-widgets.ts';
 export * from './types/nutrition.ts';
 export * from './types/food.ts';
+export * from './food-name.ts';
 export * from './types/dietary.ts';
 export * from './dietary-safety.ts';
 export * from './named-sizes.ts';

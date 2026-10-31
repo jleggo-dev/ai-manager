@@ -274,23 +274,23 @@
   align-items: center;
   gap: 8px;
 }
+/* Green from the first tap, like every other go button in the food flow — the grey it used to
+   wear until a lookup came back read as "not yet" (owner, 2026-10-31). Only an empty box dims it. */
 .ms-ds-go {
   flex: 1;
   border: 0;
   border-radius: 16px;
   padding: 14px;
-  background: oklch(80% 0.015 85);
+  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
+  box-shadow: 0 3px 0 oklch(39% 0.08 152);
   color: #fff;
   font: inherit;
   font-size: 15px;
   font-weight: 900;
   cursor: pointer;
 }
-.ms-ds-go.is-ready {
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 3px 0 oklch(39% 0.08 152);
-}
 .ms-ds-go:disabled {
+  opacity: 0.55;
   cursor: default;
 }
 

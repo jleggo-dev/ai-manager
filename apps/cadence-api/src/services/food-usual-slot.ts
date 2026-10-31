@@ -20,6 +20,8 @@ export interface UsualAtSlot {
   /** `food_id` or `recipe_id` — whichever `kind` says. */
   id: string;
   name: string;
+  /** The food's brand, when it has one — the tile shows "Gatorade Lemon-lime", not "Lemon-lime". */
+  brand: string | null;
   /** The serving this would add ("2/3 cup"), when the food names one. */
   serving_label: string | null;
   kcal: number | null;
@@ -49,6 +51,7 @@ async function hydrate(userId: string, t: RecentAtSlot): Promise<UsualAtSlot | n
       kind: 'food',
       id: food.food_id,
       name: food.name,
+      brand: food.brand ?? null,
       serving_label: serving?.label ?? null,
       kcal: macros.kcal ?? null,
       protein_g: macros.protein_g ?? null,
@@ -64,6 +67,7 @@ async function hydrate(userId: string, t: RecentAtSlot): Promise<UsualAtSlot | n
     kind: 'recipe',
     id: recipe.recipe_id,
     name: recipe.name,
+    brand: null,
     serving_label: recipe.ingredients.length ? `${recipe.ingredients.length} ingredients` : null,
     kcal: recipe.macros_per_serving?.kcal ?? null,
     protein_g: recipe.macros_per_serving?.protein_g ?? null,
