@@ -464,3 +464,22 @@ export async function logMealFromReading(input: {
   if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
   return res.json();
 }
+
+/**
+ * Step 2 inside an open meal — the reading becomes priced rows to SHOW, not a row. The draft does
+ * the write once the user has seen the numbers. Its own route because a photo reading runs past
+ * the 500 characters `previewMeal`'s words path accepts.
+ */
+export async function previewMealFromReading(input: {
+  reading: string;
+  caption?: string;
+  meal?: MealKind;
+}): Promise<MealPreview> {
+  const res = await fetch(`${BASE}/nutrition/photo/preview`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
+  return res.json();
+}

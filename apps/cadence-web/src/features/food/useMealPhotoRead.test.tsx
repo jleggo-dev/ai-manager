@@ -11,6 +11,7 @@ const api = { readMealPhoto: vi.fn(), logMealFromReading: vi.fn() };
 vi.mock('../../lib/api.ts', () => ({
   readMealPhoto: (...a: unknown[]) => api.readMealPhoto(...a),
   logMealFromReading: (...a: unknown[]) => api.logMealFromReading(...a),
+  previewMealFromReading: vi.fn(),
 }));
 
 const { useMealPhotoRead } = await import('./useMealPhotoRead.ts');

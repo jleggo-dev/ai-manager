@@ -64,10 +64,12 @@ export function MethodTiles({
               data-method={m}
             >
               {inner}
+              {/* No `capture`: with it iOS goes straight to the camera and the photo you already
+                  took is out of reach. Without it the system offers Take Photo AND Photo Library
+                  (owner, 2026-10-31: "you can't select from the library but it should be an option"). */}
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 hidden
                 disabled={disabled}
                 onChange={(e) => {

@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { READ_PHOTO_STEPS, NUTRITION_STEPS, readProgressLine, type MealKind } from '@cadence/shared';
-import { readMealPhoto, logMealFromReading, previewMeal, type Meal, type MealPreview } from '../../lib/api.ts';
+import {
+  readMealPhoto,
+  logMealFromReading,
+  previewMealFromReading,
+  type Meal,
+  type MealPreview,
+} from '../../lib/api.ts';
 
 /**
  * Draft mode (meal-logging rework, 1b): the photo door appends into the open meal instead of
- * writing one. The confirmed reading — the user's own corrected words — goes through the same
- * parse-without-write the typed path uses (`previewMeal`), and the resulting rows are handed to
- * the caller verbatim for `appendParsed`; the write itself belongs to the meal's close.
+ * writing one. The confirmed reading — the user's own corrected words — is priced WITHOUT a write
+ * (`previewMealFromReading`) and the hook stops at `priced`, holding the rows: the user sees the
+ * foods and their numbers before anything joins the meal (owner, 2026-10-31: "present the
+ * nutritional information to the user"). The caller hands the confirmed rows to `appendParsed`.
+ *
+ * It went through the typed path's `previewMeal` until 2026-10-31, whose 500-character cap a photo
+ * reading always overran — every photo added to an open meal failed with a bare 400.
  */
-export type PhotoDraftAppend = (items: MealPreview['items'], rawText: string) => Promise<boolean>;
-
 /**
  * Photographing a meal, narrated.
  *
@@ -29,14 +37,15 @@ export type PhotoDraftAppend = (items: MealPreview['items'], rawText: string) =>
  * The ticker is a 500ms interval rather than a chain of timeouts, so a stage that finishes early
  * needs no cleanup bookkeeping and a stage that runs long simply holds its last line.
  */
-export type ReadPhase = 'idle' | 'reading' | 'confirming' | 'nutrition' | 'done' | 'error';
+export type ReadPhase = 'idle' | 'reading' | 'confirming' | 'nutrition' | 'priced' | 'done' | 'error';
 
-export function useMealPhotoRead(appendDraft?: PhotoDraftAppend) {
+export function useMealPhotoRead(draft = false) {
   const [phase, setPhase] = useState<ReadPhase>('idle');
   const [progress, setProgress] = useState('');
   const [reading, setReading] = useState('');
   const [photoRef, setPhotoRef] = useState('');
   const [meal, setMeal] = useState<Meal | null>(null);
+  const [preview, setPreview] = useState<MealPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const startedAt = useRef(0);
 
@@ -78,14 +87,15 @@ export function useMealPhotoRead(appendDraft?: PhotoDraftAppend) {
       startedAt.current = Date.now();
       setPhase('nutrition');
       try {
-        if (appendDraft) {
-          // Draft mode: price the confirmed reading without writing, then append verbatim.
-          const words = [opts.reading ?? reading, opts.caption].filter(Boolean).join(' — ');
-          const p = await previewMeal(words, opts.meal);
-          if (!p.items.length) throw new Error('could not pick anything out of that reading');
-          const ok = await appendDraft(p.items, words);
-          if (!ok) throw new Error('could not add that to your meal');
-          setPhase('done');
+        if (draft) {
+          const p = await previewMealFromReading({
+            reading: opts.reading ?? reading,
+            caption: opts.caption,
+            meal: opts.meal,
+          });
+          if (!p.items.length) throw new Error('I couldn’t pick any foods out of that — try adding a few words.');
+          setPreview(p);
+          setPhase('priced');
           return null;
         }
         const row = await logMealFromReading({
@@ -103,7 +113,7 @@ export function useMealPhotoRead(appendDraft?: PhotoDraftAppend) {
         return null;
       }
     },
-    [appendDraft, photoRef, reading],
+    [draft, photoRef, reading],
   );
 
   const reset = useCallback(() => {
@@ -112,8 +122,15 @@ export function useMealPhotoRead(appendDraft?: PhotoDraftAppend) {
     setReading('');
     setPhotoRef('');
     setMeal(null);
+    setPreview(null);
     setError(null);
   }, []);
 
-  return { phase, progress, reading, setReading, photoRef, meal, error, read, commit, reset };
+  /** Back from the numbers to the reading, to fix what it says and price it again. */
+  const unprice = useCallback(() => {
+    setPreview(null);
+    setPhase('confirming');
+  }, []);
+
+  return { phase, progress, reading, setReading, photoRef, meal, preview, error, read, commit, unprice, reset };
 }

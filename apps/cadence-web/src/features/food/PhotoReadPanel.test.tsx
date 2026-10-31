@@ -10,11 +10,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const api = { readMealPhoto: vi.fn(), logMealFromReading: vi.fn() };
+const api = { readMealPhoto: vi.fn(), logMealFromReading: vi.fn(), previewMealFromReading: vi.fn() };
 vi.mock('../../lib/api.ts', () => ({
   readMealPhoto: (...a: unknown[]) => api.readMealPhoto(...a),
   logMealFromReading: (...a: unknown[]) => api.logMealFromReading(...a),
+  previewMealFromReading: (...a: unknown[]) => api.previewMealFromReading(...a),
+  logPreviewedMeal: vi.fn(),
 }));
+// The draft-mode numbers ride MealParseCard, which reads the day cache's invalidator.
+vi.mock('../../lib/query/index.ts', () => ({ useInvalidateNutritionDay: () => vi.fn() }));
 
 const { PhotoReadPanel } = await import('./PhotoReadPanel.tsx');
 
@@ -112,5 +116,100 @@ describe('PhotoReadPanel', () => {
     await user.click(screen.getByRole('button', { name: /have a look/i }));
     await user.click(await screen.findByRole('button', { name: /log to breakfast/i }));
     await waitFor(() => expect(onLogged).toHaveBeenCalledWith(ROW));
+  });
+});
+
+/**
+ * Inside an open meal (the quick log's photo door). The owner's report, 2026-10-31: the reading was
+ * a markdown summary well past 500 characters, it went to the words path's preview, and every
+ * photo came back "meal preview failed: 400". Then: show the numbers before adding.
+ */
+describe('PhotoReadPanel — draft mode', () => {
+  const LONG = `**Compact Summary for Data Entry:**\n${'* Mozzarella cheese, full-fat, baked (~40-50g)\n'.repeat(20)}`;
+  const PRICED = {
+    meal: 'dinner',
+    raw_text: `Two slices — ${LONG}`,
+    items: [
+      { name: 'Hawaiian pizza', qty: 2, unit: 'slice', est: { kcal: 560, protein_g: 24, carbs_g: 66, fat_g: 21 } },
+    ],
+    macros: { kcal: 560, protein_g: 24, carbs_g: 66, fat_g: 21 },
+    confidence: 0.7,
+    flags: {},
+  };
+
+  const setupDraft = () => {
+    const appendDraft = vi.fn().mockResolvedValue(true);
+    render(
+      <PhotoReadPanel
+        photo={PHOTO}
+        meal="dinner"
+        mode="draft"
+        appendDraft={appendDraft}
+        onLogged={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    return { appendDraft, user: userEvent.setup() };
+  };
+
+  beforeEach(() => {
+    api.readMealPhoto.mockResolvedValue({ photo_ref: 'ref/1.jpg', reading: LONG, error: null });
+    api.previewMealFromReading.mockResolvedValue(PRICED);
+  });
+
+  it('prices the whole reading on the photo route, however long it runs', async () => {
+    const { user } = setupDraft();
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await user.click(await screen.findByRole('button', { name: /work out the nutrition/i }));
+    await waitFor(() =>
+      expect(api.previewMealFromReading).toHaveBeenCalledWith(
+        expect.objectContaining({ reading: LONG, meal: 'dinner' }),
+      ),
+    );
+    expect(LONG.length).toBeGreaterThan(500);
+  });
+
+  it('shows the foods and their numbers BEFORE anything joins the meal', async () => {
+    const { user, appendDraft } = setupDraft();
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await user.click(await screen.findByRole('button', { name: /work out the nutrition/i }));
+
+    expect(await screen.findByText('~560 kcal')).toBeTruthy();
+    expect(screen.getByText(/24g protein/)).toBeTruthy();
+    expect(appendDraft).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Add to dinner' }));
+    await waitFor(() => expect(appendDraft).toHaveBeenCalledWith(PRICED.items, PRICED.raw_text));
+  });
+
+  it('goes back to the reading from the numbers, to fix it and price again', async () => {
+    const { user } = setupDraft();
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await user.click(await screen.findByRole('button', { name: /work out the nutrition/i }));
+    await screen.findByText('~560 kcal');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('What the photo shows')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /work out the nutrition/i })).toBeTruthy();
+  });
+
+  it('a failed read with no caption offers a retry, not a button that cannot work', async () => {
+    api.readMealPhoto.mockRejectedValue(new Error('nope'));
+    const { user } = setupDraft();
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await screen.findByRole('button', { name: /try reading it again/i });
+    expect(screen.queryByRole('button', { name: /work it out/i })).toBeNull();
+  });
+
+  it('a failed read with a caption works the meal out from the caption', async () => {
+    api.readMealPhoto.mockRejectedValue(new Error('nope'));
+    const { user } = setupDraft();
+    await user.type(screen.getByLabelText('A few words about the photo'), 'Two slices');
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await user.click(await screen.findByRole('button', { name: /work it out from “two slices”/i }));
+    await waitFor(() =>
+      expect(api.previewMealFromReading).toHaveBeenCalledWith(
+        expect.objectContaining({ reading: '', caption: 'Two slices' }),
+      ),
+    );
   });
 });
