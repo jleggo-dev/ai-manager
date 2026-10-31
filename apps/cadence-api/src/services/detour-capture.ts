@@ -18,15 +18,14 @@
  * confirmed exchange re-captured next turn is a no-op). Junk type, absurd days, oversized
  * equipment → clamped or dropped app-side, never trusted from the model.
  */
-import type { CaptureDetourResult } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { enterEpisode, reviseEpisodeEquipment } from './episode.ts';
 import { hasDetourSignal, hasEquipmentSignal } from './detour-signal.ts';
+import { normalizeDetour, normalizeEquipmentUpdate } from './detour-normalize.ts';
 
-const EPISODE_TYPES = new Set(['travel', 'illness', 'injury', 'recovery', 'custom']);
-const MAX_DAYS = 60;
-const MAX_EQUIPMENT = 20;
+// Re-exported so existing callers and tests keep one import; the probe imports detour-normalize.ts.
+export { normalizeDetour, normalizeEquipmentUpdate };
 
 export interface DetourCaptureOutcome {
   ran: boolean;
@@ -40,67 +39,6 @@ export interface DetourCaptureOutcome {
     | 'equipment_revised'
     | 'equipment_unchanged'
     | 'no_update';
-}
-
-/** Trim, de-junk and cap an equipment list from the model — shared by both modes. */
-function clampEquipment(raw: unknown): Array<{ name: string }> {
-  return (Array.isArray(raw) ? raw : [])
-    .map((e) =>
-      e && typeof (e as { name?: unknown }).name === 'string'
-        ? String((e as { name: string }).name)
-            .trim()
-            .slice(0, 60)
-        : '',
-    )
-    .filter(Boolean)
-    .slice(0, MAX_EQUIPMENT)
-    .map((name) => ({ name }));
-}
-
-/** The update-mode read: the arrived equipment answer, or null. Exported for tests. */
-export function normalizeEquipmentUpdate(raw: string): Array<{ name: string }> | null {
-  let parsed: CaptureDetourResult;
-  try {
-    parsed = JSON.parse(raw) as CaptureDetourResult;
-  } catch {
-    return null;
-  }
-  const list = parsed?.equipment_update;
-  if (!Array.isArray(list)) return null;
-  const cleaned = clampEquipment(list);
-  // An explicit empty list is a REAL answer ("nothing here, no gym") — it re-drafts to bodyweight.
-  return cleaned.length || list.length === 0 ? cleaned : null;
-}
-
-/** Parse + clamp the job's output into an `enterEpisode` input, or null. Exported for tests. */
-export function normalizeDetour(raw: string): {
-  type: 'travel' | 'illness' | 'injury' | 'recovery' | 'custom';
-  start?: string;
-  days?: number;
-  end?: string;
-  available_equipment: Array<{ name: string }>;
-} | null {
-  let parsed: CaptureDetourResult;
-  try {
-    parsed = JSON.parse(raw) as CaptureDetourResult;
-  } catch {
-    return null;
-  }
-  const d = parsed?.detour;
-  // The explicit-assent gate: anything short of a confirmed agreement is conversation, not consent.
-  if (!d || d.confirmed !== true) return null;
-  if (typeof d.type !== 'string' || !EPISODE_TYPES.has(d.type)) return null;
-
-  const days =
-    typeof d.days === 'number' && Number.isFinite(d.days)
-      ? Math.min(MAX_DAYS, Math.max(1, Math.round(d.days)))
-      : undefined;
-  const end = typeof d.end === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.end) ? d.end : undefined;
-  // A stated arrival date schedules the detour (owner, 2026-08-04): nothing pauses until then.
-  // Malformed or past dates drop to undefined — entering begins today, never retroactively.
-  const start = typeof d.start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.start) ? d.start : undefined;
-
-  return { type: d.type, start, days, end, available_equipment: clampEquipment(d.available_equipment) };
 }
 
 /**
