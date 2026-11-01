@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18; R4 (weekly) and R5 (the gate) ruled as built on 2026-11-01. Still owed: `eval:tools` (owner).** Written 2026-10-31. R1 ruled the same
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061, 0062 and 0063 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18; R4 (weekly) and R5 (the gate) ruled as built on 2026-11-01. Still owed: `eval:tools` (owner).** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds; the fold did not
 until P3c made the summary a list (13% → 94% over four folds, see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -170,8 +170,9 @@ reply 446/893, injected ≈3.1k/12.5k per turn, persona ~20k, once-per-session b
   10,000 characters of a job variable, and the mark still moved past the whole round. At production
   sizes a round is ~27 exchanges (~15k chars of dialogue), so ~10 exchanges a round were neither
   summarized nor ever sent again. Now the transcript is built row by row up to
-  `TRANSCRIPT_BUDGET_CHARS` (`MAX_VARIABLE_LENGTH` − 100, exported from `job-execution-utils.ts`;
-  the cap is measured before the `<user_input>` wrapper is added, so the 100 is only a margin). The
+  `TRANSCRIPT_BUDGET_CHARS` (9,900, pinned — the fold size every reading was measured at; it was
+  `MAX_VARIABLE_LENGTH` − 100 until the engine cap was raised to 40,000 on 2026-11-01, and the fold
+  did not follow, since a bigger fold wants its own reading). The
   mark moves to the last row included, and a cut round ends on her reply. Rows that did not fit
   stay after the mark. One row longer than the whole budget is shortened and says so, so it cannot
   block every round after it. After a reply, one run does up to 3 rounds, so a backlog catches up;
@@ -292,7 +293,7 @@ No migration; stacks on P9 (#441) for the `source` column.
   rendered nothing and the pinned copy was the only list she could see. Once a person has ever had
   one, the floor now says `- none open right now` instead of going quiet; someone who never had one
   pays nothing. (The 0061 `pack_touch` trigger on `follow_ups` then only cost an extra deterministic
-  pack rebuild; migration 0063 drops it.)
+  pack rebuild; migration 0063 dropped it, applied 2026-11-01.)
 - **The fact review's questions are marked.** A `source = 'fact-review'` line carries
   `(a question from checking their file)`, so it does not read as her promise. This replaces the P9
   note below that the render was left unchanged.
@@ -520,7 +521,7 @@ Differences from the design above, each from the code:
    summaries ran 556–963 words (the 500 cap is not obeyed), which is up to ~2.1K billed on every
    turn and ~1,400 units against the trigger; an engine guard on the summary's size is owed, as is
    one on `existingSummary`, which the same 10,000-char variable cap would cut after seven or eight
-   folds. What the 80-exchange runs show about copying: the planted facts
+   folds (40,000 since 2026-11-01: about thirty). What the 80-exchange runs show about copying: the planted facts
    survived every fold, but the lines did not stay word for word. Of round 1's lines, 35–89% were
    still verbatim one fold later (9 fixture runs) and 20–81% two folds later (6); the rest were
    reworded with the fact kept. Rewording compounds, so a fourth fold is a real test, not a
@@ -552,7 +553,7 @@ Differences from the design above, each from the code:
      average exchange less room between folds.
    - **Open.** (1) Done the same night: the 3-run reading on the 100-exchange fixtures is the 94%
      above, and every fixture's round 4 held round 1's lines (9 of 9). (2) `existingSummary` is cut
-     at 10,000 characters like any job variable; at ~130 words a round the summary gets there
+     at the engine cap like any job variable (10,000 then, 40,000 since 2026-11-01); at ~130 words a round the summary gets there
      after roughly 7–8 folds (~160–190 exchanges; the longest session on file has 53 messages).
      The heading order means a cut loses the last headings first, silently.
      **Guarded (2026-11-01):** `planCompaction` refuses to fold when the summary is over

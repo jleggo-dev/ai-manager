@@ -7,7 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { COMPACTION_FIXTURES, type PlantedFact } from './eval-compaction-fixtures.ts';
 import { composeConversation, poolStrings, PRODUCTION_SIZES } from './eval-compaction-filler.ts';
-import { buildFixtureRows, JOB_VARIABLE_CAP } from './eval-compaction-score.ts';
+import { TRANSCRIPT_BUDGET_CHARS } from '@ai-admin/core';
+import { buildFixtureRows } from './eval-compaction-score.ts';
 
 /** Every term the scorer looks for on a fact's behalf, kept or forbidden. */
 const termsOf = (f: PlantedFact) => [...f.expect.flat(), ...(f.mustNotContain ?? [])].map((t) => t.toLowerCase());
@@ -89,15 +90,17 @@ describe.each(COMPACTION_FIXTURES)('fixture $id', (fixture) => {
     expect(composeConversation(fixture)).toEqual(turns);
   });
 
-  it('a round of dialogue outgrows the job-variable cap, as real rounds do', () => {
-    // The first fixtures summarized ~6K chars a round and never came near the cap. Under the live
+  it('a round of dialogue outgrows the fold, as real rounds do', () => {
+    // The first fixtures summarized ~6K chars a round and never came near the fold. Under the live
     // policy a round summarizes about the first 25–30 exchanges, so their dialogue alone, written
-    // the way the engine writes a transcript, must be longer than the cap.
+    // the way the engine writes a transcript, must be longer than the fold (TRANSCRIPT_BUDGET_CHARS)
+    // — that is what makes the budget cut the eval measures real. The engine's own variable cap is
+    // 40,000 since 2026-11-01 and is no longer the thing a round outgrows.
     const dialogue = turns
       .slice(0, 25)
       .map((t) => `user: ${t.exchange.user}\n\nassistant: ${t.exchange.coach}`)
       .join('\n\n');
-    expect(dialogue.length).toBeGreaterThan(JOB_VARIABLE_CAP);
+    expect(dialogue.length).toBeGreaterThan(TRANSCRIPT_BUDGET_CHARS);
   });
 });
 

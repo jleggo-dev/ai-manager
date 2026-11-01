@@ -24,13 +24,19 @@ export async function resolveTimeoutMs(
 }
 
 /**
- * The most characters of one job variable a prompt ever sees. Anything longer is cut here and
- * ends in `... [truncated]`. The length is measured on the value itself, BEFORE the
+ * The most characters of one job variable a prompt ever sees. Anything longer is cut here, ends in
+ * `... [truncated]`, and is logged with the variable's name — a cut is a defect in the caller,
+ * never a quiet trim. The length is measured on the value itself, BEFORE the
  * `<user_input name="…">` wrapper below is added, so the wrapper does not count against it.
- * Exported so a caller that builds a long variable (compaction's `transcript`) can size it to fit
- * instead of losing its tail here without anyone noticing.
+ *
+ * 40,000 characters is about 10,000 tokens: a guard against a runaway value (a whole file, a
+ * loop's output), not a sizing tool. It was 10,000 until 2026-11-01, when the food-check job's
+ * candidate book (8 records a part, 200–400 characters a record) was found to be cut on any meal of
+ * five or more parts with nothing in the logs. A caller that builds a long variable still sizes it
+ * to what the job should read: compaction pins its fold at `TRANSCRIPT_BUDGET_CHARS`
+ * (session-compaction-plan.ts); the candidate book has a budget of its own.
  */
-export const MAX_VARIABLE_LENGTH = 10_000;
+export const MAX_VARIABLE_LENGTH = 40_000;
 
 /** Replace {{variableName}} placeholders with actual values. */
 export function interpolateTemplate(template: string, variables: Record<string, unknown>): string {
@@ -38,6 +44,11 @@ export function interpolateTemplate(template: string, variables: Record<string, 
     if (variables[key] === undefined) return match;
     let value = String(variables[key]);
     if (value.length > MAX_VARIABLE_LENGTH) {
+      console.warn('[job-execution] variable cut to the cap; the caller should size it', {
+        variable: key,
+        length: value.length,
+        cap: MAX_VARIABLE_LENGTH,
+      });
       value = value.slice(0, MAX_VARIABLE_LENGTH) + '... [truncated]';
     }
     return `<user_input name="${key}">${value}</user_input>`;
