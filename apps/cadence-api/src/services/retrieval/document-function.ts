@@ -40,6 +40,7 @@ type RunResult = DocumentRead | { missing: true } | null;
 
 export const READ_DOCUMENT: RetrievalFunction = {
   name: 'read_document',
+  mutates: 'none',
   description:
     'Reads back a document or text file they attached to the chat — on this turn or any earlier one — and returns its words page by page. Use it when they ask about something in a file they sent that is not in front of you. Pass {"doc_ref": "coach-attachments/..."} from the attachment note; add {"from_page": 3} to continue past a cut (default 1). A photo is read_label, not this. It only reads; nothing is changed.',
   domains: ['files', 'documents'],

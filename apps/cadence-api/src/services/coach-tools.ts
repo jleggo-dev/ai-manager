@@ -3,7 +3,7 @@ import { executeCalls } from './retrieval/select-and-run.ts';
 import { COACH_ACTION_TOOLS, coachActionDefinitions } from './coach-actions.ts';
 import { alwaysOnToolNames, allHarnessToolNames, FIND_TOOLS_NAME } from './coach-tool-tiers.ts';
 import { COACH_META_TOOLS, metaToolDefinitions, searchTools } from './coach-meta-tools.ts';
-import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
+import { boundToolResponse, toolActionFaultText, toolEmptyText, toolFaultText } from './tool-response.ts';
 import { logAi } from './ai-log.ts';
 
 /**
@@ -339,8 +339,10 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
   }
   if (!wanted.length) return [];
 
-  // Action and meta tools run one at a time and own their own output — actions write a PROPOSAL,
-  // never a change; meta tools search or delegate. Neither goes through the read path below.
+  // Action and meta tools run one at a time and own their own output; neither goes through the
+  // read path below. What they hand back is bounded the same as a read (HARNESS-V3 C4): an action's
+  // answer used to pass through uncut, so one long propose_plan_change evidence block, or a tail
+  // read reached through use_tool's dossier branch, was the only unbounded text she could receive.
   const single = wanted.filter((c) => COACH_ACTION_TOOLS[c.name] || COACH_META_TOOLS[c.name]);
   const actionOutputs: CoachToolOutput[] = [];
   for (const c of single) {
@@ -350,9 +352,9 @@ export async function executeCoachToolCalls(userId: string, calls: CoachToolCall
       output = await tool.run(userId, parseArgs(c.arguments));
     } catch (e) {
       console.error('[coach-tool]', c.name, e);
-      output = 'That could not be done just now — tell the user plainly and offer to try again.';
+      output = toolActionFaultText();
     }
-    actionOutputs.push({ toolCallId: c.toolCallId, output });
+    actionOutputs.push({ toolCallId: c.toolCallId, output: boundToolResponse(output) });
   }
 
   const reads = wanted.filter((c) => !COACH_ACTION_TOOLS[c.name] && !COACH_META_TOOLS[c.name]);

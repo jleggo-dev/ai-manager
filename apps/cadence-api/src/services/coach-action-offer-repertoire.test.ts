@@ -175,17 +175,21 @@ describe('offer_repertoire_review — the description the harness would audit', 
   /**
    * The gate, in plain words (owner ruling 2026-09-03). It read "This does NOT change anything and
    * does NOT add anything to their list" — the harness's own stock phrase, twice. The ruling asked
-   * for plain simple language, so it now says what is true in the words a person would use, and
-   * says it once: *"This saves nothing: no item goes on their list until they mark it and confirm
-   * on that screen."*
+   * for plain simple language, said once; it became *"This saves nothing: no item goes on their
+   * list until they mark it and confirm on that screen."*
+   *
+   * Since HARNESS-V3 P5 the opening words are generated from `mutates: 'proposes'`
+   * (tool-mutates.ts), so the sentence is now *"This does NOT change anything until they mark items
+   * and confirm on that screen"* — the stock phrase once, which is what the field guarantees for
+   * every tool that waits for a tap.
    *
    * Still asserted, and this is why: the whole value of this tool is that the confirm happens on a
    * screen the person is looking at. A description that lost the gate would leave a model free to
    * report the collection as recorded.
    */
-  it('states its gate — that it saves nothing until they confirm', () => {
-    expect(d).toMatch(/This saves nothing/);
-    expect(d).toMatch(/until they mark it and confirm/);
+  it('states its gate — that it changes nothing until they confirm', () => {
+    expect(OFFER_REPERTOIRE_REVIEW.mutates).toBe('proposes');
+    expect(d).toMatch(/This does NOT change anything until they mark items and confirm on that screen/);
   });
 
   /**

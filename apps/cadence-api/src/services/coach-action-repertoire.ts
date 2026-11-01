@@ -12,7 +12,8 @@ import {
 } from './repertoire-practice.ts';
 import { normTitle } from './goal-identity.ts';
 import { matchActivity } from './plan-edit.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 import { qualifierMeta, type RepertoireStatus } from '@cadence/shared';
 
 /**
@@ -119,8 +120,9 @@ interface ItemParam {
  * the dock's engagement gate exists to prevent; it should not be reintroduced from the other end.
  */
 
-export const UPDATE_REPERTOIRE: CoachActionTool = {
+export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
   name: 'update_repertoire',
+  mutates: 'immediate',
   // 795 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
   // and six fields, so the clauses that could not change a choice went: "mean to learn", "it is
   // their own account", "not revisited", and the per-field "omit if" repeats, which one closing
@@ -129,7 +131,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
   // definitions, verbatim from `STANDING_MEANS` — she reads them in the shelf render too, and two
   // spellings would drift.
   description:
-    'Write down what the user is learning or already knows — pieces, katas, poems, techniques. Use the moment they name any of it; get_repertoire reads it back. Takes effect immediately: reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise", "status": "known", "collection": "Suzuki Book 2", "description": "the fast one in G"}], "goal": "Piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands; a new one starts working. "kind" is plain words; "collection" is the book or list it is part of; "description" is their own words for which one it is; "goal" is a goal\'s exact title. Omit any that do not fit.',
+    'Write down what the user is learning or already knows — pieces, katas, poems, techniques. Use the moment they name any of it; get_repertoire reads it back. {gate}: reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise", "status": "known", "collection": "Suzuki Book 2", "description": "the fast one in G"}], "goal": "Piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands; a new one starts working. "kind" is plain words; "collection" is the book or list it is part of; "description" is their own words for which one it is; "goal" is a goal\'s exact title. Omit any that do not fit.',
   parameters: {
     properties: {
       items: {
@@ -185,7 +187,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
         seen.add(key);
         return true;
       });
-    if (!wanted.length) return 'No items were named, so nothing was recorded. Ask what they know or are working on.';
+    if (!wanted.length)
+      return toolNothingChangedText('no items were named, so nothing was recorded.', [
+        'Ask what they know or are working on.',
+      ]);
 
     // Goal link is best-effort: a fuzzy miss records the items unlinked rather than dropping them.
     let goalId: string | null = null;
@@ -196,7 +201,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       const live = goals.filter((g) => !['completed', 'abandoned'].includes(g.status));
       const goal = matchActivity(live, goalQuery);
       if (goal) goalId = goal.goal_id;
-      else goalNote = ` (no goal matched "${goalQuery}" — recorded without a goal link)`;
+      else goalNote = `a goal link — no goal matched "${goalQuery}", so these were recorded without one.`;
     }
 
     const batch = wanted.slice(0, MAX_ITEMS_PER_CALL);
@@ -215,7 +220,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       return null;
     });
     if (onFile === null) {
-      return 'I could not read what is already on file just now, so I did not write anything — a fault on our side, not an empty record. Try again in a moment.';
+      return toolNothingChangedText(
+        'I could not read what is already on file just now, so I did not write anything — a fault on our side, not an empty record.',
+        ['Try again in a moment.'],
+      );
     }
 
     // The collections she named, resolved to rows once for the whole batch (migration 0056). A
@@ -227,7 +235,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       return null;
     });
     if (collections === null) {
-      return 'I could not file those into their collection just now, so I did not write anything — a fault on our side. Try again in a moment.';
+      return toolNothingChangedText(
+        'I could not file those into their collection just now, so I did not write anything — a fault on our side.',
+        ['Try again in a moment.'],
+      );
     }
     const collectionIdFor = (item: { collection: string }): string | null =>
       item.collection ? (collections.get(collectionKey(item.collection)) ?? null) : null;
@@ -294,9 +305,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
     for (const i of now) counts[i.status] += 1;
     const overflow = wanted.length - batch.length;
     const eventFailures = written.filter((w) => w.eventFailed).length;
-    return [
-      `Recorded${goalNote}:`,
-      ...written.map((w) => `- ${w.line}`),
+    const notes = [
       ...(rejected.length ? ['Not recorded:', ...rejected.map((r) => `- ${r}`)] : []),
       ...(overflow > 0
         ? [
@@ -312,7 +321,13 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       // directly re-usable in her next call — a count labelled "keeping up" would have her
       // writing "keeping up" as a standing and getting it rejected.
       `On file now: ${counts.queued} queued, ${counts.working} working, ${counts.known} known, ${counts.retired} retired.`,
-      'Say in one line what you noted down.',
-    ].join('\n');
+    ];
+    // Every item refused or cut is a call that changed nothing, and says so rather than "Recorded:".
+    if (!written.length) return toolNothingChangedText('none of those items were recorded.', notes);
+    return toolChangeText({
+      changed: written.map((w) => `recorded ${w.line}`) as [string, ...string[]],
+      unchanged: goalNote ? [goalNote] : [],
+      next: [...notes, 'Say in one line what you noted down.'],
+    });
   },
-};
+});

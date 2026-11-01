@@ -41,6 +41,7 @@ function nutrientLine(n: Record<string, unknown>): string {
 
 export const RESEARCH_FOOD: RetrievalFunction = {
   name: 'research_food',
+  mutates: 'none',
   description:
     'Looks a NAMED product up on the open web when your sources have nothing — a specific vendor/brand, not a generic ingredient. SLOW (minutes) and billed. check_food_sources and lookup_food read the food databases without a web search and without a bill. Pass {"name": "mixed dried mushrooms"}; add {"brand": "the wild mushroom co"} when they named who makes it, omit it only if nobody did.',
   domains: ['nutrition', 'foods'],

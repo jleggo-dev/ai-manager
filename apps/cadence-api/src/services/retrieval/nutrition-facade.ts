@@ -48,6 +48,7 @@ const isView = (v: unknown): v is NutritionView => typeof v === 'string' && v in
 
 export const GET_NUTRITION: RetrievalFunction = {
   name: 'get_nutrition',
+  mutates: 'none',
   description:
     'Everything about what this user eats, in one place. Use for any food question, and say which view you need: "log" is what they actually ate, "targets" is their daily calorie and macro goals with how today is tracking, "recipes" is the dishes they have saved, and "lookup" is nutrition facts for one named food from a public database (that one needs "q"). Use for food; for how training went use get_recent_logs. Pass {"view": "log"} or {"view": "lookup", "q": "halloumi"}.',
   domains: ['nutrition', 'foods', 'recipes', 'progress'],

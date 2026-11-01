@@ -7,7 +7,8 @@ import {
 } from '@cadence/shared';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `set_micro_target` — the one thing allowed to override a published reference intake.
@@ -42,10 +43,11 @@ const isKey = (v: unknown): v is MicronutrientKey => KEYS.includes(v as Micronut
 /** "iron_mg, zinc_mg, …" — what to say back when she names something that isn't one. */
 const KEY_LIST = KEYS.join(', ');
 
-export const SET_MICRO_TARGET: CoachActionTool = {
+export const SET_MICRO_TARGET: CoachActionTool = defineAction({
   name: 'set_micro_target',
+  mutates: 'immediate',
   description:
-    'Record a daily micronutrient target this person was given OUTSIDE the app — a doctor, a prescription, a blood result. Takes effect immediately and stands in for the published reference intake for that one nutrient, in every later read. Use only when they report a number someone gave them: the reference intakes already apply to everybody, so never set one from your own reasoning, and never to make a nutrient easier to hit. Pass {"nutrient": "vitamin_c_mg", "amount": 2000, "why": "her doctor asked for 2000mg a day"}. Omit amount to remove an override and go back to the published figure. An amount outside the published safe range for that nutrient is refused and nothing changes.',
+    'Record a daily micronutrient target this person was given OUTSIDE the app — a doctor, a prescription, a blood result. {gate} and stands in for the published reference intake for that one nutrient, in every later read. Use only when they report a number someone gave them: the reference intakes already apply to everybody, so never set one from your own reasoning, and never to make a nutrient easier to hit. Pass {"nutrient": "vitamin_c_mg", "amount": 2000, "why": "her doctor asked for 2000mg a day"}. Omit amount to remove an override and go back to the published figure. An amount outside the published safe range for that nutrient is refused and nothing changes.',
   parameters: {
     properties: {
       nutrient: {
@@ -67,12 +69,16 @@ export const SET_MICRO_TARGET: CoachActionTool = {
   async run(userId, params) {
     const nutrient = params.nutrient;
     if (!isKey(nutrient)) {
-      return `"${String(nutrient ?? '')}" is not a nutrient this tracks, so nothing changed. The ones with reference intakes are: ${KEY_LIST}.`;
+      return toolNothingChangedText(
+        `"${String(nutrient ?? '')}" is not a nutrient this tracks. The ones with reference intakes are: ${KEY_LIST}.`,
+      );
     }
 
     const why = String(params.why ?? '').trim();
     if (!why) {
-      return 'No source was given, so nothing changed. An override only counts because of who said it — ask where the number came from, then set it.';
+      return toolNothingChangedText(
+        'no source was given. An override only counts because of who said it — ask where the number came from, then set it.',
+      );
     }
 
     const user = await getUser(userId);
@@ -82,14 +88,19 @@ export const SET_MICRO_TARGET: CoachActionTool = {
 
     if (clearing) {
       if (!current[nutrient]) {
-        return `There was no override on ${nutrient} to remove — they are already coached against the published reference intake for it. Nothing changed.`;
+        return toolNothingChangedText(
+          `there was no override on ${nutrient} to remove — they are already coached against the published reference intake for it.`,
+        );
       }
       delete current[nutrient];
     } else {
       const amount = sanitizeMicroTargetAmount(nutrient, params.amount);
       if (amount === null) {
         const range = microTargetRange(nutrient);
-        return `${String(params.amount)} is outside the safe daily range for ${nutrient}${range ? ` (${range[0]}–${range[1]})` : ''}, so nothing was changed. Do not set it. Say the number back to them and ask them to check it with whoever gave it.`;
+        return toolNothingChangedText(
+          `${String(params.amount)} is outside the safe daily range for ${nutrient}${range ? ` (${range[0]}–${range[1]})` : ''}.`,
+          ['Do not set it. Say the number back to them and ask them to check it with whoever gave it.'],
+        );
       }
       current[nutrient] = { amount, why, set_at: new Date().toISOString().slice(0, 10) };
     }
@@ -106,12 +117,18 @@ export const SET_MICRO_TARGET: CoachActionTool = {
     ).find((t) => t.key === nutrient);
 
     if (!resolved) {
-      return `Could not read ${nutrient} back after that write. Do not tell them it is set; say you could not save it just now.`;
+      return toolActionFaultText(
+        `${nutrient} could not be read back after that write`,
+        'do not tell them it is set; say you could not save it just now.',
+      );
     }
 
     if (clearing) {
       if (resolved.origin === 'override') {
-        return `The override on ${nutrient} is STILL on their file — the removal did not take. Do not say it is cleared; say you could not change it just now.`;
+        return toolNothingChangedText(
+          `the override on ${nutrient} is STILL on their file — the removal did not take.`,
+          ['Do not say it is cleared; say you could not change it just now.'],
+        );
       }
       await insertGoalEvent(userId, {
         kind: 'note',
@@ -121,11 +138,19 @@ export const SET_MICRO_TARGET: CoachActionTool = {
             200,
           ),
       }).catch(() => null);
-      return `Cleared — ${resolved.label} is back to the published ${String(resolved.amount)}${resolved.unit} a day. Say it back so they know what they are being coached to now.`;
+      return toolChangeText({
+        changed: [
+          `Cleared — ${resolved.label} is back to the published ${String(resolved.amount)}${resolved.unit} a day.`,
+        ],
+        next: ['Say it back so they know what they are being coached to now.'],
+      });
     }
 
     if (resolved.origin !== 'override') {
-      return `${nutrient} did NOT take the new number — their file still reads the published figure. Do not say it is set; say you could not save it just now.`;
+      return toolNothingChangedText(
+        `${nutrient} did NOT take the new number — their file still reads the published figure.`,
+        ['Do not say it is set; say you could not save it just now.'],
+      );
     }
 
     await insertGoalEvent(userId, {
@@ -134,6 +159,11 @@ export const SET_MICRO_TARGET: CoachActionTool = {
     }).catch(() => null);
 
     const direction = resolved.direction === 'ceiling' ? 'to stay under' : 'to reach';
-    return `On file and verified: ${resolved.label} ${direction} ${String(resolved.amount)}${resolved.unit} a day, standing in for the published reference intake. Say it back so they can correct you.`;
+    return toolChangeText({
+      changed: [
+        `On file and verified: ${resolved.label} ${direction} ${String(resolved.amount)}${resolved.unit} a day, standing in for the published reference intake.`,
+      ],
+      next: ['Say it back so they can correct you.'],
+    });
   },
-};
+});

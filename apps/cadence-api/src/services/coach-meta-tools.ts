@@ -1,7 +1,8 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
-import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
+import { boundToolResponse, toolActionFaultText, toolEmptyText, toolFaultText } from './tool-response.ts';
 import { COACH_ACTION_TOOLS } from './coach-actions.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
+import type { Mutates } from './tool-mutates.ts';
 import {
   onDemandToolNames,
   categoryMembers,
@@ -146,6 +147,12 @@ export function searchTools(query: string): ToolSearchResult {
 
 export interface MetaTool {
   name: string;
+  /**
+   * What calling it can do to their data (tool-mutates.ts). `find_tools` only searches: `'none'`.
+   * `use_tool` runs whatever she names, so it declares the most it can do — `'immediate'` — and its
+   * description sends her to the named tool's own sentence rather than carrying one of its own.
+   */
+  mutates: Mutates;
   description: string;
   parameters: { properties: Record<string, unknown>; required?: string[] };
   run(userId: string, params: Record<string, unknown>): Promise<string>;
@@ -154,6 +161,7 @@ export interface MetaTool {
 export const COACH_META_TOOLS: Record<string, MetaTool> = {
   [FIND_TOOLS_NAME]: {
     name: FIND_TOOLS_NAME,
+    mutates: 'none',
     description: drawerLabel(),
     parameters: {
       properties: {
@@ -206,6 +214,7 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
 
   [USE_TOOL_NAME]: {
     name: USE_TOOL_NAME,
+    mutates: 'immediate',
     description:
       'Run one of the things find_tools listed, and get its answer back. Use immediately after find_tools rather than telling the user what you could look up. Most only read; the ones marked [changes their data] take effect immediately and each says so in its own description — read it and honour it before calling. Name the tool exactly as find_tools spelled it: {"name": "get_workout_history", "arguments": {"days": 7}}. Omit "arguments" when it takes none.',
     parameters: {
@@ -288,7 +297,7 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
           return await action.run(userId, args);
         } catch (e) {
           console.error('[use_tool] action failed:', name, e);
-          return 'That could not be done just now — tell the user plainly and offer to try again.';
+          return toolActionFaultText();
         }
       }
 

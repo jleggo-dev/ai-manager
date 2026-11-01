@@ -95,8 +95,8 @@ describe('send_questionnaire — what it puts up', () => {
   it('says what is true and nothing about what to say next', async () => {
     const out = await SEND_QUESTIONNAIRE.run('u1', { questions: TWO });
     expect(out).toBe(
-      'A questionnaire with 2 questions is on their screen. Their answers arrive as their own message when they ' +
-        'send it; nothing is recorded until then.',
+      'changed: A questionnaire with 2 questions is on their screen.\nunchanged: their file — their answers arrive ' +
+        'as their own message when they send it; nothing is recorded until then.',
     );
     // Facts, not picks (owner red line 2026-09-03): no instruction about tone, length, or offers.
     expect(out).not.toMatch(/\bsay\b|\bkeep it\b|\btell them\b|\boffer\b|\bone short line\b/i);
@@ -156,7 +156,7 @@ describe('send_questionnaire — the set it refuses', () => {
     it(`puts nothing up for ${what}, and says why`, async () => {
       const out = await SEND_QUESTIONNAIRE.run('u1', questions === undefined ? {} : { questions });
       expect(setPendingQuestionnaire).not.toHaveBeenCalled();
-      expect(out).toMatch(/^Nothing is on their screen:/);
+      expect(out).toMatch(/^nothing changed: .*\. Nothing is on their screen\.$/);
       expect(out).toMatch(saysAbout);
       // Facts, not picks: a refusal reports the fault and stops. What to do instead is hers.
       expect(out).not.toMatch(/\bask them\b|\bcall this again\b|\bin chat\b/i);
@@ -187,9 +187,14 @@ describe('send_questionnaire — the description the harness would audit', () =>
     expect(d).toMatch(/ask in chat instead/);
   });
 
-  it('states its gate — that it writes nothing until they send the card', () => {
-    expect(d).toMatch(/This writes nothing/);
-    expect(d).toMatch(/nothing is on file until then/);
+  /**
+   * The gate is generated from `mutates: 'proposes'` (tool-mutates.ts, HARNESS-V3 P5). It read
+   * "This writes nothing: … and nothing is on file until then"; the generated "This does NOT change
+   * anything" says the second half already, so that clause went rather than saying it twice.
+   */
+  it('states its gate — that it changes nothing until they send the card', () => {
+    expect(SEND_QUESTIONNAIRE.mutates).toBe('proposes');
+    expect(d).toMatch(/This does NOT change anything: their answers come back as their own message/);
   });
 
   it('teaches every declared parameter with a quoted example', () => {

@@ -1,7 +1,8 @@
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { enterEpisode } from './episode.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `pause_week` — clear a stretch of the plan instead of refusing to.
@@ -48,7 +49,7 @@ function daysInclusive(a: string, b: string): number {
  * hers (owner red line, "facts, not picks").
  */
 function refused(reason: string): string {
-  return `Nothing was paused: ${reason} Their plan is unchanged.`;
+  return toolNothingChangedText(`${reason} Nothing was paused, and their plan is unchanged.`);
 }
 
 /** What is already running, in the words that distinguish the two things it can be. */
@@ -57,10 +58,11 @@ function openStretch(episode: { type: string; start: string; end: string; constr
   return paused ? 'a pause' : `a detour (${episode.type})`;
 }
 
-export const PAUSE_WEEK: CoachActionTool = {
+export const PAUSE_WEEK: CoachActionTool = defineAction({
   name: 'pause_week',
+  mutates: 'immediate',
   description:
-    'Pause every scheduled session between two dates. Takes effect immediately: nothing is deleted, the plan itself is not edited, and the sessions come back on their own the day after the last paused day. Use it when they want a stretch with nothing on their plate — a death in the family, a deliberate stretch off, days too full to train — instead of dropping commitments with propose_plan_change, which refuses an edit that would leave the plan with nothing on it. Pass {"start": "2026-09-07", "end": "2026-09-13", "reason": "funeral, travelling all week"}. "start" defaults to today, "end" is the last paused day, "reason" is their own words and may be omitted. It refuses a stretch over eight weeks, and refuses while a pause or detour is already running.',
+    'Pause every scheduled session between two dates. {gate}: nothing is deleted, the plan itself is not edited, and the sessions come back on their own the day after the last paused day. Use it when they want a stretch with nothing on their plate — a death in the family, a deliberate stretch off, days too full to train — instead of dropping commitments with propose_plan_change, which refuses an edit that would leave the plan with nothing on it. Pass {"start": "2026-09-07", "end": "2026-09-13", "reason": "funeral, travelling all week"}. "start" defaults to today, "end" is the last paused day, "reason" is their own words and may be omitted. It refuses a stretch over eight weeks, and refuses while a pause or detour is already running.',
   parameters: {
     properties: {
       end: {
@@ -131,6 +133,11 @@ export const PAUSE_WEEK: CoachActionTool = {
     // The dates come off the STORED episode, not off the arguments: enterEpisode reads a past
     // start as today, and she should describe the stretch that exists.
     const { start: from, end: to } = entered.episode;
-    return `Paused from ${from} to ${to}: their scheduled sessions in that window are paused, nothing is deleted, and the rhythm resumes on ${addDaysIso(to, 1)}. Their plan is otherwise unchanged.`;
+    return toolChangeText({
+      changed: [
+        `Paused from ${from} to ${to}: their scheduled sessions in that window are paused, and the rhythm resumes on ${addDaysIso(to, 1)}.`,
+      ],
+      unchanged: ['nothing is deleted, and their plan is otherwise unchanged.'],
+    });
   },
-};
+});

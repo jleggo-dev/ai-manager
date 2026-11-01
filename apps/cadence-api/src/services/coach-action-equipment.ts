@@ -1,7 +1,8 @@
 import type { Equipment, EquipmentCategory } from '@cadence/shared';
 import { deleteEquipment, insertEquipment, listEquipment, updateEquipment } from '../repos/equipment.ts';
 import { sameEquipmentName } from './fact-tokens.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `update_equipment` — the WRITE half of what they own. The read half (get_equipment) rides the
@@ -37,10 +38,11 @@ function matching(rows: Equipment[], name: string): Equipment[] {
   return rows.filter((r) => sameEquipmentName(r.name, name));
 }
 
-export const UPDATE_EQUIPMENT: CoachActionTool = {
+export const UPDATE_EQUIPMENT: CoachActionTool = defineAction({
   name: 'update_equipment',
+  mutates: 'immediate',
   description:
-    'Change what equipment is on their file — what they own to train, practice, or study with. Takes effect immediately. Use add when they got something new mid-conversation and you need it on file NOW (mentioning gear in passing is captured automatically — do not add what you merely heard); remove when they no longer have it or it was recorded wrongly; reword (with new_label) when the item is right but the name is wrong — "2x50lb dumbbells" when they actually own 25s. Read get_equipment first and name the item as listed. Pass {"item": "2x50lb dumbbells", "action": "reword", "new_label": "2x25lb dumbbells"}; {"item": "rowing machine", "action": "add", "category": "cardio"}; {"item": "treadmill", "action": "remove"}.',
+    'Change what equipment is on their file — what they own to train, practice, or study with. {gate}. Use add when they got something new mid-conversation and you need it on file NOW (mentioning gear in passing is captured automatically — do not add what you merely heard); remove when they no longer have it or it was recorded wrongly; reword (with new_label) when the item is right but the name is wrong — "2x50lb dumbbells" when they actually own 25s. Read get_equipment first and name the item as listed. Pass {"item": "2x50lb dumbbells", "action": "reword", "new_label": "2x25lb dumbbells"}; {"item": "rowing machine", "action": "add", "category": "cardio"}; {"item": "treadmill", "action": "remove"}.',
   parameters: {
     properties: {
       item: {
@@ -68,14 +70,16 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
   async run(userId, params) {
     const item = String(params.item ?? '').trim();
     const action = String(params.action ?? '');
-    if (!item) return 'No item was named, so nothing changed. Ask which piece of equipment they mean.';
+    if (!item) return toolNothingChangedText('no item was named.', ['Ask which piece of equipment they mean.']);
 
     const rows = await listEquipment(userId);
     const hits = matching(rows, item);
 
     if (action === 'add') {
       if (hits.length) {
-        return `"${hits[0]!.name}" is already on their file — nothing was added. If the name is wrong, use reword; if they own a second one, add it under a name that tells the two apart ("second kettlebell, 24kg").`;
+        return toolNothingChangedText(`"${hits[0]!.name}" is already on their file — nothing was added.`, [
+          'If the name is wrong, use reword; if they own a second one, add it under a name that tells the two apart ("second kettlebell, 24kg").',
+        ]);
       }
       const category = CATEGORIES.includes(params.category as EquipmentCategory)
         ? (params.category as EquipmentCategory)
@@ -83,29 +87,46 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
       await insertEquipment(userId, { name: item, category, owned: true });
       const after = matching(await listEquipment(userId), item);
       return after.length
-        ? `On file and verified: they own "${after[0]!.name}". Say it back so they can correct you.`
-        : `"${item}" is NOT on their file after that write — it did not take. Do not say it is done; say you could not save it just now.`;
+        ? toolChangeText({
+            changed: [`On file and verified: they own "${after[0]!.name}".`],
+            next: ['Say it back so they can correct you.'],
+          })
+        : toolNothingChangedText(`"${item}" is NOT on their file after that write — it did not take.`, [
+            'Do not say it is done; say you could not save it just now.',
+          ]);
     }
 
     if (action === 'remove') {
       if (!hits.length) {
         const names = rows.map((r) => r.name).join(', ') || 'none on file';
-        return `Nothing on file matches "${item}", so nothing was removed. What they have: ${names}. Ask which they mean.`;
+        return toolNothingChangedText(`nothing on file matches "${item}". What they have: ${names}.`, [
+          'Ask which they mean.',
+        ]);
       }
       for (const h of hits) await deleteEquipment(userId, h.equipment_id);
       const still = matching(await listEquipment(userId), item);
       if (still.length) {
-        return `"${item}" is STILL on their file — the removal did not take. Do NOT tell them it is gone; say you could not remove it just now.`;
+        return toolNothingChangedText(`"${item}" is STILL on their file — the removal did not take.`, [
+          'Do NOT tell them it is gone; say you could not remove it just now.',
+        ]);
       }
-      return `Removed "${hits.map((h) => h.name).join('", "')}" — verified gone from their file.`;
+      return toolChangeText({
+        changed: [`Removed "${hits.map((h) => h.name).join('", "')}" — verified gone from their file.`],
+      });
     }
 
     if (action === 'reword') {
       const next = String(params.new_label ?? '').trim();
-      if (!next) return `No new wording was given, so "${item}" is unchanged. Ask what it should be called instead.`;
+      if (!next)
+        return toolNothingChangedText(`no new wording was given for "${item}".`, [
+          'Ask what it should be called instead.',
+        ]);
       if (!hits.length) {
         const names = rows.map((r) => r.name).join(', ') || 'none on file';
-        return `Nothing on file matches "${item}", so nothing was reworded. What they have: ${names}. Ask which they mean.`;
+        return toolNothingChangedText(
+          `nothing on file matches "${item}", so nothing was reworded. What they have: ${names}.`,
+          ['Ask which they mean.'],
+        );
       }
       // The first match takes the new name; a twin the older matcher let in would now COLLIDE
       // with it, so the rest are removed rather than left as stale duplicates of the fresh name.
@@ -115,10 +136,17 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
       const after = await listEquipment(userId);
       const landed = after.some((r) => r.name.trim() === next);
       return landed
-        ? `Reworded and verified: "${keep!.name}" now reads "${next}" on their file${dupes.length ? ` (${dupes.length} duplicate row${dupes.length > 1 ? 's' : ''} of it folded in)` : ''}. Say it back so they can correct you.`
-        : `"${item}" did NOT get reworded — the change did not take. Do not say it is fixed; say you could not save it just now.`;
+        ? toolChangeText({
+            changed: [
+              `Reworded and verified: "${keep!.name}" now reads "${next}" on their file${dupes.length ? ` (${dupes.length} duplicate row${dupes.length > 1 ? 's' : ''} of it folded in)` : ''}.`,
+            ],
+            next: ['Say it back so they can correct you.'],
+          })
+        : toolNothingChangedText(`"${item}" did NOT get reworded — the change did not take.`, [
+            'Do not say it is fixed; say you could not save it just now.',
+          ]);
     }
 
-    return `"${action}" is not something this tool does. The actions are: add, remove, reword.`;
+    return toolNothingChangedText(`"${action}" is not something this tool does. The actions are: add, remove, reword.`);
   },
-};
+});

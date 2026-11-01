@@ -7,7 +7,8 @@ import {
 } from '../repos/users.ts';
 import { sameConstraint } from './constraint-merge.ts';
 import { factTokens } from './fact-tokens.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `update_constraint` — the safety input to every plan, and the one action tool whose wording the
@@ -38,10 +39,11 @@ export async function verifyConstraints(userId: string): Promise<Array<{ label: 
   return (u?.baseline?.constraints ?? []) as Array<{ label: string; plan_around?: boolean }>;
 }
 
-export const UPDATE_CONSTRAINT: CoachActionTool = {
+export const UPDATE_CONSTRAINT: CoachActionTool = defineAction({
   name: 'update_constraint',
+  mutates: 'immediate',
   description:
-    'Record a change to something they work around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, kept on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is worded badly (reword, with new_label). Use remove ONLY when it was recorded wrongly and never true ("I have never had a knee injury") — an error to erase, not history; recovering is never a reason to remove. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}; {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}; or {"constraint": "ramp gently", "action": "reword", "new_label": "left ankle tendinitis"}.',
+    'Record a change to something they work around — a knee, a night shift, a hard stretch. {gate}. Use when one has EASED ("my knee is fine now" → lift, kept on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is worded badly (reword, with new_label). Use remove ONLY when it was recorded wrongly and never true ("I have never had a knee injury") — an error to erase, not history; recovering is never a reason to remove. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}; {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}; or {"constraint": "ramp gently", "action": "reword", "new_label": "left ankle tendinitis"}.',
   parameters: {
     properties: {
       constraint: { type: 'string', description: 'Which one, by its label as get_constraints lists it.' },
@@ -75,7 +77,7 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
   async run(userId, params) {
     const label = String(params.constraint ?? '').trim();
     const action = String(params.action ?? '');
-    if (!label) return 'No constraint was named, so nothing changed. Ask which one they mean.';
+    if (!label) return toolNothingChangedText('no constraint was named.', ['Ask which one they mean.']);
 
     if (action === 'remove') {
       const removed = await removeCapturedConstraint(userId, label);
@@ -83,11 +85,15 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
       const after = await verifyConstraints(userId);
       const stillThere = after.some((c) => sameConstraint(c.label ?? '', label));
       if (stillThere) {
-        return `"${label}" is STILL on their file — the removal did not take. Do NOT tell them it is gone. Say you could not remove it just now, and that they can take it off themselves in Settings under "What we work around".`;
+        return toolNothingChangedText(`"${label}" is STILL on their file — the removal did not take.`, [
+          'Do NOT tell them it is gone. Say you could not remove it just now, and that they can take it off themselves in Settings under "What we work around".',
+        ]);
       }
       return removed
-        ? `Removed "${label}" — verified gone from their file.`
-        : `Nothing on file matches "${label}", so nothing was removed. Tell them plainly it was not there.`;
+        ? toolChangeText({ changed: [`Removed "${label}" — verified gone from their file.`] })
+        : toolNothingChangedText(`nothing on file matches "${label}", so nothing was removed.`, [
+            'Tell them plainly it was not there.',
+          ]);
     }
 
     /**
@@ -98,25 +104,36 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
      */
     if (action === 'reword') {
       const next = String(params.new_label ?? '').trim();
-      if (!next) return `No new wording was given, so "${label}" is unchanged. Ask what it should say instead.`;
+      if (!next)
+        return toolNothingChangedText(`no new wording was given for "${label}".`, ['Ask what it should say instead.']);
       const done = await renameCapturedConstraint(userId, label, next);
       if (!done) {
         const names = ((await verifyConstraints(userId)).map((c) => c.label).join(', ') || 'none on file') as string;
-        return `Nothing on file matches "${label}", so nothing was reworded. What they work around: ${names}. Ask which they mean.`;
+        return toolNothingChangedText(
+          `nothing on file matches "${label}", so nothing was reworded. What they work around: ${names}.`,
+          ['Ask which they mean.'],
+        );
       }
       // Re-READ, do not trust the write.
       const after = await verifyConstraints(userId);
       const landed = after.some((c) => (c.label ?? '').trim() === next);
       return landed
-        ? `Reworded: "${done.from}" now reads "${next}" on their file — verified. Say it back so they can tell you if it is still not right.`
-        : `"${label}" did NOT get reworded — the change did not take. Do not say it is fixed; say you could not save it just now, and that they can edit the wording themselves in Settings under "What we work around".`;
+        ? toolChangeText({
+            changed: [`Reworded: "${done.from}" now reads "${next}" on their file — verified.`],
+            next: ['Say it back so they can tell you if it is still not right.'],
+          })
+        : toolNothingChangedText(`"${label}" did NOT get reworded — the change did not take.`, [
+            'Do not say it is fixed; say you could not save it just now, and that they can edit the wording themselves in Settings under "What we work around".',
+          ]);
     }
 
     const known = ((await getUser(userId))?.baseline?.constraints ?? []) as Array<{ label: string }>;
     const existing = known.find((c) => sameConstraint(c.label ?? '', label));
     if (action !== 'add' && !existing) {
       const names = known.map((c) => c.label).join(', ') || 'none on file';
-      return `Nothing on file matches "${label}", so nothing changed. What they work around: ${names}. Ask which they mean, or add it if it is new.`;
+      return toolNothingChangedText(`nothing on file matches "${label}". What they work around: ${names}.`, [
+        'Ask which they mean, or add it if it is new.',
+      ]);
     }
 
     const planAround = typeof params.plan_around === 'boolean' ? params.plan_around : action !== 'lift';
@@ -138,17 +155,37 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
     const after = await verifyConstraints(userId);
     const row = after.find((c) => sameConstraint(c.label ?? '', existing?.label ?? label));
     if (!row) {
-      return `"${label}" is not on their file after that write — it did not take. Do NOT say it is done; say you could not save it just now.`;
+      return toolNothingChangedText(`"${label}" is not on their file after that write — it did not take.`, [
+        'Do NOT say it is done; say you could not save it just now.',
+      ]);
     }
     if (action === 'lift') {
       return row.plan_around === false
-        ? `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it. Say that back plainly. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`
-        : `"${row.label}" is still being planned around — the change did not take. Do NOT say it is eased; say you could not save it just now.`;
+        ? toolChangeText({
+            changed: [
+              `"${row.label}" is marked eased and verified: still on file, so you keep knowing about it, but the plan no longer works around it.`,
+            ],
+            unchanged: [
+              'their current week — it was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.',
+            ],
+            next: ['Say that back plainly.'],
+          })
+        : toolNothingChangedText(`"${row.label}" is still being planned around — the change did not take.`, [
+            'Do NOT say it is eased; say you could not save it just now.',
+          ]);
     }
     if (action === 'flare') {
       return row.plan_around
-        ? `"${row.label}" is active again and verified: the plan should work around it. Say so. Their current week was built while this was not being planned around, and still holds those sessions. rebuild (scope "week") rebuilds it.`
-        : `"${row.label}" did not save as active. Do NOT say it is done; say you could not save it just now.`;
+        ? toolChangeText({
+            changed: [`"${row.label}" is active again and verified: the plan should work around it.`],
+            unchanged: [
+              'their current week — it was built while this was not being planned around, and still holds those sessions. rebuild (scope "week") rebuilds it.',
+            ],
+            next: ['Say so.'],
+          })
+        : toolNothingChangedText(`"${row.label}" did not save as active.`, [
+            'Do NOT say it is done; say you could not save it just now.',
+          ]);
     }
     /**
      * A guard reports evidence; she adjudicates (CLAUDE.md). The merge already folds a retelling
@@ -158,13 +195,18 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
      * Name the nearest neighbour instead of deciding, and let her ask.
      */
     const near = !existing ? nearMiss(after, row.label ?? label) : null;
-    return `Noted and verified: they work around "${row.label}". Say it back so they can correct you if you have it wrong.${
-      near
-        ? ` One thing to check: this sits close to "${near}", already on their file — if those are one fact, use reword to fold them into one telling and remove the other.`
-        : ''
-    }`;
+    return toolChangeText({
+      changed: [`Noted and verified: they work around "${row.label}".`],
+      next: [
+        `Say it back so they can correct you if you have it wrong.${
+          near
+            ? ` One thing to check: this sits close to "${near}", already on their file — if those are one fact, use reword to fold them into one telling and remove the other.`
+            : ''
+        }`,
+      ],
+    });
   },
-};
+});
 
 /** Another stored label sharing 2+ significant tokens with the one just written — evidence of a
  *  possible twin the containment rule could not merge, for the coach to raise, not act on. */
