@@ -57,3 +57,22 @@ export async function listRecaps(userId: string, limit = 8): Promise<RecapRow[]>
     order by week_start desc
     limit ${limit}`;
 }
+
+/**
+ * Claim this recap week for the weekly fact review (0062's `fact_reviewed_at`; HARNESS-V3 C7).
+ * Sets the mark on the week's recap only when nothing has claimed it yet AND none of their recaps
+ * was claimed within the last `minDaysBetween` days. True means this call claimed it and the
+ * caller runs the review; false means a re-confirm or a double tap of the same week, a recent
+ * review, or no recap row. One statement, so two confirms racing on one week cannot both win.
+ */
+export async function claimFactReviewWeek(userId: string, weekStart: string, minDaysBetween: number): Promise<boolean> {
+  const rows = await sql<Array<{ id: string }>>`
+    update cadence.recaps set fact_reviewed_at = now()
+     where user_id = ${userId} and week_start = ${weekStart}::date and fact_reviewed_at is null
+       and not exists (
+         select 1 from cadence.recaps r2
+          where r2.user_id = ${userId}
+            and r2.fact_reviewed_at > now() - make_interval(days => ${minDaysBetween}))
+    returning id`;
+  return rows.length > 0;
+}
