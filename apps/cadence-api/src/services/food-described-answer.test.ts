@@ -3,9 +3,10 @@
  * question was about and the answer become ONE part through the same read (`readParts`), and the
  * priced row comes back for the card to put where the asked row was. Pinned here:
  *   - the merge of words and answer, as a table of positives and near-misses;
- *   - a chosen answer prices the part from the record the model picks and keeps `said` as the
- *     words the question was about, so the confirm teaches "milk" → that record;
- *   - a typed answer prices the same way but keeps the combined words as `said`;
+ *   - a chosen answer prices the part from the record the model picks and keeps the COMBINED
+ *     words as `said` ("whole milk"), so the confirm teaches those and the bare "milk" is asked
+ *     again (owner's ruling, 2026-11-02: "No, ask each time.");
+ *   - a typed answer prices the same way and keeps the combined words too; `chosen` is logged only;
  *   - an answer with a comma is one part, not two;
  *   - words the memory holds under the combined phrase are a hit with no call;
  *   - a model that still cannot tell hands back a question row again, with no number;

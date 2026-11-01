@@ -184,14 +184,16 @@ describe('MealAskedRow — the buttons', () => {
     expect(screen.queryByLabelText('What the milk was')).not.toBeInTheDocument();
   });
 
-  it('busy (the card writing, or another answer in flight) disables every button and the field', () => {
-    draw(asked(), yes);
+  it('busy (the card writing, or another answer in flight) disables every button and the open field', () => {
+    const { rerender } = draw(asked(), yes);
     fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
-    cleanup();
-    render(<MealAskedRow row={asked()} index={0} busy onQty={noop} onAnswer={yes} />);
-    for (const name of ['Whole milk', '2%', 'Skim', SOMETHING_ELSE]) {
+    expect(screen.getByLabelText('What the milk was')).toBeEnabled();
+    // The card goes busy with the field open: the field and its send wait too.
+    rerender(<MealAskedRow row={asked()} index={0} busy onQty={noop} onAnswer={yes} />);
+    for (const name of ['Whole milk', '2%', 'Skim', SOMETHING_ELSE, THATS_IT]) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
+    expect(screen.getByLabelText('What the milk was')).toBeDisabled();
   });
 
   it.each([CHECKING, CHECK_FAILED, CHECK_REJECTED, SOMETHING_ELSE, THATS_IT, STILL_ASKING, COULD_NOT_SETTLE])(

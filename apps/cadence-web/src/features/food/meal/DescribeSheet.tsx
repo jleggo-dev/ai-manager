@@ -9,7 +9,7 @@
  * nobody said is shown as a question, and it waits as a chip on the drawer the way it always has
  * (draft mode: one unsettled amount holds the log, never the add).
  */
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../../lib/api.ts';
 import { CoachFace } from '../../../components/CoachFace.tsx';
 import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
@@ -59,11 +59,22 @@ export function DescribeSheet({
   const [answerNotReached, setAnswerNotReached] = useState(false);
   const [err, setErr] = useState('');
 
+  // The rows as last rendered, for an answer that lands after they have moved (answer()).
+  const rowsRef = useRef<Row[]>([]);
+  rowsRef.current = read?.rows ?? [];
+
   const words = text.trim();
   const fresh = read && read.for === words ? read.rows : null;
   const coach = read && read.for === words ? read.coach : undefined;
   // A row waiting on her question carries no number; it is not in the total until answered.
   const kcal = (fresh ?? []).filter((r) => !r.question).reduce((s, r) => s + (r.est?.kcal ?? 0), 0);
+  // A question an amount cannot answer must not reach the meal with its question stripped (the add
+  // keeps none of question/choices): the add waits while one is open, and while an answer is in
+  // flight. An open amount does not hold it — that waits on the drawer, as it always has.
+  const openChoices = (fresh ?? []).filter(asksWithChoices).length;
+  const inFlight = answering > 0;
+  /** What holds the add — ONE gate, read by the button and by Enter in the box alike. */
+  const held = openChoices > 0 || inFlight;
 
   async function lookUp() {
     if (!words || looking) return;
@@ -81,7 +92,7 @@ export function DescribeSheet({
   }
 
   async function confirm() {
-    if (!fresh?.length || busy) return;
+    if (!fresh?.length || busy || held) return;
     if (await onAdd(fresh, words)) onClose();
   }
 
@@ -102,6 +113,8 @@ export function DescribeSheet({
       const out = await reReadAnswer(row, text, chosen, meal);
       if (!out.ok) return out.reason;
       const fresh: Row[] = out.preview.items.map((it) => (it.question ? { ...it, reasks: (row.reasks ?? 0) + 1 } : it));
+      // The row went away while the re-read ran: nothing to put the answer on, as the card's hook says.
+      if (!rowsRef.current.includes(row)) return 'failed';
       setRead((r) => {
         const at = r ? r.rows.indexOf(row) : -1;
         return r && at >= 0 ? { ...r, rows: [...r.rows.slice(0, at), ...fresh, ...r.rows.slice(at + 1)] } : r;
@@ -113,11 +126,6 @@ export function DescribeSheet({
     }
   }
   const ready = !!fresh?.length;
-  // A question an amount cannot answer must not reach the meal with its question stripped (the add
-  // keeps none of question/choices): the button waits while one is open. An open amount does not
-  // hold it — that waits on the drawer, as it always has.
-  const openChoices = (fresh ?? []).filter(asksWithChoices).length;
-  const inFlight = answering > 0;
   const label = looking
     ? READING
     : openChoices > 0
@@ -221,7 +229,7 @@ export function DescribeSheet({
           <button
             type="button"
             className="ms-ds-go"
-            disabled={!words || looking || busy || inFlight || openChoices > 0}
+            disabled={!words || looking || busy || (ready && held)}
             onClick={() => void (ready ? confirm() : lookUp())}
           >
             {label}

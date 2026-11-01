@@ -13,10 +13,9 @@ const api = vi.hoisted(() => ({ previewMeal: vi.fn(), previewMealAnswer: vi.fn()
 vi.mock('../../../lib/api.ts', () => api);
 
 const { DescribeSheet } = await import('./DescribeSheet.tsx');
-const { NOT_REACHED } = await import('../coachReadCopy.ts');
+const { NOT_REACHED, NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
 const { CHECK_FAILED, CHECKING } = await import('../MealQuestionChoices.tsx');
 const { COULD_NOT_SETTLE } = await import('../MealAskedRow.tsx');
-const { NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,
@@ -223,5 +222,89 @@ describe('DescribeSheet — the camera', () => {
   it('no onPhoto, no camera', () => {
     render(<DescribeSheet meal="lunch" onAdd={async () => true} onClose={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Add a photo' })).toBeNull();
+  });
+});
+
+/**
+ * The verification round on #460: the hold is ONE gate — Enter in the box adds nothing while a
+ * question with buttons is open or an answer is in flight, as the button does not — and the
+ * answer lands on its own row whatever was tried meanwhile.
+ */
+describe('DescribeSheet — the hold and the answer, by the key as by the button', () => {
+  const milk = { name: 'milk', question: 'Whole milk or skim?', choices: ['Whole milk', 'Skim'], asked_about: 'milk' };
+  const toast = { name: 'Toast', qty: 1, unit: 'slice', est: { kcal: 80 } };
+  const three = { ...base, items: [base.items[0], milk, toast], coach: { reached: true, calls: 1, checked: [] } };
+  const pressEnter = () =>
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'What did you have?' }), { key: 'Enter' });
+  const names = () => screen.getAllByRole('button', { name: /^Drop / }).map((b) => b.getAttribute('aria-label'));
+
+  async function open(onAdd = vi.fn(async () => true)) {
+    api.previewMeal.mockResolvedValueOnce(three);
+    render(<DescribeSheet meal="snack" seed="a banana" onAdd={onAdd} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    await screen.findByText('Banana, raw');
+    return onAdd;
+  }
+
+  it('Enter with a question with buttons open adds nothing', async () => {
+    const onAdd = await open();
+    pressEnter();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('Enter while an answer is in flight adds nothing, even once nothing else is open', async () => {
+    const onAdd = await open();
+    let settle!: (p: unknown) => void;
+    api.previewMealAnswer.mockReturnValueOnce(new Promise((r) => (settle = r)));
+    fireEvent.click(screen.getByRole('button', { name: 'Skim' }));
+    await screen.findByText(CHECKING);
+    pressEnter();
+    expect(onAdd).not.toHaveBeenCalled();
+    settle({ ...base, items: [{ name: 'Milk, skim', qty: 1, unit: 'cup', est: { kcal: 83 }, said: 'skim milk' }] });
+    await screen.findByText('Milk, skim');
+    // Settled, and nothing open: now Enter adds the rows, the answered one in its place.
+    pressEnter();
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    const [rows] = onAdd.mock.calls[0] as unknown as [Array<{ name: string }>];
+    expect(rows.map((r) => r.name)).toEqual(['Banana, raw', 'Milk, skim', 'Toast']);
+  });
+
+  it('near-miss: Enter with only an open amount still adds — the drawer asks the amount, as always', async () => {
+    api.previewMeal.mockResolvedValueOnce({ ...base, items: [base.items[0], { name: 'milk', question: 'How much?' }] });
+    const onAdd = vi.fn(async () => true);
+    render(<DescribeSheet meal="snack" seed="a banana" onAdd={onAdd} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    await screen.findByText('Banana, raw');
+    pressEnter();
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+  });
+
+  it('a drop tried during the re-read does nothing, and the answer lands on its own row', async () => {
+    await open();
+    let settle!: (p: unknown) => void;
+    api.previewMealAnswer.mockReturnValueOnce(new Promise((r) => (settle = r)));
+    fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
+    await screen.findByText(CHECKING);
+    fireEvent.click(screen.getByRole('button', { name: 'Drop Banana, raw' }));
+    expect(names()).toEqual(['Drop Banana, raw', 'Drop milk', 'Drop Toast']);
+    settle({ ...base, items: [{ name: 'Milk, whole', qty: 1, unit: 'cup', est: { kcal: 149 }, said: 'whole milk' }] });
+    await screen.findByText('Milk, whole');
+    expect(names()).toEqual(['Drop Banana, raw', 'Drop Milk, whole', 'Drop Toast']);
+  });
+
+  it('a two-row answer on the MIDDLE row keeps the order around it', async () => {
+    await open();
+    api.previewMealAnswer.mockResolvedValueOnce({
+      ...base,
+      items: [
+        { name: 'Milk, whole', qty: 1, unit: 'cup', est: { kcal: 149 }, said: 'whole milk' },
+        { name: 'Honey', qty: 1, unit: 'tsp', est: { kcal: 21 }, said: 'whole milk' },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
+    await screen.findByText('Honey');
+    expect(names()).toEqual(['Drop Banana, raw', 'Drop Milk, whole', 'Drop Honey', 'Drop Toast']);
+    expect(screen.getByRole('button', { name: /Looks right · 355 kcal/ })).toBeEnabled();
   });
 });

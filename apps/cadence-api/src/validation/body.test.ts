@@ -146,6 +146,11 @@ describe('parseBody / meal answer schema — a question row answered', () => {
     ).toEqual({ asked_about: 'a glass of milk', answer: 'Whole milk', chosen: true, meal: 'breakfast' });
   });
 
+  it("accepts words and an answer at exactly the caps (a row's 200, a line's 120)", () => {
+    const body = { asked_about: 'x'.repeat(200), answer: 'y'.repeat(120) };
+    expect(parseBody(previewMealAnswerBodySchema, body)).toMatchObject(body);
+  });
+
   it('accepts a typed answer with no chosen flag and no slot', () => {
     expect(parseBody(previewMealAnswerBodySchema, { asked_about: 'milk', answer: 'lactose-free' })).toEqual({
       asked_about: 'milk',
