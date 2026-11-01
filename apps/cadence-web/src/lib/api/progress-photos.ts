@@ -90,7 +90,12 @@ export async function getProgressPhotosStatus(): Promise<ProgressPhotosStatus> {
   }
 }
 
-/** PUT /progress/photos/enabled — flips the opt-in switch; returns what the server actually stored. */
+/**
+ * PUT /progress/photos/enabled — flips the opt-in switch. True when the server stored what was
+ * asked for. It used to answer `stored === true`, so a switch turned OFF that saved read as a
+ * failed save: the Settings row flipped back on and said "That didn't save" (found 2026-11-01;
+ * both sides pinned in the API's settings.client.test.ts).
+ */
 export async function setProgressPhotosEnabled(enabled: boolean): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/progress/photos/enabled`, {
@@ -100,7 +105,7 @@ export async function setProgressPhotosEnabled(enabled: boolean): Promise<boolea
     });
     if (!res.ok) return false;
     const body = (await res.json()) as { enabled?: boolean };
-    return body.enabled === true;
+    return body.enabled === enabled;
   } catch {
     return false;
   }
