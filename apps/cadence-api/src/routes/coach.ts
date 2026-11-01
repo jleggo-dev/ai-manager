@@ -443,6 +443,31 @@ async function runAmbientCapture(userId: string, sessionId: string, message: str
 }
 
 /**
+ * Everything that runs once the reply has ended, each handed to `runInBackground` under its own
+ * label: the push to someone who left, the turn's X-ray trace and `coach` log row, ambient capture
+ * (runAmbientCapture above) and compaction (compactCoachSessionAfterReply).
+ *
+ * None of them is awaited, and that is the fix. The response has ENDED by now, and on Vercel the
+ * instance can be frozen the moment it does: an await after `res.end()` is no safer than a bare
+ * promise (background.ts has the measured case). `waitUntil` keeps the invocation alive until the
+ * work settles. P1b (#445) moved capture and compaction; the push and the record were still awaited
+ * until P7b, and over 60 days 121 coach turns had left 40 `coach` log rows. The four are
+ * independent — none reads what another writes — so each settles on its own. Capture is where what
+ * someone told you becomes something you remember ("never make you repeat yourself").
+ */
+function afterTheReply(
+  turn: { userId: string; sessionId: string; message: string; content: string },
+  left: { armed: boolean; clientAlive: boolean; sessionIdParam: string; responseId: string | null },
+  metrics: CoachTurnMetrics,
+): void {
+  const { userId, sessionId, message, content } = turn;
+  runInBackground('coach-notify', notifyIfTheyLeft({ userId, content, ...left }));
+  runInBackground('coach-record', recordCoachTurn(userId, sessionId, message, content, metrics));
+  runInBackground('coach-capture', runAmbientCapture(userId, sessionId, message));
+  runInBackground('coach-compaction', compactCoachSessionAfterReply(userId, sessionId));
+}
+
+/**
  * Open the turn's SSE stream and put the first honest thing on it.
  *
  * The stage frame goes out before ANY pre-work: the client renders it as a pre-first-token line
@@ -697,41 +722,14 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      * Capacitor shows foreground banners by default, so "notify always" would banner over an
      * active chat; these two gates are what make "always" mean "always when you actually left".
      *
-     * Handed to `runInBackground`, like everything else below (HARNESS-V3 P7b). It was awaited, on
-     * the reasoning that a promise left running past the handler may never finish (#195) — true,
-     * and an await after `res.end()` is no better: the response has ended, so the instance can be
-     * frozen mid-await. Over 60 days, 121 coach turns left 40 `coach` log rows. `waitUntil` keeps
-     * the invocation alive until the work settles; an await does not.
+     * Then the turn's own record, ambient capture and compaction. All four run after the response
+     * has ended, so none of them is awaited here: `afterTheReply` hands each to the background.
      */
-    runInBackground(
-      'coach-notify',
-      notifyIfTheyLeft({ userId, armed, clientAlive, content, sessionIdParam, responseId }),
+    afterTheReply(
+      { userId, sessionId: req.params.id as string, message, content },
+      { armed, clientAlive, sessionIdParam, responseId },
+      { model, promptTokens, cachedPromptTokens, completionTokens, responseId, clientDropped, ms: turnMs, toolRounds },
     );
-
-    // The turn's X-ray trace and its `coach` log row. Independent of the push above — neither
-    // reads what the other writes — so each settles on its own.
-    runInBackground(
-      'coach-record',
-      recordCoachTurn(userId, req.params.id as string, message, content, {
-        model,
-        promptTokens,
-        cachedPromptTokens,
-        completionTokens,
-        responseId,
-        clientDropped,
-        ms: turnMs,
-        toolRounds,
-      }),
-    );
-
-    // Ambient capture (what it does: see runAmbientCapture above) and compaction (see
-    // compactCoachSessionAfterReply). The response has ENDED by now, and on Vercel the instance
-    // can be frozen the moment it does: awaiting here is not enough (background.ts has the
-    // measured case). `runInBackground` hands each to `waitUntil`, which keeps the invocation
-    // alive until it settles. Capture is where what someone told you becomes something you
-    // remember ("never make you repeat yourself"); nobody waits on either.
-    runInBackground('coach-capture', runAmbientCapture(userId, req.params.id as string, message));
-    runInBackground('coach-compaction', compactCoachSessionAfterReply(userId, req.params.id as string));
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);
