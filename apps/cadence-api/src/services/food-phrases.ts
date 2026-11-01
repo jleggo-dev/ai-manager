@@ -6,7 +6,7 @@
  *
  * Only a confirmed row teaches it (a preview walked away from leaves nothing behind), and only
  * a row that names a food: an estimate has no record to remember. Best-effort on both sides —
- * the table is migration 0063, and until it is applied a recall finds nothing and a remember
+ * the table is migration 0064, and until it is applied a recall finds nothing and a remember
  * logs a warning; a miss costs one model call, never the meal.
  */
 import { recallFoodPhrases, rememberFoodPhrase, type FoodPhraseRow } from '../repos/food-phrases.ts';
@@ -58,7 +58,7 @@ export async function learnDescribedMeal(userId: string, items: LearnableItem[])
     try {
       await rememberFoodPhrase(userId, link);
     } catch (e) {
-      console.warn('[food-phrases] remember failed (0063 applied?):', e instanceof Error ? e.message : e);
+      console.warn('[food-phrases] remember failed (0064 applied?):', e instanceof Error ? e.message : e);
       return;
     }
   }
@@ -69,7 +69,7 @@ export async function recallPhrases(userId: string, keys: string[]): Promise<Map
   try {
     return await recallFoodPhrases(userId, keys);
   } catch (e) {
-    console.warn('[food-phrases] recall failed (0063 applied?):', e instanceof Error ? e.message : e);
+    console.warn('[food-phrases] recall failed (0064 applied?):', e instanceof Error ? e.message : e);
     return new Map();
   }
 }

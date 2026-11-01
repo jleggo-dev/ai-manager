@@ -1,4 +1,4 @@
--- 0063 — the phrase memory for described meals (docs/cadence/FOOD-LOGGING-COACH-LED.md, build
+-- 0064 — the phrase memory for described meals (docs/cadence/FOOD-LOGGING-COACH-LED.md, build
 -- step 2, 2026-11-01).
 --
 -- A meal someone types or says is read by the food-check model: software looks every part up,

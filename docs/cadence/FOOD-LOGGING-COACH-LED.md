@@ -373,7 +373,7 @@ on the card as an automatic estimate, not hers.
    not: `parse-meal-description` still prices the reading. Per-row source labels are on the wire
    (`source_label`) and not yet drawn._
 5. ~~Write-back of her verdicts (phrase → food) so repeats get faster~~ — built in step 2
-   (`food_phrases`, migration 0063): the confirm teaches it, the next read of the same words is a
+   (`food_phrases`, migration 0064): the confirm teaches it, the next read of the same words is a
    deterministic hit and no call.
 6. Retire `acceptMatch` and the code-decided research trigger from the logging path. _Still in
    place behind the fallback and behind `log_meal`._
@@ -385,11 +385,11 @@ The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.t
 1. **The split** (`food-candidate-book.ts`): comma, newline, "and", "with", "+", "&" separate
    parts; a leading amount is peeled into the lookup's measure; a menu size ("venti") stays in the
    food's words. Table-tested with the Venti latte as the pinned case (#426).
-2. **The memory first** (`food-phrases.ts`, `repos/food-phrases.ts`, migration `0063`): a part
+2. **The memory first** (`food-phrases.ts`, `repos/food-phrases.ts`, migration `0064`): a part
    whose words this person confirmed before is priced from the remembered food and amount by
    `priceFood`, no lookup and no call. The amount they say this time wins over the remembered one
    when the store can read it. Written only on a confirm (`logMeal({parsed})` and the draft's
-   `appendParsed`), never on a preview walked away from. Until 0063 is applied a recall finds
+   `appendParsed`), never on a preview walked away from. Until 0064 is applied a recall finds
    nothing and a remember logs a warning: a miss costs one call, never the meal.
 3. **The book** (`food-candidate-sources.ts` → `fanOutFoodSources` + FatSecret's top 5 rows
    fetched in full): every record found, per-100 g numbers, the measures each offers with grams,

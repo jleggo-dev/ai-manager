@@ -1,7 +1,7 @@
 import { sql } from '../db/sql.ts';
 
 /**
- * The phrase memory (0063): what someone's own words for a food resolved to, once the
+ * The phrase memory (0064): what someone's own words for a food resolved to, once the
  * food-check picked a record and they confirmed it. services/food-phrases.ts normalises the
  * phrase and decides when to write; this file only reads and writes rows.
  */
