@@ -18,8 +18,8 @@
  * (`JOB_VARIABLE_CAP`), so a round whose transcript is longer hands the summarizer only its first
  * 10,000 characters. Each round line says how long its transcript was and whether it went over,
  * and each fact says when it was planted past the cut — a fact the summarizer never saw is lost to
- * the cap, not to the summarizer. The fixtures are production-sized (P3b), so under today's engine
- * every round goes over.
+ * the cap, not to the summarizer. The fixtures are production-sized (P3b): before #445 every round
+ * went over; since #445 the engine builds the transcript to fit, so an "OVER" line is a regression.
  *
  * WHAT IT DOES NOT DO (yet). It scores the SUMMARY, not her answers. A fact the summary keeps can
  * still be ignored by the coach; asking her the probes over the compacted history is the next arm.

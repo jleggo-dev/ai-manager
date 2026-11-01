@@ -4,17 +4,17 @@
  * kept. No model and no network in here — `eval-compaction.ts` supplies the summarizer, the tests
  * supply a fake one.
  */
-import { planCompaction, type ChatMessageRow, type ChatSessionRow } from '@ai-admin/core';
+import { MAX_VARIABLE_LENGTH, planCompaction, type ChatMessageRow, type ChatSessionRow } from '@ai-admin/core';
 import type { CompactionFixture, FactKind, PlantedFact } from './eval-compaction-fixtures.ts';
 import { composeConversation } from './eval-compaction-filler.ts';
 
 /**
  * The engine cuts every job variable at this many characters and appends "... [truncated]"
- * (`MAX_VARIABLE_LENGTH` in backend/src/ai-manager/job-execution-utils.ts, not exported today).
- * Whatever a round's `transcript` holds past this point never reaches the summarizer. Switch to the
- * core export when one exists.
+ * (`MAX_VARIABLE_LENGTH`, job-execution-utils.ts). Whatever a round's `transcript` holds past this
+ * point never reaches the summarizer. Since #445 `planCompaction` builds the transcript to fit
+ * under it, so a round over the cap now means that guard broke.
  */
-export const JOB_VARIABLE_CAP = 10_000;
+export const JOB_VARIABLE_CAP = MAX_VARIABLE_LENGTH;
 
 /** The policy shape `planCompaction` reads, with every default filled in. */
 export interface EvalPolicy {
