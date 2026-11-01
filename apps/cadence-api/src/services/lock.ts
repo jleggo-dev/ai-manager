@@ -82,6 +82,10 @@ export async function previewLock(userId: string, progress?: PlanProgress): Prom
   return { status: 'proposed', proposal: { activities: s.activities!, note, rationale: s.rationale } };
 }
 
+/** What the person is told when the change they tapped is no longer on file (applied, dismissed,
+ *  or expired between screens). One wording for both doors that commit a change. */
+export const CHANGE_EXPIRED = 'That change card expired — ask me again and I will put it back up.';
+
 /**
  * Second half: commit the user's stored pending_plan (flip confirmed goals → committed, clear
  * the preview). Self-sufficient at GENESIS only — with no active plan yet (onboarding, a direct
@@ -100,7 +104,7 @@ export async function confirmLock(
   // Onboarding (no active plan) keeps the fallback: there is nothing to bulldoze yet.
   const pending = (await getUser(userId))?.pending_plan;
   if (!pending && (await getActivePlan(userId))) {
-    return { status: 'vetoed', violations: ['That change card expired — ask me again and I will put it back up.'] };
+    return { status: 'vetoed', violations: [CHANGE_EXPIRED] };
   }
 
   const result = await confirmPendingPlan(

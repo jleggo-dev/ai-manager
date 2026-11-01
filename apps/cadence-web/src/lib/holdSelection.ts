@@ -38,6 +38,9 @@ export function guardSelectionThroughHold(): () => void {
   const end = () => {
     if (ended) return;
     ended = true;
+    // The page can be gone before the cap fires (a test file torn down mid-guard): nothing is left
+    // to clean up, and reaching for `window` there throws out of a bare timer.
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
     window.clearTimeout(settle);
     window.clearTimeout(cap);
     document.removeEventListener('selectstart', refuse, true);

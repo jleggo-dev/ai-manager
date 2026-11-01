@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { dismissPendingChange, getPendingChange, getPendingChangeDetail, lockPlan } from '../../lib/api.ts';
+import { applyPendingChange, dismissPendingChange, getPendingChange, getPendingChangeDetail } from '../../lib/api.ts';
 
 /**
  * "Here's the one change — apply it?"
@@ -14,8 +14,8 @@ import { dismissPendingChange, getPendingChange, getPendingChangeDetail, lockPla
  * the tap is the consent.
  *
  * **Two branches, decided by whether any item carries a per-item field.** An ordinary requested
- * tweak ("move Thursday's run to Friday") applies inline exactly as it always has — Apply runs the
- * same commit path a first build runs. A change that came from a check-in offer carries a
+ * tweak ("move Thursday's run to Friday") applies inline exactly as it always has — Apply commits the
+ * stored change in one request (applyPendingChange). A change that came from a check-in offer carries a
  * `change_reason` and/or an optional add (propose_plan_change's `reason`/`optional`, stamped onto
  * the stored activities as `change_reason`/`enabled` — plan-edit.ts) — those need the Changes
  * sheet's toggles and NOW/NEXT detail, not a blind inline Apply that would commit every optional
@@ -43,6 +43,8 @@ export function ChangeCard({
   const [lines, setLines] = useState<string[] | null>(null);
   const [hasOffers, setHasOffers] = useState(false);
   const [state, setState] = useState<'idle' | 'applying' | 'applied' | 'gone' | 'failed'>('idle');
+  /** The server's own words for a refused apply (an expired card, a failed check), when it gave any. */
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -67,8 +69,11 @@ export function ChangeCard({
   async function apply() {
     setState('applying');
     try {
-      const { status } = await lockPlan();
-      if (status !== 200) return setState('failed');
+      const applied = await applyPendingChange();
+      if (!applied.ok) {
+        setFailure(applied.message);
+        return setState('failed');
+      }
       setState('applied');
       onApplied?.();
     } catch {
@@ -120,7 +125,7 @@ export function ChangeCard({
         )
       ) : (
         <>
-          {state === 'failed' && <div className="chg-err">That didn&rsquo;t take — try again?</div>}
+          {state === 'failed' && <div className="chg-err">{failure ?? 'That didn’t take — try again?'}</div>}
           <button type="button" className="cfm-build" onClick={() => void apply()} disabled={state === 'applying'}>
             {state === 'applying' ? 'Changing…' : 'Apply this'}
           </button>
