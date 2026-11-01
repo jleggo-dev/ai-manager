@@ -5,6 +5,12 @@
 
 export interface RetrievalFunction {
   name: string;
+  /**
+   * A retrieval function only reads, so this can only be `'none'` (tool-mutates.ts). Declared on
+   * every one anyway so the field means the same thing on every tool spec, and so the audit that
+   * no `'none'` tool imports a repo write (repo-write-imports.test.ts) has a field to read.
+   */
+  mutates: 'none';
   description: string; // LLM-facing (catalog / P2 selection)
   domains: string[];
   run(userId: string, params?: Record<string, unknown>): Promise<unknown>;

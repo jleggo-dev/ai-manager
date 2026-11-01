@@ -1,7 +1,8 @@
 import { listGoals } from '../repos/goals.ts';
 import { setPendingRepertoireReview } from '../repos/users.ts';
 import { matchActivity } from './plan-edit.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `offer_repertoire_review` — she shows them everything in a collection; they mark what they know.
@@ -41,8 +42,9 @@ const MAX_WHERE = 120;
 
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
+export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = defineAction({
   name: 'offer_repertoire_review',
+  mutates: 'proposes',
   /**
    * 797 of the 800 the action rule allows (TOOL-HARNESS.md §1). The harness's own audit only reads
    * the tools declared every turn, so this one is asserted in coach-action-offer-repertoire.test.ts
@@ -62,7 +64,7 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
    * alone could not have reached it.
    */
   description:
-    'Show the user everything in a named collection they are learning from, in its own order, as a checklist on their screen. A collection is anything with a fixed sequence of items to learn: a book, an exam grade, a grading syllabus, a reading list, a set of poems. Use it when they say they are partway through such a collection, instead of asking them to type the items out; use update_repertoire when they name individual items. This saves nothing: no item goes on their list until they mark it and confirm on that screen. Pass {"collection": "Suzuki Piano Book 2", "where_you_are": "Hungarian Folk Song", "goal": "Practice piano"}. "where_you_are" is the item they said they are on; with it, everything before it starts marked as known. Omit it and nothing starts marked. Omit "goal" if none fits.',
+    'Show the user everything in a named collection they are learning from, in its own order, as a checklist on their screen. A collection is anything with a fixed sequence of items to learn: a book, an exam grade, a grading syllabus, a reading list, a set of poems. Use it when they say they are partway through such a collection, instead of asking them to type the items out; use update_repertoire when they name individual items. This {gate} until they mark items and confirm on that screen. Pass {"collection": "Suzuki Piano Book 2", "where_you_are": "Hungarian Folk Song", "goal": "Practice piano"}. "where_you_are" is the item they said they are on; with it, everything before it starts marked as known. Omit it and nothing starts marked. Omit "goal" if none fits.',
   parameters: {
     properties: {
       collection: {
@@ -84,7 +86,9 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
   async run(userId, params) {
     const collection = text(params.collection, MAX_COLLECTION);
     if (!collection) {
-      return 'No collection was named, so nothing was put up. Ask them which book, syllabus, grade or list it is — by its name — and call this again with it.';
+      return toolNothingChangedText('no collection was named, so nothing was put up.', [
+        'Ask them which book, syllabus, grade or list it is — by its name — and call this again with it.',
+      ]);
     }
     const whereYouAre = text(params.where_you_are, MAX_WHERE) || null;
 
@@ -117,11 +121,14 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = {
       ? `The pieces before "${whereYouAre}" start marked as ones they keep up, and "${whereYouAre}" as the one they are learning.`
       : 'Nothing is marked yet — they tap the piece they are on and the screen works the rest out.';
 
-    return [
-      `Done — the user now has "${collection}" up on their screen as a list they can tick.${goalNote}`,
-      split,
-      'NOTHING is on their file: no piece is stored until they confirm on that screen, and you have not read the book — the screen has. Do not say anything is recorded, on their list, or done.',
-      'It is up for them to check. Do not list the pieces and do not count them. Wait for them to look.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [`the user now has "${collection}" up on their screen as a list they can tick.${goalNote}`],
+      unchanged: ['NOTHING is on their file: no piece is stored until they confirm on that screen.'],
+      next: [
+        split,
+        'You have not read the book — the screen has. Do not say anything is recorded, on their list, or done.',
+        'It is up for them to check. Do not list the pieces and do not count them. Wait for them to look.',
+      ],
+    });
   },
-};
+});

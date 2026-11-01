@@ -12,7 +12,8 @@ import {
   type QuestionnaireQuestion,
 } from '@cadence/shared';
 import { setPendingQuestionnaire } from '../repos/users.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `send_questionnaire` — a short set of questions on their screen, answers back as their words.
@@ -135,8 +136,9 @@ function readQuestions(raw: unknown): { fault: string } | { questions: Questionn
   return { questions };
 }
 
-export const SEND_QUESTIONNAIRE: CoachActionTool = {
+export const SEND_QUESTIONNAIRE: CoachActionTool = defineAction({
   name: 'send_questionnaire',
+  mutates: 'proposes',
   /**
    * Under the 800-char action bound (TOOL-HARNESS.md §1), asserted in this tool's own test — the
    * harness audit reads only the tools declared every turn and cannot reach a tail one.
@@ -146,7 +148,7 @@ export const SEND_QUESTIONNAIRE: CoachActionTool = {
    * the one factual tiebreak — how many things to ask, and whether to ask at all, is hers.
    */
   description:
-    'Put a short set of questions on the user\'s screen as one card they fill in and send. Use it when you need several separate answers and asking one at a time would take many turns; ask in chat instead when one question will do. This writes nothing: their answers come back as their own message when they send the card, and nothing is on file until then. Pass {"questions": [{"id": "days_free", "label": "Which days are usually free?", "kind": "multi", "options": ["Mon", "Wed", "Sat"]}, {"id": "session_length", "label": "How long can a session be?", "kind": "number", "hint": "in minutes"}]}. Two to six questions. "kind" is text, number, choice or multi; choice and multi need two to eight "options". "id" is lower-case with underscores. "hint" is optional — it says what the question is for.',
+    'Put a short set of questions on the user\'s screen as one card they fill in and send. Use it when you need several separate answers and asking one at a time would take many turns; ask in chat instead when one question will do. This {gate}: their answers come back as their own message when they send the card. Pass {"questions": [{"id": "days_free", "label": "Which days are usually free?", "kind": "multi", "options": ["Mon", "Wed", "Sat"]}, {"id": "session_length", "label": "How long can a session be?", "kind": "number", "hint": "in minutes"}]}. Two to six questions. "kind" is text, number, choice or multi; choice and multi need two to eight "options". "id" is lower-case with underscores. "hint" is optional — it says what the question is for.',
   parameters: {
     properties: {
       questions: {
@@ -182,7 +184,7 @@ export const SEND_QUESTIONNAIRE: CoachActionTool = {
     if ('fault' in read) {
       // The fault and nothing else. What to do about it — call again with a fixed set, or drop the
       // card and keep talking — is hers (owner red line 2026-09-03: facts, not picks).
-      return `Nothing is on their screen: ${read.fault}.`;
+      return toolNothingChangedText(`${read.fault}. Nothing is on their screen.`);
     }
 
     try {
@@ -190,11 +192,18 @@ export const SEND_QUESTIONNAIRE: CoachActionTool = {
     } catch (e) {
       console.error('[send_questionnaire] write failed:', e);
       // An honesty guard, which the red line allows, and no instruction about what to do instead.
-      return 'The questionnaire did NOT go up — saving it failed. Nothing is on their screen; do not say there is.';
+      return toolNothingChangedText(
+        'the questionnaire did NOT go up — saving it failed. Nothing is on their screen; do not say there is.',
+      );
     }
 
     // Facts only (owner red line 2026-09-03): what happened, what is now true, and the honesty
     // guard. Nothing about what to say next, how long to speak, or what to offer.
-    return `A questionnaire with ${read.questions.length} questions is on their screen. Their answers arrive as their own message when they send it; nothing is recorded until then.`;
+    return toolChangeText({
+      changed: [`A questionnaire with ${read.questions.length} questions is on their screen.`],
+      unchanged: [
+        'their file — their answers arrive as their own message when they send it; nothing is recorded until then.',
+      ],
+    });
   },
-};
+});

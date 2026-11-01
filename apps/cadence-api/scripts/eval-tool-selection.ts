@@ -3,9 +3,16 @@
  *
  * MANUAL GATE, NOT CI. It talks to prod, it costs real money per run, and the thing it measures is
  * stochastic. Run it before and after a harness change (HARNESS-V2.md workstream 4) and compare the
- * two numbers; never wire it to a commit hook. There is no pass threshold baked in on purpose —
- * a single number would harden into a target, and the only honest use of this script is a
- * before/after pair on the same day against the same deployment.
+ * two numbers; never wire it to a commit hook. A full run has no pass threshold on purpose — a
+ * single number would harden into a target, and the honest use of a full run is a before/after
+ * pair on the same day against the same deployment.
+ *
+ * THE ONE GATE: `--smoke` and `--floor` (HARNESS-V3 C5.2). The smoke subset
+ * (`eval-tool-selection-smoke.ts`, about a fifth of the cases) answers a narrower question than
+ * "better or worse": did the model we just pointed the coach at break her tools? `--floor <F1>`
+ * exits non-zero below that F1 and prints the gap; `--smoke` defaults its floor from
+ * `eval-tool-selection.baseline.json`. `repoint-profile.ts --verify` is the caller. Whether a miss
+ * should block a repoint or only be reported is owner ruling R5, still open.
  *
  * WHAT IT IS FOR. We have a static description audit (`description-audit.test.ts`, seven checks on
  * the words) and plumbing probes (`probe-tool-loop.ts`, which proves a function_call can survive
@@ -17,7 +24,8 @@
  * than the call-mechanics bucket, dominated by no-tool-use; that is our bug, and this is the only
  * thing in the repo that can see it.
  *
- * HOW IT MEASURES. 33 cases (`eval-tool-selection-cases.ts`), each sourced from something that
+ * HOW IT MEASURES. The cases in `eval-tool-selection-cases.ts` (the run prints how many; no header
+ * states the number, because every header that did went stale), each sourced from something that
  * actually happened, balanced between turns that must fire a tool and turns that must not — the
  * design both Anthropic's `skill-creator` and OpenAI's `eval-skills` land on independently,
  * because a set of only positive cases measures recall and silently ignores false triggering.
@@ -81,17 +89,20 @@
  *     "the 10k feels way too hard right now", read `get_goal_progress` and `get_objectives` and
  *     did NOT touch `update_goal`: the "never on your own read" gate holding, measured.
  *
- * WHAT A FULL RUN COSTS, measured rather than guessed: ~34-45s per case serial, so 33 cases is
- * roughly 20-25 minutes; ~22,150 prompt and ~1,300 completion tokens per turn, so about 730k in
- * and 43k out, which on Sonnet-class pricing is ~$3 a run before the Broker's own per-turn
- * `context-select` call. Cheap enough to run on both sides of a harness change, expensive enough
- * that `--only` exists.
+ * WHAT A FULL RUN COSTS, measured rather than guessed: ~34-45s per case serial; the 2026-09-15
+ * run (66 cases) took 28 minutes and 1.64M prompt tokens, ~25,000 a turn, plus ~1,300 completion
+ * tokens a turn and the Broker's own per-turn `context-select` call. `--dry` prints the estimate
+ * for whatever is selected, next to the full set's. Cheap enough to run on both sides of a harness
+ * change, expensive enough that `--only` and `--smoke` exist.
  *
  * Run:
  *   npm run eval:tools -- --dry                    # the case table + token estimate, no network, free
  *   npm run eval:tools -- --only CAN,A1            # a handful — the cheap trial run
- *   npm run eval:tools                             # all 33, one at a time
+ *   npm run eval:tools                             # every case, one at a time
  *   npm run eval:tools -- --concurrency 3          # faster, and blind to what the Broker prefetched
+ *   npm run eval:tools:smoke                       # the smoke subset, held to the baseline floor
+ *   npm run eval:tools -- --floor 80               # any selection, exit non-zero under F1 80
+ *   npm run eval:tools:smoke -- --json out.json    # also write F1, floor and models as JSON
  *
  * Cost and clock are printed at the end of every run. It cleans up after itself: the auth user and
  * every cadence row it created are deleted on exit, success or failure.
@@ -104,7 +115,24 @@ import {
   PROVIDER_BUILTINS,
   type EvalCase,
 } from './eval-tool-selection-cases.ts';
-import { dryRun, graderVerdict, header, line, summarize, type Outcome } from './eval-tool-selection-report.ts';
+import { writeFileSync } from 'node:fs';
+import {
+  dryRun,
+  graderVerdict,
+  header,
+  line,
+  summarize,
+  type Outcome,
+  type SelectionScore,
+} from './eval-tool-selection-report.ts';
+import {
+  SMOKE_IDS,
+  parseFloor,
+  printEstimate,
+  readBaseline,
+  reportFloor,
+  smokeFloor,
+} from './eval-tool-selection-smoke.ts';
 import {
   API,
   missingEnv,
@@ -142,8 +170,39 @@ const ONLY = (flag('only') ?? '')
   .map((s) => s.trim())
   .filter(Boolean);
 const LIMIT = Number(flag('limit') ?? 0) || 0;
+/** `--smoke`: the named subset in eval-tool-selection-smoke.ts, with a floor by default. */
+const SMOKE = has('smoke');
+/** `--json <path>`: write F1, floor, verdict and the models that answered — read by repoint --verify. */
+const JSON_OUT = flag('json');
 /** A turn plus its continuation can run past three minutes when the loop fetches twice. */
 const TURN_TIMEOUT_MS = 300_000;
+
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+/**
+ * The floor this run is held to, or null when it is only reported. `--floor` wins; `--smoke`
+ * without one reads the baseline file, and refuses to run when that file has no number yet
+ * rather than inventing a default.
+ */
+function resolveFloor(): { floor: number; from: string } | null {
+  const raw = flag('floor');
+  if (raw !== null) {
+    const parsed = parseFloor(raw);
+    if ('error' in parsed) fail(parsed.error);
+    return { floor: parsed.floor, from: 'given with --floor' };
+  }
+  if (!SMOKE) return null;
+  return (
+    smokeFloor(readBaseline()) ??
+    fail(
+      '--smoke has no default floor: eval-tool-selection.baseline.json holds no F1 yet. ' +
+        'Pass --floor <F1> until a full run is recorded there.',
+    )
+  );
+}
 
 /**
  * `--only` takes exact ids ("A1") or a whole group ("A", "CAN"). A prefix only matches a group
@@ -154,6 +213,13 @@ const picked = (id: string, p: string): boolean => id === p || (id.startsWith(p)
 
 function selected(): EvalCase[] {
   let out = CASES;
+  if (SMOKE) {
+    if (ONLY.length) fail('--smoke and --only are two different selections; pass one of them.');
+    const smoke = new Set<string>(SMOKE_IDS);
+    const unknown = SMOKE_IDS.filter((id) => !CASES.some((c) => c.id === id));
+    if (unknown.length) fail(`SMOKE_IDS names cases that do not exist: ${unknown.join(', ')}`);
+    out = out.filter((c) => smoke.has(c.id));
+  }
   if (ONLY.length) out = out.filter((c) => ONLY.some((p) => picked(c.id, p)));
   if (LIMIT) out = out.slice(0, LIMIT);
   return out;
@@ -312,8 +378,11 @@ if (!cases.length) {
   console.error('No cases selected. --only takes ids or id prefixes, e.g. --only A,CAN-POS');
   process.exit(1);
 }
+const FLOOR = resolveFloor();
 if (DRY) {
   await dryRun(cases, KNOWN_TOOLS);
+  printEstimate(cases.length, CASES.length);
+  console.log(FLOOR ? `Floor: F1 ${FLOOR.floor}% (${FLOOR.from}).` : 'Floor: none — F1 is reported, never gated.');
   process.exit(0);
 }
 
@@ -323,9 +392,25 @@ if (envProblem) {
   process.exit(1);
 }
 
+/** What `--json` writes. Starts as a failure so a run that dies early still says it did not pass. */
+const result: Record<string, unknown> = {
+  ranAt: new Date().toISOString(),
+  api: API,
+  smoke: SMOKE,
+  cases: cases.map((c) => c.id),
+  f1: null,
+  floor: FLOOR?.floor ?? null,
+  floorFrom: FLOOR?.from ?? null,
+  pass: false,
+  graderOk: false,
+  errors: null,
+  models: [],
+  error: 'the run did not finish',
+};
+
 let world: World | null = null;
 try {
-  console.log(`── tool-selection eval · ${cases.length} case(s) · ${API} ──\n`);
+  console.log(`── tool-selection eval · ${cases.length} of ${CASES.length} case(s) · ${API} ──\n`);
   world = await setUp();
   header();
   const t0 = Date.now();
@@ -335,11 +420,25 @@ try {
     return o;
   });
   const ok = graderVerdict(outcomes);
-  if (ok) summarize(outcomes, Date.now() - t0, CONCURRENCY);
-  if (!ok || outcomes.some((o) => o.error)) process.exitCode = 1;
+  const score: SelectionScore | null = ok ? summarize(outcomes, Date.now() - t0, CONCURRENCY) : null;
+  const f1 = score ? Math.round(score.f1 * 1000) / 10 : null;
+  const floorPass = FLOOR ? reportFloor(f1, FLOOR, SMOKE) : null;
+  Object.assign(result, {
+    f1,
+    precision: score ? Math.round(score.precision * 1000) / 10 : null,
+    recall: score ? Math.round(score.recall * 1000) / 10 : null,
+    pass: ok && floorPass !== false,
+    graderOk: ok,
+    errors: outcomes.filter((o) => o.error).length,
+    models: [...new Set(outcomes.map((o) => o.model).filter(Boolean))],
+    error: null,
+  });
+  if (!ok || outcomes.some((o) => o.error) || floorPass === false) process.exitCode = 1;
 } catch (e) {
   console.error('\neval failed:', e);
+  result.error = String((e as Error)?.message ?? e);
   process.exitCode = 1;
 } finally {
+  if (JSON_OUT) writeFileSync(JSON_OUT, `${JSON.stringify(result, null, 2)}\n`);
   await tearDown(world);
 }

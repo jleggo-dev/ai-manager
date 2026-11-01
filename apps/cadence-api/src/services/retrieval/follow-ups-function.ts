@@ -39,6 +39,7 @@ export function renderFollowUps(items: FollowUp[]): string {
 
 export const GET_FOLLOW_UPS: RetrievalFunction = {
   name: 'get_follow_ups',
+  mutates: 'none',
   description:
     'The things you told the user you would come back to, or they asked you to remember — noted with note_follow_up, still open. Newest first, with the date you gave and how long each has been open. In your context every turn; nothing to fetch.',
   domains: ['follow_ups'],

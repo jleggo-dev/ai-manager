@@ -1,6 +1,7 @@
 import type { MealKind } from '@cadence/shared';
 import { logMeal } from './nutrition.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 const MEAL_KINDS: readonly MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 const isMealKind = (v: unknown): v is MealKind => (MEAL_KINDS as readonly string[]).includes(String(v));
@@ -26,10 +27,11 @@ const isMealKind = (v: unknown): v is MealKind => (MEAL_KINDS as readonly string
  * considering. That protection is gone; the eval's restraint cases (`eval-tool-selection-cases.ts`)
  * are what stand in for it now, and this description carries the same gate in words.
  */
-export const LOG_MEAL: CoachActionTool = {
+export const LOG_MEAL: CoachActionTool = defineAction({
   name: 'log_meal',
+  mutates: 'immediate',
   description:
-    'Log a meal exactly as the person described eating it — pass their own words and it parses, prices from their saved foods and the shared database, and writes one row. Takes effect immediately. Use it once they have actually eaten or drunk something — never for something they are only considering, asking the calories of, or might cook later; call preview_meal first instead if you are not confident the words alone will price cleanly. Pass {"text": "a protein shake and a banana"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when said, omit and the parse guesses; add {"date": "2026-08-27"} only when it was not today, omit it for today — "forgot to log lunch" still means today.',
+    'Log a meal exactly as the person described eating it — pass their own words and it parses, prices from their saved foods and the shared database, and writes one row. {gate}. Use it once they have actually eaten or drunk something — never for something they are only considering, asking the calories of, or might cook later; call preview_meal first instead if you are not confident the words alone will price cleanly. Pass {"text": "a protein shake and a banana"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when said, omit and the parse guesses; add {"date": "2026-08-27"} only when it was not today, omit it for today — "forgot to log lunch" still means today.',
   parameters: {
     properties: {
       text: {
@@ -50,7 +52,8 @@ export const LOG_MEAL: CoachActionTool = {
   },
   async run(userId, params) {
     const text = String(params.text ?? '').trim();
-    if (!text) return 'No food was named, so nothing was logged. Ask what they actually had.';
+    if (!text)
+      return toolNothingChangedText('no food was named, so nothing was logged.', ['Ask what they actually had.']);
     const meal = isMealKind(params.meal) ? params.meal : undefined;
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(params.date ?? '')) ? String(params.date) : undefined;
 
@@ -59,20 +62,27 @@ export const LOG_MEAL: CoachActionTool = {
       row = await logMeal(userId, { text, meal, date });
     } catch (e) {
       console.error('[log_meal] logMeal failed:', e);
-      return 'That could not be logged just now — tell them plainly and offer to try again, or point them at the Food screen.';
+      return toolActionFaultText(
+        'That could not be logged',
+        'tell them plainly and offer to try again, or point them at the Food screen.',
+      );
     }
 
     const kcal = typeof row.macros?.kcal === 'number' ? `${Math.round(row.macros.kcal)} kcal` : null;
     const items = row.items.map((i) => [i.brand, i.name].filter(Boolean).join(' ')).join(', ') || text;
 
     if (row.provisional) {
-      return [
-        `Logged, but PROVISIONAL: "${items}" is on their file for ${row.date} (${row.meal}), but ` +
-          `${kcal ? `only part of it priced so far (${kcal})` : 'nothing priced yet'} — it will not count toward ` +
-          "today's totals until it is settled.",
-        'Say honestly that you logged what they said but could not price all of it. Ask for more detail (an amount, a brand) if that would help, or say the Food screen can fill in the rest. Do not claim it is fully counted.',
-      ].join('\n');
+      return toolChangeText({
+        changed: [
+          `Logged, but PROVISIONAL: "${items}" is on their file for ${row.date} (${row.meal}), but ` +
+            `${kcal ? `only part of it priced so far (${kcal})` : 'nothing priced yet'} — it will not count toward ` +
+            "today's totals until it is settled.",
+        ],
+        next: [
+          'Say honestly that you logged what they said but could not price all of it. Ask for more detail (an amount, a brand) if that would help, or say the Food screen can fill in the rest. Do not claim it is fully counted.',
+        ],
+      });
     }
-    return `Logged: "${items}" for ${row.date} (${row.meal})${kcal ? `, ${kcal}` : ''}.`;
+    return toolChangeText({ changed: [`Logged: "${items}" for ${row.date} (${row.meal})${kcal ? `, ${kcal}` : ''}.`] });
   },
-};
+});

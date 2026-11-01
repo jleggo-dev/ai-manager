@@ -54,6 +54,7 @@ const MAX_LINES = 12;
 
 export const GET_USER_BUILT_ACTIVITIES: RetrievalFunction = {
   name: 'get_user_built_activities',
+  mutates: 'none',
   description:
     'Activities the user built themselves in the Activity Builder — each with its name, area, step list, total minutes, run count, and whether it is on the plan. Use to know what they have built without being told, to schedule around their own activities, and to answer a request to review one (read its steps here and give a plain read). Their steps are theirs: never rewrite them; propose any change as a question.',
   domains: ['plan', 'goals'],

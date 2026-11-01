@@ -107,7 +107,16 @@ capability manifest names it automatically.
 - **Teach every parameter in the prose**, with a quoted worked example: `{"days": 30}`. The Broker
   never sees your JSON schema.
 - Every optional parameter says its **default**, or what omitting it does.
-- An action states its **gate**: "takes effect immediately", or "does NOT change anything".
+- **Declare what it changes — `mutates`** — on the spec (HARNESS-V3 P5, `tool-mutates.ts`):
+  `'none'` for a read (every `RetrievalFunction` carries `mutates: 'none'`), `'proposes'` when it
+  only puts something on their screen to accept (a card, a checklist, a questionnaire), `'immediate'`
+  when the call itself changes their data. Build an action with `defineAction({...})` and write
+  `{gate}` where the safety sentence goes; the sentence is **generated** from the field —
+  "takes effect immediately" / "does NOT change anything", capitalized only where a sentence
+  starts — so it cannot disagree with it. Never type the phrase yourself: the audit reads the
+  action sources and fails on a hand-typed one, and fails an action whose description carries its
+  mode's phrase other than exactly once, or the other mode's at all. This covers tail and
+  facade-inner actions too, not only the always-on ones the old regex could see.
 - **No internal words.** `occurrences` is a table. `baseline` is a column. The banned list grows
   every time a real one slips through.
 - ≤ **520** characters for a read, ≤ **800** for an action.
@@ -115,7 +124,17 @@ capability manifest names it automatically.
 ### 4. Write what it hands back (CI-enforced)
 
 Use the helpers in `tool-response.ts` — `toolFaultText`, `toolEmptyText`, `boundToolResponse` — and
-the gate comes for free. `tool-response.test.ts` holds them:
+the gate comes for free. `tool-response.test.ts` holds them. Every tool's answer is bounded,
+actions' included (`coach-tools.ts`, since HARNESS-V3 P5).
+
+**An action (`mutates` other than `'none'`) answers in one of three shapes, and its first line says
+which:** `toolChangeText({ changed, unchanged?, next? })` — `changed:` lines for what is now
+different (read back from the store where it can be), `unchanged:` lines for what the call left
+alone, then her next steps; `toolNothingChangedText(reason, next?)` — one `nothing changed:` line;
+or `toolActionFaultText(what?, next?)` when it broke. `coach-action-contract.test.ts` walks every
+registered action against a faked store (a call that changes something, one that changes nothing,
+a fault where there is one) and fails by name for an action with no row; it also fails any action
+file that returns a hand-built string, so paths the walk does not run are held too.
 
 - **An error must never look like an empty result.** "Nothing on file" when a query threw is a lie
   in her voice, and it took four device rounds to find the last one. The two texts are asserted to
@@ -124,6 +143,13 @@ the gate comes for free. `tool-response.test.ts` holds them:
   The cut lands on a line boundary so a row is never half-shown and misread as data.
 - **Tell her what to do next**, scoped to this result — not durable routing rules, which belong in
   the description.
+- **Heavy reading happens outside her context** (HARNESS-V3 C6). If answering needs reading more
+  than about 2k tokens of raw material — a pile of candidate rows, a document, a long log — the
+  reading happens in a separate job that returns facts in the tool's own shape, and she gets the
+  result, never the pile. A tool that cannot meet the 7,400-char bound without truncating is the
+  sign that it is handing her the pile. `check_food_sources` passing up to six candidates with their
+  disagreements is the one place this still happens today; the `food-check` job in
+  FOOD-LOGGING-COACH-LED.md is the fix, on that doc's own plan.
 
 ### 5. Make it complete in one call
 
@@ -247,7 +273,8 @@ tool performance."* Aim for 3–4 sentences; more if complex. Every description 
 - when to use something else instead, naming the sibling (see `TIEBREAK_PAIRS`);
 - every parameter, taught in prose with a **quoted worked example** (`{"days": 30}`), because the
   Broker reads descriptions and never sees the JSON schema;
-- for actions: whether it commits or waits for a tap — CI-enforced phrase.
+- for actions: whether it commits or waits for a tap — generated from the tool's `mutates` field
+  and CI-enforced (step 3 of the checklist).
 
 Length caps are a budget, not a target: **520** chars for reads, **800** for actions. They exist
 because all 24 ride every request; they are not a claim that shorter is better.
@@ -360,7 +387,12 @@ silently. Dropping it is worse than failing: the turn ends with the model believ
 4. Every optional parameter states its default, its omission behaviour, or its condition.
 5. Every confusable pair carries the tiebreak on at least one side.
 6. Reads ≤ 520 chars, actions ≤ 800 chars.
-7. Every action states its safety gate ("does NOT change anything" / "takes effect immediately").
+7. Every tool declares `mutates`; every action — always-on, tail and facade-inner — carries the
+   generated sentence for its mode exactly once and never the other mode's, and no action source
+   types it by hand (replaced the phrase regex, HARNESS-V3 P5).
+
+Beside it: `coach-action-contract.test.ts` (every action answers `changed:` / `nothing changed:` /
+fault) and `repo-write-imports.test.ts` (no `'none'` tool imports a repo write).
 
 This is more mechanical enforcement than any reference implementation we looked at. Sentry has a
 written convention; the `claw-code` harness asserts only that a description is non-empty.
@@ -375,10 +407,13 @@ written convention; the `claw-code` harness asserts only that a description is n
    63.3% of failures are cognitive rather than tool-call errors, dominated by **no-tool-use**: our
    bug is the field's most common failure, and the only thing that measures it is this eval.
    Source the cases from real failures — PLAN.md is already a catalogue of them.
-3. **The mutation contract as a typed field, not a regex on prose.** Today the audit greps for a
-   phrase. A `mutates: 'none' | 'proposes' | 'immediate'` on the tool spec, with the sentence
-   *generated* from it, cannot drift and cannot be forgotten. Sentry requires the equivalent MCP
-   hints explicitly because *"an absent hint is a silent gap"*.
+3. ~~**The mutation contract as a typed field, not a regex on prose.**~~ **DONE (HARNESS-V3 P5,
+   2026-10-31).** Every tool spec carries `mutates: 'none' | 'proposes' | 'immediate'`; an action's
+   safety sentence is generated from it by `defineAction` (`tool-mutates.ts`), and the audit checks
+   the field and the sentence for every action, tail included. The two meta tools declare the field
+   but are not generated: `find_tools` is `'none'`, and `use_tool` is `'immediate'` (the most it can
+   run) with a description that sends her to the named tool's own sentence. Sentry requires the
+   equivalent MCP hints explicitly because *"an absent hint is a silent gap"*.
 4. **Consolidation pass over the 18 reads.** Against the 30–50 degradation threshold and the
    intent to add more.
 5. **Progressive disclosure.** Anthropic's server-side tool search reports 49%→74% (Opus 4) and
@@ -389,7 +424,12 @@ written convention; the `claw-code` harness asserts only that a description is n
    parameter handling; OpenAI warns prose examples can hurt reasoning models. We inline examples in
    prose (rule 3 above) because the field is not available through our provider. Worth revisiting.
 7. **Negative assertions in tests.** Assert what a tool set does *not* contain, so a later refactor
-   cannot silently widen a capability boundary.
+   cannot silently widen a capability boundary. **First one DONE (HARNESS-V3 P5):**
+   `repo-write-imports.test.ts` — no file holding a `'none'` tool imports a repo function whose
+   leading verb is a write, and every repo verb must be filed as a read or a write. **What is left:**
+   it reads direct imports only, so a read that writes through a service module is not followed
+   (`research_food`'s write-back to the food ledger is the known, intended case), and a raw `sql`
+   import is not checked (`retrieval/catalog.ts` has one; it only counts rows today).
 8. **A size budget on the parameter schema, not just the description.** Rule 1's 520/800-char caps
    bound `description`; nothing bounds `parameters`. Measured 2026-08-28 (MP34):
    `propose_plan_change` passes its description cap and still costs 1,338 tokens — 7× the

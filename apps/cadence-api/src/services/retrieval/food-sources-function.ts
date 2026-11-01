@@ -82,6 +82,7 @@ function candidateBlock(c: SourceCandidate): string {
 
 export const CHECK_FOOD_SOURCES: RetrievalFunction = {
   name: 'check_food_sources',
+  mutates: 'none',
   description:
     'Asks every food database at once — their saved foods, the shared corpus, USDA — and hands back what each one said, unranked and including where they disagree, so you judge which to trust. Use when a food is unfamiliar or its numbers matter; for a quick fact use get_nutrition. Pass {"q": "shallots"}; add {"measure": "1 cup"} to price it at a measure they named, {"brand": "Chobani"} for a packaged item, {"include_fatsecret": true} only if the free sources came up short, as it is billed.',
   domains: ['nutrition', 'foods'],

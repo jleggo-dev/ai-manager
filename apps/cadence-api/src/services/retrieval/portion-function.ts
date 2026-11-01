@@ -20,6 +20,7 @@ const round = (n: number): number => Math.round(n * 10) / 10;
 
 export const RESOLVE_PORTION: RetrievalFunction = {
   name: 'resolve_portion',
+  mutates: 'none',
   description:
     'Works out what a household measure of one saved food weighs in grams — "1/4 cup", "3 shallots", "1 tbsp chopped" — when the food only lists weights. Use it after check_food_sources says a source has no such measure, so you can price what they actually ate instead of assuming. It returns grams only; the app does the nutrition arithmetic from that. Needs the food it belongs to: pass {"food_id": "...", "measure": "1/4 cup"}. A measure found this way is saved onto that food, so asking again later is free.',
   domains: ['nutrition', 'foods'],

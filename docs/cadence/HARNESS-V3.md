@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: SPEC; P1 (#431), P2 (#433), P3 (#435) and the fold fix (#437) shipped; P7 in review.** Written 2026-10-31. R1 ruled the same
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8, P3b (#444) and P1b (#445) shipped; P9 (#441) and P3c (the summary as a list) in review.** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds, the fold does not
 (see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -150,7 +150,8 @@ MP33 (HARNESS-V2.md:253-265).
   capability manifest and pick protocol (`coach-block-refresh.ts`) arrive once per session. They
   are matched by their `source` (`PINNED_CONTEXT` in `coach-turns.ts`, handed to the engine as
   `pinnedRowPattern`), with no change to the tag, which the refresher compares exactly. Pinned rows
-  are kept like instruction rows, placed just before the summary. This closes MP33.
+  are kept like instruction rows. In the stored history they sit just before the summary; on the
+  wire the summary goes first, inside `instructions` (P1b, H below). This closes MP33.
 - Do it only at compaction time, never per turn. Removing a row from the middle of the history
   changes the cached prefix, and the cache covers ~2/3 of every message
   (memory: prompt cache is global). Compaction already breaks the cache once; doing the dropping
@@ -159,6 +160,70 @@ MP33 (HARNESS-V2.md:253-265).
 **Tests.** The summarizer input contains no `<context`/`<note` text. Pinned blocks survive two
 compactions. A config-pinning test asserts the manifest is present after compaction (this is the MP33
 regression).
+
+**Built (P1b, 2026-10-31): compaction hardening.** An independent audit of P1 and P2 found one
+blocker and several should-fixes. Each fix landed with the test that would have caught it, on rows
+the size production stores (`backend/test/helpers/compaction-sim.ts`: user 87/181 chars avg/p90,
+reply 446/893, injected ≈3.1k/12.5k per turn, persona ~20k, once-per-session blocks ~12.5k).
+
+- **A. The variable cap lost most of a round (the blocker).** `interpolateTemplate` keeps the first
+  10,000 characters of a job variable, and the mark still moved past the whole round. At production
+  sizes a round is ~27 exchanges (~15k chars of dialogue), so ~10 exchanges a round were neither
+  summarized nor ever sent again. Now the transcript is built row by row up to
+  `TRANSCRIPT_BUDGET_CHARS` (`MAX_VARIABLE_LENGTH` − 100, exported from `job-execution-utils.ts`;
+  the cap is measured before the `<user_input>` wrapper is added, so the 100 is only a margin). The
+  mark moves to the last row included, and a cut round ends on her reply. Rows that did not fit
+  stay after the mark. One row longer than the whole budget is shortened and says so, so it cannot
+  block every round after it. After a reply, one run does up to 3 rounds, so a backlog catches up;
+  the pre-send ceiling path does one.
+- **B. Folding on every message.** With 12.5k-char injected rows, a 20-turn tail is itself at the
+  trigger: 50 folds in 60 exchanges, two rows each, and every fold loses something (P3). Now
+  `keepTailUnits` sizes the tail over every row in it, as whole exchanges, never fewer than two
+  (`keepLastNTurns` stays as the fallback for sessions that lack it), and `minRemovedUnits` skips,
+  and logs, a fold that would take out less. A round the budget filled always runs, and the minimum
+  is capped at half the trigger. The coach's values are 12,000 and 4,000; the arithmetic is in
+  `coach-compaction-policy.ts`. Same scenario: 8 folds on the live policy (25 with the guard on
+  the old tail). The guard can only delay a fold, never stop one: everything that ages out of the
+  tail adds to what the next fold would remove. A send can go past the ceiling while it waits (by
+  at most about one exchange in the tests); in normal use the after-reply run clears the guard
+  first, because 4,000 is under ceiling − trigger (8,000).
+- **C. Rows written once in a while were dropped for good:** the daily `date` stamp (date, weather,
+  check-in due), the last `attachments` note (its `photo_ref`) and a mid-session `health-digest`.
+  New engine rule `keepNewestRowPattern`, a regex with one capture group naming the source: of the
+  rows behind the mark, the newest of each source is sent again after the summary, unless the tail
+  already has one. Chosen over putting the date line in the per-turn floor, which would not cover
+  attachments or digests. Limit: only the newest attachment note survives; an older photo's ref is
+  gone unless the summary carries it, and the summarizer never reads injected rows.
+- **D. Work after the reply could be frozen.** The route awaited capture and compaction after
+  `res.end()`; both now go through `runInBackground` (`waitUntil`). Evidence: in the 19 days before
+  this the coach had one real turn (2026-10-29), and neither its capture nor its `coach` ai_log row
+  (also written after `res.end()`) landed. Over the 60 days before, capture ran on 93 of 121 coach
+  turns. So "0 captures in 19 days" was mostly no chat; the one turn fits a freeze but proves
+  nothing alone. Still after `res.end()` and not moved here: `notifyIfTheyLeft`, `recordCoachTurn`.
+- **E. The mark could move backwards** when two runs overlapped. The write is compare-and-set on the
+  mark the plan was built from (`updateChatSessionIfMarkUnchanged`); a miss is skipped and logged.
+- **F. The summarizer's diagnostic row** now carries `chat_session_id` and `metadata.compaction`
+  (rows summarized, injected rows dropped, transcript chars, whether the budget cut the round,
+  units removed). `executeJob` takes an optional `diagnostics: { chatSessionId, metadata }`.
+  Failures before the run log the session id.
+- **G. The policy reaches open sessions.** It is copied onto a session at open, and an active user's
+  session is never reopened. `npm run backfill:session-summarizer` (dry by default, `--write`
+  applies, `--days 30`) sets it on every coach session that has a summarizer or was active in the
+  window. Dry run 2026-10-31: 461 to write (458 at trigger 20,000, 3 at 32,000), 0 already live.
+- **H. Order on the wire.** The design above said pinned rows sit before the summary. In the stored
+  history they do. On the wire they don't: the Responses dialect (`buildResponsesRequest`, used by
+  Devs.ai v2 and the gateway) lifts every system row into `instructions`, so the summary rides with
+  the persona, ahead of the pinned rows, which are the first input items. Kept: the summary carrying
+  system weight is fine. The ordering test now pins both orders.
+- **I. Reading the session.** `listChatMessages` asked for every row in one request, and Supabase
+  returns at most 1,000 and says nothing; in ascending order the rows lost are the newest. It now
+  reads a page at a time (largest session today: 304 rows). **Follow-up, not done:** read only what
+  can be sent (system rows, pinned rows, the newest row per kept source, rows after the mark). Not
+  cheap now: the kept-source rows come from behind the mark, and both patterns are JS regexes that
+  would have to be rewritten for Postgres.
+
+**Rollout:** deploy; `set-coach-persona.ts` (new sessions copy the job's policy);
+`npm run backfill:session-summarizer -- --write` (sessions already open); `eval:compaction`.
 
 ### C3. Follow-ups that outlive the conversation
 
@@ -236,12 +301,65 @@ notice.
 - Negative assertions (backlog #7): a test asserting that the `'none'` tools never import a repo write
   function.
 
+**Built (P5, 2026-10-31).** All four gaps closed in one PR; no migration, no sync.
+- **Bounded.** `coach-tools.ts` passes every action and meta output, and the catch-path text,
+  through `boundToolResponse`. Test: an action returning 5,000 lines arrives cut, with TRUNCATED.
+- **`mutates` on every spec.** `CoachActionTool`, `MetaTool`, and `RetrievalFunction` (typed as
+  `'none'` only). Actions are built with `defineAction`, which replaces a `{gate}` token in the
+  description with the phrase for the mode (`tool-mutates.ts`). The regex in
+  `description-audit.test.ts` is gone; in its place, for every read, action (tail and
+  facade-inner included) and meta tool: a mode is declared, an action carries its own mode's
+  phrase exactly once and never the other's, and no action source types the phrase by hand.
+- **Three shapes.** `toolChangeText`, `toolNothingChangedText`, `toolActionFaultText`, read by
+  `toolOutputShape` from the first line. Every return path of every action now goes through one
+  of them; no allowlist was needed. `coach-action-contract.test.ts` walks all 21 registered
+  actions (changes something / changes nothing / fault where there is one) and fails any action
+  source that returns a hand-built string.
+- **Negative assertion.** `repo-write-imports.test.ts`, described in TOOL-HARNESS.md backlog #7.
+
+Differences from the design above, each from the code:
+- **The phrase is generated, not the whole sentence.** Most actions continue the sentence in
+  their own words ("Takes effect immediately: reflecting it back is the confirmation"), so the
+  token sits where the phrase was and the text after it stays the tool's. The phrase is
+  capitalized only where a sentence starts, so "This does NOT change anything…" and "…and takes
+  effect immediately" survive byte for byte. Every always-on definition is identical: 22,174
+  serialized chars before and after. Three tail descriptions changed: `shape_week` ("all taking
+  effect immediately" → "and each takes effect immediately", 759 → 763 chars);
+  `send_questionnaire` ("This writes nothing: … and nothing is on file until then" → "This does
+  NOT change anything: …", 792 → 767); `offer_repertoire_review` ("This saves nothing: no item
+  goes on their list until they mark it and confirm on that screen" → "This does NOT change
+  anything until they mark items and confirm on that screen", 797 → 783). **The last one rewords
+  a sentence the 2026-09-03 plain-words ruling produced** — the stock phrase once rather than
+  twice, which is what that ruling objected to, but it is the owner's to veto. All action
+  descriptions together: 14,814 → 14,779 chars. find_tools label 3,092 of 3,140 and the
+  capability manifest 5,804 of 5,824: both unchanged.
+- **The meta tools declare the field but are not generated.** `find_tools` is `'none'`.
+  `use_tool` runs whatever she names, so it declares the most it can do, `'immediate'`, and keeps
+  its own sentence, which sends her to the named tool's description. That sentence says every
+  `[changes their data]` tool "takes effect immediately", which is not true of the three tail
+  tools that wait for a tap, or of `rebuild`'s week scope; left as is (always-on wording), noted
+  for a ruling.
+- **`rebuild` is `'immediate'`** because its session scope is; its own words say the week scope
+  ends in a card.
+- **An action fault has its own helper.** The read fault ("could not be read … NOT an empty
+  record") is the wrong sentence for a write. `toolActionFaultText` keeps the old catch-path words
+  and shares the read fault's "this is a fault on our side", so both classify as a fault.
+- **`toolChangeText` takes a third field, `next`**, for the result-specific instructions every
+  action already carried; they follow the `changed:` and `unchanged:` lines.
+- **"Before and after" where the action already knew the before** (a goal's target and date,
+  the kcal target). Actions that never read the old value were not changed to read it — that would
+  change what they do, not how they report.
+- **`update_goal` moved to `coach-action-goal.ts`**: coach-actions.ts reached 567 of its 500 lines.
+
+`eval:tools` is owed (three tail descriptions and every action's output changed), owner-gated.
+
 ### C5. Evals built from real failures, and run on every model change
 
 **What exists.**
-- `eval:tools`: 64 cases (header says 33, doc says 66; fix both), first turns only, run against
-  deployed prod, manual, no pass threshold, ~1.6M input tokens per run, ±3 F1 between runs of the
-  same code.
+- `eval:tools`: 68 cases after P7 (66 at the last full run, 2026-09-15; the case-file header said 58
+  and the runner's 33 — neither header states a number now, the runner prints it), first turns
+  only, run against deployed prod, manual, no pass threshold, ~1.6M input tokens per run, ±3 F1
+  between runs of the same code.
 - `eval:outcomes`: 11 multi-turn scenarios asserting database state.
 - `eval-conversation-replay.ts`: one conversation.
 - `diagnostic_logs` already stores `llm_request`, `llm_response` and `chat_session_id` for every
@@ -303,10 +421,171 @@ notice.
      scores the summary; asking her is the next arm.
    - Found on the way: `interpolateTemplate` cuts every job variable at **10,000 characters**
      (`job-execution-utils.ts`, `MAX_VARIABLE_LENGTH`), so one round's `transcript` can never hand
-     the summarizer more than ~2,500 units. A round today is ~1,500 units (~30 exchanges of
-     dialogue once injected rows are dropped), so there is room, but a chattier user would hit it
-     silently: the tail of the round would be "... [truncated]" and gone. Not fixed here; the right
-     answer is probably a per-job override of the cap, or compaction splitting a round in two.
+     the summarizer more than ~2,500 units. **There is no room** (corrected by the P1b audit): the
+     fixture's dialogue is shorter than real dialogue. At production sizes (user 87 chars, reply
+     446, measured 2026-10-31) a round is ~27 exchanges, ~15k characters, so about a third of
+     every round was cut to "... [truncated]" while the mark moved past it: neither summarized nor
+     sent again. Fixed in P1b (C2, "Built (P1b)", finding A): compaction splits a round to fit.
+
+   **Built (P3b, 2026-10-31): fixtures and scorer rebuilt so the numbers can be trusted.** An audit
+   found the first fixtures were about a third of real length, so no round came near the cap above
+   ("a round today is ~1,500 units" was the fixtures, not production). Messages, replies and
+   injected context are now drawn from production sizes (AI Admin DB, coach sessions, last 60
+   days: messages avg 87 chars, p90 181; replies avg 446, p50 340, p90 893; context ~3.1K per
+   exchange, p90 12.5K) and put together from a seeded pool of distinct asks and reply sentences
+   per fixture (`eval-compaction-filler.ts`, `eval-compaction-pool-*.ts`), with no counters.
+   Pooled they come out at messages 88 / p90 165, replies 455 / p50 365 / p90 849, context 3,053 /
+   p90 12,119. Under today's engine `--dry` shows **every round over the cap: 6 of 6, transcripts
+   10,944–16,780 chars**, and the report now prints each round's length against the cap and flags a
+   fact planted past it (3 of 18: the 6am runs and the bedtime sits never reach the summarizer, the
+   meal-kit reply is cut partway). Also fixed: filler no longer carries any fact's terms ("nuts —
+   not peanuts" scored the allergy as kept against filler; a test now checks every pool string
+   against every fact), and a correction fails while the summary still states the old value in a
+   sentence without the new one (`mustNotContain`; the rule and its near-misses are in `scoreFact`
+   and its table test). The 74% → 93% reading above was taken on the old fixtures and is not
+   comparable; re-run after the cap is dealt with.
+
+   **Built (P3c, 2026-11-01): the summary is a list, and the fold copies it.** The re-run after P1b
+   (80-exchange fixtures, 3 runs, 0 of 23 rounds over the cap) kept **53% (27/51)**: facts first
+   summarized in round 1 kept 17%, decisions 11%, constraints 22%. The engine was no longer the
+   cause; the fold was. Round 2 re-wrote the prose from scratch, spent its words on her advice (29
+   sentences like "the coach advised…" or "they were told…" across 23 summaries), and twice ended on
+   a claim that everything had been "integrated". The two P3 lines were in the prompt and not
+   obeyed at this size; nor was "aim for 200 words" (final summaries 261–683).
+   - **The shape.** Seven fixed headings in the KEEP order: `DECIDED`, `CONSTRAINTS`, `CORRECTIONS`,
+     `THEIR WORDS`, `STILL OPEN`, `TRIED AND DID NOT WORK`, `WHERE THINGS STAND`. One fact per line,
+     at most 15 words, in their words; `- none` under an empty heading. Plain text, no schema: the
+     summary goes into her instructions as it is (`[Conversation summary]`).
+   - **The fold is mechanical.** Copy every existing line under its heading, word for word. A
+     correction deletes or rewrites every line, under every heading, that states the old value, and
+     writes the new value under CORRECTIONS. An answered STILL OPEN line moves to DECIDED. Anything
+     else is added at the end of its heading. A line is never deleted to save words. A summary in the
+     old prose format is sorted into the headings first.
+   - **What goes in.** Every line records something they said, chose, corrected, tried or named,
+     something still open, or a promise she made. Her advice goes under no heading. CORRECTIONS holds
+     only what THEY corrected; THEIR WORDS only names they made up. No title, no opening line, no
+     closing line. Cap 500 words (was "aim for 200, never exceed 400").
+
+   | 3 runs each, `--prompt-from-config` | before (P1b re-run) | first try | shipped |
+   |---|---|---|---|
+   | all | 53% (27/51) | 90% (46/51) | **94% (48/51)** |
+   | run 1 / 2 / 3 | 41 / 65 / 53% | 88 / 94 / 88% | 94 / 94 / 94% |
+   | decision / constraint | 11 / 22% | 100 / 100% | 100 / 100% |
+   | correction | 89% | 56% | 78% |
+   | own words / open / tried and failed | 67 / 67 / 67% | 100 / 100 / 89% | 100 / 100 / 89% |
+   | first summarized in round 1 / 2 / 3 | 17 / 70 / 83% | 100 / 81 / 100% | 100 / 89 / 100% |
+   | final summary words: median, mean, max | 373, 389, 683 | 651, 656, 749 | 527, 562, 919 |
+   | final summaries over 500 words | 1 of 9 | 8 of 9 | 5 of 9 |
+   | "she advised" sentences / closing claims | 29 / 2 | 0 / 0 | 0 / 0 |
+
+   **Read this table with care: it is on the 80-exchange fixtures,** 17 facts a run, at most three
+   folds (two for meditation, whose "still open" fact sat past the final mark). #446 lengthened them
+   to 100 exchanges the same night so every fact is folded with a round to spare: four folds per
+   fixture, 18 facts a run. On those, the OLD prompt keeps **13% (7/54)** (3 runs, measured
+   2026-11-01): decisions, constraints and tried-and-failed 0%, corrections and own words 11%, open
+   56%; round-1 facts 0%, round 2 15%, round 3 33%. Its round 2 still carries round 1's facts; its
+   rounds 3 and 4 mostly hold none, because it rewrites from the new transcript once the old summary
+   is long. **The new prompt, measured there the same night (3 runs, 36 rounds, none over the
+   cap): 94% (51/54).** Decisions, constraints, own words, open and tried-and-failed 100%;
+   corrections 67% (the three misses are all a copied line that kept the old value beside the new
+   one under CORRECTIONS); facts first summarized in round 1 **100%** (was 0%), round 2 89%, round
+   3 100%. Round 4's summary held every round-1 planted term in 9 of 9 fixture runs. The cost: final
+   summaries ran 556–963 words (the 500 cap is not obeyed), which is up to ~2.1K billed on every
+   turn and ~1,400 units against the trigger; an engine guard on the summary's size is owed, as is
+   one on `existingSummary`, which the same 10,000-char variable cap would cut after seven or eight
+   folds. What the 80-exchange runs show about copying: the planted facts
+   survived every fold, but the lines did not stay word for word. Of round 1's lines, 35–89% were
+   still verbatim one fold later (9 fixture runs) and 20–81% two folds later (6); the rest were
+   reworded with the fact kept. Rewording compounds, so a fourth fold is a real test, not a
+   formality. The first 80 exchanges of the 100-exchange fixtures are identical to the old ones
+   (the seeded streams run in order), so their first three folds (two for meditation) read the
+   same transcripts, give or take an exchange; the new reading differs mainly by the last fold.
+
+   - **The first try** had the headings and the fold but loose heading definitions. CORRECTIONS
+     filled with things SHE had set straight (8–16 lines in a final summary; the fixtures plant
+     one), THEIR WORDS with common terms ("body scan", "strides"), DECIDED with her suggestions;
+     and a correction left the old value under another heading ("E-flat nocturne" in THEIR WORDS).
+     The shipped prompt adds the rule for every line, "only THEY" in each heading's definition, and
+     the every-heading delete for a correction.
+   - **The three misses left.** Two corrections wrote the new value but kept a copied line with the
+     old one ("Vegetarian diet, no meat." under CONSTRAINTS; the Chopin under STILL OPEN). Copying
+     word for word is obeyed better than deleting the old value, which is why corrections are the one
+     kind below the baseline (89% → 78%): prose used to rewrite stale lines away along with
+     everything else. The third is the scorer: "Bedtime meditation sits turned into naps" kept the
+     fact in her word, not their "asleep" (96%, 49/51, if read as kept).
+   - **The cap is not obeyed either.** 5 of 9 final summaries passed 500 words; the largest, 919, held
+     30 DECIDED and 26 CORRECTIONS lines, most of them her suggestions written without "she". Growth
+     is ~130 words a round here. The old prompt's cap was ignored the same way (683 against 400).
+   - **Cost per turn.** The summary rides in her instructions on every message until the next fold.
+     At words × 1.3 tokens × 1.78 billed: the 500 cap ≈ 1.2K billed (1.5% of the ~75K trigger); the
+     measured mean, 562 words ≈ 1.3K (1.7%); the max, 919 ≈ 2.1K (2.8%); the old mean, 389 ≈ 0.9K.
+     About +0.4K billed a turn. From characters (chars/4 × 1.78): mean 3,328 ≈ 1.5K, max 5,295 ≈
+     2.4K. Before any prompt-cache discount (the summary changes only at a fold). It also counts
+     toward the trigger: ~830 units against the ~400 the policy comment assumes, about half an
+     average exchange less room between folds.
+   - **Open.** (1) **Owed before merge:** a 3-run reading on the 100-exchange fixtures (~170K
+     billed), with each fixture's round 4 checked for round 1's lines. (2) `existingSummary` is cut
+     at 10,000 characters like any job variable; at ~130 words a round the summary gets there
+     after roughly 7–8 folds (~160–190 exchanges; the longest session on file has 53 messages).
+     The heading order means a cut loses the last headings first, silently.
+     It needs a guard before sessions get that long. (3) Advice still gets in as bare lines under
+     DECIDED and CORRECTIONS, mostly on the food fixture: that is the size problem, not the retention
+     one. Next to try: a stronger model for this one job, or a line cap per heading. (4) Whether she
+     answers the probes from the list is still not measured.
+
+   **Rollout:** `sync-jobs`; the prompt is not live until then. No `set-coach-persona` run: neither
+   the persona nor the policy changed, and the engine reads the job by slug at every fold, so open
+   sessions get the new prompt on their next fold (an old prose summary is sorted into the headings).
+
+**Built (P6, 2026-10-31): C5.1–C5.3.**
+- **`npm run eval:mine`** (`scripts/mine-eval-candidates.ts`; patterns in `eval-mine-patterns.ts`,
+  table-tested with near-misses). A coach turn is a `diagnostic_logs` row whose `processing_job_id`
+  is the `cadence-coach-chat` job and whose `chat_session_id` is set; `calling_application` is
+  `platform:cadence` on Broker jobs too, so it does not tell them apart. `llm_request.promptContent`
+  is the person's message and `llm_response.rawContent` her reply. **The diagnostic row holds no
+  tool calls**: those come from Cadence `ai_log` `coach_tool` rows, which name the person but not
+  the conversation, so they are joined by person and time. Turns from deleted or `@cadence.test`
+  accounts are skipped; they are the eval's own throwaway users (685 of 873 rows in 90 days). Writes
+  a gitignored markdown file (`apps/cadence-api/eval-candidates-<date>.md`) with an empty
+  "promote as:" line each; `--dry` prints counts only. First reading, 2026-10-31: 30 days held 9
+  turns and no candidates (little coach traffic since mid-September); 90 days held 188 real turns
+  in 20 conversations and **16 candidates: 7 promised a change with no action, 5 corrected in the
+  next message, 4 over 120 s, 0 tool faults.** None reviewed or promoted yet.
+- **`npm run eval:tools:smoke`**: 13 cases named, each with its reason, in
+  `scripts/eval-tool-selection-smoke.ts`. `--dry` estimates ~325K prompt tokens against ~1.7M for
+  all 68 (19%). `--floor <F1>` exits non-zero under it and prints the gap, on any selection;
+  `--smoke` defaults the floor from `scripts/eval-tool-selection.baseline.json`: the last recorded
+  full run, **82.9** (2026-09-15, TOOL-HARNESS.md), minus 5 = **77.9**. `--json` writes the result.
+- **`repoint-profile.ts --verify`**: runs the smoke on the new coach primary and, on a miss (F1
+  under the floor, no tool call seen, another model answered, or no result), writes back the
+  pointers read before the write and exits non-zero. `--force "<reason>"` keeps the pointer through
+  a miss. Every verified repoint appends a line to `config/ai-admin/repoint-log.jsonl`. Refused
+  before any write: a failover-only change, a profile the coach chat does not use, no floor,
+  `--force` without a reason.
+
+**Where it differs from the design above:**
+1. **`--verify` writes first, then reverts; "before" is not achievable today.** A coach chat turn
+   reads the model from the profile row on every send, and neither `openChatSession` nor
+   `sendChatMessage` takes a model override. `modelOverride` exists only on one-shot job execution,
+   which runs no tools, so it cannot run this eval. For the ~10 minutes of the smoke run the new
+   model answers every coach turn, real users included; the script says so first and prints the
+   restore command, and Ctrl-C restores. Testing before the write needs an engine change (a
+   per-session model override, and a way for the eval to ask the deployed API for it). Owner's call.
+2. **`--verify` proves a primary only.** The coach chat has no failover path at all; only job
+   execution fails over. A failover still needs a live call.
+3. **The smoke leaves out cases the model on file already missed** in the last full run (A13, A16,
+   A20–A23, A27–A29): a case today's model fails cannot tell a worse model from this one, and it
+   would drag the smoke F1 under the full-run number it is compared with.
+4. **The floor compares a smoke F1 with a full-run F1** until a smoke baseline exists. The baseline
+   file has a `smokeF1` slot (null); once the owner records a smoke run on a trusted pointer, the
+   floor becomes `smokeF1 − 5`. The 82.9 itself is from `claude-sonnet-5` (no longer served) on 66
+   cases; the coach is on `claude-sonnet-5-5` now. The first smoke run should be recorded.
+5. **Action tools' faults are not detected.** The miner reads `toolFaultText`'s wording from the
+   function. Action tools fail with a separate sentence in `coach-tools.ts` that is not exported;
+   it can be added once P5 gives action faults a shared text.
+
+**R5 is still open.** The gate is built as proposed (a miss reverts), with `--force "<reason>"` as
+the way through. "Report only" would be a one-line change: log the miss and keep the pointer.
 
 **Cost.** Mining is read-only SQL, essentially free. Smoke ≈ 300K tokens per run. The
 compaction eval ≈ 3 conversations × ~30 turns: owner-gated, like `eval:tools` is today.
@@ -325,6 +604,11 @@ disagreements. The fix is already designed and ruled: the `food-check` job and c
   ~2k tokens of raw material, the reading happens in a separate job that returns facts in the
   tool's shape. She gets the result, never the pile. A tool that cannot meet the 7,400-char bound
   without truncating is the sign.
+
+**Built (P8).** The rule is in TOOL-HARNESS.md checklist step 4 ("Write what it hands back"), not
+step 5 as written above — step 4 is where the bound and the fault/empty rules already live, and
+the reading rule is the same question (what reaches her) asked earlier. CLAUDE.md's "what a tool
+hands back is not gated yet" line is replaced: P5 gated it.
 
 ### C7. Stale and contradicting facts: find them, ask, never overwrite
 
@@ -414,11 +698,11 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 | P2 | C2: drop app rows at compaction, `pinned` blocks (closes MP33) | P1 | engine + `coach-block-refresh.ts`, `@cadence/shared` pattern | `set-coach-persona.ts` re-run |
 | P3 | C5.4 compaction eval — BUILT + first reading above | P1, P2 | `scripts/eval-compaction*.ts`, `coach-compaction-policy.ts` | — |
 | P4 | ~~R1 threshold~~ folded into P1 by the ruling; P3 checks it | — | — | — |
-| P5 | C4: bound actions, `mutates` field, `toolChangeText` | — | `coach-tools.ts`, action files, audit test | — |
-| P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint | — | `scripts/` | — |
-| P7 | C3: follow-ups store, two tools, pack section — BUILT, in review | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
-| P8 | C6: TOOL-HARNESS rule (doc); food-check continues on its own plan | — | docs | — |
-| P9 | C7: `fact-review` job, hooked to check-in close — BUILT, in review | P7 | new job + service, `follow-ups.ts`, `recaps.ts`, `week-review.ts` | Cadence migration 0062 (owner go), then `sync-jobs` |
+| P5 | C4: bound actions, `mutates` field, `toolChangeText` — MERGED #442 | — | `coach-tools.ts`, action files, audit test | — |
+| P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint — MERGED #440 | — | `scripts/` | — |
+| P7 | C3: follow-ups store, two tools, pack section — MERGED #439, 0061 applied | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
+| P8 | C6: TOOL-HARNESS rule (doc) — DONE (checklist step 4); food-check continues on its own plan | — | docs | — |
+| P9 | C7: `fact-review` job, hooked to check-in close — BUILT, in review (#441) | P7 | new job + service, `follow-ups.ts`, `recaps.ts`, `week-review.ts` | Cadence migration 0062 (owner go), then `sync-jobs` |
 
 P1, P5, P6 and P7 touch disjoint files and can run in parallel. P2→P3→P4 and P7→P9 are chains.
 

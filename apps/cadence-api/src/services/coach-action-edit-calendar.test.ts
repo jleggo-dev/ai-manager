@@ -69,7 +69,7 @@ describe('edit_calendar — finding the session', () => {
   ])('%s names it', async (_label, title) => {
     const out = await EDIT_CALENDAR.run(USER, { action: 'move', date: '2026-09-15', title, to: '2026-09-17' });
     expect(moveOccurrence).toHaveBeenCalledWith(USER, 'o-hill', '2026-09-17', 'America/Toronto', 'coach');
-    expect(out).toContain('Done — "Hill intervals" moved from 2026-09-15 to 2026-09-17');
+    expect(out).toContain('changed: "Hill intervals" moved from 2026-09-15 to 2026-09-17');
   });
 
   it('two matches are handed back to be named apart, and nothing moves', async () => {
@@ -137,7 +137,7 @@ describe('edit_calendar — the three edits and what she is told', () => {
       title: 'Hill intervals',
       to: '2026-09-17',
     });
-    expect(out).toMatch(/^Nothing was changed on their calendar:/);
+    expect(out).toMatch(/^nothing changed: /);
     expect(out).toMatch(want);
   });
 });
@@ -159,7 +159,7 @@ describe('edit_calendar — refusals before anything is read', () => {
     ['a copy with a bad "to"', { action: 'copy', date: '2026-09-15', title: 'x', to: 'friday' }, /a copy needs "to"/],
   ])('%s', async (_label, params, want) => {
     const out = await EDIT_CALENDAR.run(USER, params as never);
-    expect(out).toMatch(/^Nothing was changed on their calendar:/);
+    expect(out).toMatch(/^nothing changed: /);
     expect(out).toMatch(want);
     expect(listOccurrences).not.toHaveBeenCalled();
   });

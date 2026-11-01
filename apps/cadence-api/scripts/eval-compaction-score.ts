@@ -4,8 +4,17 @@
  * kept. No model and no network in here — `eval-compaction.ts` supplies the summarizer, the tests
  * supply a fake one.
  */
-import { planCompaction, type ChatMessageRow, type ChatSessionRow } from '@ai-admin/core';
-import type { CompactionFixture, Exchange, FactKind, PlantedFact } from './eval-compaction-fixtures.ts';
+import { MAX_VARIABLE_LENGTH, planCompaction, type ChatMessageRow, type ChatSessionRow } from '@ai-admin/core';
+import type { CompactionFixture, FactKind, PlantedFact } from './eval-compaction-fixtures.ts';
+import { composeConversation } from './eval-compaction-filler.ts';
+
+/**
+ * The engine cuts every job variable at this many characters and appends "... [truncated]"
+ * (`MAX_VARIABLE_LENGTH`, job-execution-utils.ts). Whatever a round's `transcript` holds past this
+ * point never reaches the summarizer. Since #445 `planCompaction` builds the transcript to fit
+ * under it, so a round over the cap now means that guard broke.
+ */
+export const JOB_VARIABLE_CAP = MAX_VARIABLE_LENGTH;
 
 /** The policy shape `planCompaction` reads, with every default filled in. */
 export interface EvalPolicy {
@@ -19,11 +28,18 @@ export interface EvalPolicy {
 
 const START = Date.parse('2026-10-01T08:00:00Z');
 
-/** Sized like the real blocks (persona ~20k chars; capabilities + picks ~6.5k; per-turn ~3k). */
-const pad = (label: string, chars: number) =>
-  `${label}\n${'- a line of injected detail, standing in for the real block.\n'.repeat(Math.ceil(chars / 60))}`;
-const wrap = (source: string, body: string) =>
-  `<context source="${source}" version="1" built_at="2026-10-01T08:00:00.000Z">\n${body}\n</context>`;
+const INJECTED_LINE = '- a line of injected detail, standing in for the real block.\n';
+/**
+ * A `<context>` row of exactly `chars` characters (or the bare wrapper, if `chars` is smaller).
+ * The real blocks: persona ~20k chars; dossier ~6k; capabilities + picks ~6.5k; per turn, whatever
+ * `composeConversation` drew.
+ */
+export function injectedRow(source: string, label: string, chars: number): string {
+  const open = `<context source="${source}" version="1" built_at="2026-10-01T08:00:00.000Z">\n${label}\n`;
+  const close = '\n</context>';
+  const room = Math.max(0, chars - open.length - close.length);
+  return `${open}${INJECTED_LINE.repeat(Math.ceil(room / INJECTED_LINE.length)).slice(0, room)}${close}`;
+}
 
 export interface BuiltFixture {
   rows: ChatMessageRow[];
@@ -34,8 +50,7 @@ export interface BuiltFixture {
 /**
  * One fixture as stored rows: the persona, the three blocks sent once per session, then for every
  * exchange a per-turn context row, the user's message and her reply — the shape the coach route
- * writes. A planted fact (or the earlier statement a correction overrides) takes its exchange's
- * slot; filler fills the rest.
+ * writes.
  */
 export function buildFixtureRows(fixture: CompactionFixture, persona: string): BuiltFixture {
   let t = START;
@@ -50,22 +65,18 @@ export function buildFixtureRows(fixture: CompactionFixture, persona: string): B
     } as ChatMessageRow);
 
   push('system', persona);
-  push('user', wrap('registry-pack', pad('== WHO THEY ARE ==', 6000)));
-  push('user', wrap('capabilities', pad('== WHAT YOU CAN DO ==', 4500)));
-  push('user', wrap('pick-protocol', pad('== QUICK PICKS ==', 2000)));
+  push('user', injectedRow('registry-pack', '== WHO THEY ARE ==', 6000));
+  push('user', injectedRow('capabilities', '== WHAT YOU CAN DO ==', 4500));
+  push('user', injectedRow('pick-protocol', '== QUICK PICKS ==', 2000));
 
-  const planted = new Map<number, Exchange>();
-  for (const f of fixture.facts) {
-    planted.set(f.at, f.plant);
-    if (f.before) planted.set(f.before.at, f.before);
-  }
   const exchangeEnds: string[] = [];
-  let fillerIndex = 0;
-  for (let i = 0; i < fixture.exchanges; i++) {
-    const ex = planted.get(i) ?? fixture.filler[fillerIndex++ % fixture.filler.length]!;
-    push('user', wrap('turn-context', pad(`[ctx:get_active_plan:${i.toString(16).padStart(8, '0')}]`, 3000)));
-    push('user', ex.user.replace('{n}', String(i + 1)));
-    push('assistant', ex.coach.replace('{n}', String(i + 1)));
+  for (const [i, turn] of composeConversation(fixture).entries()) {
+    push(
+      'user',
+      injectedRow('turn-context', `[ctx:get_active_plan:${i.toString(16).padStart(8, '0')}]`, turn.contextChars),
+    );
+    push('user', turn.exchange.user);
+    push('assistant', turn.exchange.coach);
     exchangeEnds.push(rows[rows.length - 1]!.created_at);
   }
   return { rows, exchangeEnds };
@@ -122,6 +133,8 @@ export interface FactResult {
   kept: boolean;
   /** The `expect` groups with no term present. */
   missing: string[][];
+  /** Corrections: sentences that state the replaced value without the new one (see `scoreFact`). */
+  stale: string[];
   /** Which round first summarized it. */
   round: number;
 }
@@ -141,11 +154,73 @@ export function compactedFacts(
   return out;
 }
 
-/** Does every `expect` group have one of its terms in the summary? */
+/**
+ * Where a summary's sentences end: after . ! or ? (and any closing quote or bracket) followed by a
+ * space and a capital letter or an opening quote or bracket, and at every line break. Never before
+ * a digit or a lower-case letter, so "Oct. 12", "Gymnopédie No. 1" and "6 a.m. and" stay whole.
+ */
+export const SENTENCE_BREAK = /(?<=[.!?]["'”’)]?)\s+(?=[\p{Lu}"'“‘(])|\n+/u;
+export const sentences = (text: string): string[] =>
+  text
+    .split(SENTENCE_BREAK)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+const hasAny = (text: string, terms: readonly string[]) => terms.some((t) => text.includes(t.toLowerCase()));
+
+/**
+ * Is the fact kept? Every `expect` group needs one of its terms somewhere in the summary
+ * (case-insensitive) — and a correction must not still state the value it replaced.
+ *
+ * THE CORRECTION RULE (P3b, 2026-10-31). A correction fails when a sentence of the summary names
+ * the replaced value (`mustNotContain`) WITHOUT the new one (a term from every `expect` group). The
+ * replaced value is allowed only in a sentence that also holds the new value: "the race moved from
+ * October 12 to November 2" records the change, which is honest and worth keeping. A sentence that
+ * names only the old value reads as current — "Race day is October 12th." — and she would believe
+ * it. Strict on purpose: "They learn Satie now. They dropped the Chopin." fails, because its second
+ * sentence names the old piece alone. "Allowed wherever the new value also appears in the summary"
+ * would never fail anything — a kept correction always holds the new value — so the scope is the
+ * sentence. The report quotes the offending sentence, so a reader can overrule the call.
+ */
 export function scoreFact(summary: string, fact: PlantedFact & { round: number }): FactResult {
   const text = summary.toLowerCase();
-  const missing = fact.expect.filter((group) => !group.some((term) => text.includes(term.toLowerCase())));
-  return { id: fact.id, kind: fact.kind, probe: fact.probe, kept: missing.length === 0, missing, round: fact.round };
+  const missing = fact.expect.filter((group) => !hasAny(text, group));
+  const old = fact.mustNotContain ?? [];
+  const stale = old.length
+    ? sentences(summary).filter((s) => {
+        const lower = s.toLowerCase();
+        return hasAny(lower, old) && !fact.expect.every((group) => hasAny(lower, group));
+      })
+    : [];
+  return {
+    id: fact.id,
+    kind: fact.kind,
+    probe: fact.probe,
+    kept: missing.length === 0 && stale.length === 0,
+    missing,
+    stale,
+    round: fact.round,
+  };
+}
+
+/** Where a fact's planted exchange sits in the transcript of the round that first summarized it. */
+export interface PlantSpan {
+  /** Offset of "user: <their message>". */
+  start: number;
+  /** Offset just past her reply. */
+  end: number;
+  transcriptChars: number;
+}
+
+export function plantSpan(fact: PlantedFact & { round: number }, rounds: CompactionRound[]): PlantSpan | null {
+  const transcript = rounds[fact.round - 1]?.transcript;
+  if (!transcript) return null;
+  const start = transcript.indexOf(`user: ${fact.plant.user}`);
+  if (start < 0) return null;
+  const reply = `assistant: ${fact.plant.coach}`;
+  const at = transcript.indexOf(reply, start);
+  const end = at < 0 ? start + fact.plant.user.length + 6 : at + reply.length;
+  return { start, end, transcriptChars: transcript.length };
 }
 
 /** Text that should never reach a summary now that injected rows are dropped (HARNESS-V3 C2). */

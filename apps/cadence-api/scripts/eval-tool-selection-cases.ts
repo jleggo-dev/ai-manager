@@ -1,6 +1,8 @@
 /**
- * The golden set for the tool-selection eval — 58 turns, every one of them sourced from something
- * that actually happened. See `eval-tool-selection.ts` for how they are run and scored.
+ * The golden set for the tool-selection eval — every turn sourced from something that actually
+ * happened. See `eval-tool-selection.ts` for how they are run and scored. How many there are is
+ * printed by the runner (`npm run eval:tools -- --dry`), never written here: this line said 33 and
+ * then 58 while the set grew past both. `eval-tool-selection-smoke.ts` names the smoke subset.
  *
  * THE VOICE IS THE POINT. Every turn here is lowercase, hedged, half-punctuated and often about
  * two things at once, because that is how the owner writes to her and spec-shaped prompts test a

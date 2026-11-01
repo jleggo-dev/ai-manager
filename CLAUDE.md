@@ -79,9 +79,12 @@ P/C/F, owner 2026-10-28). Full veto list + rationale in BRAND.md.
   belongs in the context pack), and **which layer** — `ALWAYS_ACTIONS` costs ~190 tokens on every
   message forever, everything else is free until she asks for it. Tool descriptions, categories,
   and declared-equals-executable are gated by `coach-meta-tools.test.ts` and
-  `retrieval/description-audit.test.ts`; **what a tool hands BACK is not gated yet**, and that gap
-  is what let a crash read as "nothing on file" for weeks. Touching the always-on list means
-  running `npm run eval:tools`.
+  `retrieval/description-audit.test.ts`; what a tool hands BACK is gated by
+  `tool-response.test.ts` (a fault never reads as empty; every answer is bounded) and
+  `coach-action-contract.test.ts` (every action answers `changed:` / `nothing changed:` / fault,
+  since HARNESS-V3 P5) — that gap is what let a crash read as "nothing on file" for weeks, and
+  reading more than ~2k tokens of raw material belongs in a job, never in her context (step 4).
+  Touching the always-on list means running `npm run eval:tools`.
 - **Every button gets a table test, and every bug fix lands with the test that would have caught
   it** (owner, 2026-09-01). Deterministic routers — a title deciding which sheet opens
   (`taskShape.ts`), which tool a tap invokes, which matcher claims a row — fail silently: the

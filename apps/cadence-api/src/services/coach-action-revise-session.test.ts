@@ -73,7 +73,7 @@ describe('revise_session', () => {
 
   it('a miss lists what IS coming up, so the next call can be right', async () => {
     const out = await REVISE_SESSION.run('u1', { session: 'Swimming', steer: 'add abs' });
-    expect(out).toContain('No upcoming session clearly matches "Swimming"');
+    expect(out).toContain('no upcoming session clearly matches "Swimming"');
     expect(out).toContain('2026-08-31 Strength');
     expect(reviseSession).not.toHaveBeenCalled();
   });
@@ -99,7 +99,7 @@ describe('revise_session', () => {
   it('a vanished session points back at the plan instead of claiming anything happened', async () => {
     vi.mocked(reviseSession).mockResolvedValue({ status: 'not_found' });
     const out = await REVISE_SESSION.run('u1', { session: 'Easy run', steer: 'easier' });
-    expect(out).toContain('Nothing happened');
+    expect(out).toMatch(/^nothing changed: that session vanished/);
     expect(out).toContain('get_active_plan');
   });
 });

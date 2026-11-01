@@ -23,7 +23,14 @@ export async function resolveTimeoutMs(
   return Number((setting?.value as Record<string, unknown>)?.value) || 300_000;
 }
 
-const MAX_VARIABLE_LENGTH = 10_000;
+/**
+ * The most characters of one job variable a prompt ever sees. Anything longer is cut here and
+ * ends in `... [truncated]`. The length is measured on the value itself, BEFORE the
+ * `<user_input name="…">` wrapper below is added, so the wrapper does not count against it.
+ * Exported so a caller that builds a long variable (compaction's `transcript`) can size it to fit
+ * instead of losing its tail here without anyone noticing.
+ */
+export const MAX_VARIABLE_LENGTH = 10_000;
 
 /** Replace {{variableName}} placeholders with actual values. */
 export function interpolateTemplate(template: string, variables: Record<string, unknown>): string {

@@ -69,6 +69,7 @@ function unresolvedLine(item: PreviewItem): string {
 
 export const PREVIEW_MEAL: RetrievalFunction = {
   name: 'preview_meal',
+  mutates: 'none',
   description:
     'Reads food someone described into an itemised meal WITHOUT logging it — the parse-and-price the Food screen runs before a confirm. Use when unsure the words alone will price cleanly, or to answer a "how many calories" question about food not yet eaten; for the plain case ("had a banana") call log_meal instead, no preview needed. Pass {"text": "two eggs, toast and coffee"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when known — omit and it guesses. Writes nothing; call it as often as you like.',
   domains: ['nutrition', 'foods'],

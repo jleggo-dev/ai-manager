@@ -45,6 +45,7 @@ import {
 } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 import { REGISTRY_PACK_SOURCE } from '../services/coach-turns.ts';
+import { runInBackground } from '../services/background.ts';
 
 /** Build the capture window from the FULL conversation (user + coach turns), excluding the
  *  app-authored turns (see coach-transcript.ts). Falls back to the latest message if history
@@ -712,16 +713,14 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
       toolRounds,
     });
 
-    // Ambient capture (what it does: see runAmbientCapture above).
-    //
-    // Awaited for the same reason the reply is (above): this is where what someone told you
-    // becomes something you remember, and a promise left running past the handler is a promise
-    // the platform may never finish. It costs nobody any wait — the response is already ended —
-    // only invocation time, which is the correct thing to spend to keep "never make you repeat
-    // yourself" true.
-    await runAmbientCapture(userId, req.params.id as string, message);
-    // Last, because nothing else waits on it: see compactCoachSessionAfterReply.
-    await compactCoachSessionAfterReply(userId, req.params.id as string);
+    // Ambient capture (what it does: see runAmbientCapture above) and compaction (see
+    // compactCoachSessionAfterReply). The response has ENDED by now, and on Vercel the instance
+    // can be frozen the moment it does: awaiting here is not enough (background.ts has the
+    // measured case). `runInBackground` hands each to `waitUntil`, which keeps the invocation
+    // alive until it settles. Capture is where what someone told you becomes something you
+    // remember ("never make you repeat yourself"); nobody waits on either.
+    runInBackground('coach-capture', runAmbientCapture(userId, req.params.id as string, message));
+    runInBackground('coach-compaction', compactCoachSessionAfterReply(userId, req.params.id as string));
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);

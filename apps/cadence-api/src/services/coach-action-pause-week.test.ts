@@ -42,8 +42,8 @@ describe('pause_week', () => {
       constraints: { paused: true, reason: 'funeral' },
     });
     expect(out).toBe(
-      'Paused from 2026-09-07 to 2026-09-13: their scheduled sessions in that window are paused, nothing is ' +
-        'deleted, and the rhythm resumes on 2026-09-14. Their plan is otherwise unchanged.',
+      'changed: Paused from 2026-09-07 to 2026-09-13: their scheduled sessions in that window are paused, and the ' +
+        'rhythm resumes on 2026-09-14.\nunchanged: nothing is deleted, and their plan is otherwise unchanged.',
     );
   });
 
@@ -74,7 +74,7 @@ describe('pause_week', () => {
   it('does not delete anything — it never touches the plan editor', async () => {
     const out = await PAUSE_WEEK.run(USER, { end: '2026-09-09' });
     expect(out).toContain('nothing is deleted');
-    expect(out).toContain('Their plan is otherwise unchanged');
+    expect(out).toContain('their plan is otherwise unchanged');
   });
 
   /**
@@ -95,8 +95,8 @@ describe('pause_week', () => {
     it(`refuses ${name}, and nothing is entered`, async () => {
       const out = await PAUSE_WEEK.run(USER, params);
       expect(out).toMatch(expected);
-      expect(out).toMatch(/^Nothing was paused:/);
-      expect(out).toContain('Their plan is unchanged.');
+      expect(out).toMatch(/^nothing changed: /);
+      expect(out).toContain('Nothing was paused, and their plan is unchanged.');
       expect(enterEpisode).not.toHaveBeenCalled();
     });
   }
@@ -112,7 +112,7 @@ describe('pause_week', () => {
     it(`pauses ${name}`, async () => {
       const out = await PAUSE_WEEK.run(USER, params);
       expect(enterEpisode).toHaveBeenCalled();
-      expect(out).toMatch(/^Paused from /);
+      expect(out).toMatch(/^changed: Paused from /);
     });
   }
 

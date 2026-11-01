@@ -1,6 +1,7 @@
 import { getUser, setHomeLocation } from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `set_home_location` — the coach's own write path for a fact that, until now, only Settings and
@@ -27,10 +28,11 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * geolocation — it records only what the person said, in their own words.
  */
 
-export const SET_HOME_LOCATION: CoachActionTool = {
+export const SET_HOME_LOCATION: CoachActionTool = defineAction({
   name: 'set_home_location',
+  mutates: 'immediate',
   description:
-    'Record the place their weather and daylight are read from. Takes effect immediately. Use when they tell you where they live or have moved to — "I just moved to Denver", "I\'m based in Lisbon, Portugal" — so outdoor conditions can be checked from here on; do not use this for where they are right now on a trip, only for home. Pass {"place": "Bend OR"} in their own words, a city name with as much state or country as they gave. The place is geocoded; if it cannot be found, nothing is changed and you are told so.',
+    'Record the place their weather and daylight are read from. {gate}. Use when they tell you where they live or have moved to — "I just moved to Denver", "I\'m based in Lisbon, Portugal" — so outdoor conditions can be checked from here on; do not use this for where they are right now on a trip, only for home. Pass {"place": "Bend OR"} in their own words, a city name with as much state or country as they gave. The place is geocoded; if it cannot be found, nothing is changed and you are told so.',
   parameters: {
     properties: {
       place: {
@@ -42,10 +44,10 @@ export const SET_HOME_LOCATION: CoachActionTool = {
   },
   async run(userId, params) {
     const place = String(params.place ?? '').trim();
-    if (!place) return 'No place was given, so nothing changed.';
+    if (!place) return toolNothingChangedText('no place was given.');
 
     const geo = await geocodeCity(place);
-    if (!geo) return `"${place}" could not be found; nothing was changed.`;
+    if (!geo) return toolNothingChangedText(`"${place}" could not be found.`);
 
     const user = await getUser(userId);
     // A place named in conversation is a typed city, as far as the clients are concerned: it may
@@ -62,9 +64,13 @@ export const SET_HOME_LOCATION: CoachActionTool = {
       after?.home_location?.lon === geo.lon &&
       after?.home_location?.label === geo.label;
     if (!landed) {
-      return `Home location did NOT get set — the write did not take. Do not say it is done.`;
+      return toolNothingChangedText('home location did NOT get set — the write did not take. Do not say it is done.');
     }
 
-    return `Home location set to ${geo.label} (${geo.lat}, ${geo.lon}). Weather and daylight for outdoor sessions are read from here from now on.`;
+    return toolChangeText({
+      changed: [
+        `Home location set to ${geo.label} (${geo.lat}, ${geo.lon}). Weather and daylight for outdoor sessions are read from here from now on.`,
+      ],
+    });
   },
-};
+});

@@ -1,4 +1,5 @@
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolNothingChangedText } from './tool-response.ts';
 import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { BUILD_WEEK_AHEAD } from './coach-action-build-week-ahead.ts';
 import { PAUSE_WEEK } from './coach-action-pause-week.ts';
@@ -35,9 +36,6 @@ import { START_REPLAN } from './coach-action-start-replan.ts';
  * tool of its own: one dated session is the calendar layer, not the week's shape.
  */
 
-/** A refusal names what did NOT happen and the choices, and stops (the pause_week wording). */
-const refusedWeek = (reason: string): string => `Nothing was changed to their week: ${reason}`;
-
 const WEEK_ACTIONS = {
   extend: EXTEND_HORIZON,
   build_ahead: BUILD_WEEK_AHEAD,
@@ -46,10 +44,11 @@ const WEEK_ACTIONS = {
 type WeekAction = keyof typeof WEEK_ACTIONS;
 const isWeekAction = (v: unknown): v is WeekAction => typeof v === 'string' && v in WEEK_ACTIONS;
 
-export const SHAPE_WEEK: CoachActionTool = {
+export const SHAPE_WEEK: CoachActionTool = defineAction({
   name: 'shape_week',
+  mutates: 'immediate',
   description:
-    'Change the shape of their week at its edges — one action per call, all taking effect immediately. "extend" runs the CURRENT week longer: {"action": "extend", "days": 14} makes it two weeks counted from the day it began (28 at most); the check-in moves to the new end. "build_ahead" writes NEXT week now on the same rhythm: {"action": "build_ahead"}; the check-in does not move. "pause" clears every session between two dates and deletes nothing: {"action": "pause", "start": "2026-09-07", "end": "2026-09-13", "reason": "funeral"}; "start" defaults to today. Use it when they ask to plan further ahead, to see next week early, or for a stretch with nothing on it. What is IN the week is propose_plan_change; a finished week rolls forward with build_next_week.',
+    'Change the shape of their week at its edges — one action per call, and each {gate}. "extend" runs the CURRENT week longer: {"action": "extend", "days": 14} makes it two weeks counted from the day it began (28 at most); the check-in moves to the new end. "build_ahead" writes NEXT week now on the same rhythm: {"action": "build_ahead"}; the check-in does not move. "pause" clears every session between two dates and deletes nothing: {"action": "pause", "start": "2026-09-07", "end": "2026-09-13", "reason": "funeral"}; "start" defaults to today. Use it when they ask to plan further ahead, to see next week early, or for a stretch with nothing on it. What is IN the week is propose_plan_change; a finished week rolls forward with build_next_week.',
   parameters: {
     properties: {
       action: {
@@ -74,13 +73,14 @@ export const SHAPE_WEEK: CoachActionTool = {
   async run(userId, params) {
     const action = params.action;
     if (!isWeekAction(action)) {
-      return refusedWeek(
+      // A refusal names what did NOT happen and the choices, and stops.
+      return toolNothingChangedText(
         `"${String(action ?? '')}" is not one of ${Object.keys(WEEK_ACTIONS).join(', ')}. Their plan is unchanged.`,
       );
     }
     return WEEK_ACTIONS[action].run(userId, params);
   },
-};
+});
 
 const REBUILD_SCOPES = {
   session: REVISE_SESSION,
@@ -89,10 +89,11 @@ const REBUILD_SCOPES = {
 type RebuildScope = keyof typeof REBUILD_SCOPES;
 const isScope = (v: unknown): v is RebuildScope => typeof v === 'string' && v in REBUILD_SCOPES;
 
-export const REBUILD: CoachActionTool = {
+export const REBUILD: CoachActionTool = defineAction({
   name: 'rebuild',
+  mutates: 'immediate',
   description:
-    'Rebuild from their words — one session, or the whole week. {"scope": "session", "session": "Strength", "steer": "add chest and abs", "date": "2026-09-01"} reprograms what is INSIDE one upcoming session and takes effect immediately ("session" as the plan lists it; omit "date" for the soonest one). {"scope": "week", "steer": "more recovery, keep the long run"} redoes the plan itself in the background — minutes, ending in a card they tap; nothing changes until that tap. "steer" is always THEIR words, never your rewrite. Use "session" when they want the work within a session different, "week" only when they ask for the week itself reshaped. Moving, resizing, dropping or adding commitments is propose_plan_change; a first-ever plan is the build card, not this.',
+    'Rebuild from their words — one session, or the whole week. {"scope": "session", "session": "Strength", "steer": "add chest and abs", "date": "2026-09-01"} reprograms what is INSIDE one upcoming session and {gate} ("session" as the plan lists it; omit "date" for the soonest one). {"scope": "week", "steer": "more recovery, keep the long run"} redoes the plan itself in the background — minutes, ending in a card they tap; nothing changes until that tap. "steer" is always THEIR words, never your rewrite. Use "session" when they want the work within a session different, "week" only when they ask for the week itself reshaped. Moving, resizing, dropping or adding commitments is propose_plan_change; a first-ever plan is the build card, not this.',
   parameters: {
     properties: {
       scope: {
@@ -116,11 +117,13 @@ export const REBUILD: CoachActionTool = {
   async run(userId, params) {
     const scope = params.scope;
     if (!isScope(scope)) {
-      return `Nothing was rebuilt: "${String(scope ?? '')}" is not one of ${Object.keys(REBUILD_SCOPES).join(', ')}. Their plan is unchanged.`;
+      return toolNothingChangedText(
+        `"${String(scope ?? '')}" is not one of ${Object.keys(REBUILD_SCOPES).join(', ')}, so nothing was rebuilt. Their plan is unchanged.`,
+      );
     }
     return REBUILD_SCOPES[scope].run(userId, params);
   },
-};
+});
 
 /** The originals these two front — kept as modules, no longer registered as tools of their own. */
 export const PLAN_FACADE_COVERS = [

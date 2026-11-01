@@ -34,6 +34,7 @@ export interface RepertoireRead {
 
 export const GET_REPERTOIRE: RetrievalFunction = {
   name: 'get_repertoire',
+  mutates: 'none',
   // The standings are named by their SCHEMA words, because that is what the returned rows carry
   // and what update_repertoire takes back. The render translates them into the group headers she
   // reads ("Keeping up", "Learned"); a description naming only those labels would leave her
