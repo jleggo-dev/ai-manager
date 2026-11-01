@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied. Still owed: the three production writes (`set-coach-persona.ts`, `backfill:session-summarizer --write`, `sync-jobs` for `coach-compact` and `fact-review`), `eval:fact-review` live, `eval:tools`.** Written 2026-10-31. R1 ruled the same
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18. Still owed: `eval:tools` (owner), rulings R4 and R5.** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds; the fold did not
 until P3c made the summary a list (13% → 94% over four folds, see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -712,6 +712,15 @@ schema-validated. An assertion that the job holds no write path to fact tables.
   `npm run eval:fact-review` — six fixture files (the four above, a clean file, and a knee
   constraint beside a knee brace), each expecting one kind or nothing. The owner runs it after
   `sync-jobs`; `--dry` prints the cases free.
+- **Live reading (2026-11-01, 3 runs, after the sync): 18/18.** Every contradiction, stale fact
+  and duplicate came back under the expected kind citing the expected facts; all nine quiet runs
+  stayed quiet. Seven extra findings over the 18 runs, all on the two files with something to
+  find: the job infers a conflict from what a fact usually implies ("lifts three times a week"
+  beside "no equipment at home"; "gym closed until June" beside "lifts at the gym", while saying
+  itself that June has passed). With three findings a run, a person could be handed one real
+  question and two inferred ones a week. The candidate fix is one prompt line, two facts that can
+  both be true given something the file does not say are not a finding, measured with
+  `--prompt-from-config` before a sync. Not changed; the owner's call.
 
 ---
 
