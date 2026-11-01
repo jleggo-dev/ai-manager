@@ -1,0 +1,11 @@
+-- 0063 — a follow-up no longer rebuilds the context pack.
+--
+-- HARNESS-V3 P7b (2026-11-01). 0061 put open follow-ups in the context pack and added `pack_touch`
+-- so a note or a close would mark the pack stale. P7b took follow-ups OUT of the pack: the pack is
+-- pinned for the whole session, so it showed closed items as open, and the per-turn floor is now the
+-- only copy (`retrieval/follow-ups-function.ts`). The trigger was left in place that day and only
+-- cost an extra deterministic pack rebuild per follow-up write. This drops it.
+--
+-- House style: `if exists`, no down-migration. The function `cadence.touch_pack()` stays; other
+-- tables still use it.
+drop trigger if exists pack_touch on cadence.follow_ups;

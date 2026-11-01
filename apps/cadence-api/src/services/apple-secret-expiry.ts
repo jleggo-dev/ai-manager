@@ -18,6 +18,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isCalendarDate } from '@cadence/shared';
 
 /** Renew with this much runway. A month is enough to notice, act, and not be rushed. */
 export const RENEW_WINDOW_DAYS = 30;
@@ -33,8 +34,6 @@ export interface ExpiryRecord {
   /** Which Services ID it was minted for, so a mismatch is visible without decoding the JWT. */
   serviceId: string;
 }
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Whole days from `now` until the expiry date (negative once past). Compared at UTC midnight so
@@ -57,7 +56,7 @@ export function readExpiryRecord(filePath: string = EXPIRY_RECORD_PATH): ExpiryR
     return null;
   }
   const parsed = JSON.parse(raw) as Partial<ExpiryRecord>;
-  if (!parsed.expiresOn || !ISO_DATE.test(parsed.expiresOn)) {
+  if (!parsed.expiresOn || !isCalendarDate(parsed.expiresOn)) {
     throw new Error(`${filePath} has no valid "expiresOn" (YYYY-MM-DD)`);
   }
   return {

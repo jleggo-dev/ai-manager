@@ -7,13 +7,13 @@
  * edits) the stepping-stones + any right-sized target/date in Review, which PATCHes the goal.
  */
 import type { GoalAssessment } from '@cadence/shared';
+import { isCalendarDate } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getGoal } from '../repos/goals.ts';
 import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 
 const VERDICTS = new Set<GoalAssessment['verdict']>(['on_track', 'stretch', 'unrealistic']);
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseJson(text: string): Record<string, unknown> | null {
   try {
@@ -51,7 +51,7 @@ export async function assessGoal(userId: string, goalId: string): Promise<GoalAs
       st && typeof st === 'object' && typeof st.value === 'number'
         ? { value: st.value, unit: String(st.unit ?? '') }
         : null,
-    suggested_end: typeof p.suggested_end === 'string' && ISO_DATE.test(p.suggested_end) ? p.suggested_end : null,
+    suggested_end: typeof p.suggested_end === 'string' && isCalendarDate(p.suggested_end) ? p.suggested_end : null,
     milestones: Array.isArray(p.milestones)
       ? (p.milestones as unknown[])
           .filter(
@@ -60,7 +60,7 @@ export async function assessGoal(userId: string, goalId: string): Promise<GoalAs
           )
           .map((m) => ({
             label: String(m.label).trim(),
-            target_date: typeof m.target_date === 'string' && ISO_DATE.test(m.target_date) ? m.target_date : undefined,
+            target_date: typeof m.target_date === 'string' && isCalendarDate(m.target_date) ? m.target_date : undefined,
           }))
           .filter((m) => m.label.length > 0)
           .slice(0, 6)

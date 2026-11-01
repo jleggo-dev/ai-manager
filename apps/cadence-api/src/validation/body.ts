@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { DESCRIPTION_MAX, MAX_ATTACHMENTS_PER_MESSAGE, type RepertoireStatus } from '@cadence/shared';
+import { calendarDate } from './calendar-date.ts';
 
 export class BodyValidationError extends Error {
   constructor(message: string) {
@@ -78,10 +79,7 @@ export const previewMealBodySchema = z.object({
 /** One pour of water, ml canonical (0037). The cap matches the table's own check constraint. */
 export const waterBodySchema = z.object({
   ml: z.number().int().min(1).max(5000),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
+  date: calendarDate().optional(),
 });
 
 /**
@@ -94,19 +92,13 @@ export const waterBodySchema = z.object({
 export const readPhotoBodySchema = z.object({
   photo: z.string().refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' }),
   caption: z.string().max(2000).optional(),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
-    .optional(),
+  date: calendarDate().optional(),
 });
 
 /** POST /progress/photos — one opt-in progress photo; `taken_on` defaults to today server-side. */
 export const progressPhotoBodySchema = z.object({
   photo: z.string().refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' }),
-  taken_on: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'taken_on must be YYYY-MM-DD')
-    .optional(),
+  taken_on: calendarDate('taken_on must be YYYY-MM-DD').optional(),
 });
 
 /** PUT /progress/photos/enabled — the opt-in switch, both directions. */
@@ -128,10 +120,7 @@ export const logFromReadingBodySchema = z.object({
   reading: z.string().max(20000),
   caption: z.string().max(2000).optional(),
   meal: mealKindSchema.optional(),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
-    .optional(),
+  date: calendarDate().optional(),
 });
 
 /**
@@ -185,10 +174,7 @@ export const logMealBodySchema = z
       .min(1)
       .max(20)
       .optional(),
-    date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
-      .optional(),
+    date: calendarDate().optional(),
   })
   .superRefine((val, ctx) => {
     if (val.food_id && val.recipe_id) {
@@ -252,10 +238,7 @@ export const occurrenceLogBodySchema = z
 export const adhocLogBodySchema = z
   .object({
     text: z.string({ message: 'text required' }),
-    date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
-      .optional(),
+    date: calendarDate().optional(),
     // The quick-add sheet's area-flavoured adds — routes the log to that area's own off-plan
     // bucket (adhoc-log.ts ADHOC_TITLES) instead of the generic one.
     area: z.enum(['movement', 'practice']).optional(),
@@ -273,18 +256,13 @@ export const adhocLogBodySchema = z
 export const didLogBodySchema = z
   .object({
     text: z.string().optional(),
-    date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
-      .optional(),
+    date: calendarDate().optional(),
   })
   .transform((val) => ({ text: typeof val.text === 'string' ? val.text.trim() : '', date: val.date }));
 
 /** The hold menu's dated edits (move / duplicate): the one day the task should land on. */
 export const occurrenceDateBodySchema = z.object({
-  date: z
-    .string({ message: 'date must be YYYY-MM-DD' })
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' }),
+  date: calendarDate(),
 });
 
 export const weighInBodySchema = z
@@ -434,10 +412,7 @@ export const episodeEnterBodySchema = z.object({
     message: 'type must be travel|illness|injury|recovery|custom',
   }),
   days: z.coerce.number().int().min(1).max(60).optional(),
-  end: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'end must be YYYY-MM-DD' })
-    .optional(),
+  end: calendarDate('end must be YYYY-MM-DD').optional(),
   tone: z.enum(['gentle', 'supportive']).optional(),
   /**
    * What they actually have with them — a hotel gym's dumbbells, a resistance band, nothing at
@@ -573,7 +548,7 @@ export const weekReviewSessionBodySchema = z.object({
 /** Flip one day's meal slot. Deliberately the same three slots `week-review-facts.ts` computes —
  *  never `snack`, which the review grid does not confirm. */
 export const weekReviewMealBodySchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' }),
+  date: calendarDate(),
   meal: z.enum(['breakfast', 'lunch', 'dinner'], { message: 'meal must be breakfast|lunch|dinner' }),
   logged: z.boolean({ message: 'logged (boolean) required' }),
 });

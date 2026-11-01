@@ -59,6 +59,7 @@ describe('summarizeDailySteps', () => {
     // planner — one of them is a reason to build a bigger plan.
     expect(summarizeDailySteps([])).toBeNull();
     expect(summarizeDailySteps([{ date: 'garbage', steps: 500 }])).toBeNull();
+    expect(summarizeDailySteps([{ date: '2026-02-30', steps: 500 }])).toBeNull();
     expect(summarizeDailySteps([{ date: '2026-08-01', steps: 0 }])).toBeNull();
   });
 });

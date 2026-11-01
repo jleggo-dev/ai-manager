@@ -1,3 +1,4 @@
+import { isCalendarDate } from '@cadence/shared';
 import { claimFactReviewWeek } from '../repos/recaps.ts';
 import { emptyOutcome, runFactReview, type FactReviewOutcome } from './fact-review.ts';
 
@@ -24,14 +25,13 @@ import { emptyOutcome, runFactReview, type FactReviewOutcome } from './fact-revi
 export const FACT_REVIEW_MIN_DAYS_BETWEEN = 5;
 
 /** A recap week as the recaps repo returns it. Anything else is no week to claim. */
-export const WEEK_START_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function maybeRunFactReview(
   userId: string,
   weekStart: string | null | undefined,
 ): Promise<FactReviewOutcome> {
   try {
-    if (!weekStart || !WEEK_START_RE.test(weekStart)) return emptyOutcome('no_week');
+    if (!weekStart || !isCalendarDate(weekStart)) return emptyOutcome('no_week');
     const claimed = await claimFactReviewWeek(userId, weekStart, FACT_REVIEW_MIN_DAYS_BETWEEN);
     if (!claimed) return emptyOutcome('already_reviewed');
     const outcome = await runFactReview(userId);

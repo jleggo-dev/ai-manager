@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Goal, GoalArea, GoalMilestone, GoalType } from '@cadence/shared';
+import { isCalendarDate } from '@cadence/shared';
 import { deleteGoal, insertGoal, listGoalsByStatus, updateGoal } from '../repos/goals.ts';
 import { describeIncoherentMeasure, normalizeBrief, selectCapturedGoals } from './capture-normalize.ts';
 import { planGoalWrites, type GoalDraft } from './capture-goal-merge.ts';
@@ -36,8 +37,6 @@ const LEGACY_AREA: Record<string, GoalArea> = {
   learning: 'practice',
 };
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * Milestones from the Broker (the reframe path: "the novel finished by December, as a milestone
  * on a daily writing practice"). The model emits {label, target_date}; every OTHER writer of
@@ -53,7 +52,7 @@ function normalizeMilestones(raw: unknown): GoalMilestone[] | undefined {
     .map((m) => ({
       id: randomUUID(),
       label: String(m.label).trim(),
-      ...(typeof m.target_date === 'string' && ISO_DATE.test(m.target_date) ? { target_date: m.target_date } : {}),
+      ...(typeof m.target_date === 'string' && isCalendarDate(m.target_date) ? { target_date: m.target_date } : {}),
     }))
     .filter((m) => m.label.length > 0)
     .slice(0, 6);

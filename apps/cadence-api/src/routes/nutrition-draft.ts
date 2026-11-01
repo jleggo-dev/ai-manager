@@ -12,6 +12,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { BodyValidationError, parseBody, mealKindSchema } from '../validation/body.ts';
+import { calendarDate } from '../validation/calendar-date.ts';
 import {
   appendFood,
   appendParsed,
@@ -54,7 +55,7 @@ function sendError(res: Response, err: unknown, label: string, fallback: string)
 
 /* ── Body schemas (local on purpose — validation/body.ts is a contention point) ─ */
 
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD');
+const dateSchema = calendarDate();
 
 const openDraftBody = z.object({
   meal: mealKindSchema.optional(),

@@ -1,3 +1,4 @@
+import { isCalendarDate } from '@cadence/shared';
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { enterEpisode } from './episode.ts';
@@ -26,7 +27,6 @@ import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 const MAX_PAUSE_DAYS = 56;
 
 const DAY = 86_400_000;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** The same UTC calendar day `episode.ts` works in, so the two never disagree by a day. */
 function todayIso(): string {
@@ -85,11 +85,11 @@ export const PAUSE_WEEK: CoachActionTool = defineAction({
     const rawStart = String(params.start ?? '').trim();
     const rawEnd = String(params.end ?? '').trim();
 
-    if (rawStart && !ISO_DATE.test(rawStart)) {
+    if (rawStart && !isCalendarDate(rawStart)) {
       return refused(`"${rawStart}" is not a start date in YYYY-MM-DD form.`);
     }
     if (!rawEnd) return refused('no last paused day was given.');
-    if (!ISO_DATE.test(rawEnd)) return refused(`"${rawEnd}" is not a last paused day in YYYY-MM-DD form.`);
+    if (!isCalendarDate(rawEnd)) return refused(`"${rawEnd}" is not a last paused day in YYYY-MM-DD form.`);
 
     const start = rawStart && rawStart > today ? rawStart : today;
     if (rawEnd < start) {

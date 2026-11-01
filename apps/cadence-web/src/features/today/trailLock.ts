@@ -1,3 +1,5 @@
+import { isCalendarDate } from '@cadence/shared';
+
 /**
  * The wall (owner, 2026-09-07): "I'm okay showing an endless horizon, just as long as the
  * check-in is static and we can't really move past it without doing so explicitly."
@@ -30,8 +32,6 @@ export interface TrailWeekState {
 /** The one quiet line on a locked day — why its discs are muted (owner's wording, 2026-09-09). */
 export const LOCKED_DAY_LINE = 'Locked until weekly check-in';
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 /** YYYY-MM-DD + 1, pure date arithmetic (no zone) — same idiom as the server's `addDays`. */
 function nextDay(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -44,8 +44,8 @@ export function wallDate(
   weekState: TrailWeekState | null | undefined,
   todayIso: string | null | undefined,
 ): string | null {
-  if (!weekState || !ISO_DATE.test(weekState.ends_on)) return null;
-  const today = todayIso && ISO_DATE.test(todayIso) ? todayIso : null;
+  if (!weekState || !isCalendarDate(weekState.ends_on)) return null;
+  const today = todayIso && isCalendarDate(todayIso) ? todayIso : null;
   const lastOpen = today && today > weekState.ends_on ? today : weekState.ends_on;
   return nextDay(lastOpen);
 }
@@ -59,7 +59,7 @@ export function lockedFromDate(
   const wall = wallDate(weekState, todayIso);
   if (!wall) return null;
   const built = weekState?.built_through;
-  if (built && ISO_DATE.test(built)) {
+  if (built && isCalendarDate(built)) {
     const afterBuilt = nextDay(built);
     return afterBuilt > wall ? afterBuilt : wall;
   }
@@ -69,6 +69,6 @@ export function lockedFromDate(
 /** Is this day behind the wall? ISO date strings compare lexically, so no parsing is needed —
  *  and anything that is not one is never locked. */
 export function isLockedDay(date: string, lockedFrom: string | null | undefined): boolean {
-  if (!lockedFrom || !ISO_DATE.test(lockedFrom) || !ISO_DATE.test(date)) return false;
+  if (!lockedFrom || !isCalendarDate(lockedFrom) || !isCalendarDate(date)) return false;
   return date >= lockedFrom;
 }

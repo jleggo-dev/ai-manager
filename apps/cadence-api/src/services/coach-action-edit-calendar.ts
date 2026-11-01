@@ -1,3 +1,4 @@
+import { isCalendarDate } from '@cadence/shared';
 import { getUser } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
@@ -24,7 +25,6 @@ import { titlesFor } from './retrieval/calendar-function.ts';
  * A session is named by its date and title as the calendar read shows them, never by an id the
  * model would have to carry. Tail tier, `plan` category, with a DRAWER_HOOKS line.
  */
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIONS = ['move', 'copy', 'delete'] as const;
 type Action = (typeof ACTIONS)[number];
 
@@ -106,9 +106,9 @@ export const EDIT_CALENDAR: CoachActionTool = defineAction({
     const to = typeof params.to === 'string' && params.to.trim() ? params.to.trim() : undefined;
 
     if (!ACTIONS.includes(action)) return refused(`"${action}" is not one of move, copy, delete.`);
-    if (!ISO_DATE.test(date)) return refused(`"${date}" is not a day in YYYY-MM-DD form.`);
+    if (!isCalendarDate(date)) return refused(`"${date}" is not a day in YYYY-MM-DD form.`);
     if (!title) return refused('no session title was given.');
-    if (action !== 'delete' && !(to && ISO_DATE.test(to))) {
+    if (action !== 'delete' && !(to && isCalendarDate(to))) {
       return refused(`a ${action} needs "to", the day it goes to, in YYYY-MM-DD form.`);
     }
 

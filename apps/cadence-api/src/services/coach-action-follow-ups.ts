@@ -1,6 +1,7 @@
 import { closeFollowUp, noteFollowUp, FOLLOW_UP_ID_PREFIX } from '../repos/follow-ups.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
-import { isCalendarDate, normalizeFollowUpId } from './follow-up-input.ts';
+import { isCalendarDate } from '@cadence/shared';
+import { normalizeFollowUpId } from './follow-up-input.ts';
 import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**

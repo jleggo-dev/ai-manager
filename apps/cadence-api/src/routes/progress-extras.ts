@@ -6,7 +6,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import type { ProgressWindow, RepertoireItem, RepertoireStatus, SessionFeedbackKind } from '@cadence/shared';
-import { qualifierMeta } from '@cadence/shared';
+import { isCalendarDate, qualifierMeta } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { isMeal } from '../services/nutrition-parse.ts';
 import { getShelf } from '../services/progress-nontemporal-shelf.ts';
@@ -39,13 +39,11 @@ const windowFromQuery = (v: unknown): ProgressWindow => (isWindow(v) ? v : 'mont
 const FEEDBACK_KINDS: SessionFeedbackKind[] = ['movement', 'mind'];
 const isFeedbackKind = (v: unknown): v is SessionFeedbackKind => FEEDBACK_KINDS.includes(v as SessionFeedbackKind);
 
-const isIsoDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-
 /** GET /progress/events?from&to — `shelf`: bests & firsts from goal_events in the range. */
 router.get('/events', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const { from, to } = req.query;
-  if (!isIsoDate(from) || !isIsoDate(to)) {
+  if (!isCalendarDate(from) || !isCalendarDate(to)) {
     return void res.status(400).json({ error: 'from and to (YYYY-MM-DD) are required' });
   }
   try {

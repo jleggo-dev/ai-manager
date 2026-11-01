@@ -153,6 +153,15 @@ describe('meal-plans client soft-fail', () => {
     if (r.status === 'unavailable') expect(r.message).toMatch(/aren't reachable/i);
   });
 
+  it.each(['2026-02-30', 'next monday'])(
+    'generateMealPlan refuses the week start %s without asking the server',
+    async (week_of) => {
+      const r = await generateMealPlan({ week_of });
+      expect(r.status).toBe('error');
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
   it('probeRecipeDiscovery false on 404', async () => {
     expect(await probeRecipeDiscovery()).toBe(false);
   });

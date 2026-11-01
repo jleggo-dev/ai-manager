@@ -35,12 +35,22 @@ export interface SweepResult {
   skippedLive: number;
 }
 
-export async function sweepSuiteUsers(idleMinutes = SUITE_USER_IDLE_MINUTES): Promise<SweepResult> {
+/**
+ * `only` narrows the sweep to those ids. The sweep's own test passes its three users: sweeping the
+ * whole table under a running CI (every idle user is a cascading delete) timed out at 30 s three
+ * times on 2026-11-01. The cleanup script passes nothing and sweeps everything idle.
+ */
+export async function sweepSuiteUsers(
+  idleMinutes = SUITE_USER_IDLE_MINUTES,
+  only?: readonly string[],
+): Promise<SweepResult> {
+  const scope = only ? sql`and id = any(${[...only]}::uuid[])` : sql``;
   const rows = await sql<{ id: string; idle: boolean }[]>`
     select id::text, updated_at < now() - make_interval(mins => ${idleMinutes}) as idle
       from cadence.users
      where id::text ~ ${SUITE_USER}
-       and id::text !~ ${SCRATCH_ACCOUNT}`;
+       and id::text !~ ${SCRATCH_ACCOUNT}
+       ${scope}`;
   const swept: string[] = [];
   let skippedLive = rows.filter((r) => !r.idle).length;
   for (const { id } of rows.filter((r) => r.idle)) {

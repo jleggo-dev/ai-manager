@@ -19,6 +19,7 @@
  * - **Count what happened.** Subtitles say what a session IS, never what is left of it, and a
  *   past day carries its own outcome so the week face can draw what happened without arithmetic.
  */
+import { isCalendarDate } from './calendar-date.ts';
 import type { OccurrenceSession, OccurrenceStatus, SessionBlock, SessionItem } from './types/occurrence.ts';
 import { singleSetPlan, intervalTotalSeconds, type IntervalPlan } from './interval.ts';
 import { composeWorkoutPlan, inferActivity, type WorkoutPlanSpec } from './workout-plan.ts';
@@ -491,10 +492,6 @@ export function buildWatchWeek(input: WatchWeekInput): WatchWeekPayload {
   return fitToBudget({ version: WATCH_PAYLOAD_VERSION, generatedAt: input.generatedAt, days });
 }
 
-function isDateISO(s: string | undefined): s is string {
-  return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
-
 function addDays(dateISO: string, days: number): string {
   const [y, m, d] = dateISO.split('-').map(Number);
   return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + days)).toISOString().slice(0, 10);
@@ -520,9 +517,9 @@ function windowOf(input: WatchWeekInput, scheduled: string[]): { first?: string;
   const today = input.todayISO;
   const firstScheduled = scheduled[0];
   const lastScheduled = scheduled[scheduled.length - 1];
-  if (!isDateISO(today)) return { first: firstScheduled, last: lastScheduled };
+  if (!isCalendarDate(today)) return { first: firstScheduled, last: lastScheduled };
 
-  const through = isDateISO(input.throughISO) ? input.throughISO : lastScheduled;
+  const through = isCalendarDate(input.throughISO) ? input.throughISO : lastScheduled;
   let last = through && daysBetween(today, through) > 0 ? through : today;
   if (daysBetween(today, last) >= WATCH_MAX_DAYS) last = addDays(today, WATCH_MAX_DAYS - 1);
 
