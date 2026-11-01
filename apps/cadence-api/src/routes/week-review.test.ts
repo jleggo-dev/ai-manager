@@ -150,6 +150,12 @@ describe('GET /plan/week-review/facts', () => {
       expect(r.status).toBe(400);
       expect(buildWeekReviewFacts).not.toHaveBeenCalled();
     });
+
+    it('400s a day that is not on the calendar — the shape alone is not a date', async () => {
+      const r = await call('GET', '/plan/week-review/facts?week=2026-02-30');
+      expect(r.status).toBe(400);
+      expect(buildWeekReviewFacts).not.toHaveBeenCalled();
+    });
   });
 });
 

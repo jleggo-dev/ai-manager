@@ -182,6 +182,7 @@ describe('get_calendar — the tail tool', () => {
       '2026-10-07',
     ],
     ['an unparseable from is ignored', { from: 'next tuesday', days: 2 }, utcToday, addDays(utcToday, 1)],
+    ['a from that is not on the calendar is ignored', { from: '2026-02-30', days: 2 }, utcToday, addDays(utcToday, 1)],
   ])('%s', async (_label, params, from, to) => {
     await GET_CALENDAR.run('u1', params as never);
     expect(listOccurrences).toHaveBeenCalledWith('u1', from, to);

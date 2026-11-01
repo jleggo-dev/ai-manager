@@ -17,6 +17,7 @@ describe('planDay — day N of the plan', () => {
     ['a start after today never goes below 1', '2026-09-10', '2026-09-06', 1],
     ['no start known → 4, the mid-week wording', undefined, '2026-09-06', 4],
     ['garbage start → 4', 'yesterday', '2026-09-06', 4],
+    ['a start that is not on the calendar → 4', '2026-02-30', '2026-09-06', 4],
   ])('%s', (_label, startedOn, today, want) => {
     expect(planDay(startedOn, today)).toBe(want);
   });
@@ -123,6 +124,8 @@ describe('"later today" — remembered for the day, on this device', () => {
     writeLaterOn('2026-09-13');
     expect(readLaterOn()).toBe('2026-09-13');
     localStorage.setItem('cadence.checkin-gate.later', 'whenever');
+    expect(readLaterOn()).toBeNull();
+    localStorage.setItem('cadence.checkin-gate.later', '2026-02-30');
     expect(readLaterOn()).toBeNull();
   });
 });

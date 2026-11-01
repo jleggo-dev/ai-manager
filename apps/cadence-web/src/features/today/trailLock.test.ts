@@ -33,6 +33,7 @@ describe('wallDate — where the check-in card stands', () => {
     ['undefined weekState (older server) → nothing', undefined, '2026-09-07', null],
     ['ends_on unparseable → fails OPEN', { ends_on: 'soon', checkin_due: true }, '2026-09-07', null],
     ['ends_on empty → fails OPEN', { ends_on: '', checkin_due: true }, '2026-09-07', null],
+    ['ends_on not on the calendar → fails OPEN', { ends_on: '2026-02-30', checkin_due: true }, '2026-09-07', null],
   ])('%s', (_label, weekState, today, want) => {
     expect(wallDate(weekState, today)).toBe(want);
   });

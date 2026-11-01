@@ -2,7 +2,7 @@
  * Pure helpers for generate_meal_plan job output + shopping-list derivation.
  * No DB / AI Admin imports — unit-testable without CADENCE_* secrets.
  */
-import type { ShoppingListCategory, ShoppingListItem } from '@cadence/shared';
+import { isCalendarDate, type ShoppingListCategory, type ShoppingListItem } from '@cadence/shared';
 import type { StructuredIngredient, StructuredRecipe } from './recipe-parse.ts';
 
 const SLOTS = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
@@ -61,10 +61,6 @@ function asPositiveNumber(v: unknown): number | null {
     if (Number.isFinite(n) && n > 0) return n;
   }
   return null;
-}
-
-function isIsoDate(s: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
 function parseIngredient(raw: unknown): MealPlanIngredient | null {
@@ -136,7 +132,7 @@ function parseDay(raw: unknown): MealPlanStructuredDay | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   const day = asTrimmedString(o.day);
-  if (!day || !isIsoDate(day)) return null;
+  if (!day || !isCalendarDate(day)) return null;
   const meals = (Array.isArray(o.meals) ? o.meals : [])
     .map(parseMeal)
     .filter((m): m is MealPlanStructuredMeal => m !== null)

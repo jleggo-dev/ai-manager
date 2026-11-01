@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isCalendarDate, normalizeFollowUpId } from './follow-up-input.ts';
+import { isCalendarDate } from '@cadence/shared';
+import { normalizeFollowUpId } from './follow-up-input.ts';
 
 /**
  * Two routers, one table each (CLAUDE.md: every router ships with positives AND near-misses).

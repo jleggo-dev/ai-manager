@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isCalendarDate } from '@cadence/shared';
 import {
   getUser,
   mergeCapturedConstraints,
@@ -138,7 +139,7 @@ export const UPDATE_CONSTRAINT: CoachActionTool = defineAction({
 
     const planAround = typeof params.plan_around === 'boolean' ? params.plan_around : action !== 'lift';
     const kind = ['physical', 'life', 'other'].includes(String(params.kind)) ? String(params.kind) : undefined;
-    const until = /^\d{4}-\d{2}-\d{2}$/.test(String(params.until ?? '')) ? String(params.until) : undefined;
+    const until = isCalendarDate(params.until) ? params.until : undefined;
 
     await mergeCapturedConstraints(userId, [
       {

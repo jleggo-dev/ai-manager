@@ -1,3 +1,4 @@
+import { isCalendarDate } from '@cadence/shared';
 import { retitleForTarget } from './goal-retitle.ts';
 import { listGoals, updateGoal, setGoalStatus, retireGoal, restoreGoal } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
@@ -138,7 +139,7 @@ export const UPDATE_GOAL: CoachActionTool = defineAction({
     }
 
     const date = String(params.date ?? '').trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!isCalendarDate(date)) {
       return toolNothingChangedText('no usable date was given.', ['Ask what date they are aiming for.']);
     }
     const wasDate = goal.timeframe?.end;

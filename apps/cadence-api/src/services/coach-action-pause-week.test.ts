@@ -85,7 +85,13 @@ describe('pause_week', () => {
     ['no end at all', {}, /no last paused day was given/],
     ['an end that is not a date', { end: 'next friday' }, /"next friday" is not a last paused day/],
     ['an end in the wrong shape', { end: '09/13/2026' }, /is not a last paused day/],
+    ['an end that is not on the calendar', { end: '2026-02-30' }, /"2026-02-30" is not a last paused day/],
     ['a start that is not a date', { start: 'monday', end: '2026-09-09' }, /"monday" is not a start date/],
+    [
+      'a start that is not on the calendar',
+      { start: '2026-02-30', end: '2026-09-09' },
+      /"2026-02-30" is not a start date/,
+    ],
     ['an end before the start', { start: '2026-09-10', end: '2026-09-08' }, /is before the first paused day/],
     ['an end already past', { end: '2026-08-30' }, /has already passed/],
     ['a stretch over eight weeks', { end: '2026-11-30' }, /89 days, and this pauses at most 56 days/],

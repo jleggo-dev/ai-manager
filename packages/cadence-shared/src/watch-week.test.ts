@@ -546,6 +546,8 @@ describe('buildWatchWeek — the week itself', () => {
     });
     // No committed plan at all (the route sends an empty today) is an empty payload, not a throw.
     expect(build([], '')).toEqual({ version: WATCH_PAYLOAD_VERSION, generatedAt: STAMP, days: [] });
+    // A "today" that is not on the calendar is no today either — the same empty payload.
+    expect(build([], '2026-02-30')).toEqual({ version: WATCH_PAYLOAD_VERSION, generatedAt: STAMP, days: [] });
   });
 
   it('omits absent quantities rather than sending zeros', () => {

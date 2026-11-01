@@ -1,3 +1,5 @@
+import { isCalendarDate } from '@cadence/shared';
+
 /**
  * The gate (owner, 2026-09-09): what a tap on the trail asks before it opens anything.
  *
@@ -24,13 +26,12 @@ export interface GateWeekState {
   started_on?: string;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 86_400_000;
 
 /** Which day of the plan today is, 1-based. Unknown start → 4: the mid-week wording is the safe
  *  one ("we're still working through this week" is true whatever the day). */
 export function planDay(startedOn: string | undefined, todayIso: string): number {
-  if (!startedOn || !ISO_DATE.test(startedOn) || !ISO_DATE.test(todayIso)) return 4;
+  if (!startedOn || !isCalendarDate(startedOn) || !isCalendarDate(todayIso)) return 4;
   const days = Math.round((Date.parse(`${todayIso}T00:00:00Z`) - Date.parse(`${startedOn}T00:00:00Z`)) / DAY_MS);
   return Math.max(1, days + 1);
 }
@@ -54,7 +55,7 @@ export function gateFor({
   /** The local day "Later today" was last tapped on, if any (`readLaterOn`). */
   laterOn: string | null;
 }): { variant: GateVariant; day: number } | null {
-  if (!weekState || !ISO_DATE.test(weekState.ends_on) || !ISO_DATE.test(todayIso)) return null;
+  if (!weekState || !isCalendarDate(weekState.ends_on) || !isCalendarDate(todayIso)) return null;
   const day = planDay(weekState.started_on, todayIso);
   if (todayIso >= weekState.ends_on) {
     // The check-in's day (or later). A locked day always asks; an open day from the check-in on
@@ -74,7 +75,7 @@ const LATER_KEY = 'cadence.checkin-gate.later';
 export function readLaterOn(): string | null {
   try {
     const v = localStorage.getItem(LATER_KEY);
-    return v && ISO_DATE.test(v) ? v : null;
+    return v && isCalendarDate(v) ? v : null;
   } catch {
     return null;
   }

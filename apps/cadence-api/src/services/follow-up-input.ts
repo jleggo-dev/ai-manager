@@ -26,17 +26,3 @@ export function normalizeFollowUpId(raw: string): string | null {
     .filter((r) => r.replace(/-/g, '').length >= MIN_ID_CHARS);
   return runs.length === 1 ? runs[0]! : null;
 }
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * True for a YYYY-MM-DD that is a real day. The shape alone let "2026-02-30" through, and the
- * `::date` cast then threw inside the insert and reached her as a generic fault instead of a reason
- * she could fix. Round-tripping through Date catches every impossible day (JS rolls Feb 30 over to
- * Mar 2, so the string no longer matches); year 0000 is refused because Postgres has no year zero.
- */
-export function isCalendarDate(s: string): boolean {
-  if (!ISO_DATE.test(s) || s.startsWith('0000')) return false;
-  const d = new Date(`${s}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-}
