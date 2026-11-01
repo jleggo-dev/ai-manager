@@ -277,6 +277,31 @@ stale, session B opens, and the follow-up is in the pack.
 - Filed in a new drawer category `remembering`; no capability-manifest line (68 chars of headroom,
   the category line takes ~55). Migration `0061_follow_ups.sql`, owner go.
 
+**Built (P7b, 2026-11-01) — the follow-ups audit's five should-fix items, plus one route leftover.**
+No migration; stacks on P9 (#441) for the `source` column.
+- **Expiry counts from the due date.** `greatest(created_at, due_on)`: a follow-up noted in
+  November and due in March is not expired in February. The list orders soonest due first, then
+  undated newest first (it was newest first, which put tomorrow's date below eight newer notes).
+- **The cap says what it hides.** `readFollowUpList` carries the open total; past 8 the section adds
+  "And N more open, not shown here: older ones with no date" (or "ones due later, or with no date"
+  when the last shown is dated) — read from the order, never a pick.
+- **The floor is the only copy.** `get_follow_ups` left the pack's MANDATORY list: the pack is
+  pinned for the session, so it showed closed items as open, and when the last one closed the floor
+  rendered nothing and the pinned copy was the only list she could see. Once a person has ever had
+  one, the floor now says `- none open right now` instead of going quiet; someone who never had one
+  pays nothing. (The 0061 `pack_touch` trigger on `follow_ups` now only costs an extra deterministic
+  pack rebuild; left in place.)
+- **The fact review's questions are marked.** A `source = 'fact-review'` line carries
+  `(a question from checking their file)`, so it does not read as her promise. This replaces the P9
+  note below that the render was left unchanged.
+- **Closing takes what she is shown.** `[3f9a2c1d]` works (`follow-up-input.ts` keeps the one run of
+  uuid characters long enough to be an id); the prefix match is `starts_with`, so `________` no longer
+  matches everything as a LIKE did; `note_follow_up` refuses a day that does not exist (2026-02-30)
+  with a reason instead of a fault from the `::date` cast.
+- **After the reply, nothing is a bare await.** `notifyIfTheyLeft` and `recordCoachTurn` run through
+  `runInBackground` (`coach-notify`, `coach-record`) beside capture and compaction: 121 coach turns
+  in 60 days had left 40 `coach` log rows.
+
 ### C4. What tools hand back: finish the contract
 
 **What exists, and better than the last answer assumed.** `tool-response.ts` +
@@ -701,6 +726,7 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 | P5 | C4: bound actions, `mutates` field, `toolChangeText` — MERGED #442 | — | `coach-tools.ts`, action files, audit test | — |
 | P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint — MERGED #440 | — | `scripts/` | — |
 | P7 | C3: follow-ups store, two tools, pack section — MERGED #439, 0061 applied | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
+| P7b | C3 audit follow-ups: due-date expiry, count line, floor-only, fact-review tag, id input, post-reply background — in review | P7, P9 | `repos/follow-ups.ts`, `follow-ups-function.ts`, `follow-up-input.ts`, `context-pack.ts`, `routes/coach.ts` | — |
 | P8 | C6: TOOL-HARNESS rule (doc) — DONE (checklist step 4); food-check continues on its own plan | — | docs | — |
 | P9 | C7: `fact-review` job, hooked to check-in close — BUILT, in review (#441) | P7 | new job + service, `follow-ups.ts`, `recaps.ts`, `week-review.ts` | Cadence migration 0062 (owner go), then `sync-jobs` |
 
