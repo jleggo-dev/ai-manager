@@ -18,7 +18,8 @@ import { resolveAttachmentsAsText } from '../services/attachment-resolver.ts';
 import { getConfig } from '../config.ts';
 import { errorMessage } from '../lib/error-message.ts';
 import type { AiManagerResult, Attachment, FormattingRule, ProcessingJobRow, ProviderRow } from '../types.ts';
-import { interpolateTemplate } from './job-execution-utils.ts';
+import { fillTemplate } from './job-execution-utils.ts';
+import type { VariableCut } from '../types/llm.ts';
 import { runJobLlmAndFormat } from './job-execution-run.ts';
 
 export { interpolateTemplate, resolveTimeoutMs } from './job-execution-utils.ts';
@@ -192,6 +193,7 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
 
     /* ── 4. Build the final prompt ────────────────────────── */
     let finalPrompt: string;
+    let cuts: VariableCut[] = [];
     if (promptOverride) {
       finalPrompt = promptOverride;
     } else {
@@ -199,7 +201,14 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
       if (!template.trim()) {
         throw new Error('No prompt template configured for this job');
       }
-      finalPrompt = interpolateTemplate(template, variables);
+      ({ text: finalPrompt, cuts } = fillTemplate(template, variables));
+    }
+    if (cuts.length) {
+      // A cut is a defect in the caller, never a quiet trim. It goes on the run's diagnostic row
+      // (where runs are reviewed) and back to the caller (who can tell the person the answer was
+      // read from less than they sent) — a server log alone is where nobody looks.
+      diag.addMetadata('truncated_variables', cuts);
+      console.warn('[job-execution] variables cut to the cap on this run', { job: job.slug, cuts });
     }
 
     /* ── 4b. Inject text file attachments into prompt ─────── */
@@ -234,6 +243,8 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
       diag,
       t0,
     });
+
+    if (cuts.length) result.metadata.truncatedVariables = cuts;
 
     diag.complete('success').catch((diagErr: unknown) => {
       console.warn('[AI Manager] Non-blocking diagnostics write failed:', errorMessage(diagErr));

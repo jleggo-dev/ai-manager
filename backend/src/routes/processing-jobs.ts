@@ -272,6 +272,12 @@ router.post(
         model: result.metadata.model,
         usage: result.metadata.usage,
         finishReason: result.metadata.finishReason,
+        // The same `metadata` object an in-process run returns, so a remote caller reads one shape.
+        metadata: {
+          model: result.metadata.model,
+          durationMs: result.metadata.durationMs,
+          truncatedVariables: result.metadata.truncatedVariables ?? [],
+        },
         diagnostics: result.diagnostics || null,
       };
 

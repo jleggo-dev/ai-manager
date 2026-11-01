@@ -14,6 +14,7 @@
  * to the same public surface throughout).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MAX_VARIABLE_LENGTH } from '../src/ai-manager/job-execution-utils.ts';
 import type { AiProfileRow, ChatMessageRow, ChatSessionRow, ProcessingJobRow, ProviderRow } from '../src/types.ts';
 
 /* ── Mocks: models ──────────────────────────────────────────── */
@@ -243,6 +244,40 @@ describe('executeJobById', () => {
 
     expect(diagSessions[0]?.args[4]).toBe('sess-9');
     expect(diagSessions[0]?.addMetadata).toHaveBeenCalledWith('compaction', { summarizedRows: 4, budgetCut: true });
+  });
+
+  /** A variable over the cap is cut, and the cut is on the diagnostic row and in the result. */
+  it('records a cut variable on the diagnostic row and hands it back to the caller', async () => {
+    vi.mocked(getProcessingJob).mockResolvedValue(asProcessingJobRow());
+    const chatCompletion = vi.fn().mockResolvedValue({ model: 'model-a', choices: [{ message: { content: 'ok' } }] });
+    vi.mocked(createLlmClientForProvider).mockReturnValue({
+      chatCompletion,
+    } as unknown as ReturnType<typeof createLlmClientForProvider>);
+    diagSessions.length = 0;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await executeJobById('job-1', { variables: { name: 'x'.repeat(MAX_VARIABLE_LENGTH + 1) } });
+
+    const cut = { variable: 'name', length: MAX_VARIABLE_LENGTH + 1, cap: MAX_VARIABLE_LENGTH };
+    expect(diagSessions[0]?.addMetadata).toHaveBeenCalledWith('truncated_variables', [cut]);
+    expect(result.metadata.truncatedVariables).toEqual([cut]);
+    const [, messages] = chatCompletion.mock.calls[0] as [string, Array<{ content: string }>];
+    expect(messages[0]?.content.endsWith('... [truncated]</user_input>')).toBe(true);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('a run with nothing cut carries no truncatedVariables at all', async () => {
+    vi.mocked(getProcessingJob).mockResolvedValue(asProcessingJobRow());
+    vi.mocked(createLlmClientForProvider).mockReturnValue({
+      chatCompletion: vi.fn().mockResolvedValue({ model: 'model-a', choices: [{ message: { content: 'ok' } }] }),
+    } as unknown as ReturnType<typeof createLlmClientForProvider>);
+    diagSessions.length = 0;
+
+    const result = await executeJobById('job-1', { variables: { name: 'World' } });
+
+    expect(result.metadata.truncatedVariables).toBeUndefined();
+    expect(diagSessions[0]?.addMetadata).not.toHaveBeenCalledWith('truncated_variables', expect.anything());
   });
 
   it('falls back to the failover provider when the primary model errors', async () => {

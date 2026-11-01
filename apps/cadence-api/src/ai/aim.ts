@@ -30,7 +30,13 @@ import {
 } from '@ai-admin/core';
 import { cadenceConfig } from '../config.ts';
 import { rejectAsAimError } from './aim-errors.ts';
-import { remoteJobsEnabled, remoteJobsTarget, remoteRunJobById, remoteRunJobBySlug } from './aim-remote.ts';
+import {
+  type JobRunResult,
+  remoteJobsEnabled,
+  remoteJobsTarget,
+  remoteRunJobById,
+  remoteRunJobBySlug,
+} from './aim-remote.ts';
 
 export { AimError } from './aim-errors.ts';
 export type { AimErrorKind } from './aim-errors.ts';
@@ -129,7 +135,7 @@ export function runJobBySlug(
   slug: string,
   variables: Record<string, unknown>,
   opts: { images?: string[]; promptOverride?: string } = {},
-) {
+): Promise<JobRunResult> {
   refuseInTest(`job ${slug}`);
   const vars = { ...clockVars(), ...variables };
   // Images ride the in-process path only — the remote job endpoint takes attachments in a
