@@ -38,5 +38,6 @@ class CadenceBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(CadenceWorkoutPlanPlugin())
         bridge?.registerPluginInstance(CadenceWatchSyncPlugin())
         bridge?.registerPluginInstance(CadenceLiveActivityPlugin())
+        bridge?.registerPluginInstance(CadenceKeepAwakePlugin())
     }
 }

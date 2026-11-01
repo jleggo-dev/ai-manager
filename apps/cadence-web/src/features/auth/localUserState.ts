@@ -57,6 +57,9 @@ export const USER_SCOPED_KEYS = [
   // and whether its one-time "hold for an amount" line has been seen — one person's choices.
   'cadence.leftoverWindowDays',
   'cadence.holdHintSeen',
+  // The session someone is in the middle of (features/walkthrough/sessionInProgress.ts). It ALSO
+  // stamps its owner; this sweep stops one person's half-done practice reopening for the next.
+  'cadence.sessionInProgress',
 ] as const;
 
 function read(key: string): string | null {
