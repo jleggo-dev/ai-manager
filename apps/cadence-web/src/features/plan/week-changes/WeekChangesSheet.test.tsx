@@ -5,7 +5,7 @@ import { WeekChangesSheet } from './WeekChangesSheet.tsx';
 const api = vi.hoisted(() => ({
   getPendingChangeDetail: vi.fn(),
   setPendingChangeToggles: vi.fn(async () => true),
-  lockPlan: vi.fn(async () => ({ status: 200, body: {} })),
+  applyPendingChange: vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string | null }> => ({ ok: true })),
 }));
 vi.mock('../../../lib/api.ts', () => api);
 
@@ -31,7 +31,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.getPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: ITEMS });
   api.setPendingChangeToggles.mockResolvedValue(true);
-  api.lockPlan.mockResolvedValue({ status: 200, body: {} });
+  api.applyPendingChange.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => cleanup());
@@ -48,7 +48,8 @@ describe('WeekChangesSheet', () => {
     expect(screen.getByText(/made 4 of 4 morning sessions/)).toBeInTheDocument();
     expect(screen.getByText('NEW')).toBeInTheDocument(); // the pure add's NOW column
     expect(screen.getByText('OPTIONAL')).toBeInTheDocument();
-    expect(screen.getByText('Nothing changes until you tap this.')).toBeInTheDocument();
+    // The "Nothing changes until you tap this." helper was cut (owner, 2026-11-01: not useful).
+    expect(screen.queryByText(/Nothing changes until/)).not.toBeInTheDocument();
   });
 
   it('defaults every toggle from the stored `enabled` — the optional add starts unchecked', async () => {
@@ -90,15 +91,15 @@ describe('WeekChangesSheet', () => {
       { index: 0, enabled: true },
       { index: 1, enabled: false },
     ]);
-    expect(api.lockPlan).toHaveBeenCalledTimes(1);
+    expect(api.applyPendingChange).toHaveBeenCalledTimes(1);
     const toggleOrder = api.setPendingChangeToggles.mock.invocationCallOrder[0]!;
-    const lockOrder = api.lockPlan.mock.invocationCallOrder[0]!;
+    const lockOrder = api.applyPendingChange.mock.invocationCallOrder[0]!;
     expect(toggleOrder).toBeLessThan(lockOrder);
     expect(onApplied).toHaveBeenCalledTimes(1);
   });
 
   it('a failed apply shows a quiet inline error and leaves the sheet open with state intact', async () => {
-    api.lockPlan.mockResolvedValue({ status: 422, body: {} });
+    api.applyPendingChange.mockResolvedValue({ ok: false, message: null });
     const onClose = vi.fn();
     render(<WeekChangesSheet onClose={onClose} />);
     await screen.findByText('Easy run');
@@ -109,6 +110,20 @@ describe('WeekChangesSheet', () => {
     expect(onClose).not.toHaveBeenCalled();
     // The toggle state survives the failure — still showing the same button label.
     expect(screen.getByRole('button', { name: /Apply 1 change and build next week/ })).toBeInTheDocument();
+  });
+
+  it("a refused apply shows the server's own words, not the generic line", async () => {
+    api.applyPendingChange.mockResolvedValue({
+      ok: false,
+      message: 'That change card expired — ask me again and I will put it back up.',
+    });
+    render(<WeekChangesSheet onClose={vi.fn()} />);
+    await screen.findByText('Easy run');
+
+    screen.getByRole('button', { name: /Apply 1 change and build next week/ }).click();
+
+    expect(await screen.findByText(/change card expired/)).toBeInTheDocument();
+    expect(screen.queryByText(/didn.t take/)).not.toBeInTheDocument();
   });
 
   it('falls back to one warm message when there is nothing to change', async () => {

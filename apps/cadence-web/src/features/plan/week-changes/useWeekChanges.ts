@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   getPendingChangeDetail,
   setPendingChangeToggles,
-  lockPlan,
+  applyPendingChange,
   type PendingChangeDetailItem,
 } from '../../../lib/api.ts';
 
@@ -24,6 +24,8 @@ export function useWeekChanges() {
   const [items, setItems] = useState<PendingChangeDetailItem[]>([]);
   const [enabled, setEnabled] = useState<Record<number, boolean>>({});
   const [applyState, setApplyState] = useState<WeekChangesApplyState>('idle');
+  /** The server's own words for a refused apply, when it gave any. */
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -54,13 +56,14 @@ export function useWeekChanges() {
   const enabledCount = items.filter((i) => enabled[i.index]).length;
 
   /**
-   * Toggles first, THEN the same lockPlan() ChangeCard's own Apply already runs — in that order,
+   * Toggles first, THEN the same applyPendingChange() ChangeCard's own Apply runs — in that order,
    * because the funnel (confirmPendingPlan → resolveToggledActivities) reads whatever `enabled`
    * values are on the stored proposal at the moment it commits. Posting the flips after the lock
    * would commit against stale state.
    */
   async function apply(): Promise<boolean> {
     setApplyState('applying');
+    setApplyError(null);
     try {
       const toggles = items.map((i) => ({ index: i.index, enabled: !!enabled[i.index] }));
       const saved = await setPendingChangeToggles(toggles);
@@ -68,8 +71,9 @@ export function useWeekChanges() {
         setApplyState('failed');
         return false;
       }
-      const { status } = await lockPlan();
-      if (status !== 200) {
+      const applied = await applyPendingChange();
+      if (!applied.ok) {
+        setApplyError(applied.message);
         setApplyState('failed');
         return false;
       }
@@ -81,5 +85,5 @@ export function useWeekChanges() {
     }
   }
 
-  return { state, planVersion, items, enabled, toggle, enabledCount, applyState, apply };
+  return { state, planVersion, items, enabled, toggle, enabledCount, applyState, applyError, apply };
 }

@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
   getPendingChange: vi.fn(),
   getPendingChangeDetail: vi.fn(),
   dismissPendingChange: vi.fn(async () => true),
-  lockPlan: vi.fn(async () => ({ status: 200, body: {} })),
+  applyPendingChange: vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string | null }> => ({ ok: true })),
 }));
 vi.mock('../../lib/api.ts', () => api);
 
@@ -62,7 +62,7 @@ describe('ChangeCard — no per-item fields (an ordinary requested tweak)', () =
     expect(screen.queryByRole('button', { name: 'Show me' })).not.toBeInTheDocument();
   });
 
-  it('applying runs lockPlan and shows the done state', async () => {
+  it('applying commits the stored change and shows the done state', async () => {
     api.getPendingChange.mockResolvedValueOnce(CHANGE);
     api.getPendingChangeDetail.mockResolvedValueOnce(PLAIN_DETAIL);
     const onApplied = vi.fn();
@@ -72,7 +72,24 @@ describe('ChangeCard — no per-item fields (an ordinary requested tweak)', () =
 
     expect(await screen.findByText("Done — that's your plan now")).toBeInTheDocument();
     expect(onApplied).toHaveBeenCalledTimes(1);
-    expect(api.lockPlan).toHaveBeenCalledTimes(1);
+    expect(api.applyPendingChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused apply keeps the card up with the server's own words", async () => {
+    api.getPendingChange.mockResolvedValueOnce(CHANGE);
+    api.getPendingChangeDetail.mockResolvedValueOnce(PLAIN_DETAIL);
+    api.applyPendingChange.mockResolvedValueOnce({
+      ok: false,
+      message: 'That change card expired — ask me again and I will put it back up.',
+    });
+    const onApplied = vi.fn();
+    render(<ChangeCard onApplied={onApplied} />);
+
+    (await screen.findByRole('button', { name: 'Apply this' })).click();
+
+    expect(await screen.findByText(/change card expired/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply this' })).toBeInTheDocument();
+    expect(onApplied).not.toHaveBeenCalled();
   });
 
   it('"Not now" dismisses and disappears', async () => {
@@ -99,7 +116,7 @@ describe('ChangeCard — no per-item fields (an ordinary requested tweak)', () =
 });
 
 describe('ChangeCard — per-item fields present (a check-in offer)', () => {
-  it('renders "Show me" instead of an inline Apply, and never calls lockPlan on its own', async () => {
+  it('renders "Show me" instead of an inline Apply, and never applies on its own', async () => {
     api.getPendingChange.mockResolvedValueOnce(CHANGE);
     api.getPendingChangeDetail.mockResolvedValueOnce(OFFER_DETAIL);
     render(<ChangeCard onShowChanges={vi.fn()} />);
@@ -108,7 +125,7 @@ describe('ChangeCard — per-item fields present (a check-in offer)', () => {
     expect(screen.getByText('Move Easy run: Thu → Fri')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show me' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Apply this' })).not.toBeInTheDocument();
-    expect(api.lockPlan).not.toHaveBeenCalled();
+    expect(api.applyPendingChange).not.toHaveBeenCalled();
   });
 
   it('tapping "Show me" calls onShowChanges and does not apply anything itself', async () => {
@@ -119,7 +136,7 @@ describe('ChangeCard — per-item fields present (a check-in offer)', () => {
 
     (await screen.findByRole('button', { name: 'Show me' })).click();
     expect(onShowChanges).toHaveBeenCalledTimes(1);
-    expect(api.lockPlan).not.toHaveBeenCalled();
+    expect(api.applyPendingChange).not.toHaveBeenCalled();
   });
 
   it('"Not now" still dismisses the offer branch', async () => {

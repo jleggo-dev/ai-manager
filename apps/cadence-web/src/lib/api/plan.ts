@@ -418,7 +418,7 @@ export async function getPendingChangeDetail(): Promise<PendingChangeDetail> {
  * Persist the sheet's toggle flips before applying. `index` addresses the STORED array position —
  * stable, because propose_plan_change never reorders it — so these survive to the commit funnel
  * (resolveToggledActivities in plan-partial-apply.ts) even though the tap that applies happens in
- * a separate call (lockPlan).
+ * a separate call (applyPendingChange).
  */
 export async function setPendingChangeToggles(toggles: { index: number; enabled: boolean }[]): Promise<boolean> {
   const res = await fetch(`${BASE}/plan/pending-change/toggles`, {
@@ -427,6 +427,23 @@ export async function setPendingChangeToggles(toggles: { index: number; enabled:
     body: JSON.stringify({ toggles }),
   }).catch(() => null);
   return !!res?.ok;
+}
+
+/**
+ * Apply the change the coach put up — the change card's Apply and the Changes sheet's button. The
+ * server commits it inside the request: `ok` means it landed, and a refusal carries the server's
+ * own words (`message`; null when there were none, or the request never got an answer).
+ *
+ * These buttons used to call lockPlan, which became a background run answering 202 — and since
+ * they read anything but 200 as failure, every change that landed said "That didn't take".
+ */
+export async function applyPendingChange(): Promise<{ ok: true } | { ok: false; message: string | null }> {
+  const res = await fetch(`${BASE}/plan/pending-change/apply`, { method: 'POST', headers: headers() }).catch(
+    () => null,
+  );
+  if (res?.ok) return { ok: true };
+  const body = res ? ((await res.json().catch(() => null)) as { violations?: string[] } | null) : null;
+  return { ok: false, message: body?.violations?.length ? body.violations.join(' ') : null };
 }
 
 /**

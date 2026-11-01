@@ -11,6 +11,7 @@ import type { PendingPlan } from '@cadence/shared';
 const getUser = vi.fn();
 const setPendingPlan = vi.fn(async (..._a: unknown[]) => {});
 const buildPendingChangeDetail = vi.fn();
+const confirmLock = vi.fn();
 
 vi.mock('../repos/users.ts', () => ({
   getUser: (...a: unknown[]) => getUser(...a),
@@ -18,6 +19,10 @@ vi.mock('../repos/users.ts', () => ({
 }));
 vi.mock('../services/plan-change-detail.ts', () => ({
   buildPendingChangeDetail: (...a: unknown[]) => buildPendingChangeDetail(...a),
+}));
+vi.mock('../services/lock.ts', () => ({
+  CHANGE_EXPIRED: 'That change card expired — ask me again and I will put it back up.',
+  confirmLock: (...a: unknown[]) => confirmLock(...a),
 }));
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
@@ -79,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getUser.mockResolvedValue({ pending_plan: pendingPlan() });
   buildPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: [] });
+  confirmLock.mockResolvedValue({ status: 'committed', version: 30 });
 });
 
 describe('POST /plan/pending-change/toggles', () => {
@@ -154,6 +160,39 @@ describe('GET /plan/pending-change/detail', () => {
   it('reports a failure instead of a half-built list', async () => {
     buildPendingChangeDetail.mockRejectedValueOnce(new Error('db down'));
     const r = await call('GET', '/plan/pending-change/detail');
+    expect(r.status).toBe(500);
+  });
+});
+
+describe('POST /plan/pending-change/apply', () => {
+  // POST /plan/lock answers 202 (a background run) and the change buttons read anything but 200
+  // as failure — every applied change showed "That didn't take" while it had landed (2026-11-01).
+  // This route is the one those buttons call, and its answers are the whole contract.
+  it('commits the stored change in the request and answers 200 with the new version', async () => {
+    const r = await call('POST', '/plan/pending-change/apply');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ ok: true, version: 30 });
+    expect(confirmLock).toHaveBeenCalledWith('u1');
+  });
+
+  it('with nothing on file it refuses in plain words and never starts a build', async () => {
+    getUser.mockResolvedValue({ pending_plan: null });
+    const r = await call('POST', '/plan/pending-change/apply');
+    expect(r.status).toBe(409);
+    expect(r.body.violations).toEqual(['That change card expired — ask me again and I will put it back up.']);
+    expect(confirmLock).not.toHaveBeenCalled();
+  });
+
+  it("a refused commit answers 422 with the check's own words", async () => {
+    confirmLock.mockResolvedValue({ status: 'vetoed', violations: ['Two long runs on Monday'] });
+    const r = await call('POST', '/plan/pending-change/apply');
+    expect(r.status).toBe(422);
+    expect(r.body.violations).toEqual(['Two long runs on Monday']);
+  });
+
+  it('a throw is a 500, never a 200', async () => {
+    confirmLock.mockRejectedValueOnce(new Error('db down'));
+    const r = await call('POST', '/plan/pending-change/apply');
     expect(r.status).toBe(500);
   });
 });

@@ -6,14 +6,14 @@ import { WeekChangeCard } from './WeekChangeCard.tsx';
  * The Changes sheet (check-in rebuild, step 7 — client half): the swap candidates the coach
  * persisted the moment she offered them, via propose_plan_change's `reason`/`optional` fields
  * (coach-actions.ts, plan-edit.ts). Reads the stored pending change back — never the turn that
- * announced it — lets the user flip any card's toggle, then applies through the SAME lock flow
- * ChangeCard's own inline Apply already runs: toggles persisted first, then lockPlan(), so the
+ * announced it — lets the user flip any card's toggle, then applies through the SAME call
+ * ChangeCard's own inline Apply runs: toggles persisted first, then applyPendingChange(), so the
  * commit funnel (confirmPendingPlan → resolveToggledActivities) resolves exactly what's on screen.
  *
  * A pure DB read, same as WeekReviewSheet — SheetRowsSkeleton, not chat dots.
  */
 export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
-  const { state, planVersion, items, enabled, toggle, enabledCount, applyState, apply } = useWeekChanges();
+  const { state, planVersion, items, enabled, toggle, enabledCount, applyState, applyError, apply } = useWeekChanges();
 
   async function onApply() {
     const ok = await apply();
@@ -54,8 +54,7 @@ export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; 
                 onToggle={() => toggle(item.index)}
               />
             ))}
-            <p className="wkc-helper">Nothing changes until you tap this.</p>
-            {applyState === 'failed' && <div className="wkc-err">That didn&rsquo;t take — try again?</div>}
+            {applyState === 'failed' && <div className="wkc-err">{applyError ?? 'That didn’t take — try again?'}</div>}
             <button
               type="button"
               className="cfm-build"

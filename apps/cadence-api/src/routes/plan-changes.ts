@@ -2,7 +2,7 @@
  * The Changes sheet's own routes — split into a NEW file rather than grown inside routes/plan.ts,
  * which is already at its size gate (same reasoning as routes/week.ts and routes/week-review.ts).
  * Mounted under /plan so the URLs read as if they lived there: POST /plan/pending-change/toggles,
- * GET /plan/pending-change/detail. The existing GET /plan/pending-change and its /dismiss stay in
+ * POST /plan/pending-change/apply, GET /plan/pending-change/detail. The existing GET /plan/pending-change and its /dismiss stay in
  * plan.ts untouched — this file only adds the two the sheet needed.
  */
 import { Router, type Request, type Response } from 'express';
@@ -10,6 +10,7 @@ import { requireCadenceUser } from '../auth/middleware.ts';
 import { getUser, setPendingPlan } from '../repos/users.ts';
 import { BodyValidationError, parseBody, pendingChangeTogglesBodySchema } from '../validation/body.ts';
 import { buildPendingChangeDetail } from '../services/plan-change-detail.ts';
+import { CHANGE_EXPIRED, confirmLock } from '../services/lock.ts';
 
 const router = Router();
 router.use(requireCadenceUser);
@@ -47,6 +48,33 @@ router.post('/pending-change/toggles', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/pending-change/toggles]', err);
     res.status(500).json({ error: 'toggle failed' });
+  }
+});
+
+/**
+ * POST /plan/pending-change/apply — commit the change the coach put up, inside this request, and
+ * answer how it went: 200 {ok, version} when it landed, 409 when nothing is on file to apply, 422
+ * with the check's own words when it was refused.
+ *
+ * The change card and the Changes sheet used to apply through POST /plan/lock. That route became a
+ * background run answering 202 (#398, for the minutes-long first build), and both buttons still
+ * read anything but 200 as failure — so every applied change since showed "That didn't take" while
+ * it had in fact landed. Applying a stored change does no synthesis (the toggles are resolved and
+ * the rows written — a few database calls), so it has no reason to be a background run, and this
+ * route never starts one: with nothing pending it refuses rather than falling through to a build.
+ */
+router.post('/pending-change/apply', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const pending = (await getUser(userId))?.pending_plan;
+    if (!pending?.activities?.length) return void res.status(409).json({ violations: [CHANGE_EXPIRED] });
+
+    const r = await confirmLock(userId);
+    if (r.status === 'committed') return void res.json({ ok: true, version: r.version });
+    res.status(422).json({ violations: r.violations ?? [] });
+  } catch (err) {
+    console.error('[POST /plan/pending-change/apply]', err);
+    res.status(500).json({ error: 'apply failed' });
   }
 });
 

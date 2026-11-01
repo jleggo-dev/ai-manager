@@ -6,7 +6,7 @@
  * `getPendingReplan`'s `ok` flag documents.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { getRoutineSession } from './plan.ts';
+import { applyPendingChange, getRoutineSession } from './plan.ts';
 
 describe('getRoutineSession', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -55,5 +55,53 @@ describe('getRoutineSession', () => {
     const url = fetchMock.mock.calls[0]![0] as string;
     expect(url).toContain(encodeURIComponent('c/1 with spaces'));
     expect(url.endsWith('/session')).toBe(true);
+  });
+});
+
+/**
+ * `applyPendingChange` — the change card's and the Changes sheet's one commit. They used to call
+ * lockPlan and demand a 200; the server moved that route to a background run answering 202, every
+ * mock kept saying 200, and every change that landed showed "That didn't take" (2026-11-01). So the
+ * real route and the real answers are pinned here, not a status a mock made up.
+ */
+describe('applyPendingChange', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs the change-apply route — never /plan/lock, which starts a background build', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true, version: 30 }), { status: 200 }));
+    expect(await applyPendingChange()).toEqual({ ok: true });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/plan\/pending-change\/apply$/);
+    expect(init.method).toBe('POST');
+  });
+
+  it("a refusal carries the server's own words", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ violations: ['That change card expired — ask me again and I will put it back up.'] }),
+        {
+          status: 409,
+        },
+      ),
+    );
+    expect(await applyPendingChange()).toEqual({
+      ok: false,
+      message: 'That change card expired — ask me again and I will put it back up.',
+    });
+  });
+
+  it('a failure with no words, or no answer at all, is ok:false with message null', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('oops', { status: 500 }));
+    expect(await applyPendingChange()).toEqual({ ok: false, message: null });
+    fetchMock.mockRejectedValueOnce(new TypeError('offline'));
+    expect(await applyPendingChange()).toEqual({ ok: false, message: null });
   });
 });

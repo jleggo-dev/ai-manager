@@ -81,6 +81,18 @@ describe('guardSelectionThroughHold', () => {
     expect(selectionAllowed()).toBe(true);
   });
 
+  it('a page torn down before the cap is a quiet no-op, not a throw out of a bare timer', () => {
+    // MealScreen.test left a hold's guard up when its file ended; the 10s cap then fired with no
+    // window and failed the whole run on main (d27d7df5).
+    guardSelectionThroughHold();
+    vi.stubGlobal('window', undefined);
+    try {
+      expect(() => vi.advanceTimersByTime(HOLD_SELECTION_CAP_MS)).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('leaves a caret alone — a cursor in a text field is not a selection', () => {
     const range = document.createRange();
     range.setStart(document.getElementById('words')!.firstChild!, 3);

@@ -5,7 +5,7 @@ import { useWeekChanges } from './useWeekChanges.ts';
 const api = vi.hoisted(() => ({
   getPendingChangeDetail: vi.fn(),
   setPendingChangeToggles: vi.fn(async () => true),
-  lockPlan: vi.fn(async () => ({ status: 200, body: {} })),
+  applyPendingChange: vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string | null }> => ({ ok: true })),
 }));
 vi.mock('../../../lib/api.ts', () => api);
 
@@ -18,7 +18,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.getPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: ITEMS });
   api.setPendingChangeToggles.mockResolvedValue(true);
-  api.lockPlan.mockResolvedValue({ status: 200, body: {} });
+  api.applyPendingChange.mockResolvedValue({ ok: true });
 });
 
 describe('useWeekChanges', () => {
@@ -76,14 +76,14 @@ describe('useWeekChanges', () => {
       { index: 0, enabled: true },
       { index: 1, enabled: true },
     ]);
-    expect(api.lockPlan).toHaveBeenCalledTimes(1);
+    expect(api.applyPendingChange).toHaveBeenCalledTimes(1);
     // Order: toggles persisted before the commit reads them.
     const toggleOrder = api.setPendingChangeToggles.mock.invocationCallOrder[0]!;
-    const lockOrder = api.lockPlan.mock.invocationCallOrder[0]!;
+    const lockOrder = api.applyPendingChange.mock.invocationCallOrder[0]!;
     expect(toggleOrder).toBeLessThan(lockOrder);
   });
 
-  it('reports failure and never locks when persisting the toggles fails', async () => {
+  it('reports failure and never applies when persisting the toggles fails', async () => {
     api.setPendingChangeToggles.mockResolvedValue(false);
     const { result } = renderHook(() => useWeekChanges());
     await waitFor(() => expect(result.current.state).toBe('ready'));
@@ -95,11 +95,11 @@ describe('useWeekChanges', () => {
 
     expect(ok).toBe(false);
     expect(result.current.applyState).toBe('failed');
-    expect(api.lockPlan).not.toHaveBeenCalled();
+    expect(api.applyPendingChange).not.toHaveBeenCalled();
   });
 
-  it('reports failure when the lock itself fails, after toggles already saved', async () => {
-    api.lockPlan.mockResolvedValue({ status: 422, body: {} });
+  it('reports failure when the apply itself fails, after toggles already saved', async () => {
+    api.applyPendingChange.mockResolvedValue({ ok: false, message: null });
     const { result } = renderHook(() => useWeekChanges());
     await waitFor(() => expect(result.current.state).toBe('ready'));
 
@@ -110,5 +110,25 @@ describe('useWeekChanges', () => {
 
     expect(ok).toBe(false);
     expect(result.current.applyState).toBe('failed');
+  });
+
+  it("carries the server's own words for a refused apply, and clears them on the next try", async () => {
+    api.applyPendingChange.mockResolvedValueOnce({
+      ok: false,
+      message: 'That change card expired — ask me again and I will put it back up.',
+    });
+    const { result } = renderHook(() => useWeekChanges());
+    await waitFor(() => expect(result.current.state).toBe('ready'));
+
+    await act(async () => {
+      await result.current.apply();
+    });
+    expect(result.current.applyError).toMatch(/card expired/);
+
+    await act(async () => {
+      await result.current.apply();
+    });
+    expect(result.current.applyState).toBe('applied');
+    expect(result.current.applyError).toBeNull();
   });
 });

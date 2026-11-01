@@ -99,6 +99,7 @@ export {
   dismissPendingChange,
   getPendingChangeDetail,
   setPendingChangeToggles,
+  applyPendingChange,
   type PendingChangeDetailItem,
   type PendingChangeDetail,
   getPendingWeekReview,
