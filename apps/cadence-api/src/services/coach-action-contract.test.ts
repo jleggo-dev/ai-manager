@@ -363,10 +363,13 @@ describe('every action answers in one of three shapes', () => {
  * `return 'Done — …'` fails here with its file and line.
  */
 describe('no action returns a hand-built string', () => {
-  const RAW_RETURN = /^\s*return\s+(['"`]|\[)/;
+  const RAW_RETURN = /\breturn\s+(['"`]|\[)/;
+  const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 
   it.each([
     ["return 'Done — it is set.';", true],
+    ["if (!query) return 'No session was named.';", true], // a guard on one line counts too
+    ["const returned = ['a'];", false], // a word that starts with "return" is not one
     ['return `Logged ${x}.`;', true],
     ['return ["a", "b"].join("\\n");', true],
     ["return toolChangeText({ changed: ['x'] });", false],
@@ -387,7 +390,7 @@ describe('no action returns a hand-built string', () => {
       readFileSync(new URL(f, dir), 'utf8')
         .split('\n')
         .forEach((line, i) => {
-          if (RAW_RETURN.test(line)) raw.push(`${f}:${i + 1}: ${line.trim().slice(0, 80)}`);
+          if (!COMMENT.test(line) && RAW_RETURN.test(line)) raw.push(`${f}:${i + 1}: ${line.trim().slice(0, 80)}`);
         });
     }
     expect(raw, 'return through toolChangeText / toolNothingChangedText / toolActionFaultText').toEqual([]);
