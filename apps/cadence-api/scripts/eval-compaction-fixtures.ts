@@ -7,10 +7,17 @@
  * corrected, constraint, their own words, still open, tried and failed — among ordinary coaching
  * talk, then the eval checks which survived the summaries.
  *
+ * The ordinary talk is built by `eval-compaction-filler.ts` from a pool per fixture
+ * (`eval-compaction-pool-*.ts`): production-sized, varied, seeded, and kept off every planted topic.
+ *
  * A probe matches when EVERY group in `expect` has at least one of its terms in the summary
  * (case-insensitive). Groups stay loose on wording — a summary is allowed to paraphrase — and
- * strict on the thing that would be wrong to lose: the day, the number, the word they used.
+ * strict on the thing that would be wrong to lose: the day, the number, the word they used. A
+ * correction also lists the value it replaced (`mustNotContain`); see `scoreFact` for the rule.
  */
+import { practicePool } from './eval-compaction-pool-practice.ts';
+import { foodPool } from './eval-compaction-pool-food.ts';
+import { runningPool } from './eval-compaction-pool-running.ts';
 
 export const FACT_KINDS = ['decision', 'correction', 'constraint', 'own-words', 'open', 'tried-failed'] as const;
 export type FactKind = (typeof FACT_KINDS)[number];
@@ -31,6 +38,31 @@ export interface PlantedFact {
   /** What a later turn would need to know, in words. Shown in the report. */
   probe: string;
   expect: string[][];
+  /**
+   * Corrections only: the value the correction replaced. A summary that still states it on its
+   * own fails the fact (`scoreFact`).
+   */
+  mustNotContain?: string[];
+}
+
+/** One thing people talk to the coach about, with enough wording that it can come back unrepeated. */
+export interface FillerTopic {
+  /** What they say: short to long, so a message can be picked to fit a length. */
+  asks: string[];
+  /** Her first sentence back. */
+  opens: string[];
+  /** The rest of her reply: sentences that each stand alone, so any few of them read as a reply. */
+  points: string[];
+}
+
+export interface FillerPool {
+  topics: FillerTopic[];
+  /** Short asides they add to a message ("Long day."), so a message can run long without a new topic. */
+  asides: string[];
+  /** Questions she sometimes ends a reply on. */
+  followUps: string[];
+  /** Sentences about the week as a whole, for a reply that runs longer than its topic can carry. */
+  wider: string[];
 }
 
 export interface CompactionFixture {
@@ -38,14 +70,15 @@ export interface CompactionFixture {
   title: string;
   exchanges: number;
   facts: PlantedFact[];
-  /** Ordinary talk, cycled to fill every exchange that plants nothing. `{n}` becomes a counter. */
-  filler: Exchange[];
+  /** Ordinary talk for every exchange that plants nothing. Must stay off every planted topic. */
+  pool: FillerPool;
 }
 
 const running: CompactionFixture = {
   id: 'half-marathon',
   title: 'Training for a half marathon around a sore knee',
   exchanges: 80,
+  pool: runningPool,
   facts: [
     {
       id: 'run-decision',
@@ -72,7 +105,8 @@ const running: CompactionFixture = {
         coach: 'Got it: November 2nd. That buys us three extra weeks, so the build can be gentler.',
       },
       probe: 'When is the race?',
-      expect: [['november 2', 'nov 2', '2 november', 'november 2nd']],
+      expect: [['november 2', 'nov 2', 'nov. 2', '2 november', 'november 2nd']],
+      mustNotContain: ['october 12', 'oct 12', 'oct. 12', '12 october', '12th october', '12th of october'],
     },
     {
       id: 'run-constraint',
@@ -121,42 +155,13 @@ const running: CompactionFixture = {
       expect: [['6am', '6 am', '6 a.m', '6:00', 'early morning', 'early-morning', 'morning run']],
     },
   ],
-  filler: [
-    {
-      user: 'Did the run today, felt okay. Legs a bit heavy at the end. Day {n}.',
-      coach:
-        "Heavy legs at the end of a run that felt okay is normal at this stage. Keep the pace conversational next time and we'll see if that changes.",
-    },
-    {
-      user: 'How much water should I bring on longer runs?',
-      coach:
-        'For anything over an hour, a small bottle or a loop past a fountain is plenty. Sip every 15–20 minutes rather than waiting until you are thirsty.',
-    },
-    {
-      user: 'Rest day today. Went for a walk with the dog instead. Check-in {n}.',
-      coach: 'A walk on a rest day is perfect — it keeps things moving without asking anything of your legs.',
-    },
-    {
-      user: 'Should I stretch before or after?',
-      coach:
-        'A few minutes of easy movement before — leg swings, a slow first kilometre — and save the longer stretches for after, when you are warm.',
-    },
-    {
-      user: 'Run felt great today, honestly. Kept it slow like you said. Week note {n}.',
-      coach: "That's the one to remember. Slow and great is exactly how the base gets built.",
-    },
-    {
-      user: 'What should I eat before a long run?',
-      coach:
-        'Something you know sits well, an hour or two before — toast with banana, oats, a bagel. Nothing new on a long-run morning.',
-    },
-  ],
 };
 
 const nourishment: CompactionFixture = {
   id: 'new-parent-food',
   title: 'Eating well with a newborn at home',
   exchanges: 80,
+  pool: foodPool,
   facts: [
     {
       id: 'food-decision',
@@ -184,6 +189,7 @@ const nourishment: CompactionFixture = {
       },
       probe: 'What do they eat now?',
       expect: [['pescatarian', 'eats fish', 'eating fish', 'fish again']],
+      mustNotContain: ['vegetarian'],
     },
     {
       id: 'food-constraint',
@@ -231,40 +237,13 @@ const nourishment: CompactionFixture = {
       expect: [['meal kit', 'meal-kit', 'subscription', 'box']],
     },
   ],
-  filler: [
-    {
-      user: 'Ate okay today, mostly toast and coffee though. Day {n}.',
-      coach:
-        'Toast and coffee days happen with a newborn. Could a handful of nuts — not peanuts — or yoghurt sit next to the kettle?',
-    },
-    {
-      user: 'How much water am I meant to drink when breastfeeding?',
-      coach:
-        "Drink to thirst, and keep a full glass wherever you usually feed — it's the easiest way to get enough without counting.",
-    },
-    {
-      user: 'Had a proper dinner tonight! Partner cooked. Note {n}.',
-      coach: 'A proper dinner counts. Anything from it worth doubling next time so there are leftovers?',
-    },
-    {
-      user: 'Any ideas for one-handed breakfasts?',
-      coach: 'Overnight oats in a jar, a boiled egg, a banana with cheese, a wrap rolled the night before.',
-    },
-    {
-      user: 'Skipped lunch again, the baby would not settle. Check-in {n}.',
-      coach: "That's a hard day, not a failure. Tomorrow, let's have lunch be something already made.",
-    },
-    {
-      user: 'Is it bad that I snack all day instead of meals?',
-      coach: 'Not at all right now. Grazing on good things is a perfectly good way to eat with a newborn.',
-    },
-  ],
 };
 
 const practice: CompactionFixture = {
   id: 'meditation-and-piano',
   title: 'A daily sitting practice and returning to the piano',
   exchanges: 80,
+  pool: practicePool,
   facts: [
     {
       id: 'mind-decision',
@@ -290,11 +269,13 @@ const practice: CompactionFixture = {
         coach: 'The E-flat nocturne — lovely. We can take it a phrase at a time.',
       },
       plant: {
-        user: "Change of plan, I've dropped the Chopin. I'm learning Satie's first Gymnopédie instead.",
+        // Not "dropped": `drop` is one of mind-decision's terms (school drop-off).
+        user: "Change of plan, I've stopped working on the Chopin. I'm learning Satie's first Gymnopédie instead.",
         coach: 'Gymnopédie No. 1 it is — slower, and kinder on the hands while you get back into it.',
       },
       probe: 'Which piece are they learning now?',
       expect: [['satie', 'gymnop']],
+      mustNotContain: ['chopin', 'nocturne'],
     },
     {
       id: 'mind-constraint',
@@ -343,33 +324,6 @@ const practice: CompactionFixture = {
         ['bed', 'night', 'evening'],
         ['asleep', 'sleep'],
       ],
-    },
-  ],
-  filler: [
-    {
-      user: 'Sat for ten minutes today. Mind was all over the place. Day {n}.',
-      coach: 'All over the place and you still sat — that is the practice. Noticing the wandering is the rep.',
-    },
-    {
-      user: 'Played scales for fifteen minutes, fingers are stiff.',
-      coach: 'Stiff fingers after a break are expected. Slow scales, hands separately, and stop before it aches.',
-    },
-    {
-      user: 'Missed today, busy morning. Check-in {n}.',
-      coach: "A missed day is just a missed day. Tomorrow's sit is still there.",
-    },
-    {
-      user: 'Is it okay to sit in a chair instead of on the floor?',
-      coach: 'Completely. A chair with your feet flat is as good a seat as any cushion.',
-    },
-    {
-      user: 'Practised the left hand alone tonight. Note {n}.',
-      coach: 'Hands separately is how it gets solid. Keep the tempo slow enough that it is easy.',
-    },
-    {
-      user: 'Does it matter if I keep my eyes open?',
-      coach:
-        'Not at all — eyes softly open, gaze resting on the floor a little ahead of you, works well for many people.',
     },
   ],
 };

@@ -14,6 +14,13 @@
  * final summary for every planted fact behind the final mark, and for injected text that should
  * never reach it.
  *
+ * THE JOB-VARIABLE CAP. The engine cuts every job variable at 10,000 characters
+ * (`JOB_VARIABLE_CAP`), so a round whose transcript is longer hands the summarizer only its first
+ * 10,000 characters. Each round line says how long its transcript was and whether it went over,
+ * and each fact says when it was planted past the cut — a fact the summarizer never saw is lost to
+ * the cap, not to the summarizer. The fixtures are production-sized (P3b), so under today's engine
+ * every round goes over.
+ *
  * WHAT IT DOES NOT DO (yet). It scores the SUMMARY, not her answers. A fact the summary keeps can
  * still be ignored by the coach; asking her the probes over the compacted history is the next arm.
  *
@@ -36,12 +43,15 @@ import { COMPACTION_FIXTURES, FACT_KINDS } from './eval-compaction-fixtures.ts';
 import {
   buildFixtureRows,
   compactedFacts,
+  JOB_VARIABLE_CAP,
   leaks,
+  plantSpan,
   replayCompaction,
   scoreFact,
   wordCount,
   type CompactionRound,
   type FactResult,
+  type PlantSpan,
   type Summarize,
 } from './eval-compaction-score.ts';
 
@@ -83,11 +93,13 @@ const liveRun: Summarize = async (vars) => {
   return text;
 };
 
+type ScoredFact = FactResult & { span: PlantSpan | null };
+
 interface RunResult {
   fixture: string;
   run: number;
   rounds: CompactionRound[];
-  facts: FactResult[];
+  facts: ScoredFact[];
   leaks: string[];
   words: number;
   error?: string;
@@ -99,7 +111,10 @@ async function runOne(fixtureId: string, run: number): Promise<RunResult> {
   try {
     const { rounds } = await replayCompaction(built, COACH_SUMMARIZER, DRY ? dryRun : liveRun);
     const summary = rounds.at(-1)?.summary ?? '';
-    const facts = compactedFacts(fixture, built, rounds).map((f) => scoreFact(summary, f));
+    const facts = compactedFacts(fixture, built, rounds).map((f) => ({
+      ...scoreFact(summary, f),
+      span: plantSpan(f, rounds),
+    }));
     return { fixture: fixtureId, run, rounds, facts, leaks: leaks(summary), words: wordCount(summary) };
   } catch (e) {
     const error = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
@@ -108,6 +123,31 @@ async function runOne(fixtureId: string, run: number): Promise<RunResult> {
 }
 
 const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '—');
+const chars = (n: number) => n.toLocaleString('en-US');
+
+/** "transcript 14,210 chars — OVER the 10,000-char job-variable cap: the last 4,210 never reach the summarizer". */
+function capLine(transcript: string): string {
+  const over = transcript.length - JOB_VARIABLE_CAP;
+  return over > 0
+    ? `transcript ${chars(transcript.length)} chars — OVER the ${chars(JOB_VARIABLE_CAP)}-char job-variable cap: the last ${chars(over)} never reach the summarizer`
+    : `transcript ${chars(transcript.length)} chars (under the ${chars(JOB_VARIABLE_CAP)}-char cap)`;
+}
+
+/** Was the fact's exchange past the cap in the round that summarized it? */
+const pastCap = (f: ScoredFact) => (f.span ? f.span.end > JOB_VARIABLE_CAP : false);
+function factLine(f: ScoredFact): string {
+  const miss = f.missing.length ? ` — missing ${f.missing.map((g) => g.join('/')).join(' + ')}` : '';
+  const stale = f.stale.length ? ` — still states the old value: ${f.stale.map((s) => `"${s}"`).join(' ')}` : '';
+  let cap = '';
+  if (f.span && pastCap(f)) {
+    const where = `planted at char ${chars(f.span.start)} of ${chars(f.span.transcriptChars)}`;
+    cap =
+      f.span.start >= JOB_VARIABLE_CAP
+        ? ` — ${where}: past the cap, the summarizer never saw it`
+        : ` — ${where}: the cap cut it partway`;
+  }
+  return `- ${f.kept ? '✓' : '✗'} [${f.kind}, round ${f.round}] ${f.probe}${miss}${stale}${cap}`;
+}
 
 function report(results: RunResult[]): string {
   const lines: string[] = [
@@ -127,12 +167,10 @@ function report(results: RunResult[]): string {
     for (const [i, round] of r.rounds.entries()) {
       lines.push(
         `- round ${i + 1}: after exchange ${round.afterExchange + 1}, history ${round.estimatedTokens} units (~${Math.round((round.estimatedTokens * BILLED_PER_UNIT) / 1000)}K billed); summarized ${round.summarizedRows} rows (${Math.round(round.transcript.length / 4)} units), dropped ${round.droppedAppRows} injected rows; summary ${wordCount(round.summary)} words`,
+        `  ${capLine(round.transcript)}`,
       );
     }
-    for (const f of r.facts) {
-      const miss = f.kept ? '' : ` — missing ${f.missing.map((g) => g.join('/')).join(' + ')}`;
-      lines.push(`- ${f.kept ? '✓' : '✗'} [${f.kind}, round ${f.round}] ${f.probe}${miss}`);
-    }
+    for (const f of r.facts) lines.push(factLine(f));
     lines.push(`- leaks: ${r.leaks.length ? r.leaks.join(', ') : 'none'}; final summary ${r.words} words`, '');
     // The summaries themselves ride only in the file: a miss is only diagnosable against the text.
     if (OUT) {
@@ -154,9 +192,18 @@ function report(results: RunResult[]): string {
     if (k.length)
       lines.push(`| first summarized in round ${round} | ${pct(k.filter((f) => f.kept).length, k.length)} |`);
   }
-  const summarizedUnits = results
-    .flatMap((r) => r.rounds)
-    .reduce((s, x) => s + (x.transcript.length + x.existingSummary.length) / 4, 0);
+  const rounds = results.flatMap((r) => r.rounds);
+  const lengths = rounds.map((x) => x.transcript.length);
+  const cut = all.filter(pastCap);
+  lines.push(
+    '',
+    `Rounds over the ${chars(JOB_VARIABLE_CAP)}-char job-variable cap: ${lengths.filter((n) => n > JOB_VARIABLE_CAP).length} of ${rounds.length}` +
+      (rounds.length ? ` (transcripts ${chars(Math.min(...lengths))}–${chars(Math.max(...lengths))} chars).` : '.'),
+    `Facts planted past the cap in the round that summarized them: ${cut.length} of ${all.length}; kept ${cut.filter((f) => f.kept).length}.`,
+  );
+  // What the summarizer is actually handed: each variable stops at the cap.
+  const sent = (s: string) => Math.min(s.length, JOB_VARIABLE_CAP);
+  const summarizedUnits = rounds.reduce((s, x) => s + (sent(x.transcript) + sent(x.existingSummary)) / 4, 0);
   lines.push(
     '',
     `Summarizer input across the run: ~${Math.round((summarizedUnits * BILLED_PER_UNIT) / 1000)}K billed tokens.`,

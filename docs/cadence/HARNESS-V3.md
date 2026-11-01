@@ -361,6 +361,24 @@ Differences from the design above, each from the code:
      silently: the tail of the round would be "... [truncated]" and gone. Not fixed here; the right
      answer is probably a per-job override of the cap, or compaction splitting a round in two.
 
+   **Built (P3b, 2026-10-31): fixtures and scorer rebuilt so the numbers can be trusted.** An audit
+   found the first fixtures were about a third of real length, so no round came near the cap above
+   ("a round today is ~1,500 units" was the fixtures, not production). Messages, replies and
+   injected context are now drawn from production sizes (AI Admin DB, coach sessions, last 60
+   days: messages avg 87 chars, p90 181; replies avg 446, p50 340, p90 893; context ~3.1K per
+   exchange, p90 12.5K) and put together from a seeded pool of distinct asks and reply sentences
+   per fixture (`eval-compaction-filler.ts`, `eval-compaction-pool-*.ts`), with no counters.
+   Pooled they come out at messages 88 / p90 165, replies 455 / p50 365 / p90 849, context 3,053 /
+   p90 12,119. Under today's engine `--dry` shows **every round over the cap: 6 of 6, transcripts
+   10,944–16,780 chars**, and the report now prints each round's length against the cap and flags a
+   fact planted past it (3 of 18: the 6am runs and the bedtime sits never reach the summarizer, the
+   meal-kit reply is cut partway). Also fixed: filler no longer carries any fact's terms ("nuts —
+   not peanuts" scored the allergy as kept against filler; a test now checks every pool string
+   against every fact), and a correction fails while the summary still states the old value in a
+   sentence without the new one (`mustNotContain`; the rule and its near-misses are in `scoreFact`
+   and its table test). The 74% → 93% reading above was taken on the old fixtures and is not
+   comparable; re-run after the cap is dealt with.
+
 **Built (P6, 2026-10-31): C5.1–C5.3.**
 - **`npm run eval:mine`** (`scripts/mine-eval-candidates.ts`; patterns in `eval-mine-patterns.ts`,
   table-tested with near-misses). A coach turn is a `diagnostic_logs` row whose `processing_job_id`
