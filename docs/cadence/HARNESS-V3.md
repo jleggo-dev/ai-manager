@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18. Still owed: `eval:tools` (owner), rulings R4 and R5.** Written 2026-10-31. R1 ruled the same
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18; R4 (weekly) and R5 (the gate) ruled as built on 2026-11-01. Still owed: `eval:tools` (owner).** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds; the fold did not
 until P3c made the summary a list (13% → 94% over four folds, see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -611,8 +611,10 @@ Differences from the design above, each from the code:
    function. Action tools fail with a separate sentence in `coach-tools.ts` that is not exported;
    it can be added once P5 gives action faults a shared text.
 
-**R5 is still open.** The gate is built as proposed (a miss reverts), with `--force "<reason>"` as
-the way through. "Report only" would be a one-line change: log the miss and keep the pointer.
+**R5 ruled 2026-11-01: the gate, as built.** A miss reverts the pointer; `--force "<reason>"` is
+the way through, and every verified repoint is logged either way. The floor comes from the
+baseline: the smoke F1 less the margin once a smoke run has recorded one, and until then the full
+run's F1 (82.9) less the margin, so `--verify` needs no `--floor` today.
 
 **Cost.** Mining is read-only SQL, essentially free. Smoke ≈ 300K tokens per run. The
 compaction eval ≈ 3 conversations × ~30 turns: owner-gated, like `eval:tools` is today.
@@ -688,7 +690,7 @@ schema-validated. An assertion that the job holds no write path to fact tables.
   within 5 days (catching up two in one sitting) is not reviewed again. On the recap rather than the
   user row, so the guard never writes to the row that holds the facts. A claimed week whose run
   fails is not retried; the next check-in runs.
-- **Cadence (R4, unruled):** weekly at the check-in close, as proposed. It lives in one place,
+- **Cadence (R4, ruled 2026-11-01: weekly, as built):** weekly at the check-in close. It lives in one place,
   `maybeRunFactReview` in `fact-review-trigger.ts`; `FACT_REVIEW_MIN_DAYS_BETWEEN = 28` makes it
   monthly. The confirm route hands it to `runInBackground` after the response is sent: its
   `waitUntil` keeps the invocation alive until the review settles, where a bare `await` after the
@@ -754,8 +756,13 @@ as today.
   `summary_through_at`). Other callers have no summarizer configured today, so the change is invisible
   to them, but it is AI Admin code.
 - **R3. Follow-ups UI.** None in v1 (proposed), or a Settings list from day one.
-- **R4. `fact-review` cadence.** Weekly at check-in close (proposed), or monthly.
-- **R5. Smoke-eval floor.** Gate repoints on it (proposed), or report only.
+- **R4. `fact-review` cadence.** Weekly at check-in close (proposed), or monthly. **Ruled
+  2026-11-01: weekly, as built.** The noise is bounded by the two ceilings (3 findings a run, 3 open at
+  once) and the inferred extras are a prompt matter, not a cadence one; a month is too long for the
+  coach to plan around a fact the file already contradicts.
+- **R5. Smoke-eval floor.** Gate repoints on it (proposed), or report only. **Ruled 2026-11-01: the
+  gate, with `--force`, as built.** A repoint is the moment a silently worse model goes live; the
+  override exists and is logged.
 
 ## Not in scope
 
