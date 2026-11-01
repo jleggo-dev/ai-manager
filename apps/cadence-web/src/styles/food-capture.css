@@ -66,8 +66,8 @@
 }
 
 /* The quick log's doors: round pucks, the glyph alone, white with each door's own tint as the
-   capture set draws them everywhere else. Which door wears ink is quick-log.css's call (turn 1,
-   2026-10-29: type it leads; Find became the filter bar). */
+   capture set draws them everywhere else. The type-it door's tint is quick-log.css's call (turn 1,
+   2026-10-29: type it leads; Find became the filter bar; 2026-11-01: no door wears ink). */
 .fm-tiles-icons {
   justify-content: space-between;
   gap: 0;
@@ -617,11 +617,14 @@
   line-height: 1.5;
   color: oklch(32% 0.02 150);
 }
+/* The field across the full width, the mic, camera and send on a row beneath it — beside the field
+   they took their width from the words you were typing. */
 .fc-compose {
   flex: none;
   display: flex;
-  align-items: flex-end;
-  gap: 9px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 9px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
   border-top: 1px solid oklch(93% 0.012 85);
   background: oklch(96% 0.025 76);
@@ -629,11 +632,17 @@
 /* Room to write a whole meal: the field starts two lines tall and grows to its cap (the
    textarea's own maxRows) before it scrolls. */
 .fc-compose .mc-cap-in {
-  flex: 1 1 auto;
+  flex: none;
   min-width: 0;
   min-height: 2.9em;
   font-size: 15px;
   line-height: 1.4;
+}
+.fc-compose-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
 }
 .fc-send {
   display: flex;

@@ -14,6 +14,14 @@
 .hm {
   gap: 8px;
 }
+/* The hold menu opens under a finger that is still down, so iOS's selection long press lands on
+   it. It is headings and buttons — nothing to copy — so none of it selects (2026-11-01). The
+   preview sheet (.hm.pv) is opened by a tap and keeps its words selectable. */
+.hm-hold {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .hm-h {
   display: flex;
   flex-direction: column;

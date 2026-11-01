@@ -79,7 +79,7 @@ export function TaskHoldMenu({
   return (
     <>
       <div className="sheet-scrim" onClick={onClose} aria-hidden />
-      <div className="sheet hm" role="dialog" aria-label={`${occ.title} — options`}>
+      <div className="sheet hm hm-hold" role="dialog" aria-label={`${occ.title} — options`}>
         <div className="sheet-grab" aria-hidden />
 
         {screen === 'menu' && (

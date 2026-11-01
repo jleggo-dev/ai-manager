@@ -67,7 +67,7 @@ export function SteerBox({
   }, [value]);
 
   return (
-    <div className="steer-row">
+    <div className="steer-box">
       <textarea
         ref={ref}
         className="steer-in"
@@ -77,8 +77,11 @@ export function SteerBox({
         rows={MIN_ROWS}
         disabled={disabled}
       />
-      <MicButton value={value} onChange={onChange} disabled={disabled} />
-      {onPhotos && <PhotoButton multiple disabled={disabled} onPick={onPhotos} />}
+      {/* The buttons sit on their own row under the field so the words keep the full width. */}
+      <div className="steer-tools">
+        <MicButton value={value} onChange={onChange} disabled={disabled} />
+        {onPhotos && <PhotoButton multiple disabled={disabled} onPick={onPhotos} />}
+      </div>
     </div>
   );
 }

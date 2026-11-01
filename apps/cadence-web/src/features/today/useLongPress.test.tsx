@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { HOLD_SLOP_PX, LONG_PRESS_MS, useLongPress } from './useLongPress.ts';
+import { HOLD_SELECTION_SETTLE_MS } from '../../lib/holdSelection.ts';
 
 // jsdom has no PointerEvent; the hook only reads mouse-shaped fields.
 if (!('PointerEvent' in window)) {
@@ -24,6 +25,10 @@ function Node({ onHold, onClick }: { onHold?: () => void; onClick: () => void })
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   cleanup();
+  // A hold leaves the page's selection guard up until the finger lifts and settles — end it, or
+  // it leaks into the next test.
+  window.dispatchEvent(new Event('pointerup'));
+  vi.advanceTimersByTime(HOLD_SELECTION_SETTLE_MS);
   vi.useRealTimers();
 });
 
@@ -103,6 +108,31 @@ describe('useLongPress', () => {
     fireEvent.click(el);
     expect(onHold).toHaveBeenCalledTimes(1);
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  // iOS runs its own selection long press just after ours, onto the sheet the hold opened: the
+  // whole Plan page went blue with the Copy / Share menu over the hold menu (2026-11-01).
+  it('a hold clears the selection and refuses a new one until the finger is up; a tap does not', () => {
+    const allowed = () => {
+      const e = new Event('selectstart', { bubbles: true, cancelable: true });
+      document.body.dispatchEvent(e);
+      return !e.defaultPrevented;
+    };
+    render(<Node onHold={() => {}} onClick={() => {}} />);
+    const el = screen.getByText('Easy run');
+    down(el);
+    fireEvent.pointerUp(el);
+    expect(allowed()).toBe(true);
+
+    document.getSelection()!.selectAllChildren(document.body);
+    expect(document.getSelection()!.toString()).toContain('Easy run');
+    down(el);
+    vi.advanceTimersByTime(LONG_PRESS_MS);
+    expect(document.getSelection()!.toString()).toBe('');
+    expect(allowed()).toBe(false);
+    fireEvent.pointerUp(el);
+    vi.advanceTimersByTime(HOLD_SELECTION_SETTLE_MS);
+    expect(allowed()).toBe(true);
   });
 
   it('with nothing to offer, the node just taps', () => {

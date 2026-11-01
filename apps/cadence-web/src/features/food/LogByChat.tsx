@@ -129,18 +129,27 @@ export function LogByChat({
           placeholder={preview ? 'Or just say the amount…' : 'What did you have? The whole meal is fine.'}
           onSubmit={() => void read()}
         />
-        <MicButton value={text} onChange={setText} disabled={busy} autoStart={listening} />
-        {onPhoto && (
-          <PhotoButton
-            disabled={busy}
-            onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, text.trim()))}
-          />
-        )}
-        {text.trim() && (
-          <button type="button" className="fc-send" disabled={busy} aria-label="Read that" onClick={() => void read()}>
-            ›
-          </button>
-        )}
+        {/* The buttons sit on their own row under the field so the words keep the full width. */}
+        <div className="fc-compose-tools">
+          <MicButton value={text} onChange={setText} disabled={busy} autoStart={listening} />
+          {onPhoto && (
+            <PhotoButton
+              disabled={busy}
+              onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, text.trim()))}
+            />
+          )}
+          {text.trim() && (
+            <button
+              type="button"
+              className="fc-send"
+              disabled={busy}
+              aria-label="Read that"
+              onClick={() => void read()}
+            >
+              ›
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

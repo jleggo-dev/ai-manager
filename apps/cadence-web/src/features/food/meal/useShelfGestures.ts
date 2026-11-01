@@ -14,6 +14,7 @@
  */
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { tickHaptic } from '../../../lib/haptics.ts';
+import { guardSelectionThroughHold } from '../../../lib/holdSelection.ts';
 
 /** How far sideways before the pane commits to a swipe. */
 export const SWIPE_START_PX = 8;
@@ -119,6 +120,8 @@ export function useHoldTap(
           p.timer = null;
           onPress?.(false);
           tickHaptic();
+          // iOS's own selection long press lands just after ours, on the sheet the hold opens.
+          guardSelectionThroughHold();
           onHold();
         }, HOLD_MS);
       }
