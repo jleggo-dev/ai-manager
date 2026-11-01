@@ -77,7 +77,7 @@ export interface CompactionFixture {
 const running: CompactionFixture = {
   id: 'half-marathon',
   title: 'Training for a half marathon around a sore knee',
-  exchanges: 80,
+  exchanges: 100,
   pool: runningPool,
   facts: [
     {
@@ -160,7 +160,7 @@ const running: CompactionFixture = {
 const nourishment: CompactionFixture = {
   id: 'new-parent-food',
   title: 'Eating well with a newborn at home',
-  exchanges: 80,
+  exchanges: 100,
   pool: foodPool,
   facts: [
     {
@@ -242,7 +242,7 @@ const nourishment: CompactionFixture = {
 const practice: CompactionFixture = {
   id: 'meditation-and-piano',
   title: 'A daily sitting practice and returning to the piano',
-  exchanges: 80,
+  exchanges: 100,
   pool: practicePool,
   facts: [
     {
