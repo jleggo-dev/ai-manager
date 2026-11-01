@@ -11,7 +11,7 @@
  * nothing else — the payload is validated as a whole, so an unclamped outlier would reject the
  * entire history.
  */
-import type { HealthDigestSteps, HealthDigestStepsWeek } from '@cadence/shared';
+import { isCalendarDate, type HealthDigestSteps, type HealthDigestStepsWeek } from '@cadence/shared';
 import type { DailySteps } from '../../lib/capability/index.ts';
 
 /** ~13 weeks covers the 90-day window; 14 leaves room for a partial week at each end. */
@@ -36,7 +36,7 @@ function weekStart(date: string): string {
  *  evidence, and averaging it in as a sedentary day would understate a real person's activity. */
 function observedDays(samples: DailySteps[]): DailySteps[] {
   return samples
-    .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s?.date ?? '') && Number.isFinite(s.steps) && s.steps > 0)
+    .filter((s) => isCalendarDate(s?.date) && Number.isFinite(s.steps) && s.steps > 0)
     .map((s) => ({ date: s.date, steps: Math.min(round0(s.steps), MAX_STEPS_PER_DAY) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }

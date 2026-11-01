@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { isCalendarDate } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { buildProgress } from '../services/progress.ts';
 import { parseProgressWindow } from '../services/progress-window.ts';
@@ -12,7 +13,6 @@ import { BodyValidationError, parseBody, progressEventBodySchema } from '../vali
 
 const router = Router();
 router.use(requireCadenceUser);
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_HISTORY_SPAN_DAYS = 400;
 
 /**
@@ -43,7 +43,7 @@ router.get('/history', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const from = typeof req.query.from === 'string' ? req.query.from : '';
   const to = typeof req.query.to === 'string' ? req.query.to : '';
-  if (!ISO_DATE_RE.test(from) || !ISO_DATE_RE.test(to)) {
+  if (!isCalendarDate(from) || !isCalendarDate(to)) {
     return void res.status(400).json({ error: 'from/to are required as YYYY-MM-DD' });
   }
   if (to < from) return void res.status(400).json({ error: 'to must not be before from' });

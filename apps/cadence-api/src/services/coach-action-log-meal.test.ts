@@ -35,7 +35,7 @@ describe('log_meal — bad calls never reach the service', () => {
     expect(logMeal).toHaveBeenCalledWith('u1', { text: 'toast', meal: undefined, date: undefined });
   });
 
-  it('drops a malformed date rather than passing it through', async () => {
+  it.each(['yesterday', '2026-02-30'])('drops a malformed date (%s) rather than passing it through', async (date) => {
     vi.mocked(logMeal).mockResolvedValue({
       date: '2026-08-28',
       meal: 'other',
@@ -43,7 +43,7 @@ describe('log_meal — bad calls never reach the service', () => {
       macros: { kcal: 120 },
       provisional: false,
     } as never);
-    await LOG_MEAL.run('u1', { text: 'toast', date: 'yesterday' });
+    await LOG_MEAL.run('u1', { text: 'toast', date });
     expect(logMeal).toHaveBeenCalledWith('u1', { text: 'toast', meal: undefined, date: undefined });
   });
 

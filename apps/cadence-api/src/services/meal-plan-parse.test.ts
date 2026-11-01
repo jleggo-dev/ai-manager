@@ -51,6 +51,23 @@ describe('parseGenerateMealPlanResult', () => {
     expect(parsed.notes).toBe('thin');
   });
 
+  it('drops a day that is not on the calendar even when its meal is fine, and keeps the real one', () => {
+    const meal = {
+      slot: 'dinner',
+      recipe: { name: 'Chili', servings: 4, ingredients: [{ name: 'beef', qty: 500, unit: 'g' }], steps: ['Simmer'] },
+    };
+    const parsed = parseGenerateMealPlanResult(
+      JSON.stringify({
+        days: [
+          { day: '2026-02-30', meals: [meal] },
+          { day: '2026-07-27', meals: [meal] },
+        ],
+        shopping_list: [],
+      }),
+    );
+    expect(parsed.days.map((d) => d.day)).toEqual(['2026-07-27']);
+  });
+
   it('rejects non-JSON', () => {
     expect(() => parseGenerateMealPlanResult('not json')).toThrow(/non-JSON/);
   });

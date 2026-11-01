@@ -42,6 +42,19 @@ describe('parseBody / nutrition schemas', () => {
     expect(() => parseBody(logMealBodySchema, { photo: 'http://x' })).toThrow(/data:image/);
   });
 
+  it.each([
+    ['a real day', '2026-02-28', true],
+    ['a leap day', '2028-02-29', true],
+    ['Feb 30 — the shape passes, the day does not exist', '2026-02-30', false],
+    ['Feb 29 in a common year', '2026-02-29', false],
+    ['no padding', '2026-2-8', false],
+    ['a timestamp', '2026-02-28T00:00:00Z', false],
+  ])('a meal date: %s', (_label, date, ok) => {
+    const parse = () => parseBody(logMealBodySchema, { text: 'toast', date });
+    if (ok) expect(parse()).toMatchObject({ date });
+    else expect(parse).toThrow(/date must be YYYY-MM-DD/);
+  });
+
   it('accepts deterministic food_id log without text/photo', () => {
     const id = '11111111-1111-4111-8111-111111111111';
     expect(

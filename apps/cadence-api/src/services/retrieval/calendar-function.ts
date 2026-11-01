@@ -1,4 +1,5 @@
 import type { Activity, OccurrenceStatus } from '@cadence/shared';
+import { isCalendarDate } from '@cadence/shared';
 import { getUser } from '../../repos/users.ts';
 import { getActivePlan } from '../../repos/plans.ts';
 import { listActivities, listActivitiesByIds } from '../../repos/activities.ts';
@@ -34,7 +35,6 @@ export const CALENDAR_MAX_DAYS = 28;
  *  seven-day block to a few lines — an 18-commitment plan runs ~120 characters a day. */
 const TITLE_MAX = 32;
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export interface WrittenRow {
@@ -121,7 +121,7 @@ export async function readWrittenCalendar(
   opts: { activities: TitleRow[]; timezone: string | null | undefined; from?: string; days: number },
 ): Promise<WrittenCalendar> {
   const today = localDayIso(new Date(), opts.timezone);
-  const from = opts.from && ISO_DATE.test(opts.from) ? opts.from : today;
+  const from = opts.from && isCalendarDate(opts.from) ? opts.from : today;
   const to = addDays(from, Math.max(1, opts.days) - 1);
   const rows = await listOccurrences(userId, from, to);
   return shapeWrittenDays(rows, await titlesFor(userId, rows, opts.activities), { from, to, today });

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  isCalendarDate,
   isTimeOfDay,
   type Availability,
   type AvailabilityWindow,
@@ -33,9 +34,10 @@ const EATING_SPANS_MAX = 7;
 /** The RRULE day codes `scheduling.ts` parses — the same vocabulary, so a span can become a BYDAY. */
 const RRULE_DAYS: readonly string[] = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
-/** "2026-08-14" and nothing else. A half-parsed date schedules someone in the wrong week. */
-function isYmd(raw: unknown): raw is string {
-  return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()) && !Number.isNaN(Date.parse(raw.trim()));
+/** A YYYY-MM-DD the model wrote, trimmed; a padded "until" used to pass the check and be stored padded. */
+function ymd(raw: unknown): string | undefined {
+  const s = typeof raw === 'string' ? raw.trim() : raw;
+  return isCalendarDate(s) ? s : undefined;
 }
 
 /**
@@ -162,7 +164,8 @@ function normalizeEatingWindow(raw: unknown): EatingWindow | undefined {
     if (windows.length === EATING_SPANS_MAX) break;
   }
 
-  return { said_as: saidAs, windows, ...(isYmd(src.until) ? { until: src.until } : {}) };
+  const until = ymd(src.until);
+  return { said_as: saidAs, windows, ...(until ? { until } : {}) };
 }
 
 /**
@@ -269,7 +272,7 @@ export function normalizeBaseline(raw: Record<string, unknown>): Record<string, 
         const status = c.status === 'active' || c.status === 'quiet' ? c.status : undefined;
         pushConstraint(String(c.label ?? [c.area, c.condition].filter(Boolean).join(' — ')), kind, !!c.plan_around, {
           ...(status ? { status } : {}),
-          ...(isYmd(c.until) ? { until: c.until } : {}),
+          ...(ymd(c.until) ? { until: ymd(c.until) } : {}),
         });
       }
     }

@@ -154,9 +154,19 @@ describe('edit_calendar — refusals before anything is read', () => {
       { action: 'move', date: 'tuesday', title: 'x', to: '2026-09-17' },
       /not a day in YYYY-MM-DD form/,
     ],
+    [
+      'a date that is not on the calendar',
+      { action: 'move', date: '2026-02-30', title: 'x', to: '2026-09-17' },
+      /not a day in YYYY-MM-DD form/,
+    ],
     ['no title', { action: 'move', date: '2026-09-15', title: '', to: '2026-09-17' }, /no session title was given/],
     ['a move with no "to"', { action: 'move', date: '2026-09-15', title: 'x' }, /a move needs "to"/],
     ['a copy with a bad "to"', { action: 'copy', date: '2026-09-15', title: 'x', to: 'friday' }, /a copy needs "to"/],
+    [
+      'a move to a day that is not on the calendar',
+      { action: 'move', date: '2026-09-15', title: 'x', to: '2026-02-30' },
+      /a move needs "to"/,
+    ],
   ])('%s', async (_label, params, want) => {
     const out = await EDIT_CALENDAR.run(USER, params as never);
     expect(out).toMatch(/^nothing changed: /);

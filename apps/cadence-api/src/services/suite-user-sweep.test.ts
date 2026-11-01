@@ -54,7 +54,8 @@ d('sweepSuiteUsers — leaves a live run alone (DB)', () => {
     await ensureUser(IDLE);
     await age(IDLE, 120);
 
-    const { swept } = await sweepSuiteUsers();
+    // Its own two users only: the whole table under a running CI is minutes of cascading deletes.
+    const { swept } = await sweepSuiteUsers(undefined, [LIVE, IDLE]);
 
     expect(await exists(LIVE)).toBe(true);
     expect(swept).not.toContain(LIVE);
@@ -68,7 +69,7 @@ d('sweepSuiteUsers — leaves a live run alone (DB)', () => {
     // The new run's first beforeEach — this is what every DB suite does.
     await resetUserData(REUSED);
 
-    const { swept } = await sweepSuiteUsers();
+    const { swept } = await sweepSuiteUsers(undefined, [REUSED]);
 
     expect(await exists(REUSED)).toBe(true);
     expect(swept).not.toContain(REUSED);

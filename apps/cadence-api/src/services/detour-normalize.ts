@@ -7,7 +7,7 @@
  * deployed AI Admin and nothing else), and that import crashed its tool-choice step at startup on
  * every scheduled run from at least 2026-09-07 to 2026-10-26.
  */
-import type { CaptureDetourResult } from '@cadence/shared';
+import { isCalendarDate, type CaptureDetourResult } from '@cadence/shared';
 
 const EPISODE_TYPES = new Set(['travel', 'illness', 'injury', 'recovery', 'custom']);
 const MAX_DAYS = 60;
@@ -66,10 +66,10 @@ export function normalizeDetour(raw: string): {
     typeof d.days === 'number' && Number.isFinite(d.days)
       ? Math.min(MAX_DAYS, Math.max(1, Math.round(d.days)))
       : undefined;
-  const end = typeof d.end === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.end) ? d.end : undefined;
+  const end = isCalendarDate(d.end) ? d.end : undefined;
   // A stated arrival date schedules the detour (owner, 2026-08-04): nothing pauses until then.
   // Malformed or past dates drop to undefined — entering begins today, never retroactively.
-  const start = typeof d.start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.start) ? d.start : undefined;
+  const start = isCalendarDate(d.start) ? d.start : undefined;
 
   return { type: d.type, start, days, end, available_equipment: clampEquipment(d.available_equipment) };
 }

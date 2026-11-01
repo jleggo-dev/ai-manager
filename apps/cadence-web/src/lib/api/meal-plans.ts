@@ -13,6 +13,7 @@
  */
 
 import type { MealPlan, MealPlanDay, MealPlanItem, MealPlanMeal, ShoppingListItem } from '@cadence/shared';
+import { isCalendarDate } from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 import type { ApiAvailability } from './foods.ts';
 import { parseRecipeDraft, type RecipeDraft } from './recipes.ts';
@@ -362,7 +363,7 @@ export async function generateMealPlan(input: {
   recipe_ids?: string[];
 }): Promise<GenerateMealPlanResult> {
   const week_of = input.week_of.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(week_of)) {
+  if (!isCalendarDate(week_of)) {
     return { status: 'error', message: 'I need a week start date (Monday) to draft meals.' };
   }
   try {
@@ -568,7 +569,7 @@ export async function discoverRecipes(query: string): Promise<DiscoverRecipesRes
 }
 
 export function mealPlanDayLabel(day: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+  if (isCalendarDate(day)) {
     try {
       const d = new Date(`${day}T12:00:00`);
       return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });

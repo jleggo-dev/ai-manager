@@ -1,4 +1,4 @@
-import type { MealKind } from '@cadence/shared';
+import { isCalendarDate, type MealKind } from '@cadence/shared';
 import { logMeal } from './nutrition.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
@@ -55,7 +55,7 @@ export const LOG_MEAL: CoachActionTool = defineAction({
     if (!text)
       return toolNothingChangedText('no food was named, so nothing was logged.', ['Ask what they actually had.']);
     const meal = isMealKind(params.meal) ? params.meal : undefined;
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(params.date ?? '')) ? String(params.date) : undefined;
+    const date = isCalendarDate(params.date) ? params.date : undefined;
 
     let row: Awaited<ReturnType<typeof logMeal>>;
     try {

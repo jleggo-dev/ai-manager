@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { isCalendarDate } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import {
   clearTargets,
@@ -196,7 +197,7 @@ router.get('/summary', async (req: Request, res: Response) => {
  *  provisional) + targets/left when the user has confirmed targets (N3). Defaults to today. */
 router.get('/day', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date ?? '')) ? String(req.query.date) : undefined;
+  const date = isCalendarDate(req.query.date) ? req.query.date : undefined;
   try {
     // Sunday-sweep piggyback (S3) — rides the day read like assessIfDue rides GET /plan; the
     // timezone is what anchors "Sunday" to the user's own week rather than the server's.
@@ -214,7 +215,7 @@ router.get('/day', async (req: Request, res: Response) => {
  */
 router.get('/insight', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date ?? '')) ? String(req.query.date) : undefined;
+  const date = isCalendarDate(req.query.date) ? req.query.date : undefined;
   try {
     res.json(await getNutritionInsight(userId, date));
   } catch (err) {

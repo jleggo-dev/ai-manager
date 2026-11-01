@@ -4,6 +4,7 @@
  */
 import {
   assessDietarySafety,
+  isCalendarDate,
   type DietarySafetyAssessment,
   type MealPlan,
   type MealPlanDay,
@@ -31,8 +32,6 @@ import {
   type MealPlanStructuredRecipe,
 } from './meal-plan-parse.ts';
 import { createRecipe } from './recipe.ts';
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface MealPlanRecipeDraft {
   name: string;
@@ -133,7 +132,7 @@ function toRecipeDraft(recipe: MealPlanStructuredRecipe, dietary: DietarySafetyA
  */
 export async function generateMealPlan(userId: string, input: GenerateMealPlanInput): Promise<MealPlanDraft> {
   const week_of = input.week_of.trim();
-  if (!ISO_DATE.test(week_of)) throw new Error('week_of must be YYYY-MM-DD');
+  if (!isCalendarDate(week_of)) throw new Error('week_of must be YYYY-MM-DD');
 
   // Owner ruling 2026-09-03: the user picks the slots; dinners only unless they asked for more.
   // Fewer slots is also the speed lever — the model writes every recipe, so 7 dinners is a third
@@ -256,13 +255,13 @@ export interface ConfirmMealPlanInput {
  */
 export async function confirmMealPlan(userId: string, input: ConfirmMealPlanInput): Promise<MealPlan> {
   const week_of = input.week_of.trim();
-  if (!ISO_DATE.test(week_of)) throw new Error('week_of must be YYYY-MM-DD');
+  if (!isCalendarDate(week_of)) throw new Error('week_of must be YYYY-MM-DD');
   if (!Array.isArray(input.days) || input.days.length === 0) throw new Error('at least one day required');
 
   const days: MealPlanDay[] = [];
 
   for (const day of input.days) {
-    if (!ISO_DATE.test(day.day)) throw new Error(`bad day: ${day.day}`);
+    if (!isCalendarDate(day.day)) throw new Error(`bad day: ${day.day}`);
     const meals: MealPlanMeal[] = [];
     for (const meal of day.meals) {
       const slot = meal.slot.trim().toLowerCase() || 'dinner';
@@ -320,7 +319,7 @@ export async function getMealPlanForUser(userId: string, mealPlanId: string): Pr
 }
 
 export async function getMealPlanForWeek(userId: string, weekOf: string): Promise<MealPlan | null> {
-  if (!ISO_DATE.test(weekOf)) throw new Error('week_of must be YYYY-MM-DD');
+  if (!isCalendarDate(weekOf)) throw new Error('week_of must be YYYY-MM-DD');
   return getMealPlanByWeek(userId, weekOf);
 }
 

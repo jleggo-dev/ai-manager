@@ -24,6 +24,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import type { PendingWeekReview } from '@cadence/shared';
+import { isCalendarDate } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { getUser, setPendingWeekReview } from '../repos/users.ts';
 import { restartActiveWeek } from '../repos/plans.ts';
@@ -45,7 +46,6 @@ import {
 
 const router = Router();
 router.use(requireCadenceUser);
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * GET /plan/week-review/pending — the plan week `open_week_review` last put up, if the user
@@ -90,7 +90,7 @@ router.post('/week-review/dismiss', async (req: Request, res: Response) => {
 router.get('/week-review/facts', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   const weekRaw = req.query.week;
-  if (weekRaw !== undefined && (typeof weekRaw !== 'string' || !ISO_DATE_RE.test(weekRaw))) {
+  if (weekRaw !== undefined && (typeof weekRaw !== 'string' || !isCalendarDate(weekRaw))) {
     return void res.status(400).json({ error: 'week must be YYYY-MM-DD' });
   }
   try {

@@ -1,4 +1,5 @@
 import type { Activity, Goal } from '@cadence/shared';
+import { isCalendarDate } from '@cadence/shared';
 import { NON_PLAN_CATEGORIES } from '../repos/activities.ts';
 import { expandRecurrence } from './scheduling.ts';
 import type { PlanViewDay } from './plan-view.ts';
@@ -26,8 +27,6 @@ export interface PlanViewPreviewItem {
   area?: Goal['area'];
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 /** YYYY-MM-DD + 1, pure date arithmetic — the client's `trailLock.ts` idiom. */
 function nextDay(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -43,9 +42,9 @@ export function previewFromDate(
   todayIso: string,
   builtThrough: string | null | undefined,
 ): string | null {
-  if (!endsOn || !ISO_DATE.test(endsOn) || !ISO_DATE.test(todayIso)) return null;
+  if (!endsOn || !isCalendarDate(endsOn) || !isCalendarDate(todayIso)) return null;
   const afterWeek = nextDay(todayIso > endsOn ? todayIso : endsOn);
-  if (builtThrough && ISO_DATE.test(builtThrough)) {
+  if (builtThrough && isCalendarDate(builtThrough)) {
     const afterBuilt = nextDay(builtThrough);
     return afterBuilt > afterWeek ? afterBuilt : afterWeek;
   }

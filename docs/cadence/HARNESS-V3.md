@@ -291,8 +291,8 @@ No migration; stacks on P9 (#441) for the `source` column.
   pinned for the session, so it showed closed items as open, and when the last one closed the floor
   rendered nothing and the pinned copy was the only list she could see. Once a person has ever had
   one, the floor now says `- none open right now` instead of going quiet; someone who never had one
-  pays nothing. (The 0061 `pack_touch` trigger on `follow_ups` now only costs an extra deterministic
-  pack rebuild; left in place.)
+  pays nothing. (The 0061 `pack_touch` trigger on `follow_ups` then only cost an extra deterministic
+  pack rebuild; migration 0063 drops it.)
 - **The fact review's questions are marked.** A `source = 'fact-review'` line carries
   `(a question from checking their file)`, so it does not read as her promise. This replaces the P9
   note below that the render was left unchanged.
@@ -555,7 +555,11 @@ Differences from the design above, each from the code:
      at 10,000 characters like any job variable; at ~130 words a round the summary gets there
      after roughly 7–8 folds (~160–190 exchanges; the longest session on file has 53 messages).
      The heading order means a cut loses the last headings first, silently.
-     It needs a guard before sessions get that long. (3) Advice still gets in as bare lines under
+     **Guarded (2026-11-01):** `planCompaction` refuses to fold when the summary is over
+     `SUMMARY_BUDGET_CHARS` (= the variable cap) and the engine logs the skip as a warning, so a
+     session that long stops compacting loudly instead of losing headings quietly
+     (`session-compaction-summary-cap.test.ts`). The fix for such a session is a fold of the
+     summary onto itself, still owed. (3) Advice still gets in as bare lines under
      DECIDED and CORRECTIONS, mostly on the food fixture: that is the size problem, not the retention
      one. Next to try: a stronger model for this one job, or a line cap per heading. (4) Whether she
      answers the probes from the list is still not measured.
@@ -722,7 +726,14 @@ schema-validated. An assertion that the job holds no write path to fact tables.
   itself that June has passed). With three findings a run, a person could be handed one real
   question and two inferred ones a week. The candidate fix is one prompt line, two facts that can
   both be true given something the file does not say are not a finding, measured with
-  `--prompt-from-config` before a sync. Not changed; the owner's call.
+  `--prompt-from-config` before a sync.
+  **Tried the same day, did not help:** two "do NOT report" bullets (the inferred-equipment case
+  by name, and "what they do now beside a constraint that has already ended") measured 17/18 with
+  8 extras against 18/18 with 7. Every inferred finding came back unchanged and one real stale
+  finding was lost. Reverted; the live prompt is untouched. The job's model infers past its
+  instructions, so the lever is a stronger model for this one job, the same conclusion as
+  `coach-compact`'s advice leaks (C5.4), or accepting the extras: each is one question the coach
+  may choose not to raise. The owner's call.
 
 ---
 
