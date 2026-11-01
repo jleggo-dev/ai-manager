@@ -131,6 +131,8 @@ export function useKitchen(): KitchenData {
         }
         if (plan?.meal_plan_id) {
           const r = await patchMealPlan(plan.meal_plan_id, { days });
+          // Cleared somewhere else: show the week as it really is, empty, rather than the copy we held.
+          if (r.status === 'gone') setPlan(null);
           if (r.status !== 'ok') return void setNote(r.message);
           setPlan(r.plan);
           return;
