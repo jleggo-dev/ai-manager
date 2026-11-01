@@ -457,8 +457,11 @@ The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.t
    handful") falls back to the remembered amount — the memory never skips a part it holds. The
    model is then asked only about the parts the memory did not settle, in their words for those
    parts, and a row it writes for a remembered part anyway is dropped by its phrase key (no second
-   latte). Written only on a confirm (`logMeal({parsed})` and the draft's `appendParsed`), from the
-   rows as the ledger priced and wrote them, never on a preview walked away from. Until 0064 is
+   latte). Written only on a confirm, never on a preview walked away from: the chat door
+   (`logMeal({parsed})`) learns only a row the client sent with a `food_id` that the ledger then
+   priced from that same food — a confirmed pick, never a name match the ledger made on its own;
+   the draft door (`appendParsed`, which does not price) learns only a row whose food this person
+   can see. A question row teaches nothing: it carries no link and no words. Until 0064 is
    applied a recall finds nothing and a remember logs a warning: a miss costs one call, never the
    meal.
 3. **The book** (`food-candidate-sources.ts` → `fanOutFoodSources` + FatSecret's top 5 rows
@@ -490,11 +493,11 @@ The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.t
    are chosen so the confirm re-prices to the same numbers (the measure's own word when it reads
    back, grams otherwise). An estimate is labelled (`basis: estimate`, "the coach's estimate") and
    carries the plain name and the brand the person named, so the confirm pins a food and not a
-   sentence. **A row with an open question carries no number and no food link** (review,
-   2026-11-01): the question is what it waits for — the card asks it, the total leaves it out,
-   the coach's `preview_meal` lists it as "waiting on their answer", and on confirm the row
-   re-matches by name like any row without a food, so a tentative pick is never logged and never
-   taught to the memory. A linked row that arrives without an amount is not counted either, not
+   sentence. **A row with an open question carries no number, no food link and no `said`**
+   (review, 2026-11-01): the question is what it waits for — the card asks it, the total leaves
+   it out, the coach's `preview_meal` lists it as "waiting on their answer", the guard round is
+   not spent on its tentative pick, and on confirm the row re-matches by name like any row without
+   a food, so a tentative pick is never logged and never taught to the memory. A linked row that arrives without an amount is not counted either, not
    from the card's number and not from a default serving.
 6. **When she cannot be reached** (a provider failure, a reply that is not JSON): the old
    `parse-meal` + code-picked match prices the pending parts, every row `basis: fallback`

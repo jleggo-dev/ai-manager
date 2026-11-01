@@ -99,7 +99,7 @@ describe('parseFoodCheckReply', () => {
   it.each(['', 'no json here', '{"meal":"x"}', '[1,2]'])('%j is not a reply', (raw) => {
     expect(parseFoodCheckReply(raw)).toBeNull();
   });
-  it('caps the items at the parts a meal can have — the confirm takes at most twelve rows', () => {
+  it('caps the items at MAX_PARTS, the parts a meal can have (the confirm takes up to twelve rows, so this is the tighter bound)', () => {
     const items = Array.from({ length: 14 }, (_, i) => item({ said: `part ${i}` }));
     expect(parseFoodCheckReply(JSON.stringify({ items, lookups: [] }))?.items).toHaveLength(MAX_PARTS);
   });
@@ -115,6 +115,10 @@ describe('checkItems and guardNotes', () => {
     expect(notes).toContain('item 2 ("a banana"): pick "c7" is not an id in the book');
     expect(notes).toContain('item 3 ("a banana"): measure "1 cup" is not one c1 offers');
     expect(guardNotes(items, new Map())).toBe('');
+  });
+  it('a question item is not checked: its pick is tentative and never used', () => {
+    const book = bookWith(banana);
+    expect(checkItems([item({ pick: 'c7', question: 'Which banana?' })], book).size).toBe(0);
   });
 });
 
@@ -152,6 +156,17 @@ describe('foodCheckRounds — the shape bounds the model', () => {
     expect(out.calls).toBe(FOOD_CHECK_MAX_CALLS);
     expect(out.lookups).toEqual([{ q: 'banana', measure: null, brand: null }]);
     expect(out.items[0]?.pick).toBe('c1');
+  });
+
+  it('a question item with a bad id costs no retry', async () => {
+    const book = bookWith(banana);
+    const call = vi.fn(async () =>
+      JSON.stringify({ items: [item({ pick: 'c9', question: 'Which banana — big or small?' })], lookups: [] }),
+    );
+    const out = await foodCheckRounds({ meal: 'snack', said: 'a banana', book }, { call, lookup: noLookup });
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(out.problems.size).toBe(0);
+    expect(out.items[0]?.question).toBe('Which banana — big or small?');
   });
 
   it('a bad pick goes back once as evidence, then stands as a problem after the last call', async () => {

@@ -51,7 +51,7 @@ import { totalsFromItems } from './meal-corrections.ts';
 import { enrichFlags } from './meal-enrich.ts';
 import { expireOverdueMeals } from './meal-draft.ts';
 import { previewDescribedMeal, type DescribedMealPreview } from './food-described-meal.ts';
-import { learnDescribedMeal } from './food-phrases.ts';
+import { confirmedPickRows, learnDescribedMeal } from './food-phrases.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -110,19 +110,6 @@ export interface ParsedMealInput {
   date?: string;
 }
 
-/**
- * The priced rows paired with the words each was said in. The ledger keeps the rows in order and
- * drops none (every confirmed row has a name), so the pairing is by position; when the counts
- * differ anyway nothing is paired, and nothing is learned from a guess.
- */
-export function learnableRows(
-  priced: NutritionLog['items'],
-  sent: Array<{ said?: string }>,
-): Array<NutritionLog['items'][number] & { said?: string }> {
-  if (priced.length !== sent.length) return [];
-  return priced.map((row, i) => ({ ...row, ...(sent[i]?.said ? { said: sent[i]!.said } : {}) }));
-}
-
 export async function logMeal(
   userId: string,
   input: {
@@ -175,10 +162,10 @@ export async function logMeal(
       provisional,
     });
     await tickFoodLogOccurrence(userId, date, p.meal);
-    // Logged, and learned: the words each linked row was said in now price without a call. From
-    // the rows the ledger priced and wrote, not the client's — a link the store could not see is
-    // not a link, and a row without an amount teaches nothing.
-    await learnDescribedMeal(userId, learnableRows(ledger.items, p.items));
+    // Logged, and learned: the words each confirmed pick was said in now price without a call —
+    // only a row the client sent with a food the ledger then priced from (food-phrases.ts); a
+    // name match the ledger made on its own, or a question row, teaches nothing.
+    await learnDescribedMeal(userId, confirmedPickRows(ledger.items, p.items));
     return row;
   }
   if (input.items?.length) {

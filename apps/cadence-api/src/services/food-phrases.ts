@@ -9,6 +9,7 @@
  * the table is migration 0064, and until it is applied a recall finds nothing and a remember
  * logs a warning; a miss costs one model call, never the meal.
  */
+import { getFoodsByIds } from '../repos/foods.ts';
 import { recallFoodPhrases, rememberFoodPhrase, type FoodPhraseRow } from '../repos/food-phrases.ts';
 import { stripAmount } from './food-candidate-book.ts';
 
@@ -50,6 +51,44 @@ export function phraseLinksOf(
     out.push({ phrase, food_id: it.food_id, qty: it.qty, unit: it.unit?.trim() || null });
   }
   return out;
+}
+
+/**
+ * The chat door's confirm: the rows the ledger priced, paired by position with the rows the
+ * client sent (the ledger keeps order and drops none, so a count mismatch pairs nothing). Only a
+ * row the client sent WITH a `food_id` that the ledger then priced from that same food is a
+ * confirmed pick; a row the ledger matched by name on its own, and a question row (no link, no
+ * words), teach nothing — the memory holds what the person confirmed, never what code guessed.
+ */
+export function confirmedPickRows<T extends { food_id?: string; qty?: number; unit?: string }>(
+  priced: T[],
+  sent: Array<{ food_id?: string; said?: string }>,
+): Array<T & { said: string }> {
+  if (priced.length !== sent.length) return [];
+  return priced.flatMap((row, i) => {
+    const s = sent[i];
+    return s?.food_id && s.said && row.food_id === s.food_id ? [{ ...row, said: s.said }] : [];
+  });
+}
+
+/**
+ * The draft door's add does not price its rows, so a row teaches only when the food it names is
+ * one this person can see — an id off the wire can never link a phrase to a stranger's row.
+ */
+export async function learnVisibleRows(userId: string, items: LearnableItem[]): Promise<void> {
+  const ids = [...new Set(items.flatMap((i) => (i.food_id ? [i.food_id] : [])))];
+  if (!ids.length) return;
+  let visible: Set<string>;
+  try {
+    visible = new Set((await getFoodsByIds(userId, ids)).map((f) => f.food_id));
+  } catch (e) {
+    console.warn('[food-phrases] foods read failed — learning nothing:', e instanceof Error ? e.message : e);
+    return;
+  }
+  await learnDescribedMeal(
+    userId,
+    items.filter((i) => !!i.food_id && visible.has(i.food_id)),
+  );
 }
 
 /** Teach the memory from a confirmed meal. Never throws. */

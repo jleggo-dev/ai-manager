@@ -149,6 +149,11 @@ describe('food-check job config', () => {
   });
 
   it('names the near-miss that started this: a plain latte is not a matcha latte', () => {
+    // The directive the owner ruled to keep (2026-11-01), then its examples — pinned apart, so
+    // dropping the sentence while keeping the examples does not pass.
+    expect(template).toContain(
+      'Choose the record that names what they said, not one that adds a word they did not say.',
+    );
     expect(template).toContain('"latte" is a plain latte, not a matcha latte');
     expect(template).toContain('"peanut butter" is not powdered peanut butter');
   });

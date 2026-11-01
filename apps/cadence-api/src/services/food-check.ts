@@ -155,14 +155,18 @@ export function parseFoodCheckReply(raw: string): FoodCheckReply | null {
   };
 }
 
-/** Which picks the book cannot honour, by item index, each with the reason as evidence. */
+/**
+ * Which picks the book cannot honour, by item index, each with the reason as evidence. An item
+ * that carries a question is not checked: its pick is tentative and the card never uses it
+ * (food-described-rows.ts), so the one guard retry is not spent complaining about it.
+ */
 export function checkItems(
   items: FoodCheckItem[],
   book: Pick<CandidateBook, 'entries' | 'shown'>,
 ): Map<number, string> {
   const problems = new Map<number, string>();
   items.forEach((item, i) => {
-    if (!item.pick) return;
+    if (!item.pick || item.question) return;
     const r = checkPick({ pick: item.pick, measure: item.measure, count: item.count }, book);
     if (!r.ok) problems.set(i, r.problem);
   });

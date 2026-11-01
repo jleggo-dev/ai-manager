@@ -38,7 +38,7 @@ import { isMeal, usageSlot } from './nutrition-parse.ts';
 import { sanitizeMacros } from './nutrition-day.ts';
 import { scaleMacros } from './recipe-macros.ts';
 import { dissolveThinParts, newPartKey } from './meal-parts.ts';
-import { learnDescribedMeal } from './food-phrases.ts';
+import { learnVisibleRows } from './food-phrases.ts';
 
 /** How long a meal accepts adds — visible on-surface as "adds until HH:MM", never a silent rule. */
 export const DRAFT_WINDOW_MS = 3 * 60 * 60 * 1000;
@@ -325,8 +325,9 @@ export async function appendParsed(userId: string, logId: string, parsed: Parsed
   await learnPostLogAdds(userId, meal, appended);
   // Logged, and learned (FOOD-LOGGING-COACH-LED.md): the words a linked row was said in now
   // price without a call next time — from the rows as written (sanitised, amount kept only when
-  // positive), each paired with the words it arrived with.
-  await learnDescribedMeal(
+  // positive), each paired with the words it arrived with, and only when the food it names is
+  // one this person can see (this add does not price, so nothing else has checked the id).
+  await learnVisibleRows(
     userId,
     appended.map((row, i) => ({ ...row, ...(kept[i]?.said ? { said: kept[i]!.said } : {}) })),
   );

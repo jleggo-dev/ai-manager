@@ -62,6 +62,21 @@ describe('DescribeSheet — who read it, and what the rows say', () => {
     expect(screen.queryByText(/^Checked/)).not.toBeInTheDocument();
   });
 
+  it('a question row that arrives WITH a number is still left out of the total', async () => {
+    await lookUp({
+      ...base,
+      items: [{ name: 'milk', question: 'Whole milk or 2%?', est: { kcal: 122 } }, ...base.items],
+      coach: { reached: true, calls: 1, checked: [] },
+    });
+    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+  });
+
+  it('not reached, with a trace: the notice and the trace both show', async () => {
+    await lookUp({ ...base, coach: { reached: false, calls: 1, checked: ['banana: your foods: 1 rows'] } });
+    expect(screen.getByText(NOT_REACHED)).toBeInTheDocument();
+    expect(screen.getByText('Checked banana: your foods: 1 rows.')).toBeInTheDocument();
+  });
+
   it('a row waiting on her question shows the question, asks the amount, and is not in the total', async () => {
     await lookUp({
       ...base,

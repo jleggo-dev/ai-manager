@@ -284,6 +284,32 @@ describe('CandidateBook — fits its budget, round-robin by part, the cut announ
     expect(book.shown().size).toBe(book.entries.size);
   });
 
+  it("disagreement notes come after every part's rows, and go before any row when room runs out", () => {
+    const book = new CandidateBook();
+    book.add(
+      { q: 'rice', measure: null, brand: null },
+      found([candidate({ name: 'Rice A' }), candidate({ name: 'Rice B' })], ['rice differs']),
+    );
+    book.add(
+      { q: 'beans', measure: null, brand: null },
+      found([candidate({ name: 'Beans A' }), candidate({ name: 'Beans B' })], ['beans differ']),
+    );
+    const full = book.text(100_000);
+    const at = (s: string) => full.indexOf(s);
+    expect(at('Rice A')).toBeLessThan(at('Rice B'));
+    expect(at('Rice B')).toBeLessThan(at('where they disagree: rice differs'));
+    expect(at('where they disagree: rice differs')).toBeLessThan(at('Lookup "beans"'));
+    expect(at('Beans B')).toBeLessThan(at('where they disagree: beans differ'));
+
+    // Room for every row but not for the notes: the rows stay, the notes go.
+    const notes = '  where they disagree: rice differs\n'.length + '  where they disagree: beans differ\n'.length;
+    const tight = book.text(full.length + 2 * 110 - notes + 1);
+    expect(tight).toContain('Rice B');
+    expect(tight).toContain('Beans B');
+    expect(tight).not.toContain('where they disagree');
+    expect(book.sections.every((s) => s.omitted === 0)).toBe(true);
+  });
+
   it('a smaller budget renders fewer rows and the entries stay; re-rendering with room shows them again', () => {
     const book = bigBook();
     const small = book.text(2_000);

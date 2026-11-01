@@ -193,7 +193,8 @@ describe('a row with an open question (the question is the answer it waits for)'
     });
     const p = await previewDescribedMeal(USER, 'milk and a banana', 'breakfast', d);
     expect(p.items).toHaveLength(2);
-    expect(p.items[0]).toEqual({ name: 'milk', said: 'milk', basis: 'none', question: 'Whole milk or 2%?' });
+    // No number, no link, no `said`: nothing for the confirm to price from or the memory to learn.
+    expect(p.items[0]).toEqual({ name: 'milk', basis: 'none', question: 'Whole milk or 2%?' });
     expect(p.items[1]).toMatchObject({
       name: 'Banana, raw',
       food_id: 'f-banana',
@@ -227,7 +228,6 @@ describe('a row with an open question (the question is the answer it waits for)'
     const p = await previewDescribedMeal(USER, 'a parfait', 'snack', d);
     expect(p.items[0]).toEqual({
       name: 'yogurt parfait',
-      said: 'a parfait',
       basis: 'none',
       question: 'The small or the large?',
     });
@@ -293,6 +293,15 @@ describe('rememberedRows — the memory never skips a part it holds', () => {
     expect(rows.size).toBe(1);
     expect(rows.get(0)).toMatchObject({ qty: want.qty, unit: want.unit, basis: 'remembered', said });
     expect(rows.get(0)?.est?.kcal).toBeCloseTo(want.kcal, 0);
+  });
+
+  it('near-miss: a remembered row with no unit and a bare said count is not priced — the part goes to the model', async () => {
+    // The store refuses a bare count above one of an unnamed default (the "3 shallots → 300 g"
+    // rule in food-pricing-portion.ts). A row confirmed without a unit was priced by the parse,
+    // not the store, so the memory cannot price it now either; both tries fail and the part is
+    // looked up and asked like any other. Pinned so the skip is a known rule, not a surprise.
+    const { d } = deps({ memory: memoryOf(row(phraseKey('2 almonds'), 'f-almonds', 2, null)) });
+    expect((await rememberedRows(partsToLookups('2 almonds'), USER, d)).size).toBe(0);
   });
 
   it('near-miss: words the memory does not hold are not rows', async () => {

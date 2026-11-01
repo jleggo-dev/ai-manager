@@ -100,6 +100,29 @@ describe('preview_meal.render', () => {
     expect(out).not.toContain('Unresolved');
   });
 
+  it("an estimate row reads as the coach's own estimate, apart from a record", () => {
+    const out = PREVIEW_MEAL.render({
+      meal: 'snack',
+      raw_text: 'a parfait and a banana',
+      macros: { kcal: 485 },
+      items: [
+        {
+          name: 'yogurt parfait',
+          qty: 1,
+          unit: 'serving',
+          est: { kcal: 380 },
+          basis: 'estimate',
+          source_label: "the coach's estimate",
+        },
+        { name: 'banana', qty: 1, unit: 'medium', est: { kcal: 105 }, basis: 'record', source_label: 'USDA' },
+      ],
+      coach: { reached: true, calls: 1, checked: [] },
+    } as never);
+    expect(out).toContain("- 1 serving yogurt parfait: 380 kcal (the coach's own estimate; from the coach's estimate)");
+    expect(out).toContain('- 1 medium banana: 105 kcal (a record the coach picked; from USDA)');
+    expect(out).toContain('Fully priced (snack)');
+  });
+
   it('says why a row counted nothing, and that the fallback priced an unreached read', () => {
     const out = PREVIEW_MEAL.render({
       meal: 'snack',

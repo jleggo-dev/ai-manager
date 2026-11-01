@@ -11,10 +11,10 @@
  *     skips a part it holds — a skip costs a model call tomorrow for words confirmed today.
  *   - A pick is priced by the store from the record and the measure the model named; the model
  *     never writes a calorie. An estimate is labelled as the coach's and counted as such.
- *   - A row with an open question carries NO number and NO food link. The question is what it
- *     waits for: the card asks it, nothing counts until it is answered, and on confirm the row
- *     re-matches by name like any row without a food — so a tentative pick is never logged and
- *     never taught to the phrase memory.
+ *   - A row with an open question carries NO number, NO food link and NO `said`. The question is
+ *     what it waits for: the card asks it, nothing counts until it is answered, and on confirm the
+ *     row re-matches by name like any row without a food — so a tentative pick is never logged,
+ *     and with no words on the row the phrase memory has nothing to learn from it.
  */
 import type { DescribedBasis, Food, MealItem, MealKind } from '@cadence/shared';
 import type { FoodPhraseRow } from '../repos/food-phrases.ts';
@@ -156,22 +156,20 @@ export async function rowsFromOutcome(
 
   return outcome.items.map((item, i): DescribedMealItem => {
     const said = item.said || '';
-    const extras = {
-      said,
-      ...(item.assumption ? { assumption: item.assumption } : {}),
-    };
-    // The question is the answer this row waits for: no number, no link, their own words as the
-    // name (never the record the model leaned towards), so a chip answers the amount and the
-    // confirm re-matches by name. Nothing tentative is logged or learned.
+    const assumption = item.assumption ? { assumption: item.assumption } : {};
+    // The question is the answer this row waits for: no number, no link, no `said` to teach
+    // from, their own words as the name (never the record the model leaned towards), so a chip
+    // answers the amount and the confirm re-matches by name. Nothing tentative is logged or learned.
     if (item.question) {
       return {
         name: (item.name ?? stripAmount(said).q ?? said).slice(0, NAME_MAX) || 'something',
         ...(item.brand ? { brand: item.brand } : {}),
         basis: 'none',
         question: item.question,
-        ...extras,
+        ...assumption,
       };
     }
+    const extras = { said, ...assumption };
 
     let problem = outcome.problems.get(i) ?? null;
     const pick = picks[i];
