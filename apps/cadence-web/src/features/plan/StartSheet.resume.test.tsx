@@ -94,6 +94,58 @@ describe('StartSheet — resuming a remembered session', () => {
     expect(readSessionInProgress()).toBeNull();
   });
 
+  const finish = () => {
+    fireEvent.click(screen.getByText('Log this done'));
+    fireEvent.click(screen.getByLabelText('Next step')); // → recap
+    fireEvent.click(screen.getByText(/^Finish/));
+    fireEvent.click(screen.getByText('Done'));
+  };
+
+  /** 2026-11-01: the write's failure was swallowed — the sheet had closed, and nothing said it. */
+  it('a Done the server refuses is reported once the sheet has closed, and the plan still refreshes', async () => {
+    getOccurrenceDetail.mockReturnValue(new Promise(() => {}));
+    // Whichever write Done makes (a summary or a plain check-off), the server refuses it.
+    const refused = () => Promise.reject(Object.assign(new Error('500'), { status: 500 }));
+    setOccurrence.mockImplementationOnce(refused);
+    logOccurrence.mockImplementationOnce(refused);
+    const onClose = vi.fn();
+    const onLogged = vi.fn();
+    const onSaveFailed = vi.fn();
+    renderWithQuery(
+      <StartSheet
+        occurrenceId="o1"
+        title="Piano practice"
+        resume={resume}
+        onClose={onClose}
+        onLogged={onLogged}
+        onSaveFailed={onSaveFailed}
+      />,
+    );
+    finish();
+    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => expect(onSaveFailed).toHaveBeenCalledTimes(1));
+    expect(onLogged).toHaveBeenCalled();
+  });
+
+  it('a Done that lands reports no failure', async () => {
+    getOccurrenceDetail.mockReturnValue(new Promise(() => {}));
+    const onLogged = vi.fn();
+    const onSaveFailed = vi.fn();
+    renderWithQuery(
+      <StartSheet
+        occurrenceId="o1"
+        title="Piano practice"
+        resume={resume}
+        onClose={() => {}}
+        onLogged={onLogged}
+        onSaveFailed={onSaveFailed}
+      />,
+    );
+    finish();
+    await waitFor(() => expect(onLogged).toHaveBeenCalled());
+    expect(onSaveFailed).not.toHaveBeenCalled();
+  });
+
   it('is used once: closing it and starting again is a fresh run from step 1', async () => {
     getOccurrenceDetail.mockResolvedValue(detail());
     mount();
