@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18; R4 (weekly) and R5 (the gate) ruled as built on 2026-11-01. Still owed: `eval:tools` (owner).** Written 2026-10-31. R1 ruled the same
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061, 0062 and 0063 applied; the three production writes done and verified live on 2026-11-01 (policy on the coach job, 461 sessions backfilled, `coach-compact` and `fact-review` synced, dry run 0 drift); `eval:fact-review` live 18/18; R4 (weekly) and R5 (the gate) ruled as built on 2026-11-01. Still owed: `eval:tools` (owner).** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds; the fold did not
 until P3c made the summary a list (13% → 94% over four folds, see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -292,7 +292,7 @@ No migration; stacks on P9 (#441) for the `source` column.
   rendered nothing and the pinned copy was the only list she could see. Once a person has ever had
   one, the floor now says `- none open right now` instead of going quiet; someone who never had one
   pays nothing. (The 0061 `pack_touch` trigger on `follow_ups` then only cost an extra deterministic
-  pack rebuild; migration 0063 drops it.)
+  pack rebuild; migration 0063 dropped it, applied 2026-11-01.)
 - **The fact review's questions are marked.** A `source = 'fact-review'` line carries
   `(a question from checking their file)`, so it does not read as her promise. This replaces the P9
   note below that the render was left unchanged.
