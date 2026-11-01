@@ -9,14 +9,23 @@
  * - The weigh-in choice and the other review writes: the client never looked at the status, so a
  *   refused save looked saved until the next reload.
  *
+ * - Retiring a goal (SettingsGoals): a second tap, or a retry after a lost answer, 404'd because
+ *   the goal was already retired, and the screen said "That didn't go through".
+ *
  * Faked: the account row and the repos behind /review.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { serveRoutesToWebClient, type ClientAgainstRoutes } from '../test/client-route.ts';
 
-const account: { progress_photos_enabled: boolean; baseline: Record<string, unknown>; storeDown: boolean } = {
+const account: {
+  progress_photos_enabled: boolean;
+  baseline: Record<string, unknown>;
+  goals: Map<string, { goal_id: string; status: string }>;
+  storeDown: boolean;
+} = {
   progress_photos_enabled: false,
   baseline: {},
+  goals: new Map(),
   storeDown: false,
 };
 function store() {
@@ -52,7 +61,14 @@ vi.mock('../repos/goals.ts', () => ({
   insertGoal: async () => null,
   updateGoal: async () => store(),
   deleteGoal: async () => store(),
-  retireGoal: async () => null,
+  getGoal: async (_u: string, id: string) => account.goals.get(id) ?? null,
+  retireGoal: async (_u: string, id: string) => {
+    store();
+    const goal = account.goals.get(id);
+    if (!goal || goal.status === 'parked') return null;
+    goal.status = 'parked';
+    return goal;
+  },
   restoreGoal: async () => null,
 }));
 vi.mock('../repos/equipment.ts', () => ({
@@ -75,6 +91,7 @@ interface WebReviewApi {
   deleteGoal(goalId: string): Promise<void>;
   updateEquipment(id: string, fields: Record<string, unknown>): Promise<void>;
   deleteEquipmentItem(id: string): Promise<void>;
+  retireGoal(goalId: string): Promise<boolean>;
 }
 
 const { default: progressPhotosRoutes } = await import('./progress-photos.ts');
@@ -96,6 +113,7 @@ afterAll(() => served.close());
 beforeEach(() => {
   account.progress_photos_enabled = false;
   account.baseline = {};
+  account.goals = new Map([['g1', { goal_id: 'g1', status: 'committed' }]]);
   account.storeDown = false;
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -142,5 +160,19 @@ describe('the review writes (WeighInSettings, SettingsTools) against /review', (
     for (const write of writes) await expect(write()).resolves.toBeUndefined();
     account.storeDown = true;
     for (const write of writes) await expect(write()).rejects.toThrow(/500/);
+  });
+});
+
+describe('retiring a goal (SettingsGoals) against POST /review/goals/:id/retire', () => {
+  it('a retire that lands reads as done, and so does a second tap on the same goal', async () => {
+    expect(await review.retireGoal('g1')).toBe(true);
+    expect(account.goals.get('g1')!.status).toBe('parked');
+    expect(await review.retireGoal('g1')).toBe(true);
+  });
+
+  it("a goal that isn't there, or a store that fails, reads as not done", async () => {
+    expect(await review.retireGoal('nope')).toBe(false);
+    account.storeDown = true;
+    expect(await review.retireGoal('g1')).toBe(false);
   });
 });

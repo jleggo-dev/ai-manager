@@ -368,6 +368,9 @@ router.patch('/constraints/:id', async (req: Request, res: Response) => {
  * which only deletes on an explicit "that was never true" (recovered ≠ mis-captured, owner ruling).
  * That care is right when a MODEL is inferring intent from prose. It is condescending when the
  * person whose elbow it is taps a button.
+ *
+ * One that is already gone answers 200 with the list as it stands: a second tap asked for a state
+ * that is already true, and the list is the answer the screen draws from either way.
  */
 router.delete('/constraints/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
@@ -376,8 +379,7 @@ router.delete('/constraints/:id', async (req: Request, res: Response) => {
     const u = await getUser(userId);
     const before = u?.baseline?.constraints ?? [];
     const after = before.filter((c) => c.id !== id);
-    if (after.length === before.length) return void res.status(404).json({ error: 'no such constraint' });
-    await mergeBaseline(userId, { constraints: after });
+    if (after.length !== before.length) await mergeBaseline(userId, { constraints: after });
     res.json({ constraints: after });
   } catch (err) {
     console.error('[DELETE /me/constraints/:id]', err);

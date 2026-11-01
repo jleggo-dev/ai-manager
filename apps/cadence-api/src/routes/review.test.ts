@@ -14,6 +14,7 @@ const updateGoal = vi.fn(async (..._a: unknown[]) => {});
 const deleteGoal = vi.fn(async (..._a: unknown[]) => {});
 const retireGoal = vi.fn();
 const restoreGoal = vi.fn();
+const getGoal = vi.fn();
 const listEquipment = vi.fn();
 const insertEquipment = vi.fn();
 const updateEquipment = vi.fn(async (..._a: unknown[]) => {});
@@ -32,6 +33,7 @@ vi.mock('../repos/goals.ts', () => ({
   deleteGoal: (...a: unknown[]) => deleteGoal(...a),
   retireGoal: (...a: unknown[]) => retireGoal(...a),
   restoreGoal: (...a: unknown[]) => restoreGoal(...a),
+  getGoal: (...a: unknown[]) => getGoal(...a),
 }));
 vi.mock('../repos/equipment.ts', () => ({
   listEquipment: (...a: unknown[]) => listEquipment(...a),
@@ -115,11 +117,21 @@ describe('POST /review/goals/:id/retire', () => {
     expect(retireGoal).toHaveBeenCalledWith('u1', 'g1');
   });
 
-  it("404s when there is nothing to retire (already parked, or not this user's goal)", async () => {
+  it('a goal that is already retired answers done, with the goal as it stands (a second tap)', async () => {
+    const parked = { goal_id: 'g1', title: 'Obstacle race', status: 'parked', prior_status: 'committed' };
     retireGoal.mockResolvedValue(null);
+    getGoal.mockResolvedValue(parked);
+    const r = await call('POST', '/review/goals/g1/retire');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ ok: true, goal: parked });
+  });
+
+  it("404s on a goal that isn't this user's", async () => {
+    retireGoal.mockResolvedValue(null);
+    getGoal.mockResolvedValue(null);
     const r = await call('POST', '/review/goals/g1/retire');
     expect(r.status).toBe(404);
-    expect(r.body).toEqual({ error: 'goal not found or already retired' });
+    expect(r.body).toEqual({ error: 'goal not found' });
   });
 
   it('500s and reports failure when the repo throws', async () => {
