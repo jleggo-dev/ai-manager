@@ -1,8 +1,8 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8, P3b (#444) and P1b (#445) shipped; P9 (#441) and P3c (the summary as a list) in review.** Written 2026-10-31. R1 ruled the same
-day (compact around 75K billed) and checked by P3 the same day: the threshold holds, the fold does not
-(see C5.4).
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442), P8 (#443), P3b (#444), P1b (#445), the fixture fix (#446), P3c (#447), P9 (#441) and P7b (#448) shipped; migrations 0061 and 0062 applied. Still owed: the three production writes (`set-coach-persona.ts`, `backfill:session-summarizer --write`, `sync-jobs` for `coach-compact` and `fact-review`), `eval:fact-review` live, `eval:tools`.** Written 2026-10-31. R1 ruled the same
+day (compact around 75K billed) and checked by P3 the same day: the threshold holds; the fold did not
+until P3c made the summary a list (13% → 94% over four folds, see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
 [HARNESS-V2.md](HARNESS-V2.md) (progressive disclosure),
 [MEMORY-ARCHITECTURE.md](MEMORY-ARCHITECTURE.md) (the context pack). This doc does not repeat them.
@@ -252,9 +252,11 @@ to check on the knee is her.
     to something, or they ask you to.
   - `close_follow_up {id, outcome}`.
 - **Reading it is not a tool.** Open follow-ups are a fact she needs on every turn without asking, so they go in the
-  context pack and the per-turn floor as one plain section: `== THINGS YOU SAID YOU'D COME BACK TO ==`,
-  newest first, capped at 8, with due dates. This passes checklist step 1 ("does the dossier already
-  carry this fact"): it is dossier, not tool.
+  per-turn floor as one plain section: `== THINGS YOU SAID YOU'D COME BACK TO ==`, soonest due first
+  and then undated newest first, capped at 8 with a line saying how many more are open, with due
+  dates. (They were in the context pack too until P7b: the pack is pinned for the session, so it
+  showed closed items as open.) This passes checklist step 1 ("does the dossier already carry this
+  fact"): it is dossier, not tool.
 - **Expiry is shown, not done silently.** An item past 30 days is shown with its age. It closes only when she
   or the user closes it, or after 90 days (`closed_by 'expired'`).
 - **What she does with them is hers.** Facts, not picks: the section lists them. It never says
@@ -408,8 +410,8 @@ Differences from the design above, each from the code:
    reason, which is logged. This is the code version of the catalog-is-not-callable lesson: prove a
    model with a live call, and here, prove it with her tools.
 4. **Compaction gets its own eval** (C1/C2 cannot be judged by first-turn cases). BUILT as P3:
-   `npm run eval:compaction` (`scripts/eval-compaction*.ts`). Three synthetic 80-exchange
-   conversations, each planting one fact per item on `coach-compact`'s KEEP list, built into the
+   `npm run eval:compaction` (`scripts/eval-compaction*.ts`). Three synthetic 100-exchange
+   conversations (80 until #446), each planting one fact per item on `coach-compact`'s KEEP list, built into the
    rows a real session stores and compacted by the engine's own `planCompaction` under the live
    policy. Scores whether each planted fact survives into the final summary. Synthetic because no
    real conversation has reached the trigger yet, and a planted fact needs no judge. `--dry` is free.
@@ -548,8 +550,8 @@ Differences from the design above, each from the code:
      2.4K. Before any prompt-cache discount (the summary changes only at a fold). It also counts
      toward the trigger: ~830 units against the ~400 the policy comment assumes, about half an
      average exchange less room between folds.
-   - **Open.** (1) **Owed before merge:** a 3-run reading on the 100-exchange fixtures (~170K
-     billed), with each fixture's round 4 checked for round 1's lines. (2) `existingSummary` is cut
+   - **Open.** (1) Done the same night: the 3-run reading on the 100-exchange fixtures is the 94%
+     above, and every fixture's round 4 held round 1's lines (9 of 9). (2) `existingSummary` is cut
      at 10,000 characters like any job variable; at ~130 words a round the summary gets there
      after roughly 7–8 folds (~160–190 exchanges; the longest session on file has 53 messages).
      The heading order means a cut loses the last headings first, silently.
@@ -677,7 +679,7 @@ schema-validated. An assertion that the job holds no write path to fact tables.
 - **Evidence must cite one of the finding's own ids**, as a whole word. Without that it is dropped
   and counted, with the other drops (an id not in the list, a bad shape, a repeated question).
 - **Two ceilings.** At most 3 written per run, and at most 3 of its questions open at once. Her
-  follow-up list shows 8, newest first; without the second ceiling, three unanswered weeks would push
+  follow-up list shows 8, soonest due first (P7b); without the second ceiling, three unanswered weeks would push
   her own promises off it. At the ceiling the job is not called at all.
 - **Asked once.** The open fact-review questions go to the job as `<already_asked>`, and an exact
   repeat (case, spacing and closing mark ignored) is skipped before writing.
@@ -726,9 +728,9 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 | P5 | C4: bound actions, `mutates` field, `toolChangeText` — MERGED #442 | — | `coach-tools.ts`, action files, audit test | — |
 | P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint — MERGED #440 | — | `scripts/` | — |
 | P7 | C3: follow-ups store, two tools, pack section — MERGED #439, 0061 applied | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
-| P7b | C3 audit follow-ups: due-date expiry, count line, floor-only, fact-review tag, id input, post-reply background — in review | P7, P9 | `repos/follow-ups.ts`, `follow-ups-function.ts`, `follow-up-input.ts`, `context-pack.ts`, `routes/coach.ts` | — |
+| P7b | C3 audit follow-ups: due-date expiry, count line, floor-only, fact-review tag, id input, post-reply background — MERGED #448 | P7, P9 | `repos/follow-ups.ts`, `follow-ups-function.ts`, `follow-up-input.ts`, `context-pack.ts`, `routes/coach.ts` | — |
 | P8 | C6: TOOL-HARNESS rule (doc) — DONE (checklist step 4); food-check continues on its own plan | — | docs | — |
-| P9 | C7: `fact-review` job, hooked to check-in close — BUILT, in review (#441) | P7 | new job + service, `follow-ups.ts`, `recaps.ts`, `week-review.ts` | Cadence migration 0062 (owner go), then `sync-jobs` |
+| P9 | C7: `fact-review` job, hooked to check-in close — MERGED #441 | P7 | new job + service, `follow-ups.ts`, `recaps.ts`, `week-review.ts` | Cadence migration 0062 applied 2026-11-01; `sync-jobs` owed (owner) |
 
 P1, P5, P6 and P7 touch disjoint files and can run in parallel. P2→P3→P4 and P7→P9 are chains.
 
