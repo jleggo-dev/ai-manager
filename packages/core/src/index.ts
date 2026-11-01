@@ -99,7 +99,11 @@ export { updateV2ProviderMetadata } from '../../../backend/src/ai-manager/v2-met
 // The engine's own template fill, so an eval running a prompt via promptOverride interpolates identically.
 // MAX_VARIABLE_LENGTH: the cap it puts on one variable; anything longer is cut. fillTemplate reports
 // each cut (VariableCut); a run puts the same list on its diagnostic row and in its result.
-export { fillTemplate, interpolateTemplate, MAX_VARIABLE_LENGTH } from '../../../backend/src/ai-manager/job-execution-utils.ts';
+export {
+  fillTemplate,
+  interpolateTemplate,
+  MAX_VARIABLE_LENGTH,
+} from '../../../backend/src/ai-manager/job-execution-utils.ts';
 export type { VariableCut } from '../../../backend/src/types/llm.ts';
 // Compaction after the reply is on file (HARNESS-V3 C1) — the caller decides when, so nobody waits.
 export {
