@@ -251,6 +251,28 @@ describe('the composer — a recipe onto a day and a slot (10b)', () => {
     await waitFor(() => expect(deleteMealPlan).toHaveBeenCalledWith('mp1'));
     expect(patchMealPlan).not.toHaveBeenCalled();
   });
+
+  /** 2026-11-01: a 404 here read as "meal plans aren't reachable" and left the old week drawn. */
+  it('a week cleared somewhere else shows empty and says so, instead of keeping the old copy', async () => {
+    getCurrentMealPlan.mockResolvedValue({ status: 'ok', plan: savedWeek });
+    patchMealPlan.mockResolvedValue({
+      status: 'gone',
+      message: 'That week was already cleared, so there was nothing to change.',
+    });
+    await mountKitchen();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'The week' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tue 25 Aug/i }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: /Plan Tue 25 Aug/i })).getAllByRole('button', {
+        name: /Pick a recipe/i,
+      })[0]!,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Red lentil dal/i }));
+
+    expect(await screen.findByText(/already cleared/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/1 meal planned this week\./i)).toBeNull());
+  });
 });
 
 describe('the shopping list is generated, never kept (10c)', () => {

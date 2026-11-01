@@ -12,7 +12,7 @@ import { settleTempoForTitle } from '../services/repertoire-tempo.ts';
 import { logAdhocActivity, logPlannedActivity } from '../services/adhoc-log.ts';
 import { enterEpisode, endEpisode, reviseEpisodeEquipment, postponeEpisodeStart } from '../services/episode.ts';
 import { equipmentFromGymPhotos } from '../services/gym-photo.ts';
-import { recordWeighIn, recordWeighInToday } from '../services/weigh-in.ts';
+import { recordWeighIn, recordWeighInToday, type WeighInOutcome } from '../services/weigh-in.ts';
 import { buildEarlierDays, MAX_EARLIER_WEEKS } from '../services/plan-earlier.ts';
 import { getSessionInsight } from '../services/session-insight.ts';
 import { setPendingPlan, getUser } from '../repos/users.ts';
@@ -301,18 +301,24 @@ router.post('/occurrences/:id/log', async (req: Request, res: Response) => {
   }
 });
 
+/** 422 for a number that can't be a body weight, 404 (with the route's own words) for no row. */
+function refuseWeighIn(res: Response, refused: Extract<WeighInOutcome, { ok: false }>['refused'], notFound: string) {
+  if (refused === 'implausible_weight') return res.status(422).json({ error: 'implausible weight', refused });
+  return res.status(404).json({ error: notFound, refused });
+}
+
 /**
  * POST /plan/occurrences/:id/weigh-in — deterministic weigh-in capture (no LLM): stores the
  * weight point on the occurrence (the weight time series) + updates baseline current.
- * 400 implausible/invalid · 404 not this user's weigh-in row.
+ * 400 invalid body · 422 implausible weight · 404 not this user's weigh-in row.
  */
 router.post('/occurrences/:id/weigh-in', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const { weight, unit } = parseBody(weighInBodySchema, req.body);
     const r = await recordWeighIn(userId, req.params.id as string, weight, unit);
-    if (!r) return void res.status(404).json({ error: 'not a weigh-in occurrence (or implausible weight)' });
-    res.json(r);
+    if (!r.ok) return void refuseWeighIn(res, r.refused, 'not a weigh-in occurrence');
+    res.json({ weight_kg: r.weight_kg });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/occurrences/:id/weigh-in]', err);
@@ -325,15 +331,16 @@ router.post('/occurrences/:id/weigh-in', async (req: Request, res: Response) => 
  *
  * The occurrence-scoped route above is for the scheduled weigh-in; this one is for someone who
  * has opted into weighing daily. Same validation, same series, same history — it just gets today's
- * occurrence created for it. 404 when their plan has no weigh-in to hang it off.
+ * occurrence created for it. 404 when their plan has no weigh-in to hang it off; 422 for an
+ * implausible weight, as above.
  */
 router.post('/weigh-in', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const { weight, unit } = parseBody(weighInBodySchema, req.body);
     const r = await recordWeighInToday(userId, weight, unit);
-    if (!r) return void res.status(404).json({ error: 'no weigh-in on your plan (or implausible weight)' });
-    res.json(r);
+    if (!r.ok) return void refuseWeighIn(res, r.refused, 'no weigh-in on your plan');
+    res.json({ weight_kg: r.weight_kg });
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/weigh-in]', err);

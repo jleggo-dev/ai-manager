@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CHECKIN_ADJUSTMENT_OPTIONS } from '@cadence/shared';
 import { PlanView } from './PlanView.tsx';
 import { __clearRevealedForTests, PULL_REVEAL_PX } from './proposalShelf.ts';
+import { writeSessionInProgress } from '../walkthrough/sessionInProgress.ts';
 
 /**
  * The daily check-in's adjustment picks are preformed steers — small asks, exactly what the
@@ -62,8 +63,20 @@ vi.mock('./useProposalAccept.ts', () => ({
 vi.mock('../coach/coachFaceContext.ts', () => ({ useCoachFace: () => ({ faceId: null, face: null }) }));
 
 vi.mock('./AdjustSheet.tsx', () => ({ AdjustSheet: () => <div data-testid="adjust-sheet" /> }));
-vi.mock('./StartSheet.tsx', () => ({ StartSheet: () => null }));
+/** The start sheet's callbacks, as PlanView last handed them over — so a test can play its write. */
+const startSheet = vi.hoisted(() => ({ props: null as null | { onClose: () => void; onSaveFailed?: () => void } }));
+vi.mock('./StartSheet.tsx', () => ({
+  StartSheet: (props: { onClose: () => void; onSaveFailed?: () => void }) => {
+    startSheet.props = props;
+    return null;
+  },
+}));
 vi.mock('./CaptureSheet.tsx', () => ({ CaptureSheet: () => null }));
+// A remembered session belongs to a signed-in person — the start-sheet test below needs one.
+vi.mock('../../lib/persisted-session.ts', async (orig) => ({
+  ...(await orig<object>()),
+  readPersistedSession: () => ({ user: { id: 'u1' } }),
+}));
 vi.mock('./CookSheet.tsx', () => ({ CookSheet: () => null }));
 vi.mock('./PlanProposalBanner.tsx', () => ({
   PlanProposalBanner: () => <div data-testid="proposal-banner" />,
@@ -124,6 +137,39 @@ describe('PlanView — check-in picks route to the coach', () => {
     await waitFor(() => expect(screen.queryByText('Keep the week as is')).toBeNull());
     expect(onSteerCoach).not.toHaveBeenCalled();
     expect(screen.queryByTestId('adjust-sheet')).toBeNull();
+  });
+});
+
+/**
+ * A Done the server refused (2026-11-01). The start sheet closes before its write lands, and the
+ * failure used to be swallowed — the row just stayed open. Now the sheet reports it after closing,
+ * and the plan says it in one line, naming the task.
+ */
+describe('PlanView — a check-off that did not save', () => {
+  it('says so, by name, after the sheet has closed', async () => {
+    // A remembered session is the one door to the start sheet with the trail stubbed out.
+    writeSessionInProgress({
+      occurrenceId: 'o1',
+      title: 'Evening ruck',
+      area: 'movement',
+      walkthrough: {
+        total_min: 5,
+        steps: [{ id: 's1', title: 'Ruck', minutes: 5, tool: { kind: 'checkoff' }, skippable: true }],
+      },
+      idx: 0,
+      visited: [0],
+      logs: {},
+      tempos: {},
+      phase: 'step',
+      clock: null,
+    });
+    renderPlan();
+    expect(startSheet.props).not.toBeNull();
+    const { onClose, onSaveFailed } = startSheet.props!;
+    act(() => onClose());
+    act(() => onSaveFailed?.());
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Evening ruck didn\u2019t save as done \u2014 open it and finish it again.');
   });
 });
 

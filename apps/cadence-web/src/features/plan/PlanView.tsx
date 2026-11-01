@@ -117,8 +117,12 @@ export function PlanView({
   const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(() =>
     resumeSession ? { id: resumeSession.occurrenceId, title: resumeSession.title } : null,
   ); // redesign start sheet (stepped task)
+  // A Done the server refused, named by the task's title. The start sheet closes before its write
+  // lands, so this line is where the failure is said; opening a task again clears it.
+  const [unsaved, setUnsaved] = useState<string | null>(null);
   useEffect(() => {
     if (!startOcc) setResumeSession(null);
+    else setUnsaved(null);
   }, [startOcc]);
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
   // meant the sheet had to re-learn the row's own title from the server before it could draw its
@@ -364,6 +368,11 @@ export function PlanView({
             Your week is being redrawn — I&rsquo;ll let you know when it&rsquo;s ready.
           </div>
         )}
+        {unsaved && (
+          <div className="plan-runline" role="alert">
+            {`${unsaved} didn’t save as done — open it and finish it again.`}
+          </div>
+        )}
         {/* One line of glass, never a card (2a): it announces, the sheet does the work. */}
         {data.activeEpisode && (
           <DetourBar
@@ -444,6 +453,7 @@ export function PlanView({
             refresh();
             bump();
           }}
+          onSaveFailed={() => setUnsaved(startOcc.title)}
           // "Custom — let's talk" opens the SAME compose sheet as every other typed plan change,
           // pre-seeded with this activity ("About today's X: "). The finished sentence goes to
           // the coach, who triages the size of the ask (Phase 2).

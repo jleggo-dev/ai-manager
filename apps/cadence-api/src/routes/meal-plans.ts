@@ -20,6 +20,17 @@ import {
 const router = Router();
 router.use(requireCadenceUser);
 
+/**
+ * A 404 names what is missing: the week itself (`meal_plan`), or a recipe or food a meal points at.
+ * The client tells these apart from a 404 with no body (the route itself not being there) — an
+ * already-cleared week is done, a stale recipe says so, and neither is "meal plans aren't reachable".
+ */
+const WEEK_GONE = { error: 'meal plan not found', missing: 'meal_plan' } as const;
+function missingItem(msg: string): { error: string; missing: 'recipe' | 'food' } | null {
+  const m = /^(recipe|food) not found/.exec(msg);
+  return m ? { error: msg, missing: m[1] as 'recipe' | 'food' } : null;
+}
+
 function limitFromQuery(raw: unknown, fallback = 20): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
@@ -97,8 +108,10 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     const msg = err instanceof Error ? err.message : '';
-    if (/week_of must be|at least one|bad day|ingredients required|recipe not found/.test(msg)) {
-      return void res.status(/not found/.test(msg) ? 404 : 400).json({ error: msg });
+    const missing = missingItem(msg);
+    if (missing) return void res.status(404).json(missing);
+    if (/week_of must be|at least one|bad day|ingredients required/.test(msg)) {
+      return void res.status(400).json({ error: msg });
     }
     console.error('[POST /nutrition/meal-plans]', err);
     res.status(500).json({ error: 'failed to save meal plan' });
@@ -110,7 +123,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const plan = await getMealPlanForUser(userId, String(req.params.id));
-    if (!plan) return void res.status(404).json({ error: 'meal plan not found' });
+    if (!plan) return void res.status(404).json(WEEK_GONE);
     res.json({ meal_plan: plan });
   } catch (err) {
     console.error('[GET /nutrition/meal-plans/:id]', err);
@@ -124,7 +137,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const body = parseBody(patchMealPlanBodySchema, req.body);
     const meal_plan = await patchMealPlanForUser(userId, String(req.params.id), body);
-    if (!meal_plan) return void res.status(404).json({ error: 'meal plan not found' });
+    if (!meal_plan) return void res.status(404).json(WEEK_GONE);
     // The Kitchen composes a week meal by meal through this route, so the trail's shop + cook tasks
     // have to follow the DAYS here exactly as they follow a save. A checkoff-only patch changes no
     // days and needs no resync. Best-effort, same as the save path.
@@ -139,7 +152,8 @@ router.patch('/:id', async (req: Request, res: Response) => {
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     const msg = err instanceof Error ? err.message : '';
-    if (/recipe not found/.test(msg)) return void res.status(404).json({ error: msg });
+    const missing = missingItem(msg);
+    if (missing) return void res.status(404).json(missing);
     console.error('[PATCH /nutrition/meal-plans/:id]', err);
     res.status(500).json({ error: 'failed to update meal plan' });
   }
@@ -150,7 +164,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const ok = await removeMealPlan(userId, String(req.params.id));
-    if (!ok) return void res.status(404).json({ error: 'meal plan not found' });
+    if (!ok) return void res.status(404).json(WEEK_GONE);
     // A week that no longer exists must not leave its shop + cook tasks standing on the trail.
     // An empty plan clears the menu-derived activities and adds none back.
     try {

@@ -147,12 +147,17 @@ export async function getEarlierDays(weeks: number): Promise<{ weeks: number; da
   return res.json();
 }
 
+/**
+ * Check a task off (or back on). Throws when the route refuses: this used to resolve on any answer,
+ * so a check-off the server never stored looked done until the next reload (2026-11-01).
+ */
 export async function setOccurrence(id: string, status: 'pending' | 'done' | 'skipped'): Promise<void> {
-  await fetch(`${BASE}/plan/occurrences/${id}`, {
+  const res = await fetch(`${BASE}/plan/occurrences/${id}`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ status }),
   });
+  if (!res.ok) throw Object.assign(new Error(`check-off failed: ${res.status}`), { status: res.status });
 }
 
 /**

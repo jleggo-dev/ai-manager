@@ -44,6 +44,7 @@ export function StartSheet({
   title,
   onClose,
   onLogged,
+  onSaveFailed,
   onCustom,
   onTalk,
   resume,
@@ -52,6 +53,8 @@ export function StartSheet({
   title?: string; // the tapped node's title — lets the loader personalize before the detail lands
   onClose: () => void;
   onLogged?: () => void;
+  /** The Done write was refused — called after the sheet has closed, so the plan says it. */
+  onSaveFailed?: () => void;
   /** "Custom — let's talk": opens the adjust flow seeded with this activity. */
   onCustom?: (steer: string) => void;
   /** Opens the coach from the post-session celebration. */
@@ -108,12 +111,19 @@ export function StartSheet({
    * structured log — takes ten to fifteen seconds, and waiting on it left "Done" apparently dead
    * on a finished ruck (2026-09-06). The celebration already happened; nothing on this screen
    * depends on the server's answer. The plan refresh runs when the write lands (or fails — the
-   * refresh then shows reality), so the trail catches up on its own.
+   * refresh then shows reality), so the trail catches up on its own. A failure also says so
+   * (`onSaveFailed`): the sheet is gone by then, and a row quietly staying open was all anyone saw.
    */
   function handleComplete(summary: string) {
     // The prop, not the detail: a resumed session can finish before the detail has landed.
     const write = summary.trim() ? logOccurrence(occurrenceId, summary) : setOccurrence(occurrenceId, 'done');
-    void write.catch(() => undefined).then(() => onLogged?.());
+    void write.then(
+      () => onLogged?.(),
+      () => {
+        onSaveFailed?.();
+        onLogged?.();
+      },
+    );
     setResumeFrom(null);
     setRun(null);
     onClose();

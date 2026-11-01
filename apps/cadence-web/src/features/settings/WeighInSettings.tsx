@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { updateBaseline, recordWeighInToday } from '../../lib/api.ts';
+import { isImplausibleWeight, IMPLAUSIBLE_WEIGHT_NOTE } from '../../lib/api/occurrence.ts';
 import { useReview, useUpdateReview } from '../../lib/query/index.ts';
 
 type Cadence = 'weekly' | 'daily';
@@ -61,9 +62,11 @@ export function WeighInSettings() {
     } catch (e) {
       // 404 is a real answer, not a failure: there is no weigh-in on their plan to attach it to.
       setNote(
-        (e as { status?: number })?.status === 404
-          ? "There's no weigh-in on your plan yet — add a weight goal and I'll schedule one."
-          : "That didn't save — check the number and try again.",
+        isImplausibleWeight(e)
+          ? IMPLAUSIBLE_WEIGHT_NOTE
+          : (e as { status?: number })?.status === 404
+            ? "There's no weigh-in on your plan yet — add a weight goal and I'll schedule one."
+            : "That didn't save — try again in a moment.",
       );
     } finally {
       setBusy(false);
