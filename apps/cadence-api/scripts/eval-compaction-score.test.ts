@@ -24,17 +24,26 @@ const fakeSummarize: Summarize = async () => 'They said things. '.repeat(90);
 
 /**
  * The fixtures are only worth running if they exercise what the eval claims to measure — with the
- * REAL policy and the REAL persona: at least two compactions (so round one's facts have to survive
- * being folded into round two), and every planted fact behind the final mark.
+ * REAL policy and the REAL persona: at least two compactions, and every planted fact behind the
+ * final mark WITH A ROUND TO SPARE. A fact first summarized in the last round is never folded, and
+ * a fact past the final mark is never summarized at all — the eval would score it as lost when it
+ * was never tested (2026-10-31: #445 sized the kept tail in units and moved the mark only as far as
+ * the summarizer read, and the piano fixture's last fact stayed in the tail).
+ *
+ * IF THIS FAILS AFTER A POLICY CHANGE (`coach-compaction-policy.ts`) or an engine change
+ * (`planCompaction`), fix the FIXTURES: add exchanges after the last planted fact
+ * (`exchanges` in `eval-compaction-fixtures.ts`) or plant the last facts earlier.
  */
-describe.each(COMPACTION_FIXTURES)('fixture $id under the live policy', (fixture) => {
-  it('compacts at least twice, and every planted fact ends up behind the final mark', async () => {
+describe.each(COMPACTION_FIXTURES)('fixture $id', (fixture) => {
+  it('with the LIVE policy (coach-compaction-policy.ts): compacts at least twice, and every planted fact is behind the final mark with a round to spare', async () => {
     const built = buildFixtureRows(fixture, persona);
     const { rounds } = await replayCompaction(built, COACH_SUMMARIZER, fakeSummarize);
     expect(rounds.length).toBeGreaterThanOrEqual(2);
     const facts = compactedFacts(fixture, built, rounds);
     expect(facts.map((f) => f.id)).toEqual(fixture.facts.map((f) => f.id));
     expect(new Set(facts.map((f) => f.round)).size).toBeGreaterThanOrEqual(2);
+    // Every fact is folded at least once: none is first summarized in the final round.
+    expect(facts.filter((f) => f.round === rounds.length).map((f) => f.id)).toEqual([]);
   });
 
   it('plants one fact of every kind, never two in one exchange', () => {
