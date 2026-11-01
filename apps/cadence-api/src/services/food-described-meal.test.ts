@@ -269,6 +269,28 @@ describe('a row with an open question (the question is the answer it waits for)'
   });
 });
 
+describe("the photo reader's notes reach the call (owner 2026-11-01)", () => {
+  it('ride as the notes variable when given, and are empty for words alone', async () => {
+    const sent: string[] = [];
+    const reply = JSON.stringify({
+      items: [item({ said: 'milk', pick: 'c1', measure: '1 cup (244g)', count: 1 })],
+      lookups: [],
+    });
+    const d: DescribedMealDeps = {
+      ...deps().d,
+      call: async (vars) => {
+        sent.push(vars.notes);
+        return reply;
+      },
+    };
+    await previewDescribedMeal(USER, 'milk', 'breakfast', d, {
+      notes: 'I cannot tell whether the milk is whole or skim.',
+    });
+    await previewDescribedMeal(USER, 'milk', 'breakfast', d);
+    expect(sent).toEqual(['I cannot tell whether the milk is whole or skim.', '']);
+  });
+});
+
 describe('a remembered part is settled once', () => {
   const lattePhrase = phraseKey('Starbucks venti latte');
   const memory = { [lattePhrase]: { phrase: lattePhrase, food_id: 'f-latte', qty: 1, unit: 'venti', uses: 3 } };

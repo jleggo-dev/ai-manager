@@ -29,3 +29,14 @@ export function parsePhotoDataUrl(dataUrl: string): PhotoParse {
   if (buffer.length > MAX_PHOTO_BYTES) return { ok: false, reason: 'too_large' };
   return { ok: true, mime: `image/${kind}`, ext: kind === 'jpeg' ? 'jpg' : (kind as 'png' | 'webp'), buffer };
 }
+
+/**
+ * A photo_ref a client hands back (the photo door's confirm, the draft's add, the old /photo/log)
+ * must be this person's own. Refs are written as `${userId}/<date>/<uuid>.<ext>` (meal-photos.ts),
+ * so one that starts any other way — another person's folder, a coach-attachment ref, a bare
+ * name — is refused before anything is priced or written. The message carries "invalid photo",
+ * which every route already maps to a 400.
+ */
+export function assertOwnPhotoRef(userId: string, photoRef: string): void {
+  if (!photoRef.startsWith(`${userId}/`)) throw new Error("invalid photo_ref: not this person's photo");
+}

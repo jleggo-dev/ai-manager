@@ -89,8 +89,24 @@ const PORTION_BY_FOOD: Array<{ test: RegExp; unit: string; grams: number }> = [
   { test: /\b(nuts|almonds|walnuts|cashews|seeds|crisps|chips|popcorn|raisins)\b/i, unit: 'handful', grams: 30 },
 ];
 
-const pluralise = (unit: string, n: number): string =>
-  n === 1 || !unit ? unit : unit.endsWith('h') ? `${unit}es` : `${unit}s`;
+/** Units written the same for one and many — abbreviations a label never pluralises. */
+const INVARIANT_UNITS = new Set(['g', 'kg', 'mg', 'ml', 'l', 'cl', 'dl', 'oz', 'fl oz', 'lb', 'lbs', 'tbsp', 'tsp']);
+
+/**
+ * "2 slices", "2 glasses", "2 berries", "2 oz" — the chip's plural, by rule: an abbreviation is
+ * left alone; a hiss ("ss", x, z, ch, sh) takes "es"; a consonant + y takes "ies"; a unit already
+ * plural (a single trailing "s" — the server sends "slices" and "cups") is left alone; anything
+ * else takes "s". "2 glasss" and then "2 sliceses" were on the chips until 2026-11-01.
+ */
+const pluralise = (unit: string, n: number): string => {
+  const u = unit.trim();
+  if (n === 1 || !u) return u;
+  if (INVARIANT_UNITS.has(u.toLowerCase())) return u;
+  if (/(?:ss|x|z|ch|sh)$/i.test(u)) return `${u}es`;
+  if (/[^aeiou]y$/i.test(u)) return `${u.slice(0, -1)}ies`;
+  if (/s$/i.test(u)) return u;
+  return `${u}s`;
+};
 
 const chip = (qty: number, unit: string): AmountChoice => ({
   label: [qty, pluralise(unit, qty)].filter(Boolean).join(' ').trim() || String(qty),

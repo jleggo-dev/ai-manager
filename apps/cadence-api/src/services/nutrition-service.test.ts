@@ -162,6 +162,26 @@ d('API-04 — nutrition service (DB)', () => {
     expect(row.ai_confidence).toBe(0.9);
   });
 
+  it("logMeal({ parsed, photo_ref }) with another person's photo is refused before any row is written", async () => {
+    await expect(
+      logMeal(USER, {
+        parsed: {
+          meal: 'breakfast',
+          items: [{ name: 'zzq banana', qty: 1, unit: 'medium', est: { kcal: 105 } }],
+          macros: { kcal: 105 },
+          confidence: null,
+          flags: {},
+          raw_text: '1 medium banana',
+          photo_ref: '00000000-0000-4000-a000-00000000d999/2026-11-01/p.jpg',
+        },
+      }),
+    ).rejects.toThrow(/invalid photo/);
+    expect((await listNutritionLogs(USER, today(), today())).filter((m) => m.raw_text === '1 medium banana')).toEqual(
+      [],
+    );
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+
   it('logMeal with food_id is deterministic (no AI) and correlates items[].food_id', async () => {
     const food = await insertFood(USER, {
       name: 'Nonfat Greek Yogurt',

@@ -10,7 +10,7 @@ import { readProgressLine, READ_PHOTO_STEPS, NUTRITION_STEPS } from './meal-read
 describe('readProgressLine', () => {
   it('shows the first line immediately, never an empty one', () => {
     expect(readProgressLine(READ_PHOTO_STEPS, 0)).toBe('Sending your photo…');
-    expect(readProgressLine(NUTRITION_STEPS, 0)).toBe('Working out the nutrition…');
+    expect(readProgressLine(NUTRITION_STEPS, 0)).toBe('Looking each line up in your foods and the food databases…');
   });
 
   it('advances as the stage runs', () => {
@@ -48,5 +48,20 @@ describe('readProgressLine', () => {
     for (const s of [...READ_PHOTO_STEPS, ...NUTRITION_STEPS]) {
       expect(s.text, s.text).not.toMatch(banned);
     }
+  });
+
+  /**
+   * Stage 2 is the coach-led read since 2026-11-01 (FOOD-LOGGING-COACH-LED.md): nothing joins the
+   * day until the card is confirmed, so no line may claim it did, and the role is "the coach",
+   * never the product (owner, 2026-09-06).
+   */
+  it('stage 2 narrates the read, not a write, in plain words, and names the role', () => {
+    for (const s of NUTRITION_STEPS) {
+      expect(s.text, s.text).not.toMatch(/adding it to your day|logged|saved/i);
+      expect(s.text, s.text).not.toMatch(/\bCadence\b/);
+      // Engine words were the fix (review of #457): "pricing" and "record" stay out of what is said.
+      expect(s.text, s.text).not.toMatch(/\b(pricing|priced|record|records)\b/i);
+    }
+    expect(NUTRITION_STEPS.some((s) => /the coach/i.test(s.text))).toBe(true);
   });
 });

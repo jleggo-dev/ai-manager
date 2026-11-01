@@ -115,6 +115,9 @@ export async function previewAnsweredPart(
       lookups: [answeredLookup(words)],
       not_read: [],
       answered: { asked_about: askedAbout, answer },
+      // The photo reader's notes belong to the whole reading, not to one answered part: the
+      // food-check gets none here (an empty `notes`), as it does for typed words.
+      notes: '',
     },
     deps,
   );

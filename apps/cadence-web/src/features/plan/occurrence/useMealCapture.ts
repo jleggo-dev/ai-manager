@@ -350,17 +350,6 @@ export function useMealCapture(
     }
   }
 
-  /**
-   * The photo path no longer logs from here (A23 / 2026-08-22): `MealCapturePhoto` runs the same
-   * read-then-confirm panel the Food tab uses, and the row is written by the user's confirm inside
-   * it. What is left for this hook is the bookkeeping that follows — refresh the day, tick the task.
-   */
-  async function afterPhotoLogged() {
-    clearPhoto();
-    await refreshDay();
-    markLogged();
-  }
-
   async function logDraft(portion: DraftPortion) {
     if (!draft || busy) return;
     setBusy(true);
@@ -399,7 +388,6 @@ export function useMealCapture(
     pickPhoto,
     clearPhoto,
     checkPlate,
-    afterPhotoLogged,
     logDraft,
   };
 }

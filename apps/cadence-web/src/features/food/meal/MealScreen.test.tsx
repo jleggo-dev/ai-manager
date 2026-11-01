@@ -65,7 +65,7 @@ vi.mock('../../../lib/api.ts', () => ({
   previewMeal: vi.fn(),
   logPreviewedMeal: vi.fn(),
   readMealPhoto: vi.fn(),
-  logMealFromReading: vi.fn(),
+  previewMealFromReading: vi.fn(),
 }));
 
 vi.mock('../../plan/occurrence/format.ts', () => ({

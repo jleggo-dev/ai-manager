@@ -48,7 +48,7 @@ function sendError(res: Response, err: unknown, label: string, fallback: string)
   const msg = err instanceof Error ? err.message : '';
   if (/not found/.test(msg)) return void res.status(404).json({ error: msg });
   if (/not open/.test(msg)) return void res.status(409).json({ error: msg });
-  if (/index is not|must be/.test(msg)) return void res.status(400).json({ error: msg });
+  if (/index is not|must be|invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
   console.error(label, err);
   res.status(500).json({ error: fallback });
 }
@@ -81,6 +81,9 @@ const appendBody = z
     recipe_id: z.string().uuid({ message: 'recipe_id must be a uuid' }).optional(),
     servings: z.number().positive().max(100).optional(),
     parsed: z.array(parsedItemSchema).min(1).max(20).optional(),
+    /** With `parsed`, from the photo door: the photo its read stored and the reading they confirmed. */
+    photo_ref: z.string().min(1).max(400).optional(),
+    photo_reading: z.string().max(20000).optional(),
   })
   .superRefine((val, ctx) => {
     const doors = [val.food_id, val.recipe_id, val.parsed].filter((v) => v !== undefined).length;
@@ -158,7 +161,10 @@ router.post('/meals/:id/items', async (req: Request, res: Response) => {
         })
       : body.recipe_id
         ? await appendRecipe(userId, logId, { recipe_id: body.recipe_id, servings: body.servings })
-        : await appendParsed(userId, logId, body.parsed!);
+        : await appendParsed(userId, logId, body.parsed!, {
+            photo_ref: body.photo_ref,
+            photo_reading: body.photo_reading,
+          });
     res.json({ meal });
   } catch (err) {
     sendError(res, err, '[POST /nutrition/meals/:id/items]', 'failed to add to the meal');

@@ -68,6 +68,14 @@ export async function updateNutritionLog(
     parts?: NutritionLog['parts'];
     /** Draft lifecycle: the close write flips 'open' → 'closed'. Never flips back. */
     state?: NutritionLog['state'];
+    /**
+     * The photo door's add to an open meal (meal-draft.ts appendParsed). One row, one picture:
+     * the meal's FIRST photo stays — the day's thumbnail must not change under the person as they
+     * add — so this sets photo_ref only when the row has none. A reading is APPENDED after a blank
+     * line, never replaced, so each add's words stay on file to explain its numbers.
+     */
+    photo_ref?: string | null;
+    photo_reading?: string | null;
   },
 ): Promise<NutritionLog | null> {
   const [out] = await sql<NutritionLog[]>`
@@ -79,7 +87,13 @@ export async function updateNutritionLog(
       provisional = coalesce(${patch.provisional ?? null}, provisional),
       flags = flags || coalesce(${patch.flags ? json(patch.flags) : null}, '{}'::jsonb),
       parts = coalesce(${patch.parts ? json(patch.parts) : null}, parts),
-      state = coalesce(${patch.state ?? null}, state)
+      state = coalesce(${patch.state ?? null}, state),
+      photo_ref = coalesce(photo_ref, ${patch.photo_ref ?? null}),
+      photo_reading = case
+        when ${patch.photo_reading ?? null}::text is null then photo_reading
+        when photo_reading is null or photo_reading = '' then ${patch.photo_reading ?? null}::text
+        else photo_reading || E'\n\n' || ${patch.photo_reading ?? null}::text
+      end
     where user_id = ${userId} and log_id = ${logId}
     returning ${COLS}`;
   return out ?? null;

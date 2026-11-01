@@ -98,9 +98,11 @@ router.post('/photo/read', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /nutrition/photo/log — step 2. The reading (possibly EDITED by the user) becomes numbers and
- * a row. `reading` may be empty: a failed or skipped step 1 must still be able to log the meal from
- * the caption, because a meal never vanishes because a model did.
+ * POST /nutrition/photo/log — the old one-call write (`parse-meal-description` + the code-picked
+ * match). Kept for clients built before 2026-11-01; the web's photo door now previews through
+ * /photo/preview and confirms through POST /nutrition/meals `parsed` with `photo_ref`, so the
+ * photo reads the way a typed meal does. `reading` may be empty: a failed or skipped step 1 must
+ * still be able to log the meal from the caption, because a meal never vanishes because a model did.
  */
 router.post('/photo/log', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
@@ -117,25 +119,28 @@ router.post('/photo/log', async (req: Request, res: Response) => {
     );
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const msg = err instanceof Error ? err.message : '';
+    if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/photo/log]', err);
     res.status(500).json({ error: 'failed to log the meal' });
   }
 });
 
 /**
- * POST /nutrition/photo/preview — step 2 inside an open meal: the reading (possibly edited) becomes
- * priced rows the user sees BEFORE they join the meal. Writes nothing; the draft does the write.
+ * POST /nutrition/photo/preview — step 2: the reading, as the person confirmed or corrected it,
+ * read the way a typed meal is (meal-photo-read.ts → food-described-meal.ts) and handed back as
+ * rows with the coach's trace, assumptions and questions, for the card to show BEFORE anything is
+ * logged or joins a meal. Writes nothing; the confirm does.
  */
 router.post('/photo/preview', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const body = parseBody(previewFromReadingBodySchema, req.body);
-    if (!body.reading.trim() && !body.caption?.trim()) {
-      return void res.status(400).json({ error: 'a meal needs a reading or a caption' });
-    }
     res.json(await previewMealFromReading(userId, body));
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const msg = err instanceof Error ? err.message : '';
+    if (/a meal needs/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/photo/preview]', err);
     res.status(500).json({ error: 'failed to work out that meal' });
   }
