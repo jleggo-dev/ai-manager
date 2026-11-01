@@ -4,6 +4,9 @@ import { markWeekApplied } from '../../lib/applied-week-note.ts';
 import { useClockUnit, usePlan } from '../../lib/query/index.ts';
 import { Orb } from '../../components/Orb.tsx';
 import { SteerBox } from './SteerBox.tsx';
+import { AttachmentTray } from '../onboarding/AttachmentTray.tsx';
+import { useCoachAttachments } from '../onboarding/useCoachAttachments.ts';
+import type { SendAttachments } from '../onboarding/useCoachChat.ts';
 import { ProposedWeek } from './ProposedWeek.tsx';
 import { ProposedChanges } from './ProposedChanges.tsx';
 import { changesFirst, diffWeek } from './planDiff.ts';
@@ -46,7 +49,8 @@ export function AdjustSheet({
    * never rewritten or prefixed. The host closes the sheet and switches to the Coach tab.
    * Required in `mode='adjust'` (the compose branch's only submit); rebalance never calls it.
    */
-  onSteerToCoach?: (steer: string) => void;
+  /** The words, and any photos riding with them — the coach chat's own tray refs. */
+  onSteerToCoach?: (steer: string, attached?: SendAttachments) => void;
   initialSteer?: string; // pre-filled request (e.g. the nutrition baseline's suggested change)
   mode?: 'adjust' | 'rebalance';
   /**
@@ -62,6 +66,7 @@ export function AdjustSheet({
   adoptCaptured?: boolean;
 }) {
   const [steer, setSteer] = useState(initialSteer ?? '');
+  const tray = useCoachAttachments();
   const [committing, setCommitting] = useState(false);
   const [msg, setMsg] = useState('');
   // Rebalance opens straight into a whole-plan preview — the review IS the action, no steer
@@ -187,7 +192,9 @@ export function AdjustSheet({
                   disabled={busy}
                   placeholder="e.g. one run day isn't enough — I want three"
                   autoFocus
+                  onPhotos={(files) => void tray.add(files)}
                 />
+                <AttachmentTray tray={tray} />
                 {preview.error && <div className="auth-error">{preview.error}</div>}
               </>
             )}
@@ -198,8 +205,13 @@ export function AdjustSheet({
                 </button>
               ) : (
                 // The compose branch's only submit: the words go to the coach, never to the
-                // synthesis pipeline. Disabled while empty — there is no such thing as a blank ask.
-                <button className="lockbtn" disabled={!steer.trim()} onClick={() => onSteerToCoach?.(steer.trim())}>
+                // synthesis pipeline. Disabled while empty — there is no such thing as a blank ask
+                // (a photo alone is an ask), and while a photo is still going up.
+                <button
+                  className="lockbtn"
+                  disabled={tray.busy || (!steer.trim() && !tray.ready)}
+                  onClick={() => onSteerToCoach?.(steer.trim(), tray.take())}
+                >
                   Send it over →
                 </button>
               ))}

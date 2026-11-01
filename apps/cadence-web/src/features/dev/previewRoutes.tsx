@@ -10,6 +10,7 @@ import {
 import { FreeWritePreview } from './FreeWritePreview.tsx';
 import { IntervalPreview } from './IntervalPreview.tsx';
 import { MetronomePreview } from './MetronomePreview.tsx';
+import { PhotoButtonPreview } from './PhotoButtonPreview.tsx';
 import { CoachMomentsPreview } from './CoachMomentsPreview.tsx';
 import { MealCapturePreview } from './MealCapturePreview.tsx';
 import { PlanCardPreview } from './PlanCardPreview.tsx';
@@ -50,6 +51,7 @@ const PREVIEWS: Record<string, () => ReactNode> = {
   builder: () => <ActivityBuilderPreview />,
   // `&state=full` | `&state=logged` — the trail's meal capture (the cart) against a fixture draft.
   meal: () => <MealCapturePreview />,
+  photos: () => <PhotoButtonPreview />,
 };
 
 export function previewScreen(name: string | null): ReactNode | null {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PlanView } from '../plan/PlanView.tsx';
-import { OnboardingChat } from '../onboarding/OnboardingChat.tsx';
+import { OnboardingChat, type AutoSend } from '../onboarding/OnboardingChat.tsx';
 import { ProgressView } from '../progress/ProgressView.tsx';
 import { SettingsRoom } from '../settings/SettingsRoom.tsx';
 import { AdjustSheet } from '../plan/AdjustSheet.tsx';
@@ -121,7 +121,7 @@ export function MainTabs({
    * as something the user said). `key` is bumped on every tap so a SECOND end-of-trail later in
    * the same session fires again; OnboardingChat's own effect is what actually consumes it once.
    */
-  const [autoSend, setAutoSend] = useState<{ text: string; key: number } | null>(null);
+  const [autoSend, setAutoSend] = useState<AutoSend | null>(null);
   /**
    * The Food home (Food Journey 02) — a full screen that replaces the Plan tab's content while
    * the tab bar stays. It lives HERE rather
@@ -223,9 +223,9 @@ export function MainTabs({
             // user's are exactly the user's. The coach triages the size of the ask (Phase 2,
             // PLAN-CHANGES.md); only her explicit build card below (`rebuild`) still opens the
             // direct-pipeline sheet.
-            onSteerCoach={(steer) => {
+            onSteerCoach={(steer, attached) => {
               setTab('coach');
-              setAutoSend({ text: steer, key: Date.now() });
+              setAutoSend({ text: steer, key: Date.now(), attached });
             }}
             // The horizon end-cap's ask rides the same visible bridge — she grants (or talks
             // through) the longer week herself via extend_horizon; the app only asks.

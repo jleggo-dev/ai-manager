@@ -255,6 +255,10 @@ export function MealScreen({
           busy={draft.busy}
           onAdd={async (items, raw) => !!(await draft.appendParsed(items, describe.listening ? 'heard' : 'typed', raw))}
           onClose={() => setDescribe(null)}
+          onPhoto={(photo, caption) => {
+            setDescribe(null);
+            setDoor({ at: 'photo', photo, caption });
+          }}
         />
       )}
       {chatOpen && (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { SendAttachments } from '../onboarding/useCoachChat.ts';
 import { StartSheet } from './StartSheet.tsx';
 import { CaptureSheet } from './CaptureSheet.tsx';
 import { CookSheet } from './CookSheet.tsx';
@@ -62,7 +63,7 @@ export function PlanView({
    * Phase 2 routing (PLAN-CHANGES.md): typed and preformed steers go to the coach, who triages
    * the size of the ask; only the explicit whole-week rebalance stays on the direct pipeline.
    */
-  onSteerCoach: (steer: string) => void;
+  onSteerCoach: (steer: string, attached?: SendAttachments) => void;
   /** Open the Food home (MainTabs swaps this view for it); 'shop' lands on the shopping list. */
   onOpenFood: (sub?: 'shop') => void;
   reloadSignal?: number;
@@ -576,9 +577,9 @@ export function PlanView({
           // The compose branch's submit (adjust mode only): close the sheet and hand the words to
           // the coach as a visible send. Rebalance mode never calls this — its explicit
           // whole-week run stays on the direct pipeline (Phase 2 routing).
-          onSteerToCoach={(steer) => {
+          onSteerToCoach={(steer, attached) => {
             setAdjustOpen(false);
-            onSteerCoach(steer);
+            onSteerCoach(steer, attached);
           }}
           onCommitted={(n) => {
             setNote(n);

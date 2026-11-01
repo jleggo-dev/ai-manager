@@ -10,10 +10,16 @@
  * the hop carried, asking for replies that fit here) and her opener is a real reply, not a line the
  * app wrote in her voice. The quick questions are the person's words, changing with the meal's
  * state: empty, in the cart, logged.
+ *
+ * Photos ride the same tray the coach tab uses (owner, 2026-11-01: photos in every chat) — "is
+ * this portion about right?" with the plate attached is the question this panel exists for.
  */
 import { useEffect, useRef, useState } from 'react';
 import { CoachFace } from '../../../components/CoachFace.tsx';
 import { fmtKcal } from '../bracket/copy.ts';
+import { PhotoButton } from '../../../components/PhotoButton.tsx';
+import { AttachmentTray } from '../../onboarding/AttachmentTray.tsx';
+import { useCoachAttachments } from '../../onboarding/useCoachAttachments.ts';
 import { useCoachChat } from '../../onboarding/useCoachChat.ts';
 import { QUICK_QUESTIONS, type MealChatState } from './mealChatQuestions.ts';
 
@@ -35,6 +41,7 @@ export function MealChatPanel({
   onBack: () => void;
 }) {
   const chat = useCoachChat({ intent: 'ongoing' });
+  const tray = useCoachAttachments();
   const [from, setFrom] = useState<number | null>(null);
   const thread = useRef<HTMLDivElement>(null);
 
@@ -92,13 +99,16 @@ export function MealChatPanel({
           </div>
         )}
       </div>
+      <AttachmentTray tray={tray} />
       <form
         className="ms-chat-compose"
         onSubmit={(e) => {
           e.preventDefault();
-          void chat.send();
+          if (tray.busy) return;
+          void chat.send(tray.take());
         }}
       >
+        <PhotoButton multiple className="is-left" disabled={chat.streaming} onPick={(files) => void tray.add(files)} />
         <input
           value={chat.input}
           onChange={(e) => chat.setInput(e.target.value)}
@@ -106,7 +116,11 @@ export function MealChatPanel({
           aria-label="Ask about this meal"
           disabled={chat.streaming}
         />
-        <button type="submit" aria-label="Send" disabled={chat.streaming || !chat.input.trim()}>
+        <button
+          type="submit"
+          aria-label="Send"
+          disabled={chat.streaming || tray.busy || (!chat.input.trim() && !tray.ready)}
+        >
           ↑
         </button>
       </form>

@@ -449,7 +449,7 @@
   align-items: center;
   gap: 8px;
 }
-.ms-chat-compose input {
+.ms-chat-compose > input {
   flex: 1;
   min-width: 0;
   background: #fff;
@@ -462,7 +462,7 @@
   color: oklch(30% 0.02 150);
   outline: 0;
 }
-.ms-chat-compose button {
+.ms-chat-compose > button {
   flex: none;
   width: 42px;
   height: 42px;
@@ -473,7 +473,7 @@
   font-size: 18px;
   cursor: pointer;
 }
-.ms-chat-compose button:disabled {
+.ms-chat-compose > button:disabled {
   opacity: 0.45;
   cursor: default;
 }

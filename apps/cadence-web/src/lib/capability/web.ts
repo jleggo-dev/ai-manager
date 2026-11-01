@@ -65,6 +65,11 @@ export const webCapabilities: Capabilities = {
     pause: async () => {},
     end: async () => {},
   },
+  // The browser's own file inputs do this job; unavailable sends PhotoButton to them.
+  photos: {
+    isAvailable: () => false,
+    pick: async () => null,
+  },
   // No web equivalent: communication notifications are an iOS system feature, and there is no
   // browser API that makes a notification look like it came from a person.
   coachIdentity: {
