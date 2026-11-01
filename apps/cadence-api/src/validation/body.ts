@@ -58,9 +58,14 @@ const parsedMealSchema = z.object({
     .array(
       z.object({
         name: z.string().trim().min(1).max(80),
+        brand: z.string().trim().max(120).optional(),
         qty: z.number().positive().max(10_000).optional(),
         unit: z.string().trim().min(1).max(24).optional(),
         est: z.record(z.string(), z.unknown()).optional(),
+        /** The food a coach-led preview linked the row to; the confirm prices from it (food-pricing.ts). */
+        food_id: z.string().uuid().optional(),
+        /** Their words for the row, so the phrase memory can learn from the confirm. */
+        said: z.string().trim().max(200).optional(),
       }),
     )
     .max(12),

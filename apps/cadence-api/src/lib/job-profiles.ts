@@ -22,6 +22,9 @@ export interface ProfileIds {
    *  (owner ruling 2026-09-01: evolve runs a faster model than genesis; see the profile's
    *  description in ai-admin.config.json for the benchmark behind it). */
   evolveId?: string | null;
+  /** Absent until scripts/provision-food-check-profile.ts has run — the described-meal check's
+   *  own small model (FOOD-LOGGING-COACH-LED.md, ruling 1: gpt-5.4-mini, claude-sonnet-5-5 failover). */
+  foodCheckId?: string | null;
 }
 
 /** `<ANYTHING_IN_ANGLE_BRACKETS>` — the config's un-resolved placeholder form. */
@@ -50,8 +53,16 @@ export function resolveProfileToken(token: string, ids: ProfileIds): string {
     }
     return ids.evolveId;
   }
+  if (token.includes('FOOD_CHECK')) {
+    if (!ids.foodCheckId) {
+      throw new Error(
+        `${token} used but no cadence-food-check profile exists — run scripts/provision-food-check-profile.ts first`,
+      );
+    }
+    return ids.foodCheckId;
+  }
   throw new Error(
-    `Unknown ai_profile_id placeholder ${token} — expected COACH, BROKER, RESEARCH or EVOLVE profile tokens`,
+    `Unknown ai_profile_id placeholder ${token} — expected COACH, BROKER, RESEARCH, EVOLVE or FOOD_CHECK profile tokens`,
   );
 }
 

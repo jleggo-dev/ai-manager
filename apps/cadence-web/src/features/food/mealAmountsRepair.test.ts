@@ -69,3 +69,71 @@ describe('mergeRow', () => {
     expect(result.current.rows).toHaveLength(2);
   });
 });
+
+/**
+ * The coach's link (`food_id`) and their words (`said`) ride back on the confirm so the server
+ * prices from the food and the phrase memory learns — until a repair makes the row a new reading.
+ */
+describe('a linked row through the repairs', () => {
+  const linked = {
+    raw_text: 'Starbucks venti latte and a banana',
+    items: [
+      {
+        name: 'Caffè Latte (Venti)',
+        brand: 'Starbucks',
+        qty: 1,
+        unit: 'venti',
+        est: { kcal: 250, protein_g: 16 },
+        food_id: 'f-latte',
+        said: 'Starbucks venti latte',
+      },
+      {
+        name: 'Banana, raw',
+        qty: 1,
+        unit: 'medium',
+        est: { kcal: 105, protein_g: 1 },
+        food_id: 'f-banana',
+        said: 'a banana',
+      },
+    ],
+  } as unknown as MealPreview;
+
+  it('toPreview carries food_id and said for every linked row', () => {
+    const { result } = renderHook(() => useMealAmounts(linked));
+    const sent = result.current.toPreview().items;
+    expect(sent[0]).toMatchObject({ food_id: 'f-latte', said: 'Starbucks venti latte', qty: 1, unit: 'venti' });
+    expect(sent[1]).toMatchObject({ food_id: 'f-banana', said: 'a banana' });
+  });
+
+  it('a rename keeps the link and the words — fix the name, keep the numbers (brief 03)', () => {
+    const { result } = renderHook(() => useMealAmounts(linked));
+    act(() => result.current.renameRow(0, 'Latte', 'Starbucks'));
+    expect(result.current.toPreview().items[0]).toMatchObject({
+      name: 'Latte',
+      food_id: 'f-latte',
+      said: 'Starbucks venti latte',
+    });
+  });
+
+  it('a merge drops the link and the words: the sum is no single food, and nothing is taught from it', () => {
+    const { result } = renderHook(() => useMealAmounts(linked));
+    act(() => result.current.mergeRow(1, 0));
+    expect(result.current.rows).toHaveLength(1);
+    expect(result.current.rows[0]).toMatchObject({ name: 'Caffè Latte (Venti)', matched: false, est: { kcal: 355 } });
+    const sent = result.current.toPreview().items[0]!;
+    expect(sent.food_id).toBeUndefined();
+    expect(sent.said).toBeUndefined();
+    expect(sent.est?.kcal).toBe(355);
+  });
+
+  it('near-miss: a row that never had a link sends none, before or after a rename', () => {
+    const { result } = renderHook(() => useMealAmounts(preview));
+    act(() => result.current.renameRow(1, 'Pickles'));
+    expect(result.current.toPreview().items[1]).toEqual({
+      name: 'Pickles',
+      qty: 1,
+      unit: 'serving',
+      est: { kcal: 5, sodium_mg: 450 },
+    });
+  });
+});

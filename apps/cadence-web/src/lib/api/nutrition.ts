@@ -1,4 +1,12 @@
-import type { Macros, MealKind, MealPart, MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
+import type {
+  DescribedBasis,
+  Macros,
+  MealKind,
+  MealPart,
+  MealPlanItem,
+  MicronutrientKey,
+  MicroTargetOverride,
+} from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
@@ -178,19 +186,50 @@ export async function clearMacroTargets(): Promise<boolean> {
   return res.ok;
 }
 
+export interface MealPreviewItem {
+  name: string;
+  /**
+   * `brand` is the vendor the read heard (or the user answered), and `food_id` says the item was
+   * matched to a food already on file — the card uses the absence of both to decide whether asking
+   * where it came from is worth a line (A23 §1b). Both ride back on the confirm: the server prices
+   * a linked row from its food and never re-matches it.
+   */
+  brand?: string;
+  qty?: number;
+  unit?: string;
+  est?: MealMacros;
+  food_id?: string;
+  /** Their own words for this part. Rides back on the confirm so the same words next time need no call. */
+  said?: string;
+  /** Where the number came from (DESCRIBED_BASES in @cadence/shared — one array, both readers). */
+  basis?: DescribedBasis;
+  /** "your saved food", "USDA", "the coach's estimate" — so an estimate never looks like a lookup. */
+  source_label?: string;
+  /** What the coach assumed where the words left something open ("Took this as 2% milk"). */
+  assumption?: string;
+  /**
+   * The one question she would ask. A row with one carries no number and no food link: the
+   * question is what it waits for, and the row re-matches by name once an amount is given.
+   */
+  question?: string;
+  /** Why the row could not be counted from a record, when it could not. */
+  problem?: string;
+}
+
 /** An itemized read of a described meal — previewed, not logged. Confirm posts it verbatim. */
 export interface MealPreview {
   meal: MealKind;
-  /**
-   * `brand` is the vendor the parse heard (or the user answered), and `food_id` says the item was
-   * matched to a food already on file — the card uses the absence of both to decide whether asking
-   * where it came from is worth a line (A23 §1b).
-   */
-  items: { name: string; brand?: string; qty?: number; unit?: string; est?: MealMacros; food_id?: string }[];
+  items: MealPreviewItem[];
   macros: MealMacros | null;
   confidence: number | null;
   flags: { alcohol?: boolean; caffeine?: boolean };
   raw_text: string;
+  /**
+   * Who did the reading (FOOD-LOGGING-COACH-LED.md): `reached` false means the coach could not
+   * be reached and the old automatic estimate priced the card; `checked` is the true trace of what
+   * ran, one line per part, never canned copy.
+   */
+  coach?: { reached: boolean; calls: number; checked: string[] };
 }
 
 /**

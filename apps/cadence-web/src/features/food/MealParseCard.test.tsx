@@ -123,3 +123,51 @@ describe('MealParseCard — the total it posts carries every nutrient', () => {
     expect(posted.macros.kcal).toBeCloseTo(145, 0);
   });
 });
+
+/**
+ * A coach-led question row (FOOD-LOGGING-COACH-LED.md): no number, no food link, no words — the
+ * question is what it waits for. A chip gives it an amount; the question stays on the row, and
+ * what is posted carries neither a link nor words for the memory to learn from.
+ */
+describe('MealParseCard — a coach-led question row', () => {
+  const coachLed = {
+    meal: 'breakfast' as const,
+    raw_text: 'milk and 2 eggs',
+    items: [
+      { name: 'milk', question: 'Whole milk or 2%?', basis: 'none' as const },
+      {
+        name: 'eggs',
+        qty: 2,
+        unit: 'large',
+        est: { kcal: 144 },
+        food_id: 'f-eggs',
+        said: '2 eggs',
+        basis: 'record' as const,
+      },
+    ],
+    macros: { kcal: 144 },
+    confidence: null,
+    flags: {},
+    coach: { reached: true, calls: 1, checked: [] },
+  };
+
+  it('asks her question, keeps it on the row once a chip answers the amount, and posts no link or words for it', async () => {
+    render(<MealParseCard preview={coachLed} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('Whole milk or 2%?')).toBeInTheDocument();
+    expect(screen.getByText('1 AMOUNT TO SETTLE')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '1 glass' }));
+    // Kept now — a stepper, not chips — and her question still on the sub line.
+    expect(screen.getByText('1 glass · Whole milk or 2%?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More milk' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log to breakfast' }));
+    await waitFor(() => expect(api.logPreviewedMeal).toHaveBeenCalled());
+    const [sent] = api.logPreviewedMeal.mock.calls[0] as unknown as [typeof coachLed];
+    expect(sent.items[0]).toMatchObject({ name: 'milk', qty: 1, unit: 'glass' });
+    expect(sent.items[0]).not.toHaveProperty('food_id');
+    expect(sent.items[0]).not.toHaveProperty('said');
+    // The picked row keeps both, so the confirm prices from its food and the memory learns.
+    expect(sent.items[1]).toMatchObject({ food_id: 'f-eggs', said: '2 eggs' });
+  });
+});

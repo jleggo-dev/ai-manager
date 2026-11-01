@@ -18,6 +18,15 @@
  * Run:  DRY=1 USER_ID=… node --import tsx apps/cadence-api/scripts/eval-food-check.ts
  *       USER_ID=… MODELS=gpt-5.4-mini CASES=real-banana node --import tsx apps/cadence-api/scripts/eval-food-check.ts
  *       MODE=single SKIP_FLOOR=1 USER_ID=… node --import tsx apps/cadence-api/scripts/eval-food-check.ts
+ *       USER_ID=… MODELS=gpt-5.4-mini npm run eval:food-check -- --prompt-from-config
+ *
+ * `--prompt-from-config` (or PROMPT_FROM_CONFIG=1) runs the SHIPPED shape: the e2e job is given the
+ * config's own `food-check` promptTemplate, variables, strict schema and formatting rules, and each
+ * call sends the VARIABLES production sends (meal, said, book, round_rule, guard_notes), through the
+ * service's split, book and round loop (eval-food-check-single.ts → runMealConfig). The engine fills
+ * the template exactly as in production — every variable wrapped in `<user_input name="…">`, every
+ * variable cut at MAX_VARIABLE_LENGTH — so what the model reads here is what it reads live. That is
+ * the eval of the job as synced, not of a prompt kept beside it.
  */
 import { config as dotenv } from 'dotenv';
 import fs from 'node:fs';
@@ -28,9 +37,11 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import { FOOD_CHECK_CASES, type FoodCheckCase } from './eval-food-check-cases.ts';
 import { priceItem, scoreMeal, within, type MealScore } from './eval-food-check-score.ts';
 import { MAX_ROUNDS, runMeal, type Lookup, type RoundRun } from './eval-food-check-protocol.ts';
-import { SINGLE_MAX_ROUNDS, runMealSingle, withFatSecretRows } from './eval-food-check-single.ts';
+import { SINGLE_MAX_ROUNDS, runMealConfig, runMealSingle, withFatSecretRows } from './eval-food-check-single.ts';
 import type { FanOutResult } from '../src/services/food-source-fanout.ts';
 import type { SourceCandidate } from '../src/services/food-source-report.ts';
+import type { BookLookup } from '../src/services/food-candidate-book.ts';
+import type { FoodCheckVars } from '../src/services/food-check.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 dotenv({ path: path.join(root, 'apps/cadence-api/.env') });
@@ -40,6 +51,7 @@ const { fanOutFoodSources } = await import('../src/services/food-source-fanout.t
 const { toCandidate } = await import('../src/services/food-source-report.ts');
 const { searchFatSecretFoods } = await import('../src/services/food-sources/fatsecret.ts');
 const { refreshFatSecretFood } = await import('../src/services/food-sources/fatsecret-enrich.ts');
+const { wideLookup } = await import('../src/services/food-candidate-sources.ts');
 const { priceParsedMeal } = await import('../src/services/food-pricing.ts');
 const { parseMealResult } = await import('../src/services/nutrition-parse.ts');
 const { withAim } = await import('../src/ai/aim.ts');
@@ -64,16 +76,39 @@ const dispatcher = new Agent({ headersTimeout: RUN_BUDGET_MS + 30_000, bodyTimeo
 
 const userId = process.env.USER_ID ?? '';
 const dry = process.env.DRY === '1';
-const models = (process.env.MODELS ?? DEFAULT_MODELS.join(',')).split(',').map((s) => s.trim()).filter(Boolean);
-const caseFilter = (process.env.CASES ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const models = (process.env.MODELS ?? DEFAULT_MODELS.join(','))
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const caseFilter = (process.env.CASES ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const cases = caseFilter.length ? FOOD_CHECK_CASES.filter((c) => caseFilter.includes(c.id)) : FOOD_CHECK_CASES;
 const OUT = process.env.OUT ?? path.join(os.tmpdir(), 'eval-food-check-results.json');
 /**
  * `rounds` = the model asks for lookups, then picks (eval-food-check-protocol.ts).
  * `single` = software splits and fans out first, the model gets one call (eval-food-check-single.ts).
  */
-const MODE = process.env.MODE === 'single' ? 'single' : 'rounds';
-const skipFloor = process.env.SKIP_FLOOR === '1';
+const PROMPT_FROM_CONFIG = process.argv.includes('--prompt-from-config') || process.env.PROMPT_FROM_CONFIG === '1';
+const MODE: 'rounds' | 'single' | 'config' = PROMPT_FROM_CONFIG
+  ? 'config'
+  : process.env.MODE === 'single'
+    ? 'single'
+    : 'rounds';
+const skipFloor = process.env.SKIP_FLOOR === '1' || PROMPT_FROM_CONFIG;
+/** The shipped job, read once: its prompt is what `config` mode runs and its schema what the e2e job gets. */
+const shippedJob = (() => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(root, 'config/ai-admin/ai-admin.config.json'), 'utf8')) as {
+    jobs: Array<{
+      slug: string;
+      config: { promptTemplate: string; variables?: unknown; expectedSchema?: unknown; formattingRules?: unknown };
+    }>;
+  };
+  const job = cfg.jobs.find((j) => j.slug === 'food-check');
+  if (!job) throw new Error('food-check job missing from ai-admin.config.json');
+  return job.config;
+})();
 /** FatSecret rows per lookup in the wide book. Each is a billed fetch; the eval pays it on purpose. */
 const FATSECRET_ROWS = 5;
 
@@ -104,7 +139,9 @@ async function runRemote(jobId: string, variables: Record<string, unknown>): Pro
 }
 
 async function liveCatalog(): Promise<Set<string>> {
-  const res = await fetch(`${BASE}/api/providers/${V2_PROVIDER}/models`, { headers: { Authorization: `Bearer ${KEY}` } });
+  const res = await fetch(`${BASE}/api/providers/${V2_PROVIDER}/models`, {
+    headers: { Authorization: `Bearer ${KEY}` },
+  });
   if (!res.ok) throw new Error(`catalog fetch failed: ${res.status}`);
   return new Set(((await res.json()) as Array<{ model_id: string }>).map((m) => m.model_id));
 }
@@ -144,6 +181,20 @@ async function lookupWide(l: Lookup): Promise<FanOutResult> {
   return withFatSecretRows(base, rows);
 }
 
+/** Config mode uses the PRODUCTION lookup (food-candidate-sources.ts), cached per distinct lookup. */
+const prodLookupCache = new Map<string, Promise<FanOutResult>>();
+let prodLookup: ((l: BookLookup) => Promise<FanOutResult>) | null = null;
+function lookupProd(l: BookLookup): Promise<FanOutResult> {
+  prodLookup ??= wideLookup(userId);
+  const key = `${l.q.toLowerCase()}|${(l.measure ?? '').toLowerCase()}|${(l.brand ?? '').toLowerCase()}`;
+  let p = prodLookupCache.get(key);
+  if (!p) {
+    p = prodLookup(l);
+    prodLookupCache.set(key, p);
+  }
+  return p;
+}
+
 async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
@@ -160,7 +211,7 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
 
 export interface CaseResult {
   model: string;
-  mode: 'rounds' | 'single';
+  mode: 'rounds' | 'single' | 'config';
   case: string;
   score: MealScore | null;
   seconds: number;
@@ -216,10 +267,28 @@ async function floorFor(parseJobId: string, c: FoodCheckCase): Promise<CaseResul
       completionTokens: r.completionTokens ?? 0,
       lookups: 0,
       error: null,
-      items: ledger.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, kcal: i.est?.kcal, food_id: i.food_id ?? null })),
+      items: ledger.items.map((i) => ({
+        name: i.name,
+        qty: i.qty,
+        unit: i.unit,
+        kcal: i.est?.kcal,
+        food_id: i.food_id ?? null,
+      })),
     };
   } catch (e) {
-    return { model: 'floor (today)', mode: MODE, case: c.id, score: null, seconds: (Date.now() - t0) / 1000, rounds: 0, promptTokens: 0, completionTokens: 0, lookups: 0, error: String(e).slice(0, 200), items: [] };
+    return {
+      model: 'floor (today)',
+      mode: MODE,
+      case: c.id,
+      score: null,
+      seconds: (Date.now() - t0) / 1000,
+      rounds: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      lookups: 0,
+      error: String(e).slice(0, 200),
+      items: [],
+    };
   }
 }
 
@@ -228,8 +297,17 @@ async function modelFor(model: string, jobId: string, c: FoodCheckCase): Promise
     spend();
     return runRemote(jobId, { prompt });
   };
+  /** Config mode: the job holds the shipped template, so the call carries only its variables. */
+  const runVars = (vars: FoodCheckVars) => {
+    spend();
+    return runRemote(jobId, { ...vars });
+  };
   const meal =
-    MODE === 'single' ? await runMealSingle(c, { run, lookup, lookupWide }) : await runMeal(c, { run, lookup });
+    MODE === 'config'
+      ? await runMealConfig(c, { run: runVars, lookup: lookupProd })
+      : MODE === 'single'
+        ? await runMealSingle(c, { run, lookup, lookupWide })
+        : await runMeal(c, { run, lookup });
   const outcomes = (meal.final ?? []).map((i) => priceItem(i, meal.shown));
   return {
     model,
@@ -270,10 +348,14 @@ function summary(results: CaseResult[]): void {
 async function main(): Promise<void> {
   if (!userId || !KEY) throw new Error('set USER_ID (whose foods the lookups see) and AI_ADMIN_API_KEY');
   const catalog = await liveCatalog();
-  const runnable = models.filter((m) => catalog.has(m) || (console.log(`skipping ${m} — not in the live catalog`), false));
-  const perMeal = MODE === 'single' ? SINGLE_MAX_ROUNDS : MAX_ROUNDS;
+  const runnable = models.filter(
+    (m) => catalog.has(m) || (console.log(`skipping ${m} — not in the live catalog`), false),
+  );
+  const perMeal = MODE === 'rounds' ? MAX_ROUNDS : SINGLE_MAX_ROUNDS;
   const calls = cases.length * ((skipFloor ? 0 : 1) + runnable.length * perMeal);
-  console.log(`${cases.length} meals · mode ${MODE} · ${skipFloor ? '' : 'floor + '}${runnable.join(', ')} · at most ${calls} model calls (cap ${HARD_CAP})`);
+  console.log(
+    `${cases.length} meals · mode ${MODE} · ${skipFloor ? '' : 'floor + '}${runnable.join(', ')} · at most ${calls} model calls (cap ${HARD_CAP})`,
+  );
   if (dry) return;
 
   const results: CaseResult[] = [];
@@ -294,9 +376,28 @@ async function main(): Promise<void> {
         profile_type?: string;
         runtime_options?: Record<string, unknown>;
       };
-      const config = { promptTemplate: '{{prompt}}', variables: [{ name: 'prompt', description: 'the round prompt', required: true }] };
+      // Config mode runs the shipped job's own template and variables through the engine, so the
+      // prompt the model reads is built the production way (wrapped, capped) — plus the strict
+      // schema and the formatting rules, so the output contract matches too.
+      const config =
+        MODE === 'config'
+          ? {
+              promptTemplate: shippedJob.promptTemplate,
+              variables: shippedJob.variables,
+              expectedResponseFormat: 'json',
+              expectedSchema: shippedJob.expectedSchema,
+              formattingRules: shippedJob.formattingRules,
+            }
+          : {
+              promptTemplate: '{{prompt}}',
+              variables: [{ name: 'prompt', description: 'the round prompt', required: true }],
+            };
       const existing = await getProcessingJobBySlug(E2E_JOB_SLUG);
-      const fields = { description: 'E2E food-check eval (eval-food-check.ts). Swept by cleanup:test-data.', config, is_active: true };
+      const fields = {
+        description: 'E2E food-check eval (eval-food-check.ts). Swept by cleanup:test-data.',
+        config,
+        is_active: true,
+      };
       const job = existing
         ? await updateProcessingJob(existing.id, fields).then(() => existing)
         : await createProcessingJob({ slug: E2E_JOB_SLUG, name: 'e2e foodcheck eval', ...fields });
@@ -322,7 +423,8 @@ async function main(): Promise<void> {
   } finally {
     await withAim(userId, async () => {
       if (jobId) await deleteProcessingJob(jobId).catch((e) => console.warn('job cleanup failed:', String(e)));
-      for (const id of profileIds) await deleteAiProfile(id).catch((e) => console.warn('profile cleanup failed:', String(e)));
+      for (const id of profileIds)
+        await deleteAiProfile(id).catch((e) => console.warn('profile cleanup failed:', String(e)));
     }).catch((e) => console.warn('cleanup failed (cleanup:test-data sweeps e2e%):', String(e)));
     fs.writeFileSync(OUT, JSON.stringify(results, null, 2));
   }

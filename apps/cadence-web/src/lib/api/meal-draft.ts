@@ -78,7 +78,17 @@ export async function appendRecipe(logId: string, input: { recipe_id: string; se
  */
 export async function appendParsed(
   logId: string,
-  input: { items: { name: string; brand?: string; qty?: number; unit?: string; est?: object; food_id?: string }[] },
+  input: {
+    items: {
+      name: string;
+      brand?: string;
+      qty?: number;
+      unit?: string;
+      est?: object;
+      food_id?: string;
+      said?: string;
+    }[];
+  },
 ): Promise<Meal> {
   const r = await post<{ meal: Meal }>(`/nutrition/meals/${encodeURIComponent(logId)}/items`, { parsed: input.items });
   return r.meal;

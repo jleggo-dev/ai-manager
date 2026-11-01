@@ -16,6 +16,13 @@ export interface AmountRow {
   source: AmountSource;
   /** What the parser originally priced, so a re-answer scales from the read, not from the last answer. */
   baseQty: number;
+  /** The food the coach linked the row to; rides back so the confirm prices from it, never re-matches. */
+  food_id?: string;
+  /** Their own words for this part; rides back so the same words next time need no call. */
+  said?: string;
+  assumption?: string;
+  question?: string;
+  source_label?: string;
 }
 
 /**
@@ -75,6 +82,11 @@ export function useMealAmounts(preview: MealPreview) {
       source: amountSource(it, preview.raw_text),
       // An unpriced item was read at "a typical portion", which is one of whatever it is.
       baseQty: it.qty && it.qty > 0 ? it.qty : 1,
+      ...(it.food_id ? { food_id: it.food_id } : {}),
+      ...(it.said ? { said: it.said } : {}),
+      ...(it.assumption ? { assumption: it.assumption } : {}),
+      ...(it.question ? { question: it.question } : {}),
+      ...(it.source_label ? { source_label: it.source_label } : {}),
     })),
   );
 
@@ -113,6 +125,11 @@ export function useMealAmounts(preview: MealPreview) {
    * while keeping the meal total is how 450 mg of sodium that was never eaten stays on the day.
    * The AMOUNT is not summed — two rows of one food are one portion read twice, and a doubled
    * amount hides inside a plausible number where a wrong one is visible and correctable.
+   *
+   * The LINK is dropped: a merged row is neither of its halves, so the kept half's `food_id`
+   * would have the server re-price the sum from one food alone and lose the other's nutrients —
+   * the thing the merge exists to prevent. With no food the row re-matches by name, and with no
+   * `said` it teaches the phrase memory nothing.
    */
   const mergeRow = (from: number, into: number) =>
     setRows((prev) => {
@@ -127,9 +144,12 @@ export function useMealAmounts(preview: MealPreview) {
       }
       const merged: AmountRow = {
         ...b,
+        matched: false,
         ...(b.brand || a.brand ? { brand: b.brand || a.brand } : {}),
         ...(Object.keys(est).length ? { est: est as MealMacros } : {}),
       };
+      delete merged.food_id;
+      delete merged.said;
       return prev.map((r, j) => (j === into ? merged : r)).filter((_, j) => j !== from);
     });
 
@@ -147,6 +167,10 @@ export function useMealAmounts(preview: MealPreview) {
       ...(r.qty != null ? { qty: r.qty } : {}),
       ...(r.unit ? { unit: r.unit } : {}),
       est: scaleMacros(r.est, r.qty == null ? 1 : r.qty / r.baseQty),
+      // The coach's link and their words ride back too: the server prices a linked row from its
+      // food, and learns the words so the same ones next time are a deterministic hit.
+      ...(r.food_id ? { food_id: r.food_id } : {}),
+      ...(r.said ? { said: r.said } : {}),
     })),
     macros: total,
   });

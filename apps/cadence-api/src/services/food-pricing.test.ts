@@ -14,6 +14,7 @@ vi.mock('./food-resolver.ts', () => ({
   rankedFoodsFor: vi.fn(),
 }));
 vi.mock('../repos/foods.ts', () => ({
+  getFoodsByIds: vi.fn(async () => []),
   insertFood: vi.fn(),
   searchFoods: vi.fn(async () => []),
   touchFoodUsage: vi.fn(async () => undefined),
@@ -29,7 +30,7 @@ vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
 }));
 
 import { loadResolveShared, rankedFoodsFor, type ResolveShared } from './food-resolver.ts';
-import { insertFood, searchFoods, touchFoodUsage } from '../repos/foods.ts';
+import { getFoodsByIds, insertFood, searchFoods, touchFoodUsage } from '../repos/foods.ts';
 import { estimateFood } from './food-capture.ts';
 import { findFatSecretMatch, isFatSecretRowFresh, refreshFatSecretFood } from './food-sources/fatsecret-enrich.ts';
 import { priceMealItems, PRICING_MIN_SCORE } from './food-pricing.ts';
@@ -426,5 +427,41 @@ describe('priceMealItems — cost of a plate', () => {
     expect(out.fully_priced).toBe(false);
     // The total still counts both — the unpriced item keeps the parse's number.
     expect(out.macros?.kcal).toBeCloseTo(300.3, 1);
+  });
+});
+
+/**
+ * A row that names its food (a coach-led preview's pick, confirmed on the card — FOOD-LOGGING-
+ * COACH-LED.md) is priced from THAT food and never re-matched; a row that names a food but no
+ * amount is an open question and counts nothing, whatever number rode along on the wire.
+ */
+describe('a linked row: priced from its food, or not at all', () => {
+  it('prices a linked row with an amount from its food and never calls the matcher', async () => {
+    vi.mocked(getFoodsByIds).mockResolvedValueOnce([food({ food_id: 'f-yog' })]);
+    const out = await priceMealItems(
+      USER,
+      [{ name: 'yogurt', food_id: 'f-yog', qty: 170, unit: 'g', est: { kcal: 1 } }],
+      { pin: false },
+    );
+    expect(rankedFoodsFor).not.toHaveBeenCalled();
+    expect(out.items[0]).toMatchObject({ food_id: 'f-yog', est: { kcal: 100.3, protein_g: 17 } });
+    expect(out.priced_count).toBe(1);
+  });
+
+  it('a linked row with no amount keeps the link and counts nothing — not the card’s number, not a default serving', async () => {
+    vi.mocked(getFoodsByIds).mockResolvedValueOnce([food({ food_id: 'f-milk', name: 'Milk, 2%' })]);
+    const out = await priceMealItems(USER, [{ name: 'milk', food_id: 'f-milk', est: { kcal: 122 } }], { pin: false });
+    expect(out.items[0]).toEqual({ name: 'milk', food_id: 'f-milk' });
+    expect(out.priced_count).toBe(0);
+    expect(out.macros).toBeNull();
+  });
+
+  it('a linked row whose food this person cannot see falls through to the match like any other', async () => {
+    vi.mocked(getFoodsByIds).mockResolvedValueOnce([]);
+    const out = await priceMealItems(USER, [{ name: 'milk', food_id: 'f-stranger', qty: 1, unit: 'cup' }], {
+      pin: false,
+    });
+    expect(rankedFoodsFor).toHaveBeenCalledTimes(1);
+    expect(out.items[0]?.food_id).toBeUndefined();
   });
 });

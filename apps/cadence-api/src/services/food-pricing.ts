@@ -18,7 +18,7 @@ import {
   type Macros,
   type NutritionLog,
 } from '@cadence/shared';
-import { insertFood, searchFoods, touchFoodUsage, type FoodUsageSlot } from '../repos/foods.ts';
+import { getFoodsByIds, insertFood, searchFoods, touchFoodUsage, type FoodUsageSlot } from '../repos/foods.ts';
 import { estimateFood } from './food-capture.ts';
 import { findFatSecretMatch, isFatSecretRowFresh, refreshFatSecretFood } from './food-sources/fatsecret-enrich.ts';
 import { priceFood, nutrientsPerBase, type PortionInput } from './food-pricing-portion.ts';
@@ -203,6 +203,7 @@ async function priceOne(
   shared: ResolveShared,
   confidence: number | null,
   pin: boolean,
+  linked: ReadonlyMap<string, Food>,
 ): Promise<PricedOne> {
   const bare: NutritionLog['items'][number] = {
     name: item.name,
@@ -212,6 +213,34 @@ async function priceOne(
     ...(item.est ? { est: item.est } : {}),
   };
   const portion = portionOf(item);
+
+  /**
+   * A row that already names its food — the food-check's pick, confirmed on the card
+   * (FOOD-LOGGING-COACH-LED.md, 2026-11-01) — is priced from THAT food and never re-matched. The
+   * choosing was the model's and the person's; a lexical re-match here is exactly the
+   * code-picks-the-winner step that path exists to retire. A portion the store cannot read back
+   * (food-pick-portion.ts says which) keeps the card's own numbers, which came from the same food
+   * — but only when the row carries an amount at all. A row with none is an open question
+   * (FOOD-LOGGING-COACH-LED.md): nothing is counted for it, whatever number rode along.
+   */
+  const named = item.food_id ? linked.get(item.food_id) : undefined;
+  if (named) {
+    const hasAmount = typeof item.qty === 'number' && item.qty > 0;
+    if (!hasAmount) {
+      // No amount, no number: the link is kept for the card, nothing is counted — not the
+      // card's own figure, and not one default serving the store would otherwise assume.
+      const { est: _unknown, ...noNumber } = bare;
+      return { item: { ...noNumber, food_id: named.food_id }, priced: false, food_id: named.food_id };
+    }
+    const est = priceFood(named, portion);
+    const counted = Object.keys(est).length ? est : item.est;
+    return {
+      item: { ...bare, ...(counted ? { est: counted } : {}), food_id: named.food_id },
+      priced: Object.keys(est).length > 0,
+      food_id: named.food_id,
+    };
+  }
+
   const query = [item.brand?.trim(), item.name].filter(Boolean).join(' ');
 
   let food: Food | null = null;
@@ -350,7 +379,20 @@ export async function priceMealItems(
   }
 
   const pin = opts.pin !== false;
-  const results = await Promise.all(list.map((item) => priceOne(userId, item, shared, opts.confidence ?? null, pin)));
+  // Foods the rows already name, read once; a row whose food is not visible to this person falls
+  // through to the match like any other, so an id off the wire can never price a stranger's row.
+  const namedIds = list.flatMap((i) => (i.food_id ? [i.food_id] : []));
+  let linked = new Map<string, Food>();
+  if (namedIds.length) {
+    try {
+      linked = new Map((await getFoodsByIds(userId, namedIds)).map((f) => [f.food_id, f]));
+    } catch (e) {
+      console.warn('[food-pricing] linked foods read failed — matching by name instead:', e);
+    }
+  }
+  const results = await Promise.all(
+    list.map((item) => priceOne(userId, item, shared, opts.confidence ?? null, pin, linked)),
+  );
   const priced = results.filter((r) => r.priced);
 
   // Teach recents/frequents from what was actually eaten — next time this ranks higher and the

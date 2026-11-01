@@ -1,7 +1,8 @@
 # Food logging, coach-led — design draft
 
-_Status: DRAFT for owner rulings (2026-10-29). The eval is built and run; nothing in the app is
-changed yet._
+_Status: build step 2 SHIPPED 2026-11-01 (the `food-check` job on its own profile, the candidate
+book as a service, the described-meal doors wired through it — see "Suggested build order" and
+"What was built" at the end). Rulings 2, 3, 4 and 6 are still the owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -34,12 +35,12 @@ reachable in chat but **no logging path is built on them**.
 
 **Deterministic — no reasoning needed, the user already named the exact thing:**
 
-| Way in                                   | Why it needs no judgement                            |
-| ---------------------------------------- | ---------------------------------------------------- |
-| Tap a tile (Usual, Leftovers, Cookbook, Planned) | It is a saved food/recipe id                 |
-| Find → pick from the list                | The user chose the row                               |
-| Barcode scan that hits                   | An exact product key                                 |
-| Change an amount on a row                | Arithmetic on a known food (`priceFood`)             |
+| Way in                                           | Why it needs no judgement                |
+| ------------------------------------------------ | ---------------------------------------- |
+| Tap a tile (Usual, Leftovers, Cookbook, Planned) | It is a saved food/recipe id             |
+| Find → pick from the list                        | The user chose the row                   |
+| Barcode scan that hits                           | An exact product key                     |
+| Change an amount on a row                        | Arithmetic on a known food (`priceFood`) |
 
 These log without her knowing at the moment. She reads them the next time you talk
 (`get_food_log`), as a coach would.
@@ -126,9 +127,9 @@ the table; the other two are the eval's.
 
 | Shape                                             | Calls / meal | Prompt tokens / meal | Of which ours | Of which Devs.ai's fixed preamble |
 | ------------------------------------------------- | -----------: | -------------------: | ------------: | --------------------------------: |
-| Full coach turn (`ai_log`, 60 days, Sonnet)       |          1–3 |           55k–95k    |      nearly all | ~4,800 per call (~6%)           |
-| Food-check, rounds (model asks, then picks; mini) |          2.1 |              ~9,700  |        ~1,500 |             ~5,300 (two calls)    |
-| Food-check, single call (software fetched; mini)  |      1 (–2)  |              ~4,800  |        ~1,900 |             ~2,900 (1.1 calls)    |
+| Full coach turn (`ai_log`, 60 days, Sonnet)       |          1–3 |              55k–95k |    nearly all |             ~4,800 per call (~6%) |
+| Food-check, rounds (model asks, then picks; mini) |          2.1 |               ~9,700 |        ~1,500 |                ~5,300 (two calls) |
+| Food-check, single call (software fetched; mini)  |       1 (–2) |               ~4,800 |        ~1,900 |                ~2,900 (1.1 calls) |
 
 Reading it: in the rounds shape **78% of the bill was Devs.ai's preamble**, paid twice, and the
 model's first call did work the software does for free. In the single-call shape a one-part meal
@@ -195,11 +196,11 @@ food ledger. 192 model calls in all.
 
 | Who decides                      | Right (kcal + protein) | Made-up ids | Gave up | Avg time / meal | Avg tokens in / out |
 | -------------------------------- | ---------------------: | ----------: | ------: | --------------: | ------------------: |
-| Today: `parse-meal` + code match |                  15/20 |           — |       0 |          15.5 s |         4,067 / 1,835 |
-| **gpt-5.4-mini**                 |              **19/20** |       **0** |   **0** |       **9.8 s** |       **9,736 / 346** |
-| claude-sonnet-5-5 (ceiling)      |                  18/20 |           0 |       2 |           8.4 s |          14,097 / 465 |
-| gemini-3.8-flash                 |                  17/20 |           0 |       1 |          63.6 s |        9,884 / 6,912 |
-| claude-haiku-5-5                 |                  16/20 |           0 |       2 |          12.0 s |        13,725 / 1,071 |
+| Today: `parse-meal` + code match |                  15/20 |           — |       0 |          15.5 s |       4,067 / 1,835 |
+| **gpt-5.4-mini**                 |              **19/20** |       **0** |   **0** |       **9.8 s** |     **9,736 / 346** |
+| claude-sonnet-5-5 (ceiling)      |                  18/20 |           0 |       2 |           8.4 s |        14,097 / 465 |
+| gemini-3.8-flash                 |                  17/20 |           0 |       1 |          63.6 s |       9,884 / 6,912 |
+| claude-haiku-5-5                 |                  16/20 |           0 |       2 |          12.0 s |      13,725 / 1,071 |
 
 What the numbers say:
 
@@ -244,7 +245,7 @@ offered"), which is why `shown` is saved with every result.
 
 | Model             | Right 2a | Right 2b | Both runs | Made-up ids | Settled in one call | Avg s | Prompt tokens / meal | Of which ours |
 | ----------------- | -------: | -------: | --------: | ----------: | ------------------: | ----: | -------------------: | ------------: |
-| **gpt-5.4-mini**  |    18/20 |    17/20 | **35/40** |       **0** |               17–18 |   5–6 |      **4,700–4,950** |  **~1,900**   |
+| **gpt-5.4-mini**  |    18/20 |    17/20 | **35/40** |       **0** |               17–18 |   5–6 |      **4,700–4,950** |    **~1,900** |
 | claude-sonnet-5-5 |    19/20 |    17/20 |     36/40 |           0 |               16–17 |   6–8 |          8,000–8,400 |        ~2,500 |
 | claude-haiku-5-5  |    16/20 |    18/20 |     34/40 |           0 |               15–17 |  8–10 |          7,900–9,100 |        ~2,700 |
 | gemini-3.8-flash  |    15/20 |    16/20 |     31/40 |           0 |               15–17 | 48–56 |          5,000–6,100 |        ~2,800 |
@@ -286,6 +287,114 @@ dearer; Gemini is too slow here.
 top rows in the book, every model on every run picked "Caffè Latte (Venti)" over the Matcha the
 code logs today, stating the assumption. The code fix that was paused is this design.
 
+### Eval results — run 3, the shipped job (2026-11-01)
+
+`npm run eval:food-check -- --prompt-from-config`: the `food-check` job's own prompt and strict
+schema as the config ships them, through the service's split, book and round loop
+(`food-candidate-book.ts`, `food-candidate-sources.ts`, `food-check.ts`) — the eval of what
+production runs, not of a prompt kept beside it. Same 20 meals, lookups against the owner's real
+ledger, USDA and FatSecret's top 5 rows. gpt-5.4-mini run twice (3a, 3b), claude-sonnet-5-5 once;
+71 model calls in all. The bar was run 2: 35/40 at about 4,800 prompt tokens a call.
+
+| Model             | Right 3a | Right 3b | Both runs | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) |
+| ----------------- | -------: | -------: | --------: | ----------: | ------------------: | ----: | ----------------------------------: |
+| **gpt-5.4-mini**  |    18/20 |    18/20 | **36/40** |       **0** |               16–17 |   5–6 |                5,300–5,700 · ~4,600 |
+| claude-sonnet-5-5 |    19/20 |        — |     19/20 |           0 |                  17 |   8.0 |                      8,200 · ~7,400 |
+
+Reading it:
+
+- **The bar holds: 36/40 against 35/40**, with no made-up id in 71 calls and no failed meal. Both
+  pointers of ruling 1 answered live on 2026-11-01, so both are proved callable today.
+- **The Starbucks Venti latte (#426) lands.** Every run on both models picked "Caffè Latte
+  (Venti)" at 250 kcal / 16 g protein — the case that started this.
+- **Tokens: the median call is at the bar, the average above it.** ~4,600 median against ~4,800;
+  the average (5,300–5,700) is pulled up by the two six-part meals (the eggs plate's second call
+  carried an 11k-token book). Two things grew the book on purpose: eight records shown per lookup
+  (was six) and the plain-name/brand rules for estimates. Through the gateway the Devs.ai preamble
+  (~2,600 of each call) goes to zero.
+- **The two misses are the same two every time, and neither is new.** (1) `pair-coconut-canned`:
+  every model on every run picks the same canned coconut milk record (142 kcal for ¼ cup against
+  the hand-written 110) — run 2 already called that yardstick doubtful; it wants checking before
+  it counts against anyone. (2) `pair-latte-small`: gpt-5.4-mini twice picked a record with no
+  small size — once "1 serving" at 60 kcal, once the shared ledger's **"Cafe Latte · 1 drink · 0
+  kcal"** even though the book marked it `incomplete: no usable calories`. Sonnet picked a sized
+  latte at 150. The marker is in the book and in the prompt; the model read past it once. The
+  software fix the run-2 notes asked for still stands: that ledger row wants cleaning (an
+  `incomplete` record is still a record she can pick, by design — a guard reports, it does not
+  veto).
+- **The guard round fired zero times** across 71 calls: no pick outside the book, no measure a
+  record did not offer. The one-extra-lookups round fired on 3–4 meals per run, always the
+  dictated or six-part ones.
+- **Caveats, as before:** n = 2 for the mini and 1 for Sonnet (a pointer, not a verdict); two
+  Sonnet calls came back with no usage figures and count as 0 in its average; USDA answered 400
+  on a few lookups during the run and the trace recorded it as "USDA failed" (the fan-out moved
+  on, as designed).
+
+### Eval results — run 4, after review (2026-11-01, later the same day)
+
+The PR review of step 2 found that run 3 had not run the production prompt shape: the eval posted
+the whole filled prompt as one `{{prompt}}` variable, so the engine's `<user_input>` wrapper
+never went round `round_rule` and `guard_notes`, and the engine's 10,000-character cut on any
+variable fell on the whole prompt (tail first — `</book>` and the last parts' records) without
+anyone seeing it. Run 4 fixes both and measures the fixed job: the e2e job carries the shipped
+`promptTemplate` and `variables`, each call sends only the five variables, the engine fills them
+as it does live; the book fits itself to a budget (round-robin by part, the cut announced in the
+part's head — see "What was built", 3; for this run the budget was 9,900 characters, the engine's
+cap less a margin — it was then set to its own 12,000 once #454 raised the cap, see run 5); the
+three pick steers are out of the prompt and `estimate.kcal` / `protein_g` are nullable.
+gpt-5.4-mini once over the 20 meals, 21 calls; then the one new miss re-run twice.
+
+| Model            | Right | kcal ok | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) |
+| ---------------- | ----: | ------: | ----------: | ------------------: | ----: | ----------------------------------: |
+| **gpt-5.4-mini** | 17/20 |   18/20 |       **0** |                  19 |   5.2 |                       4,908 · 4,642 |
+
+Reading it:
+
+- **17/20 against the bar's 35/40 (17.5 a run)**: within one meal of the bar at n = 1, not above
+  it. Tokens are at the bar (median 4,642 against ~4,800) now that the book fits itself; the
+  average fell from 5,300–5,700 to 4,908 because no call carries an 11k-token book any more.
+- **The same two misses as every run**, unchanged: `pair-coconut-canned` (the doubtful 110-kcal
+  yardstick) and `pair-latte-small` (the shared ledger's zero-kcal "Cafe Latte · 1 drink" row,
+  picked again with the `incomplete` marker beside it — the row wants cleaning; in production
+  that reply also carried a question, and a question row now counts nothing, so the card would
+  show an open row rather than 0 kcal).
+- **The one new miss is variance, not the budget.** `real-smoothie-protein`: the model estimated
+  the skyr at 60 kcal / 7.5 g protein instead of picking (protein total off). The book for that
+  meal was rebuilt locally: it renders at 9,685 characters with 13 of 40 rows held back; the
+  owner's own "Organic Skyr Yogurt" row was shown first, and the two rows held back from that
+  part were "Frozen Yogurt" and "Yogurt Chips". Re-run twice, the meal was right both times
+  (once by estimating the skyr at 100 / 15, once by picking a record). Seen in the rebuild and
+  worth its own fix: the split leaves "2/3 a cup skyr yoghurt" as the lookup "a cup skyr
+  yoghurt" — a fraction followed by "a cup" is not peeled — which is why that part's records were
+  mostly noise (a peanut-butter cup, a dessert topping).
+- **The guard round fired zero times** again; the extra-lookups round fired once over the 20.
+
+### Eval results — run 5, the book's own budget under the raised cap (2026-11-01)
+
+Same job and eval as run 4, after #454 (the engine's variable cap 40,000, a cut logged) was
+merged into the branch and `BOOK_BUDGET_CHARS` became the book's own 12,000 characters (sized
+from the token bar; the arithmetic is on the constant). gpt-5.4-mini once over the 20 meals,
+23 calls.
+
+| Model            | Right | kcal ok | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) | Largest call |
+| ---------------- | ----: | ------: | ----------: | ------------------: | ----: | ----------------------------------: | -----------: |
+| **gpt-5.4-mini** | 17/20 |   17/20 |       **0** |                  17 |   5.9 |                       5,072 · 4,630 |        7,629 |
+
+Reading it:
+
+- **The median call did not move** (4,630 against run 4's 4,642): a meal of one to three parts
+  never fills either budget. The average rose from 4,908 to 5,072 and the largest call from
+  ~6,400 to 7,629 — the long meals keep more rows a part now, and pay for them. Both are what the
+  constant's arithmetic said they would be.
+- **17/20 again**, the two fixed misses unchanged. The third is new in kind, not in cause:
+  `pair-almonds` ("a handful of almonds") picked the "1 almond" record and asked "About how many
+  almonds is a handful?" — a question row. In the app that row carries no number until the
+  amount is answered (review item 3); the eval's scorer still prices the pick at count 1 and
+  calls it 7 kcal, which is the scorer's shape, not the app's. The scorer could skip question
+  rows to match production; left as it is so runs stay comparable. The smoothie that missed in
+  run 4 was right.
+- **Three meals took the extra-lookups round** (one in run 4); the guard round fired zero times.
+
 ## When she can't be reached
 
 The model provider fails sometimes (2026-10-27 outage). A meal must never vanish because a model
@@ -312,12 +421,117 @@ on the card as an automatic estimate, not hers.
 
 1. ~~The food-check eval~~ — built and run in both shapes (`apps/cadence-api/scripts/eval-food-check*.ts`);
    results above. Owner rules on the model.
-2. The `food-check` job + profile (single-call shape), and the candidate book as a service:
-   `splitMealParts` + fan-out per part + FatSecret top rows (ruling 6), with the answer-format
-   checks from the eval's scorer (`priceItem`: shown ids only, offered measures only).
+2. ~~The `food-check` job + profile (single-call shape), and the candidate book as a service~~ —
+   **built 2026-11-01**, see "What was built" below. The split, the fan-out per part with
+   FatSecret's top rows, the book, the one-call-plus-one shape, the answer-format checks, the
+   pricing through `priceFood`, the phrase memory, the labelled fallback, and the typed/spoken
+   doors on it. Ruling 6 is built as the eval ran it (top 5 rows fetched in full) and stays open.
 3. Change `log_meal` / `preview_meal` to take her rows; keep the waterfall behind them only for
-   the outage case, labelled.
+   the outage case, labelled. _Partly done by step 2: `preview_meal` (the coach's tool) runs the
+   coach-led read because it wraps the same service; a confirmed row that names its food is priced
+   from that food and never re-matched (`food-pricing.ts`). `log_meal` (the coach's one-call
+   write) still runs the old waterfall._
 4. Route the meal screen's Chat / Voice / Photo doors to it; the trace UI, per-row source labels,
-   the assumption line, question rows that do not count.
-5. Write-back of her verdicts (phrase → food) so repeats get faster.
-6. Retire `acceptMatch` and the code-decided research trigger from the logging path.
+   the assumption line, question rows that do not count. _Chat and Voice (`LogByChat`, the
+   quick-log `DescribeSheet`, the plan sheet's capture) are on it, with the trace line, the
+   assumption on the row, her question on an asked row, and the not-reached notice. Photo is
+   not: `parse-meal-description` still prices the reading. Per-row source labels are on the wire
+   (`source_label`) and not yet drawn._
+5. ~~Write-back of her verdicts (phrase → food) so repeats get faster~~ — built in step 2
+   (`food_phrases`, migration 0064): the confirm teaches it, the next read of the same words is a
+   deterministic hit and no call.
+6. Retire `acceptMatch` and the code-decided research trigger from the logging path. _Still in
+   place behind the fallback and behind `log_meal`._
+
+## What was built (step 2, 2026-11-01)
+
+The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.ts`):
+
+1. **The split** (`food-candidate-book.ts`): comma, newline, "and", "with", "+", "&" separate
+   parts; a leading amount is peeled into the lookup's measure; a menu size ("venti") stays in the
+   food's words. Table-tested with the Venti latte as the pinned case (#426).
+2. **The memory first** (`food-phrases.ts`, `repos/food-phrases.ts`, migration `0064`): a part
+   whose words this person confirmed before is priced from the remembered food and amount by
+   `priceFood`, no lookup and no call. The amount they say this time wins when the store can read
+   it; a bare count ("2 eggs") takes the remembered unit; an amount the store cannot read ("a
+   handful") falls back to the remembered amount — the memory never skips a part it holds. The
+   model is then asked only about the parts the memory did not settle, in their words for those
+   parts, and a row it writes for a remembered part anyway is dropped by its phrase key (no second
+   latte). Written only on a confirm, never on a preview walked away from: the chat door
+   (`logMeal({parsed})`) learns only a row the client sent with a `food_id` that the ledger then
+   priced from that same food — a confirmed pick, never a name match the ledger made on its own;
+   the draft door (`appendParsed`, which does not price) learns only a row whose food this person
+   can see. A question row teaches nothing: it carries no link and no words. Until 0064 is
+   applied a recall finds nothing and a remember logs a warning: a miss costs one call, never the
+   meal.
+3. **The book** (`food-candidate-sources.ts` → `fanOutFoodSources` + FatSecret's top 5 rows
+   fetched in full): every record found, per-100 g numbers, the measures each offers with grams,
+   the guards' notes, the fan-out's disagreements, and `incomplete` on a record with no usable
+   calories (run 2's zero-kcal "Cafe Latte"). Ids are the meal's own (`c1`…); the same record seen
+   twice keeps its first id; eight records shown per lookup. The FatSecret line in
+   `sources_checked` is replaced with what actually ran, so the trace stays true. **The book has a
+   budget of its own** (review, 2026-11-01): `text()` renders within `BOOK_BUDGET_CHARS` (12,000
+   characters, sized from the ~4,800-token bar — the arithmetic is on the constant), dealing
+   record lines round-robin across the parts so a long meal loses every part's last rows before
+   any part loses its first; a part with rows held back says how many in its head so the model
+   can ask for a narrower lookup; `shown()` answers with the records the last rendering held, and
+   a pick of an id past the cut is refused as "not shown". The engine's own cap on a job variable
+   (`MAX_VARIABLE_LENGTH`) was 10,000 and cut silently from the tail; #454 raised it to 40,000 and
+   made a cut log the variable's name, so the budget is a cost choice, not a guard. **A record
+   kept per item** (every food the old parse-meal path pinned, "1 serving = 1") is printed per its
+   own measure ("per 1 serving: 250 kcal … kept per item, not by weight"), never as per 100 g of a
+   count (which read 25,000 kcal), and is left out of the fan-out's per-100 g disagreement
+   compare.
+4. **One call, at most two** (`food-check.ts`, the `food-check` job): the words, the slot, the
+   book, a `round_rule` variable (lookups offered on the first call only) and `guard_notes`
+   (empty, or the previous reply's problems). The first call may ask for up to 8 more lookups;
+   the second is the last and any lookups it asks for are not made. A pick not in the book, or a
+   measure the record does not offer, goes back once as evidence; after the last call it becomes
+   the model's estimate if it gave one, or an open row that counts nothing.
+5. **The store prices** (`food-pick-portion.ts` → `priceFood`): the pick's measure times the
+   count, as grams for a per-gram food or the serving for a per-item one. The row's `qty`/`unit`
+   are chosen so the confirm re-prices to the same numbers (the measure's own word when it reads
+   back, grams otherwise). An estimate is labelled (`basis: estimate`, "the coach's estimate") and
+   carries the plain name and the brand the person named, so the confirm pins a food and not a
+   sentence. **A row with an open question carries no number, no food link and no `said`**
+   (review, 2026-11-01): the question is what it waits for — the card asks it, the total leaves
+   it out, the coach's `preview_meal` lists it as "waiting on their answer", the guard round is
+   not spent on its tentative pick, and on confirm the row re-matches by name like any row without
+   a food, so a tentative pick is never logged and never taught to the memory. A linked row that arrives without an amount is not counted either, not
+   from the card's number and not from a default serving.
+6. **When she cannot be reached** (a provider failure, a reply that is not JSON): the old
+   `parse-meal` + code-picked match prices the pending parts, every row `basis: fallback`
+   ("an automatic estimate"), and the card is told (`coach.reached: false`). The remembered rows
+   stay.
+7. **On the wire**: each row carries `said`, `basis`, `source_label`, `assumption`, `question`,
+   `problem`; the preview carries `coach: { reached, calls, checked[] }` with one trace line per
+   part built from `sources_checked`. The confirm (`parsed` on `POST /nutrition/meals`, and
+   `parsed` on the draft's `/items`) takes `food_id` and `said` back; a row that names its food is
+   priced from it and never re-matched.
+8. **The profile**: `cadence-food-check`, gpt-5.4-mini primary, claude-sonnet-5-5 failover,
+   temperature 0.1 (ruling 1). Created by `scripts/provision-food-check-profile.ts` alone, which
+   proves the primary with a live call after the sync; `sync-jobs.ts` then binds the job to it
+   (the `<CADENCE_FOOD_CHECK_PROFILE_UUID>` token).
+
+What stays as it was: `log_meal` (the coach's one-call write) and the photo door run the old
+pipeline; `acceptMatch` and the research trigger stay behind them and behind the fallback;
+`ai_log` gets a `food_check` row per read (calls, reached, parts, remembered, records, problems).
+
+Decided while building, for the owner to overrule:
+
+- **Question rows are asked as an amount, and carry nothing else.** The card's only question
+  mechanism is the amount chips; her question is shown on the row in her words, the row has no
+  number and no food link, and once an amount is chosen the confirm re-matches the row by name.
+  A question that is not about the amount ("whole or 2%?") still waits on the chips, and the
+  answer the chips give is an amount, not the identity — the model's lean is never logged on the
+  strength of it. Step 4's chips in her voice would replace this.
+- **A merged row is a new reading.** Folding two rows keeps the sum of their nutrients and drops
+  the kept half's food link and words: the server would otherwise re-price the sum from one food
+  alone and lose the other's nutrients. The merged row re-matches by name and teaches nothing.
+- **The confirm trusts a link, not a number.** A row with `food_id` is re-priced from that food;
+  only when the store cannot read the row's portion back does the card's own number stand, and
+  that number came from the same food on the preview.
+- **A renamed row keeps its food.** "Fix the name, keep the numbers" (brief 03) applies to the
+  link too: renaming on the card does not re-match.
+- **FatSecret is always asked on this path** (five rows per part, billed unless already fresh in
+  the ledger). Ruling 6 decides whether that stays.

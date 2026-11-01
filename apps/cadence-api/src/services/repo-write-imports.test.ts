@@ -31,12 +31,13 @@ const WRITE_VERBS = new Set([
   'record', 'mark', 'merge', 'rename', 'restore', 'retire', 'save', 'touch', 'stamp', 'prune',
   'expire', 'claim', 'write', 'supersede', 'settle', 'restart', 'repoint', 'put', 'pause', 'move',
   'duplicate', 'mint', 'heal', 'ensure', 'end', 'dismiss', 'correct', 'commit', 'append', 'resolve',
+  'remember',
 ]); // prettier-ignore
 
 /** Verbs that only read. `collection` and `portion` name pure derivations (a key, a median). */
 const READ_VERBS = new Set([
   'list', 'get', 'find', 'count', 'search', 'sum', 'recent', 'last', 'latest', 'feedback',
-  'portion', 'collection',
+  'portion', 'collection', 'recall',
 ]); // prettier-ignore
 
 /** The leading lower-case word of an exported name; null for a constant like FOLLOW_UP_ID_PREFIX. */

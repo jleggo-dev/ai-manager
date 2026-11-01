@@ -56,6 +56,12 @@ export interface SourceCandidate {
   /** Everything else this row could be stated in, so a different measure is one more call. */
   measures: MeasureOption[];
   /**
+   * How the row is kept: by weight (`g`/`ml`, so per-100 g numbers exist) or per item (a pinned
+   * estimate whose one serving is "1"), where `per.grams` is a count, not a weight. Absent on a
+   * row built before this was recorded; read as by weight.
+   */
+  base_unit?: Food['base_unit'];
+  /**
    * Whether an ABSENT micronutrient means "measured and negligible" or "nobody looked".
    * Undecidable from a value, decidable from provenance — see `completeness.ts`.
    */
@@ -272,6 +278,7 @@ export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMea
     brand: food.brand ?? null,
     per: { measure: measureLabel, grams, nutrients },
     measures: measuresOf(food),
+    base_unit: food.base_unit,
     micros: microProvenance(base),
     completeness: nutritionTier(base),
     notes,
@@ -287,9 +294,12 @@ export function toCandidate(food: FoodLike, source: FoodSourceName, requestedMea
  */
 export function findDisagreements(candidates: SourceCandidate[]): string[] {
   const out: string[] = [];
+  // A row kept per item has no weight to normalise by: its `per.grams` is a count of one, and
+  // "per 100 g" of it would be a hundred servings. It is left out of this compare, not scaled.
   const per100 = candidates
     .map((c) => {
       const kcal = c.per.nutrients.kcal;
+      if (c.base_unit === 'item') return null;
       if (typeof kcal !== 'number' || !c.per.grams || c.per.grams <= 0) return null;
       return { source: c.source, name: c.name, kcal100: (kcal * 100) / c.per.grams };
     })

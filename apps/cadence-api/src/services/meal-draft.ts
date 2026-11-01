@@ -38,6 +38,7 @@ import { isMeal, usageSlot } from './nutrition-parse.ts';
 import { sanitizeMacros } from './nutrition-day.ts';
 import { scaleMacros } from './recipe-macros.ts';
 import { dissolveThinParts, newPartKey } from './meal-parts.ts';
+import { learnVisibleRows } from './food-phrases.ts';
 
 /** How long a meal accepts adds — visible on-surface as "adds until HH:MM", never a silent rule. */
 export const DRAFT_WINDOW_MS = 3 * 60 * 60 * 1000;
@@ -296,6 +297,8 @@ export interface ParsedDraftItem {
   unit?: string;
   est?: object;
   food_id?: string;
+  /** Their words for the row, from a coach-led preview — what the phrase memory learns from. */
+  said?: string;
 }
 
 /**
@@ -305,23 +308,29 @@ export interface ParsedDraftItem {
  */
 export async function appendParsed(userId: string, logId: string, parsed: ParsedDraftItem[]): Promise<NutritionLog> {
   const meal = await requireAddableMeal(userId, logId);
-  const appended: NutritionLog['items'] = parsed
-    .filter((i) => i && typeof i.name === 'string' && i.name.trim())
-    .slice(0, 20)
-    .map((i) => {
-      const est = sanitizeMacros(i.est);
-      const source = (i.est as Macros | undefined)?.source;
-      return {
-        name: i.name.trim(),
-        ...(i.brand?.trim() ? { brand: i.brand.trim() } : {}),
-        ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
-        ...(i.unit?.trim() ? { unit: i.unit.trim() } : {}),
-        ...(est ? { est: { ...est, ...(isMacrosSource(source) ? { source } : {}) } } : {}),
-        ...(i.food_id ? { food_id: i.food_id } : {}),
-      };
-    });
+  const kept = parsed.filter((i) => i && typeof i.name === 'string' && i.name.trim()).slice(0, 20);
+  const appended: NutritionLog['items'] = kept.map((i) => {
+    const est = sanitizeMacros(i.est);
+    const source = (i.est as Macros | undefined)?.source;
+    return {
+      name: i.name.trim(),
+      ...(i.brand?.trim() ? { brand: i.brand.trim() } : {}),
+      ...(typeof i.qty === 'number' && i.qty > 0 ? { qty: i.qty } : {}),
+      ...(i.unit?.trim() ? { unit: i.unit.trim() } : {}),
+      ...(est ? { est: { ...est, ...(isMacrosSource(source) ? { source } : {}) } } : {}),
+      ...(i.food_id ? { food_id: i.food_id } : {}),
+    };
+  });
   const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts);
   await learnPostLogAdds(userId, meal, appended);
+  // Logged, and learned (FOOD-LOGGING-COACH-LED.md): the words a linked row was said in now
+  // price without a call next time — from the rows as written (sanitised, amount kept only when
+  // positive), each paired with the words it arrived with, and only when the food it names is
+  // one this person can see (this add does not price, so nothing else has checked the id).
+  await learnVisibleRows(
+    userId,
+    appended.map((row, i) => ({ ...row, ...(kept[i]?.said ? { said: kept[i]!.said } : {}) })),
+  );
   return row;
 }
 

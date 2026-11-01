@@ -337,3 +337,43 @@ describe('a photographed label outranks a web lookup', () => {
     });
   });
 });
+
+/**
+ * A row kept per item (a pinned estimate: "1 serving = 1") has no weight to normalise by —
+ * "per 100 g" of it is a hundred servings. It is left out of the compare, not scaled into it.
+ */
+describe('findDisagreements — a row kept per item is not compared per 100 g', () => {
+  const pinned = toCandidate(
+    food({
+      food_id: 'p1',
+      name: 'Yogurt parfait',
+      source: 'llm',
+      base_unit: 'item',
+      macros_per_base: { kcal: 250, protein_g: 12, carbs_g: 30, fat_g: 9 },
+      servings: [{ label: '1 serving', unit: 'serving', amount_g: 1 }],
+      default_serving: 0,
+    }),
+    'ledger',
+  );
+  const usda = toCandidate(
+    food({ name: 'Yogurt, Greek, plain', macros_per_base: { kcal: 59, protein_g: 10 } }),
+    'usda',
+  );
+
+  it('reports the row per its own measure, with how it is kept', () => {
+    expect(pinned.base_unit).toBe('item');
+    expect(pinned.per).toMatchObject({ measure: '1 serving', grams: 1, nutrients: { kcal: 250 } });
+  });
+
+  it('raises nothing between the pinned per-item row and a per-100 g record', () => {
+    expect(findDisagreements([pinned, usda]).filter((d) => d.startsWith('Calories differ'))).toEqual([]);
+  });
+
+  it('still raises between two by-weight rows a quarter apart', () => {
+    const fatsecret = toCandidate(
+      food({ food_id: 'f2', name: 'Yogurt, Greek', macros_per_base: { kcal: 97 } }),
+      'fatsecret',
+    );
+    expect(findDisagreements([usda, fatsecret]).some((d) => d.startsWith('Calories differ'))).toBe(true);
+  });
+});
