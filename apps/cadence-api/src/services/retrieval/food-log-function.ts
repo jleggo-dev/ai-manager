@@ -64,7 +64,7 @@ export const PREVIEW_MEAL: RetrievalFunction = {
   name: 'preview_meal',
   mutates: 'none',
   description:
-    'Reads food someone described into an itemised meal WITHOUT logging it — the parse-and-price the Food screen runs before a confirm. Use when unsure the words alone will price cleanly, or to answer a "how many calories" question about food not yet eaten; for the plain case ("had a banana") call log_meal instead, no preview needed. Pass {"text": "two eggs, toast and coffee"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when known — omit and it guesses. Writes nothing; call it as often as you like.',
+    'Reads described food into an itemised meal WITHOUT logging it — the read the Food screen runs before a confirm. Use when unsure the words alone will price cleanly, or to answer a "how many calories" question about food not yet eaten; for the plain case ("had a banana") call log_meal instead. Pass {"text": "two eggs, toast and coffee"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when known — omit and it takes the slot the words name, else other. Writes nothing; call it as often as you like.',
   domains: ['nutrition', 'foods'],
 
   async run(userId, params) {
@@ -101,10 +101,13 @@ export const PREVIEW_MEAL: RetrievalFunction = {
         : '';
 
     // What is true about logging it (since 2026-11-01): log_meal runs this same read and logs the
-    // rows it shows; a row waiting on their answer is handed back, not logged. The Food screen's
-    // confirm logs these rows too.
+    // rows it shows; a row waiting on their answer, or one that could not be counted, is handed
+    // back, not logged — log_meal holds those back itself, so no steer about it belongs here.
     const logging =
-      "Note: log_meal runs this same read and logs what it shows — a row waiting on their answer is handed back, not logged. The Food screen's confirm logs exactly what is shown here.";
+      "Note: log_meal runs this same read and logs what it shows — a row waiting on their answer, or one that could not be counted, is handed back, not logged. The Food screen's confirm logs exactly what is shown here.";
+    // Parts the split did not read, said as facts: a dropped part must never read as a meal that
+    // never had it (tool-response.ts rule 2).
+    const notRead = r.coach?.not_read?.length ? ['Not read:', ...r.coach.not_read.map((l) => `- ${l}`)] : [];
     const waiting = asked.length
       ? [
           'Waiting on their answer:',
@@ -114,14 +117,9 @@ export const PREVIEW_MEAL: RetrievalFunction = {
       : [];
     const tail = fullyPriced
       ? [`Everything here is settled. ${logging}`]
-      : [
-          ...waiting,
-          ...(unpriced.length ? ['Unresolved, by name:', ...unpriced.map(unresolvedLine)] : []),
-          'Do not log_meal this and call it done while items are unresolved — say what is missing, or log once you have enough to price it.',
-          logging,
-        ];
+      : [...waiting, ...(unpriced.length ? ['Unresolved, by name:', ...unpriced.map(unresolvedLine)] : []), logging];
 
-    return [head, reached, ...r.items.map(itemLine), ...tail].filter(Boolean).join('\n');
+    return [head, reached, ...r.items.map(itemLine), ...notRead, ...tail].filter(Boolean).join('\n');
   },
 
   rows(result) {

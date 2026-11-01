@@ -2,11 +2,14 @@ import { isCalendarDate, type MealKind } from '@cadence/shared';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 import { macroLine, rowName, rowWords } from './food-described-render.ts';
 import type { DescribedMealItem } from './food-described-rows.ts';
-import { logDescribedMeal, type DescribedMealLog } from './food-log-described.ts';
+import { DescribedMealRejected, logDescribedMeal, type DescribedMealLog } from './food-log-described.ts';
 import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 const MEAL_KINDS: readonly MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 const isMealKind = (v: unknown): v is MealKind => (MEAL_KINDS as readonly string[]).includes(String(v));
+
+/** A full stop only where the words do not already end one — a question keeps its mark. */
+const sentence = (s: string): string => (/[.!?]$/.test(s) ? s : `${s}.`);
 
 /** An open row, in words: what it waits on, or why it counted nothing. A fragment, not an answer. */
 function openWords(row: DescribedMealItem): string {
@@ -38,30 +41,30 @@ const NOT_REACHED =
 
 /** The three shapes, from what the read and the write actually did. */
 function answer(out: DescribedMealLog, text: string): string {
-  const { preview, logged, open, row } = out;
+  const { preview, open, row, written } = out;
+  // Parts the split did not read are facts about this call, whatever else it did.
+  const notRead = preview.coach.not_read.map(sentence);
   if (!preview.items.length) {
     return toolNothingChangedText(`nothing readable as food in "${text}", so nothing was logged.`, [
       'Ask what they actually had, or the amount, before logging anything.',
     ]);
   }
   if (!row) {
-    return toolNothingChangedText(`nothing was logged — ${open.map(openWords).join('; ')}.`, openNext(open, false));
+    return toolNothingChangedText(sentence(`nothing was logged — ${open.map(openWords).join('; ')}`), [
+      ...notRead,
+      ...openNext(open, false),
+    ]);
   }
 
   const where = `${row.date} (${row.meal})`;
-  // The stored rows are the truth about what landed, read back from the write; the read's own
-  // notes (where a number came from, what was assumed) ride beside them by position — the
-  // confirm keeps order and drops none, so a count mismatch falls back to the read's rows.
-  const stored = row.items.length === logged.length ? row.items : logged;
-  const rows = logged.map((r, i) => ({ ...r, ...stored[i] }));
-  const unchanged = open.map((r) => `${openWords(r)} — not logged.`);
+  const unchanged = [...open.map((r) => `${openWords(r)} — not logged.`), ...notRead];
   const after = [...openNext(open, true), ...(preview.coach.reached ? [] : [NOT_REACHED])];
 
   if (row.provisional) {
     const kcal = typeof row.macros?.kcal === 'number' ? `${Math.round(row.macros.kcal)} kcal` : null;
     return toolChangeText({
       changed: [
-        `Logged, but PROVISIONAL: "${rows.map(rowName).join(', ') || text}" is on their file for ${where}, but ` +
+        `Logged, but PROVISIONAL: "${written.map(rowName).join(', ') || text}" is on their file for ${where}, but ` +
           `${kcal ? `only part of it priced so far (${kcal})` : 'nothing priced yet'} — it will not count toward ` +
           "today's totals until it is settled.",
       ],
@@ -73,8 +76,8 @@ function answer(out: DescribedMealLog, text: string): string {
     });
   }
 
-  const lines = rows.map((r) => `Logged for ${where}: ${rowWords(r)}.`);
-  const total = rows.length > 1 ? [`The meal's total is ${macroLine(row.macros)}.`] : [];
+  const lines = written.map((r) => `Logged for ${where}: ${rowWords(r)}.`);
+  const total = written.length > 1 ? [`The meal's total is ${macroLine(row.macros)}.`] : [];
   return toolChangeText({ changed: [lines[0]!, ...lines.slice(1), ...total], unchanged, next: after });
 }
 
@@ -107,7 +110,7 @@ export const LOG_MEAL: CoachActionTool = defineAction({
   name: 'log_meal',
   mutates: 'immediate',
   description:
-    'Log a meal as the person described eating it — pass their own words and it reads them as preview_meal does (a record picked per part, priced from saved foods and the shared database) and writes one row. {gate}. Use it once they have eaten or drunk something — never for something they are only considering, asking the calories of, or might cook later. A part needing an answer first (which milk, what size) is not logged: its question comes back — ask, then call again with that part and the answer. Pass {"text": "a protein shake and a banana"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when said or clear from the time of day, omit and it is filed under other; add {"date": "2026-08-27"} only when it was not today — "forgot to log lunch" still means today.',
+    'Log a meal as the person described eating it — pass their own words; it reads them as preview_meal does (a record picked per part, priced from saved foods and the shared database) and writes one row. {gate}. Use it once they have eaten or drunk something — never for food they are only considering, asking the calories of, or might cook later. A part needing an answer first (which milk, what size) is not logged: its question comes back — ask, then call again with that part and the answer. Pass {"text": "a protein shake and a banana"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when known — omit and it takes the slot the words name ("for lunch"), else other; add {"date": "2026-08-27"} only when it was not today — "forgot to log lunch" still means today.',
   parameters: {
     properties: {
       text: {
@@ -117,7 +120,8 @@ export const LOG_MEAL: CoachActionTool = defineAction({
       meal: {
         type: 'string',
         enum: [...MEAL_KINDS],
-        description: 'Which meal, when they said or clearly implied one. Omit and it is filed under other.',
+        description:
+          'Which meal, when they said or clearly implied one. Omit and it takes the slot the words name ("for lunch"), else other.',
       },
       date: {
         type: 'string',
@@ -138,8 +142,11 @@ export const LOG_MEAL: CoachActionTool = defineAction({
       out = await logDescribedMeal(userId, { text, meal, date });
     } catch (e) {
       console.error('[log_meal] logDescribedMeal failed:', e);
+      // A row past the card's caps is said with its rule, so she can fix the words; anything else
+      // is a fault with nothing claimed either way.
+      const why = e instanceof DescribedMealRejected ? ` (${e.message})` : '';
       return toolActionFaultText(
-        'That could not be logged',
+        `That could not be logged${why}`,
         'tell them plainly and offer to try again, or point them at the Food screen.',
       );
     }

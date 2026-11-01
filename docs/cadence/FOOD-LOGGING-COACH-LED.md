@@ -552,28 +552,51 @@ and the meal screen's doors, and logs through the same confirm path the card use
    — exactly as `preview_meal` does. The two tools can no longer price the same words differently
    (the Venti latte logged as Matcha, #426, was `log_meal` on the old waterfall beside a preview on
    the new read). `preview_meal` now says so: "log_meal runs this same read and logs what it shows".
-2. **The card's confirm path writes it.** The settled rows go to `logMeal({ parsed })` in the
-   card's wire shape (name, brand, amount, numbers, `food_id`, `said` — none of what the read noted
-   for the card): a row that names its food is priced from that food and never re-matched
-   (`food-pricing.ts`), and only a confirmed pick teaches the phrase memory (`confirmedPickRows`).
-   So "Starbucks venti latte" logs Caffè Latte (Venti), 250 kcal, the phrase is learned, and the
-   next `log_meal` of the same words prices from the memory with no lookup and no call. The total
-   handed over is the total of what is logged, not of the card.
+   **The slot** is the caller's `meal`, else the slot the words name explicitly ("two eggs and
+   toast for breakfast", "a salad at lunch", "Dinner: chicken" — `mealSlotInWords` in
+   `@cadence/shared`, one regex with its table of positives and near-misses: "a breakfast bar",
+   "lunchbox", "with dinner rolls", "brunch" name no slot), else `other`. The same rule on the
+   reached path and the fallback, which is handed that slot as its hint and never contributes
+   `parse-meal`'s own guess — so the same words land in the same slot whatever the provider's
+   health, and the right occurrence (Breakfast, not the generic "Food log") is ticked. The phrase
+   that named the slot is not food: it comes out of the words before the split (`readMealSlot`),
+   so the lookups are for "a banana", not "a banana for breakfast", and the phrase memory keys on
+   the same words however the slot was said; `raw_text` keeps what the person said in full.
+2. **The card's confirm path writes it, after the card's own checks.** The settled rows go to
+   `logMeal({ parsed })` in the card's wire shape (name, brand, amount, numbers, `food_id`, `said`
+   — none of what the read noted for the card), through the SAME validator the route runs
+   (`parsedMealSchema`, exported from `validation/body.ts`: at most 12 rows, a name of 80, their
+   words cut at 200, an amount at most 10,000); a row that fails it is a fault that names the row
+   and the rule ("items.0.qty: … 10000"), never a write. A row that names its food is priced from
+   that food and never re-matched (`food-pricing.ts`), and only a confirmed pick teaches the phrase
+   memory (`confirmedPickRows`). So "Starbucks venti latte" logs Caffè Latte (Venti), 250 kcal,
+   the phrase is learned, and the next `log_meal` of the same words prices from the memory with no
+   lookup and no call. The total handed over is the total of what is logged, not of the card.
 3. **An open row is not logged, and comes back as a fact.** A row with a question ("whole or
    2%?") and a row she could not count (no record fits, no estimate given) are handed back — the
-   words and the question, or the words and why — never logged, never the pick she leaned towards.
+   row's name and the question, or the name and why — never logged, never the pick she leaned
+   towards. (A question row's name is the model's plain name for the part when it gave one, else
+   the person's words with the amount stripped — `rowsFromOutcome`; it carries no `said`.)
    On its own: `nothing changed: nothing was logged — "milk" waits on their answer: Whole milk or
    2%?`. Beside settled rows: those are logged (`changed:` lines), and the open row is an
    `unchanged:` line, with "the rest of the meal is already on their file" — a person who said
    "milk and a banana" has eaten the banana whatever the milk turns out to be. She asks in
    conversation and calls `log_meal` again with that part's words plus the answer, which lands as
    its own row at the same slot. Never a tentative pick (the "one cup of protein" lesson, kept).
-4. **The answer says where every number came from.** One `changed:` line per logged row in the
-   same grammar `preview_meal` uses (`food-described-render.ts`: amount, name, numbers, then the
-   basis — "a record the coach picked; from USDA", "the coach's own estimate", "what they picked
-   last time" — the assumption, and why a row counted nothing), a total line when more than one
-   row logged, and the `changed:` / `nothing changed:` / fault contract throughout
-   (`coach-action-contract.test.ts`).
+4. **The answer says where every number came from, as the confirm left it.** One `changed:`
+   line per logged row in the same grammar `preview_meal` uses (`food-described-render.ts`:
+   amount, name, numbers, then the basis said once, in the third person — "a record the coach
+   picked, priced from USDA" / "from their saved food", "what they picked before, priced from that
+   food", "the coach's own estimate", "an automatic estimate, the coach not reached" — the
+   assumption, and why a row counted nothing; never the card's "your saved food"), a total line
+   when more than one row logged, and the `changed:` / `nothing changed:` / fault contract
+   throughout (`coach-action-contract.test.ts`). The rows are read back from the write: an
+   estimate or fallback row the read left unlinked that the confirm then matched by name and
+   priced from a food is told as "priced from a food the store matched by name (Yogurt parfait),
+   not the coach's estimate" — the store's number, not hers. **Parts the split did not read** are
+   said too: past the cap of 10 ("\"berries\" not read — the read takes at most 10 parts") or said
+   twice ("\"latte\" said twice, read once"), as `unchanged:` lines here, as `Not read:` lines on
+   `preview_meal`, and on the wire as `coach.not_read` for the card.
 5. **When she cannot be reached**, the fallback's rows log as before — every row "an automatic
    estimate, the coach not reached" — and the answer says the food-check model could not be
    reached. A fallback the confirm marks provisional is told as unsettled, as before. A read that
@@ -589,10 +612,15 @@ and the meal screen's doors, and logs through the same confirm path the card use
 
 Tests: `coach-action-log-meal.test.ts` runs the action through the `DescribedMealDeps` seam with
 the write faked at the service boundary — a picked row logs and `confirmedPickRows` keeps it, a
-remembered phrase makes no call, an estimate logs labelled and teaches nothing, a question row
-logs nothing and comes back, a settled row beside it is logged, an uncountable part comes back
-with why, the fallback logs labelled and says so, faults are faults, bad calls never reach the
-read.
+pre-seeded memory makes no call, a remembered row beside a model row (one call, order kept, the
+duplicate dropped), an estimate logs labelled and teaches nothing, an estimate the confirm matched
+by name is told as that, an estimate with a problem is logged, a question row logs nothing and
+comes back, a settled row beside it is logged, an uncountable part comes back with why, the slot
+rule on both paths, an eleventh part and a repeated part are said, words cut at 200 and an amount
+over the cap a fault, the fallback logs labelled and says so (and PROVISIONAL with no numbers),
+faults are faults, bad calls never reach the read. `food-described-render.test.ts` pins one line
+per basis exactly; `meal-slot-words.test.ts` (shared) is the slot regex's table; the split's
+report is in `food-candidate-book.test.ts`.
 
 What stays as it was after step 3: the photo door (`parse-meal-description` prices the reading;
 its own session, in flight); `acceptMatch` and the research trigger behind the fallback and the
@@ -607,12 +635,14 @@ Decided while building, for the owner to overrule:
   on the file at once and the answered part follows as its own row at the same slot. The day
   then shows two rows under one slot for that meal, which the Food screen already handles for
   any two quick-adds.
-- **A meal with no slot named is filed under "other".** The old path let `parse-meal` guess the
-  slot from the words alone; the coach-led read takes the slot as an input and no step guesses
-  one. The tool's description tells her to pass the meal when it was said or is clear from the
-  time of day. A time-of-day default would need the person's timezone and a new rule with its own
-  table test — not built until asked for.
+- **A meal whose words name no slot is filed under "other".** The old path let `parse-meal`
+  guess the slot from the words alone; the coach-led read takes the slot as an input, and the
+  only guess made now is the explicit one (`mealSlotInWords`: a preposition or a leading "Slot:"
+  in front of the slot word). The tool's description tells her to pass the meal when known. A
+  time-of-day default would need the person's timezone and a new rule with its own table test —
+  not built until asked for.
 - **`log_meal`'s description changed** (the always-on list): it now says the read is the one
   `preview_meal` runs, that a part needing an answer is not logged and its question comes back,
-  and that an unnamed meal is filed under "other". 798 characters, inside the 800-character action
-  bound. `eval:tools` is the owner's call.
+  and that an unnamed meal takes the slot the words name, else "other". 797 characters, inside
+  the 800-character action bound. `eval:tools` is the owner's call. `preview_meal`'s description
+  and its `meal` parameter say the same slot rule (513 of 520).

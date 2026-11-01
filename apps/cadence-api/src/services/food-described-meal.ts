@@ -21,15 +21,23 @@
  * (`parse-meal` + code-picked match) prices the meal instead, every row labelled as an automatic
  * estimate and the card told, so a meal never vanishes because a model did.
  *
+ * The slot is the caller's hint, else the one the words name ("for breakfast", `readMealSlot` in
+ * @cadence/shared), else `other` — the same rule on the reached path and the fallback, which is
+ * given that slot as its hint and never contributes `parse-meal`'s own guess. The phrase that
+ * named the slot is not food and is taken out of the words before the split, so the lookups are
+ * for "a banana", not "a banana for breakfast". Parts the split did not read (past the cap, or
+ * said twice) ride on the preview as `coach.not_read`, so neither the card nor the coach reads a
+ * dropped part as a meal that never had it.
+ *
  * Nothing here writes: a preview walked away from leaves no food and no memory behind. The
  * confirm (nutrition.ts, meal-draft.ts) re-prices linked rows from their food and teaches the
  * phrase memory.
  */
-import type { MealKind } from '@cadence/shared';
+import { readMealSlot, type MealKind } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getFoodsByIds } from '../repos/foods.ts';
 import { logAi } from './ai-log.ts';
-import { CandidateBook, addLookups, partsToLookups, type MealPartLookup } from './food-candidate-book.ts';
+import { CandidateBook, addLookups, describedParts, type MealPartLookup } from './food-candidate-book.ts';
 import { wideLookup } from './food-candidate-sources.ts';
 import { FOOD_CHECK_JOB, foodCheckRounds, type FoodCheckOutcome } from './food-check.ts';
 import {
@@ -55,6 +63,8 @@ export interface DescribedMealPreview extends Omit<ParsedMealResult, 'items'> {
     calls: number;
     /** What actually ran, one line per part — the trace the card shows, never canned copy. */
     checked: string[];
+    /** Parts the split did not read — past the cap, or said more than once — one line each. */
+    not_read: string[];
   };
 }
 
@@ -134,9 +144,11 @@ export async function previewDescribedMeal(
 ): Promise<DescribedMealPreview> {
   const trimmed = text.trim().slice(0, 500);
   if (!trimmed) throw new Error('a meal needs words');
-  const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : 'other';
+  const named = readMealSlot(trimmed);
+  const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : (named.slot ?? 'other');
   const started = Date.now();
-  const lookups = partsToLookups(trimmed);
+  // The slot phrase is not food: the parts are split from the words without it.
+  const { lookups, not_read } = describedParts(named.rest);
 
   const remembered = await rememberedRows(lookups, userId, deps);
   const pending = lookups.filter((_, i) => !remembered.has(i));
@@ -172,6 +184,7 @@ export async function previewDescribedMeal(
         calls,
         parts: lookups.length,
         remembered: remembered.size,
+        not_read: not_read.length,
         records: book.entries.size,
         problems: outcome ? [...outcome.problems.values()] : [],
         bases: items.map((i) => i.basis),
@@ -182,7 +195,9 @@ export async function previewDescribedMeal(
 
   if (pending.length && (!outcome || failure)) {
     console.warn('[food-described-meal] the coach could not be reached — pricing by the old waterfall:', failure);
-    const fb = await deps.fallback(pendingWords, mealHint);
+    // The slot is already decided (hint, the words, else other): the fallback is told it, so
+    // parse-meal's own guess never files the meal somewhere the reached path would not.
+    const fb = await deps.fallback(pendingWords, meal);
     const items: DescribedMealItem[] = [
       ...remembered.values(),
       ...fb.items.map((i) => ({ ...i, basis: 'fallback' as const, source_label: 'an automatic estimate' })),
@@ -190,13 +205,12 @@ export async function previewDescribedMeal(
     log(false, items);
     return {
       ...base,
-      meal: fb.meal,
       flags: { ...base.flags, ...fb.flags },
       confidence: fb.confidence,
       items,
       macros: describedTotals(items),
       // The card's notice says she could not be reached; the trace does not say it twice.
-      coach: { reached: false, calls, checked },
+      coach: { reached: false, calls, checked, not_read },
     };
   }
 
@@ -207,5 +221,5 @@ export async function previewDescribedMeal(
   );
   const items = [...remembered.values(), ...hers];
   log(true, items);
-  return { ...base, items, macros: describedTotals(items), coach: { reached: true, calls, checked } };
+  return { ...base, items, macros: describedTotals(items), coach: { reached: true, calls, checked, not_read } };
 }

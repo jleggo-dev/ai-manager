@@ -77,7 +77,9 @@ describe('preview_meal.render', () => {
     expect(out).toContain('Everything here is settled');
     // What is true since FOOD-LOGGING-COACH-LED step 3: log_meal runs this same read and logs it.
     expect(out).toContain('log_meal runs this same read and logs what it shows');
-    expect(out).toContain('a row waiting on their answer is handed back, not logged');
+    expect(out).toContain(
+      'a row waiting on their answer, or one that could not be counted, is handed back, not logged',
+    );
     expect(out).not.toContain('does not run this read');
     expect(out).not.toContain('older automatic match');
     expect(out).not.toContain('Unresolved');
@@ -97,7 +99,7 @@ describe('preview_meal.render', () => {
     expect(out).toContain('Partly priced (breakfast): 1/2 items have numbers, 1 waiting on their answer');
     expect(out).toContain('- milk: not priced yet (not counted; waiting on their answer: Whole milk or 2%?)');
     expect(out).toContain('Waiting on their answer:\n- milk: Whole milk or 2%?');
-    expect(out).toContain('- 1 medium banana: 105 kcal (a record the coach picked; from USDA)');
+    expect(out).toContain('- 1 medium banana: 105 kcal (a record the coach picked, priced from USDA)');
     expect(out).not.toContain('Fully priced');
     expect(out).not.toContain('Unresolved');
   });
@@ -120,8 +122,8 @@ describe('preview_meal.render', () => {
       ],
       coach: { reached: true, calls: 1, checked: [] },
     } as never);
-    expect(out).toContain("- 1 serving yogurt parfait: 380 kcal (the coach's own estimate; from the coach's estimate)");
-    expect(out).toContain('- 1 medium banana: 105 kcal (a record the coach picked; from USDA)');
+    expect(out).toContain("- 1 serving yogurt parfait: 380 kcal (the coach's own estimate)");
+    expect(out).toContain('- 1 medium banana: 105 kcal (a record the coach picked, priced from USDA)');
     expect(out).toContain('Fully priced (snack)');
   });
 
@@ -148,7 +150,20 @@ describe('preview_meal.render', () => {
     expect(out).toContain('research_food');
     expect(out).toContain('"name": "dried mushrooms"');
     expect(out).toContain('"brand": "the wild mushroom co"');
-    expect(out).toContain('Do not log_meal this and call it done');
+    // log_meal holds open rows back itself (step 3): no steer about it here.
+    expect(out).not.toContain('Do not log_meal this');
+    expect(out).toContain('log_meal runs this same read');
+  });
+
+  it('says which parts were not read, as facts beside the rows', () => {
+    const out = PREVIEW_MEAL.render({
+      meal: 'lunch',
+      raw_text: 'a latte, a latte',
+      macros: { kcal: 190 },
+      items: [{ name: 'latte', qty: 1, unit: 'serving', est: { kcal: 190 }, basis: 'estimate' }],
+      coach: { reached: true, calls: 1, checked: [], not_read: ['"latte" said twice, read once'] },
+    } as never);
+    expect(out).toContain('Not read:\n- "latte" said twice, read once');
   });
 
   it('points an unresolved item with no brand at the Food screen rather than research_food', () => {

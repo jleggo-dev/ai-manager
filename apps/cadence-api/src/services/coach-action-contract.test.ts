@@ -193,7 +193,7 @@ const describedBanana = () => ({
       qty: 1,
       unit: 'medium',
       est: { kcal: 105, source: 'ledger' },
-      food_id: 'f-banana',
+      food_id: '00000000-0000-4000-a000-0000000000a1',
       said: 'a banana',
       basis: 'record',
       source_label: 'USDA',
@@ -203,7 +203,7 @@ const describedBanana = () => ({
   confidence: null,
   flags: {},
   raw_text: 'a banana',
-  coach: { reached: true, calls: 1, checked: [] },
+  coach: { reached: true, calls: 1, checked: [], not_read: [] },
 });
 
 /** Bad or empty input changes nothing — every action gets this row. */
@@ -364,7 +364,15 @@ beforeEach(() => {
   fake.logMeal.mockResolvedValue({
     date: '2026-10-31',
     meal: 'snack',
-    items: [{ name: 'Banana, raw', qty: 1, unit: 'medium', est: { kcal: 105 }, food_id: 'f-banana' }],
+    items: [
+      {
+        name: 'Banana, raw',
+        qty: 1,
+        unit: 'medium',
+        est: { kcal: 105 },
+        food_id: '00000000-0000-4000-a000-0000000000a1',
+      },
+    ],
     macros: { kcal: 105 },
     provisional: false,
   });

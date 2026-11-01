@@ -15,6 +15,7 @@ import {
   BOOK_BUDGET_CHARS,
   CandidateBook,
   MAX_PARTS,
+  describedParts,
   SHOW_PER_LOOKUP,
   addLookups,
   checkPick,
@@ -105,6 +106,37 @@ describe('stripAmount — the amount comes off, the food stays', () => {
 
   it('never strips a part down to nothing', () => {
     expect(stripAmount('2 large')).toEqual({ q: '2 large', measure: null });
+  });
+});
+
+describe('describedParts — what the split left out is said, never dropped in silence', () => {
+  it('reads at most MAX_PARTS and names each part past the cap, with the rule', () => {
+    const words = Array.from({ length: 12 }, (_, i) => `food${i + 1}`).join(', ');
+    const { lookups, not_read } = describedParts(words);
+    expect(lookups).toHaveLength(MAX_PARTS);
+    expect(lookups.map((l) => l.q)).toEqual(Array.from({ length: MAX_PARTS }, (_, i) => `food${i + 1}`));
+    expect(not_read).toEqual([
+      '"food11" not read — the read takes at most 10 parts',
+      '"food12" not read — the read takes at most 10 parts',
+    ]);
+  });
+
+  it('a part said twice is looked up once, and the line says so', () => {
+    const { lookups, not_read } = describedParts('a latte, a latte');
+    expect(lookups).toHaveLength(1);
+    expect(not_read).toEqual(['"latte" said twice, read once']);
+  });
+
+  it('the same food under two amounts is one lookup too — the amount is not the part', () => {
+    const { lookups, not_read } = describedParts('2 eggs, 3 eggs, 2 eggs');
+    expect(lookups).toHaveLength(1);
+    expect(lookups[0]).toMatchObject({ said: '2 eggs', q: 'eggs', measure: '2' });
+    expect(not_read).toEqual(['"eggs" said 3 times, read once']);
+  });
+
+  it('near-miss: distinct parts within the cap leave nothing out', () => {
+    expect(describedParts('milk and a banana').not_read).toEqual([]);
+    expect(describedParts('a sandwich').not_read).toEqual([]);
   });
 });
 
