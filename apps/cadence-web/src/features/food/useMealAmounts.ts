@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import type { DescribedBasis } from '@cadence/shared';
 import type { MealKind, MealMacros, MealPreview } from '../../lib/api.ts';
 import { amountSource, scaleMacros, type AmountSource } from './amounts.ts';
-import { reReadAnswer } from './reReadAnswer.ts';
+import { REASKS_MAX, reReadAnswer, type AnswerResult } from './reReadAnswer.ts';
 
 /** One row of the confirm card: the parsed item, where its amount came from, and where it is now. */
 export interface AmountRow {
@@ -27,6 +28,8 @@ export interface AmountRow {
   choices?: string[];
   /** With a question: their words for the part, amount included — what the answer is re-read with. */
   asked_about?: string;
+  /** How many times an answer brought this row back as a question (MealAskedRow stops at REASKS_MAX). */
+  reasks?: number;
   /**
    * Set once the person answers a question row's amount on the card. Until then the row counts
    * nothing (the quick-log sheet's rule, which has no chips to answer with); after it, what the
@@ -35,6 +38,8 @@ export interface AmountRow {
    * question (answerRow).
    */
   answered?: boolean;
+  /** Where the number came from (DESCRIBED_BASES); `fallback` is drawn on the row as an automatic estimate. */
+  basis?: DescribedBasis;
   source_label?: string;
 }
 
@@ -56,6 +61,7 @@ function rowFromItem(it: MealPreview['items'][number], rawText: string): AmountR
     ...(it.question ? { question: it.question } : {}),
     ...(it.choices?.length ? { choices: it.choices } : {}),
     ...(it.asked_about ? { asked_about: it.asked_about } : {}),
+    ...(it.basis ? { basis: it.basis } : {}),
     ...(it.source_label ? { source_label: it.source_label } : {}),
   };
 }
@@ -107,6 +113,14 @@ function sum(rows: AmountRow[]): MealMacros {
   return total;
 }
 
+type Flags = MealPreview['flags'];
+/** The answer's flags join the card's: "a drink" answered "gin and tonic" logs with the alcohol flag. */
+const mergeFlags = (a: Flags, b: Flags | undefined): Flags => ({
+  ...a,
+  ...(b?.alcohol ? { alcohol: true } : {}),
+  ...(b?.caffeine ? { caffeine: true } : {}),
+});
+
 /**
  * The confirm card's amount state (design 05c). Every item arrives either with an amount — kept,
  * never re-asked — or without one, and the ones without are the only questions the card asks.
@@ -115,6 +129,14 @@ function sum(rows: AmountRow[]): MealMacros {
  */
 export function useMealAmounts(preview: MealPreview) {
   const [rows, setRows] = useState<AmountRow[]>(() => preview.items.map((it) => rowFromItem(it, preview.raw_text)));
+  // The rows as last rendered, for an answer that lands after other rows have moved (answerRow).
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const [flags, setFlags] = useState<Flags>(preview.flags);
+  /** Re-reads in flight: while one runs, the other rows' controls wait, so no answer lands on a moved row. */
+  const [answering, setAnswering] = useState(0);
+  /** Set when an answer's re-read fell back to the automatic estimate: the card says so. */
+  const [answerNotReached, setAnswerNotReached] = useState(false);
 
   /** An amount given on the card; on a question row it is the answer, so the row counts from here. */
   const setQty = (i: number, qty: number | null, unit?: string) =>
@@ -194,29 +216,51 @@ export function useMealAmounts(preview: MealPreview) {
   /**
    * Her question answered — a tapped choice or a typed line (MealQuestionChoices). The part is
    * re-read with the answer as one text through the same read (reReadAnswer.ts), and the row(s)
-   * that come back take the asked row's place: priced, linked, with their words, so the confirm
-   * carries them like any picked row and the memory learns. False when the re-read failed or
-   * came back empty — the row then stays as it was, buttons and all.
+   * that come back take the asked row's place — found by the row itself, never by its index, so
+   * a row removed or an answer landing above it meanwhile cannot put the milk where the eggs were.
+   * Priced, linked, with their words, so the confirm carries them like any picked row and the
+   * memory learns; a question again counts the re-ask, so the row can stop asking. Says what
+   * happened: `replaced`, `rejected` (different words are needed) or `failed` (another go).
    */
-  const answerRow = async (i: number, answer: string, chosen: boolean, meal?: MealKind): Promise<boolean> => {
-    const row = rows[i];
-    if (!row) return false;
-    const p = await reReadAnswer(row, answer, chosen, meal);
-    if (!p) return false;
-    const fresh = p.items.map((it) => rowFromItem(it, p.raw_text));
-    setRows((prev) => prev.flatMap((r, j) => (j === i ? fresh : [r])));
-    return true;
+  const answerRow = async (i: number, answer: string, chosen: boolean, meal?: MealKind): Promise<AnswerResult> => {
+    const row = rowsRef.current[i];
+    if (!row) return 'failed';
+    setAnswering((n) => n + 1);
+    try {
+      const out = await reReadAnswer(row, answer, chosen, meal);
+      if (!out.ok) return out.reason;
+      const p = out.preview;
+      const fresh = p.items.map((it) => {
+        const r = rowFromItem(it, p.raw_text);
+        return r.question ? { ...r, reasks: (row.reasks ?? 0) + 1 } : r;
+      });
+      // The row went away while the re-read ran (removed, merged): nothing to put the answer on.
+      if (!rowsRef.current.includes(row)) return 'failed';
+      setRows((prev) => {
+        const at = prev.indexOf(row);
+        return at < 0 ? prev : [...prev.slice(0, at), ...fresh, ...prev.slice(at + 1)];
+      });
+      setFlags((f) => mergeFlags(f, p.flags));
+      if (p.coach?.reached === false) setAnswerNotReached(true);
+      return 'replaced';
+    } finally {
+      setAnswering((n) => n - 1);
+    }
   };
 
   const open = rows.filter((r) => r.source === 'asked' && r.qty == null);
   const asked = open.length;
-  /** Of the open rows, how many wait on her question with answers to tap rather than on an amount. */
-  const askedChoices = open.filter((r) => !!r.choices?.length).length;
+  /**
+   * Of the open rows, how many wait on her question with answers to tap rather than on an amount.
+   * A row past the re-ask cap asks an amount now (MealAskedRow), so it counts as an amount.
+   */
+  const askedChoices = open.filter((r) => !!r.choices?.length && (r.reasks ?? 0) < REASKS_MAX).length;
   const total = useMemo(() => sum(rows), [rows]);
 
   /** The card's own contents, in the shape the log endpoint takes back verbatim. */
   const toPreview = (): MealPreview => ({
     ...preview,
+    flags,
     items: rows.map((r) => ({
       name: r.name,
       // Carried back deliberately: the server re-prices the confirm, and a vendor dropped here is
@@ -233,5 +277,20 @@ export function useMealAmounts(preview: MealPreview) {
     macros: total,
   });
 
-  return { rows, setQty, setBrand, removeRow, renameRow, mergeRow, answerRow, asked, askedChoices, total, toPreview };
+  return {
+    rows,
+    setQty,
+    setBrand,
+    removeRow,
+    renameRow,
+    mergeRow,
+    answerRow,
+    answering: answering > 0,
+    answerNotReached,
+    flags,
+    asked,
+    askedChoices,
+    total,
+    toPreview,
+  };
 }

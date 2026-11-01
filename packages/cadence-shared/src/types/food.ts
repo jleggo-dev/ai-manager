@@ -56,6 +56,13 @@ export type DescribedBasis = (typeof DESCRIBED_BASES)[number];
 export const QUESTION_CHOICES_MAX = 4;
 /** One answer's length, in characters: a button's worth of words. */
 export const QUESTION_CHOICE_MAX_CHARS = 40;
+/**
+ * The caps on answering a question row (POST /nutrition/meals/preview/answer): a typed answer's
+ * length, and the length of the words it answers (a row's `said` bound, validation/body.ts). The
+ * server refuses more; the card's field stops at the same number, so nothing typed is refused.
+ */
+export const ANSWER_MAX_CHARS = 120;
+export const ASKED_ABOUT_MAX_CHARS = 200;
 
 /** True when a value off the wire names a real food source. */
 export function isFoodSource(value: unknown): value is FoodSource {

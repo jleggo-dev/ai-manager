@@ -5,7 +5,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { DESCRIPTION_MAX, MAX_ATTACHMENTS_PER_MESSAGE, type RepertoireStatus } from '@cadence/shared';
+import {
+  ANSWER_MAX_CHARS,
+  ASKED_ABOUT_MAX_CHARS,
+  DESCRIPTION_MAX,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  type RepertoireStatus,
+} from '@cadence/shared';
 import { calendarDate } from './calendar-date.ts';
 
 export class BodyValidationError extends Error {
@@ -97,8 +103,8 @@ export const previewMealBodySchema = z.object({
  * was one of the offered choices, and the slot the card is logging to.
  */
 export const previewMealAnswerBodySchema = z.object({
-  asked_about: z.string().trim().min(1).max(200),
-  answer: z.string().trim().min(1).max(120),
+  asked_about: z.string().trim().min(1).max(ASKED_ABOUT_MAX_CHARS),
+  answer: z.string().trim().min(1).max(ANSWER_MAX_CHARS),
   chosen: z.boolean().optional(),
   meal: mealKindSchema.optional(),
 });

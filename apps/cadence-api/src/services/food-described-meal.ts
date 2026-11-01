@@ -176,8 +176,8 @@ export interface PartsToRead {
   /** One lookup per part, in their order. */
   lookups: MealPartLookup[];
   not_read: string[];
-  /** Set when the read is the answer to a question row (food-described-answer.ts), for the log. */
-  answered?: { asked_about: string; answer: string };
+  /** Set when the read is the answer to a question row (food-described-answer.ts), for the log: the words asked about, the answer, and the merged words the read ran on. */
+  answered?: { asked_about: string; answer: string; words: string; chosen: boolean };
   /** What the photo reader could and could not tell, for the food-check's `notes`; empty for words and for an answer. */
   notes?: string;
 }
@@ -264,7 +264,10 @@ export async function readParts(
 
   // A row the model wrote for a remembered part anyway (the words are hers to read, the memory's
   // row is already on the card) is dropped by its phrase key, so no part appears twice.
-  const hers = (outcome ? await rowsFromOutcome(outcome, book, userId, deps) : []).filter(
+  // The items pair with the pending parts by position when the model answered one per part; a
+  // question row then carries the person's words for its part, not the model's echo.
+  const saidByIndex = outcome && outcome.items.length === pending.length ? pending.map((p) => p.said) : undefined;
+  const hers = (outcome ? await rowsFromOutcome(outcome, book, userId, deps, saidByIndex) : []).filter(
     (r) => !r.said || !rememberedKeys.has(phraseKey(r.said)),
   );
   const items = [...remembered.values(), ...hers];

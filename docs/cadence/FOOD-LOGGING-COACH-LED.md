@@ -799,14 +799,13 @@ Step 5 of "How a described meal works" called this "her question, if any, as chi
    `said` depends on how it was answered (next item). The `ai_log` `food_check` row notes
    `answered: { asked_about, answer }`. The reply is a preview holding the row(s) for that part
    alone — usually one, priced; a question row again when the model still cannot tell.
-4. **What the memory learns from an answered row.** A CHOSEN answer (a button) keeps `said` as the
-   words the question was about ("milk"), so the confirm teaches "milk" → the record they chose
-   and the next "milk" is a memory hit with no question — the brand promise, never make them
-   repeat themselves; the row can still be changed on the card, and a later confirm with another
-   food replaces the memory (upsert by phrase). A TYPED answer keeps the combined words
-   ("lactose-free milk") as `said`: free text can name a different food altogether, and "milk"
-   must not learn to mean it. Words the memory already holds under the combined phrase ("whole
-   milk" confirmed last week) are a hit on the answered path with no call.
+4. **What the memory learns from an answered row — the combined words, never the bare ones**
+   (owner's ruling, 2026-11-02: "No, ask each time."). Tapped or typed, the priced row's `said` is
+   the words the read ran on ("whole milk", "lactose-free milk"), so the confirm teaches "whole
+   milk" → the record and the next "whole milk" is a hit with no call, while the next "milk" is
+   asked again. `chosen` rides to the `ai_log` row only, to tell taps from typing. Words the
+   memory already holds under the combined phrase ("whole milk" confirmed last week) are a hit
+   on the answered path with no call.
 5. **The card.** One component for every door, `MealQuestionChoices` (one button per choice in her
    words, "Something else" opening a one-line field with "That's it"), inside `MealAskedRow` on the
    confirm card (`MealParseCard` → the chat door, and the photo door through the same card) and
@@ -825,17 +824,80 @@ Step 5 of "How a described meal works" called this "her question, if any, as chi
 
 Decided while building, for the owner to overrule:
 
-- **A chosen answer teaches the memory the ORIGINAL words.** "milk" → whole milk, so the next
-  "milk" is a deterministic hit (the done-criterion of this build). The alternative — teach "whole
-  milk" only — keeps "milk" ambiguous and asks the question again next time. If the owner would
-  rather be asked each time milk is unqualified, the one line is in `previewAnsweredPart`.
+- ~~**A chosen answer teaches the memory the ORIGINAL words.**~~ _Ruled by the owner, 2026-11-02:
+  "No, ask each time."_ A chosen answer teaches the combined words, as a typed one does; "milk"
+  stays ambiguous and her question comes back each time it is said bare.
 - **`asked_about` is a field of its own, not `said`.** A question row carries no `said` by the
   step-2 ruling (nothing tentative is taught); the words the answer is re-read with needed a home
   that the memory never reads.
-- **The quick-log sheet's "Looks right" does not wait on a question with choices.** The draft
-  door's rule is "one unsettled amount holds the log, never the add", and the draft does not
-  carry `question` or `choices`: a question row added unanswered waits on the drawer as an open
-  amount, its identity question lost — as it was before this build. Answering it on the sheet is
-  now one tap; holding the add would be a rule change for the owner.
+- ~~**The quick-log sheet's "Looks right" does not wait on a question with choices.**~~ _Reversed
+  in review the same day:_ the add takes none of `question`/`choices`/`asked_about`
+  (`parsedItemSchema`), so an unanswered choice row reached the drawer as a bare "how much?" — the
+  very question an amount cannot answer. Now "Looks right" on the sheet and "Add to …" on the
+  draft-mode card (the photo door inside an open meal) wait while a row asks her question with
+  answers to tap ("One question to settle first"); an open AMOUNT still does not hold the add.
 - **The amount chips stay for a question without choices.** The prompt leaves `choices` null for
   an amount question ("how much?"), so those rows keep the chips they always had.
+- **A question that keeps coming back stops asking after two re-asks** (`REASKS_MAX`): the row
+  says "I couldn't settle that one — give me an amount and I'll take it as written." and offers
+  the amount chips; the confirm then re-matches it by name, as before this build.
+
+### The review round (2026-11-01, after the merge of #457)
+
+What the review found and how each landed, every one with its table test:
+
+1. **An answer replaced a row by a stale index.** The re-read awaited, then replaced position `i`;
+   a row removed meanwhile, or a second answer landing first with two rows, put the priced milk
+   on the wrong row. Now the row is found by itself (`indexOf` of the row captured at the tap),
+   a row gone meanwhile takes nothing, and while any re-read runs every other row's controls,
+   the drops and the log wait (`useMealAmounts.answering`, the sheet's own count).
+   `useMealAmounts.test.tsx` covers a remove above it, the asked row removed, two overlapping
+   answers (the second landing first, as two rows) and a two-row answer on a middle row.
+2. **The draft door stripped an unanswered choice row's question** — the reversed decision above.
+3. **A typed answer over 120 characters failed forever as "try again".** The caps live once in
+   `@cadence/shared` (`ANSWER_MAX_CHARS` 120, `ASKED_ABOUT_MAX_CHARS` 200): the route's schema, the
+   field's `maxLength` and the send's cut read the same numbers, and a 400 is told as what it is —
+   "I couldn't take that answer as written — try fewer words, or tap one of the buttons." — apart
+   from a failure ("try again, or type it"). One field component (`OwnAnswerField`) serves both
+   "Something else" and "Another amount": focused when it opens, and Enter does not send while a
+   keyboard is still composing.
+4. **An answer the coach could not read looked coach-priced.** A re-read that fell back says so on
+   the card and on the sheet ("The coach couldn't be reached for that answer, so that row is an
+   automatic estimate.") and the row's own line carries "an automatic estimate". The line sits
+   on the card, not in the door's header above it: the header reads the original preview, and
+   the answer belongs to one row.
+5. **The answer's flags were dropped.** They now join the card's, so "a drink" answered as a gin
+   and tonic logs with the alcohol flag.
+6. **A question that came back looked like nothing happened.** The row now says "I still couldn't
+   settle that:" above the new question and its new choices; the open-row count counts each kind
+   ("2 QUESTIONS TO SETTLE" for one amount and one question).
+7. **The merge rule glued a different food onto the question's noun** ("a handful of almonds
+   nuts", "almond beverage milk", "a oat milk latte", "a a yogurt bowl parfait"). It now reads
+   what the answer is: one plural noun or several words naming a food REPLACE the question's food
+   ("a handful of almonds", "almond beverage", "a yogurt bowl"); a part or a cut leads with the
+   food ("chicken breast, no skin"); something that goes into a food joins it ("a latte with oat
+   milk"); a qualifier goes in front, with "a"/"an" fixed ("an iced latte"); filler and one
+   article are taken off once. The merged words ride on the `ai_log` row (`answered.words`), so a
+   misfire is visible.
+8. **`asked_about` was the model's echo**, which could drop the amount ("milk" for "2 cups milk").
+   It is now the split's own words for the part, paired by position when the model answered one
+   item per part; the echo only when the counts differ.
+9. **A re-ask carried the model's echo of the combined words.** A row that comes back as a
+   question now carries our own merge as its `asked_about` (the words the read ran on, "whole
+   milk"), never the echo, so the next answer builds on the first ("whole milk" + "Light" →
+   "light whole milk"); the re-asks stop at two (above). The review asked for the ORIGINAL words
+   here, so a later chosen answer would still teach "milk"; the owner's ruling took that reason
+   away (nothing teaches the bare words), and the original words would drop the first answer.
+10. **A chosen answer rewrote `said` on every priced row.** Moot after the owner's ruling: no row
+    is rewritten; every row keeps the combined words.
+11. **After the merge of #457** the answer path passes the food-check an empty `notes` (the photo
+    reader's notes belong to the whole reading and never reach the client), and the converter's
+    comment on `maxItems` names `choices` as its first shipped user.
+
+Found while testing item 7, and fixed here because the answer path stands on it: **the split ate
+the first letter of any part starting with "a"** — "avocado toast" was looked up as "vocado
+toast", "an apple" as "n apple", "almonds" as "lmonds" — because the number words in
+`food-candidate-book.ts`'s `AMOUNT` had no word boundary and "a" was tried before "an", "a few",
+"a bit of". The table in `food-candidate-book.test.ts` now carries those near-misses. A phrase the
+memory learned under a broken key ("vocado toast") misses once and is learned again on the next
+confirm; no migration.

@@ -9,8 +9,10 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import { MealAskedRow } from './MealAskedRow.tsx';
-import { CHECKING, CHECK_FAILED, SOMETHING_ELSE, THATS_IT } from './MealQuestionChoices.tsx';
+import { ANSWER_MAX_CHARS } from '@cadence/shared';
+import { COULD_NOT_SETTLE, MealAskedRow, STILL_ASKING } from './MealAskedRow.tsx';
+import { CHECKING, CHECK_FAILED, CHECK_REJECTED, SOMETHING_ELSE, THATS_IT } from './MealQuestionChoices.tsx';
+import type { AnswerResult } from './reReadAnswer.ts';
 import type { AmountRow } from './useMealAmounts.ts';
 
 const row = (over: Partial<AmountRow> = {}): AmountRow => ({
@@ -25,10 +27,10 @@ const CHOICES = ['Whole milk', '2%', 'Skim'];
 const asked = (over: Partial<AmountRow> = {}): AmountRow =>
   row({ question: 'Whole milk, 2% or skim?', choices: CHOICES, asked_about: 'milk', ...over });
 const noop = () => {};
-type OnAnswer = (i: number, answer: string, chosen: boolean) => Promise<boolean>;
-const draw = (r: AmountRow, onAnswer?: OnAnswer, index = 0) =>
-  render(<MealAskedRow row={r} index={index} onQty={noop} onAnswer={onAnswer} />);
-const yes: OnAnswer = async () => true;
+type OnAnswer = (i: number, answer: string, chosen: boolean) => Promise<AnswerResult>;
+const draw = (r: AmountRow, onAnswer?: OnAnswer, index = 0, busy = false) =>
+  render(<MealAskedRow row={r} index={index} busy={busy} onQty={noop} onAnswer={onAnswer} />);
+const yes: OnAnswer = async () => 'replaced';
 
 afterEach(cleanup);
 
@@ -78,14 +80,14 @@ describe('MealAskedRow — which answers it offers', () => {
 
 describe('MealAskedRow — the buttons', () => {
   it('a tap answers with the choice, as chosen, for this row', async () => {
-    const onAnswer = vi.fn<OnAnswer>(async () => true);
+    const onAnswer = vi.fn<OnAnswer>(async () => 'replaced');
     draw(asked(), onAnswer, 2);
     fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
     await waitFor(() => expect(onAnswer).toHaveBeenCalledWith(2, 'Whole milk', true));
   });
 
   it('"Something else" opens a field; the typed line answers as not chosen, trimmed; Enter sends it too', async () => {
-    const onAnswer = vi.fn<OnAnswer>(async () => true);
+    const onAnswer = vi.fn<OnAnswer>(async () => 'failed');
     draw(asked(), onAnswer);
     expect(screen.queryByLabelText('What the milk was')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
@@ -102,7 +104,7 @@ describe('MealAskedRow — the buttons', () => {
   });
 
   it('near-miss: a blank typed line sends nothing', () => {
-    const onAnswer = vi.fn<OnAnswer>(async () => true);
+    const onAnswer = vi.fn<OnAnswer>(async () => 'replaced');
     draw(asked(), onAnswer);
     fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
     const field = screen.getByLabelText('What the milk was');
@@ -112,10 +114,10 @@ describe('MealAskedRow — the buttons', () => {
   });
 
   it('says she is checking while the re-read runs, and the buttons wait', async () => {
-    let settle!: (ok: boolean) => void;
+    let settle!: (result: AnswerResult) => void;
     const onAnswer = vi.fn<OnAnswer>(
       () =>
-        new Promise<boolean>((res) => {
+        new Promise<AnswerResult>((res) => {
           settle = res;
         }),
     );
@@ -124,13 +126,13 @@ describe('MealAskedRow — the buttons', () => {
     expect(await screen.findByText(CHECKING)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Whole milk' })).toBeDisabled();
     expect(screen.getByRole('button', { name: SOMETHING_ELSE })).toBeDisabled();
-    settle(true);
+    settle('replaced');
     await waitFor(() => expect(screen.queryByText(CHECKING)).not.toBeInTheDocument());
     expect(screen.queryByText(CHECK_FAILED)).not.toBeInTheDocument();
   });
 
   it('a failed re-read says so in plain words and keeps the buttons for another go', async () => {
-    const onAnswer = vi.fn<OnAnswer>(async () => false);
+    const onAnswer = vi.fn<OnAnswer>(async () => 'failed');
     draw(asked(), onAnswer);
     fireEvent.click(screen.getByRole('button', { name: '2%' }));
     expect(await screen.findByText(CHECK_FAILED)).toBeInTheDocument();
@@ -142,11 +144,107 @@ describe('MealAskedRow — the buttons', () => {
     expect(screen.getByText('Whole milk, 2% or skim?')).toBeInTheDocument();
   });
 
-  it.each([CHECKING, CHECK_FAILED, SOMETHING_ELSE, THATS_IT])(
+  it('a refused answer (too long, blank) asks for different words, not "try again"', async () => {
+    const onAnswer = vi.fn<OnAnswer>(async () => 'rejected');
+    draw(asked(), onAnswer);
+    fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
+    fireEvent.change(screen.getByLabelText('What the milk was'), { target: { value: 'oat' } });
+    fireEvent.click(screen.getByRole('button', { name: THATS_IT }));
+    expect(await screen.findByText(CHECK_REJECTED)).toBeInTheDocument();
+    expect(screen.queryByText(CHECK_FAILED)).not.toBeInTheDocument();
+  });
+
+  it("the field stops at the server's cap, and a longer answer is sent cut to it, never refused", async () => {
+    const onAnswer = vi.fn<OnAnswer>(async () => 'replaced');
+    draw(asked(), onAnswer);
+    fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
+    const field = screen.getByLabelText('What the milk was');
+    expect(field).toHaveAttribute('maxLength', String(ANSWER_MAX_CHARS));
+    // A paste can overrun maxLength in some browsers: the send cuts it anyway.
+    fireEvent.change(field, { target: { value: 'x'.repeat(ANSWER_MAX_CHARS + 30) } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() => expect(onAnswer).toHaveBeenCalledWith(0, 'x'.repeat(ANSWER_MAX_CHARS), false));
+  });
+
+  it('near-miss: Enter while the keyboard is still composing sends nothing', () => {
+    const onAnswer = vi.fn<OnAnswer>(async () => 'replaced');
+    draw(asked(), onAnswer);
+    fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
+    const field = screen.getByLabelText('What the milk was');
+    fireEvent.change(field, { target: { value: 'ぎゅうにゅう' } });
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it('"Something else" opens the field focused, and a second tap closes it again', () => {
+    draw(asked(), yes);
+    fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
+    expect(screen.getByLabelText('What the milk was')).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
+    expect(screen.queryByLabelText('What the milk was')).not.toBeInTheDocument();
+  });
+
+  it('busy (the card writing, or another answer in flight) disables every button and the field', () => {
+    draw(asked(), yes);
+    fireEvent.click(screen.getByRole('button', { name: SOMETHING_ELSE }));
+    cleanup();
+    render(<MealAskedRow row={asked()} index={0} busy onQty={noop} onAnswer={yes} />);
+    for (const name of ['Whole milk', '2%', 'Skim', SOMETHING_ELSE]) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+  });
+
+  it.each([CHECKING, CHECK_FAILED, CHECK_REJECTED, SOMETHING_ELSE, THATS_IT, STILL_ASKING, COULD_NOT_SETTLE])(
     'the copy names no product and no banned word: %s',
     (copy) => {
       expect(copy).not.toMatch(/\bCadence\b/);
       expect(copy).not.toMatch(/\b(captured|unlock|empower|journey|beats|tempo|instruments)\b/i);
     },
   );
+});
+
+/**
+ * A question that came back (review of #460): the person sees that something happened — "I still
+ * couldn't settle that:" above the NEW question and choices — and after REASKS_MAX the row stops
+ * offering buttons and asks the amount, saying why.
+ */
+describe('MealAskedRow — a question that came back', () => {
+  it.each<[string, number, string[], string[], string[]]>([
+    [
+      'first ask → her question and her buttons, nothing more',
+      0,
+      ['Whole milk', SOMETHING_ELSE],
+      [STILL_ASKING],
+      ['1 glass'],
+    ],
+    [
+      'asked again once → the line, the NEW question, the buttons',
+      1,
+      [STILL_ASKING, 'Whole milk'],
+      [COULD_NOT_SETTLE],
+      ['1 glass'],
+    ],
+    [
+      'asked again twice → she could not settle it, the amount chips',
+      2,
+      [COULD_NOT_SETTLE, '1 glass'],
+      [STILL_ASKING],
+      ['Whole milk', SOMETHING_ELSE],
+    ],
+    ['near-miss: past the cap → the same as at it', 3, [COULD_NOT_SETTLE, '1 glass'], [STILL_ASKING], ['Whole milk']],
+  ])('%s', (_label, reasks, shownText, hiddenText, hiddenButtons) => {
+    draw(asked({ reasks }), yes);
+    for (const t of shownText) {
+      expect(screen.queryByText(t) ?? screen.queryByRole('button', { name: t })).toBeInTheDocument();
+    }
+    for (const t of hiddenText) expect(screen.queryByText(t)).not.toBeInTheDocument();
+    for (const name of hiddenButtons) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+  });
+
+  it('the re-asked question is the new one, with the new choices', () => {
+    draw(asked({ reasks: 1, question: 'Full-fat or light?', choices: ['Full-fat', 'Light'] }), yes);
+    expect(screen.getByText('Full-fat or light?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Light' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Whole milk' })).not.toBeInTheDocument();
+  });
 });

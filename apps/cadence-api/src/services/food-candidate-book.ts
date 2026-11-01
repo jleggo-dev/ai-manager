@@ -61,8 +61,13 @@ export const BOOK_BUDGET_CHARS = 12_000;
 const CUT_NOTE_RESERVE = 110;
 
 const SEPARATORS = /\s*(?:,|;|\n|\+|&|\band\b|\bwith\b|\bplus\b)\s*/i;
+/**
+ * The amount in front of a part. The number WORDS end on a word boundary and the longer ones come
+ * first: without that, "a" matched the first letter of "avocado", "apple" and "almonds" ("vocado
+ * toast" was looked up, 2026-11-01), and "a few eggs" read as the food "few eggs".
+ */
 const AMOUNT =
-  /^(?:(?:\d+(?:[./]\d+)?|\d*\.\d+|a|an|one|two|three|four|half|quarter|a few|some|a bit of|a splash of)\s*)?(?:(?:ml|l|g|kg|grams?|oz|ounces?|lbs?|cups?|c|tbsp|tablespoons?|tsp|teaspoons?|slices?|shots?|scoops?|cans?|pieces?|handful|small|medium|large)\b\s*)?(?:of\s+)?/i;
+  /^(?:(?:\d+(?:[./]\d+)?|\d*\.\d+|(?:a few|a bit of|a splash of|an|a|one|two|three|four|half|quarter|some)\b)\s*)?(?:(?:ml|l|g|kg|grams?|oz|ounces?|lbs?|cups?|c|tbsp|tablespoons?|tsp|teaspoons?|slices?|shots?|scoops?|cans?|pieces?|handful|small|medium|large)\b\s*)?(?:of\s+)?/i;
 const MEASURE_WORD = /\d|cup|tbsp|tsp|oz|ml|g\b|slice|shot|scoop|handful|small|medium|large|half|quarter/i;
 
 /** Every part, in order, as the person wrote them — no cap. Never empty for non-blank text. */

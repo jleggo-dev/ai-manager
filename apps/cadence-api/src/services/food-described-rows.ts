@@ -163,12 +163,19 @@ export async function rememberedRows(
   return out;
 }
 
-/** Step 4: the model's items as rows, each priced by the store or labelled for what it is. */
+/**
+ * Step 4: the model's items as rows, each priced by the store or labelled for what it is.
+ * `saidByIndex` is the person's own words per part from the split, when the items pair with the
+ * parts by position (they are in the order said): a question row's `asked_about` is taken from
+ * there, because the model's echo can paraphrase and drop the amount ("milk" for "2 cups milk"),
+ * and a chosen answer would then teach the echo. Absent when the counts differ.
+ */
 export async function rowsFromOutcome(
   outcome: FoodCheckOutcome,
   book: CandidateBook,
   userId: string,
   deps: DescribedMealDeps,
+  saidByIndex?: string[],
 ): Promise<DescribedMealItem[]> {
   const picks = outcome.items.map((item, i) =>
     item.pick && !outcome.problems.has(i) && !item.question
@@ -192,9 +199,9 @@ export async function rowsFromOutcome(
         basis: 'none',
         question: item.question,
         ...(item.choices?.length ? { choices: item.choices } : {}),
-        // The words the answer is re-read with: theirs for this part when the model echoed them,
-        // else the row's name — never empty, so a tap always has something to re-read.
-        asked_about: said || name,
+        // The words the answer is re-read with: the person's own from the split when the items
+        // pair with the parts, else the model's echo, else the row's name — never empty.
+        asked_about: saidByIndex?.[i] || said || name,
         ...assumption,
       };
     }

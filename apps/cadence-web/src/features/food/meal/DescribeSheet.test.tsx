@@ -14,7 +14,9 @@ vi.mock('../../../lib/api.ts', () => api);
 
 const { DescribeSheet } = await import('./DescribeSheet.tsx');
 const { NOT_REACHED } = await import('../coachReadCopy.ts');
-const { CHECK_FAILED } = await import('../MealQuestionChoices.tsx');
+const { CHECK_FAILED, CHECKING } = await import('../MealQuestionChoices.tsx');
+const { COULD_NOT_SETTLE } = await import('../MealAskedRow.tsx');
+const { NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,
@@ -106,17 +108,19 @@ describe('DescribeSheet — her question answered with a button', () => {
   const whole = {
     ...base,
     raw_text: 'whole milk',
-    items: [{ name: 'Milk, whole', qty: 1, unit: 'cup', est: { kcal: 149 }, food_id: 'f-whole', said: 'milk' }],
+    items: [{ name: 'Milk, whole', qty: 1, unit: 'cup', est: { kcal: 149 }, food_id: 'f-whole', said: 'whole milk' }],
     macros: { kcal: 149 },
   };
 
-  it('offers her answers as buttons under the row, and the row stays out of the total until answered', async () => {
+  it('offers her answers as buttons under the row, and holds the add until it is answered', async () => {
     await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
     for (const name of ['Whole milk', '2%', 'Skim', 'Something else']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
     expect(screen.getByText(/Whole milk, 2% or skim\?/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+    // The add would strip the question (the draft keeps none of question/choices): it waits.
+    expect(screen.getByRole('button', { name: 'One question to settle first' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Looks right/ })).not.toBeInTheDocument();
   });
 
   it('a tap re-reads the part for this slot and the priced row takes its place, total included', async () => {
@@ -142,16 +146,60 @@ describe('DescribeSheet — her question answered with a button', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skim' }));
     expect(await screen.findByText(CHECK_FAILED)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skim' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'One question to settle first' })).toBeDisabled();
   });
 
-  it('near-miss: a question row without choices offers no buttons', async () => {
+  it('near-miss: a question row without choices offers no buttons, and does not hold the add', async () => {
     await lookUp({
       ...base,
       items: [{ name: 'milk', question: 'How much?', asked_about: 'milk' }, ...base.items],
       coach: { reached: true, calls: 1, checked: [] },
     });
     expect(screen.queryByRole('button', { name: 'Something else' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeEnabled();
+  });
+
+  it('while an answer runs, the drops and the add wait; the answer lands on its own row', async () => {
+    await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
+    let settle!: (p: unknown) => void;
+    api.previewMealAnswer.mockReturnValueOnce(new Promise((r) => (settle = r)));
+    fireEvent.click(screen.getByRole('button', { name: '2%' }));
+    expect(await screen.findByText(CHECKING)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Drop Banana, raw' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Drop milk' })).toBeDisabled();
+    settle(whole);
+    expect(await screen.findByText('Milk, whole')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Drop Banana, raw' })).toBeEnabled();
+    const rows = screen.getAllByRole('button', { name: /^Drop / }).map((b) => b.getAttribute('aria-label'));
+    expect(rows).toEqual(['Drop Milk, whole', 'Drop Banana, raw']);
+  });
+
+  it('an answer the coach could not read says so, and its row says it is an automatic estimate', async () => {
+    await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
+    api.previewMealAnswer.mockResolvedValueOnce({
+      ...whole,
+      items: [{ ...whole.items[0], food_id: undefined, basis: 'fallback', source_label: 'an automatic estimate' }],
+      coach: { reached: false, calls: 1, checked: [] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
+    expect(await screen.findByText(NOT_REACHED_ANSWER)).toBeInTheDocument();
+    // Twice: the notice, and the row's own line (the sheet draws kcal in its own column, so the
+    // line is the label alone for a row with no protein, carbs or fat).
+    const said = screen.getAllByText(/an automatic estimate/).map((el) => el.textContent);
+    expect(said.sort()).toEqual([NOT_REACHED_ANSWER, 'an automatic estimate'].sort());
+  });
+
+  it('a question that comes back twice stops offering buttons, says why, and no longer holds the add', async () => {
+    await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
+    api.previewMealAnswer.mockResolvedValue({ ...base, items: [{ ...askedRow, name: 'whole milk' }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
+    await waitFor(() => expect(api.previewMealAnswer).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole('button', { name: 'Whole milk' }));
+    expect(await screen.findByText(new RegExp(COULD_NOT_SETTLE.slice(0, 30)))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Something else' })).not.toBeInTheDocument();
+    // An amount question now: it waits on the drawer, as an open amount always has.
+    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeEnabled();
+    api.previewMealAnswer.mockReset();
   });
 });
 

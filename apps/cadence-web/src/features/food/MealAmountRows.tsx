@@ -1,4 +1,5 @@
 import { MealAskedRow } from './MealAskedRow.tsx';
+import type { AnswerResult } from './reReadAnswer.ts';
 import type { AmountRow } from './useMealAmounts.ts';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -37,11 +38,19 @@ function KeptRow({
     { k: 'carbs', v: scaled(row.est?.carbs_g) },
     { k: 'fat', v: scaled(row.est?.fat_g) },
   ];
-  // The amount, then what the coach assumed where the words left something open, then her
-  // question if the row still carries one — shown on the row, never hidden in a number
+  // The amount, then — for a row the automatic estimate priced because the coach could not be
+  // reached — its label, then what the coach assumed where the words left something open, then
+  // her question if the row still carries one — shown on the row, never hidden in a number
   // (FOOD-LOGGING-COACH-LED.md). A question row normally has no amount and renders as MealAskedRow;
   // one that arrives with an amount anyway still shows the question rather than losing it.
-  const sub = [[qty, row.unit].filter(Boolean).join(' '), row.assumption, row.question].filter(Boolean).join(' · ');
+  const sub = [
+    [qty, row.unit].filter(Boolean).join(' '),
+    row.basis === 'fallback' ? row.source_label : '',
+    row.assumption,
+    row.question,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <div className="fa-row">
       <div className="fa-row-t">
@@ -114,8 +123,8 @@ export function MealAmountRows({
   onRemove: (i: number) => void;
   /** Open the rename/merge editor for one row — brief 03's repairs, before the log. */
   onEdit: (i: number) => void;
-  /** Her question answered — a tapped choice or a typed line; the host re-reads the part. */
-  onAnswer?: (i: number, answer: string, chosen: boolean) => Promise<boolean>;
+  /** Her question answered — a tapped choice or a typed line; the host re-reads the part and says what happened. */
+  onAnswer?: (i: number, answer: string, chosen: boolean) => Promise<AnswerResult>;
 }) {
   return (
     <div className="fa-rows">

@@ -28,8 +28,9 @@ import type { FoodPhraseRow } from '../repos/food-phrases.ts';
 import type { FanOutResult } from './food-source-fanout.ts';
 import type { SourceCandidate } from './food-source-report.ts';
 import { answeredLookup, answeredWords, previewAnsweredPart } from './food-described-answer.ts';
+import { previewDescribedMeal } from './food-described-meal.ts';
 import type { DescribedMealDeps } from './food-described-rows.ts';
-import { phraseKey } from './food-phrases.ts';
+import { phraseKey, phraseLinksOf } from './food-phrases.ts';
 
 const USER = '00000000-0000-4000-a000-00000000d001';
 
@@ -159,9 +160,24 @@ describe('answeredWords — the words and the answer as one part', () => {
     ['a glass of milk', 'a glass of oat milk', 'a glass of oat milk'],
     ['milk', 'oat milk, unsweetened', 'oat milk, unsweetened'],
     ['milk', '  Whole   milk  ', 'whole milk'],
+    // An answer that names a food of its own REPLACES the question's food (review of #460)...
+    ['a handful of nuts', 'Almonds', 'a handful of almonds'],
+    ['milk', 'almond beverage', 'almond beverage'],
+    ['a parfait', 'it was a yogurt bowl', 'a yogurt bowl'],
+    // ...a part or a cut leads with the food, and something that goes INTO the food joins it.
+    ['chicken', 'Breast, no skin', 'chicken breast, no skin'],
+    ['a latte', 'Oat milk', 'a latte with oat milk'],
+    ['a latte', 'almond milk', 'a latte with almond milk'],
+    // Articles are handled once: "a" before a vowel sound reads "an", and a lone article is not an amount.
+    ['a latte', 'Iced', 'an iced latte'],
+    ['a latte', 'A large one', 'a large latte'],
+    ['an apple', 'Green', 'a green apple'],
+    ['a bread roll', 'Whole wheat', 'a whole wheat bread roll'],
     // Near-misses: a blank answer leaves the words; an answer with no food words still joins on.
     ['milk', '   ', 'milk'],
     ['milk', 'USDA', 'USDA milk'],
+    // Near-miss: a qualifier that ends in "s" is not a plural food.
+    ['chicken', 'Skinless', 'skinless chicken'],
   ])('%j + %j → %j', (about, answer, words) => {
     expect(answeredWords(about, answer)).toBe(words);
   });
@@ -178,7 +194,7 @@ describe('answeredWords — the words and the answer as one part', () => {
 });
 
 describe('previewAnsweredPart — one part through the same read', () => {
-  it('a chosen answer prices the part from the picked record and keeps the words the question was about', async () => {
+  it('a chosen answer prices the part from the picked record, keeping the combined words (owner, 2026-11-02)', async () => {
     const { d, calls, lookups, log } = deps({ reply: [wholePick('whole milk')] });
     const p = await previewAnsweredPart(
       USER,
@@ -192,30 +208,62 @@ describe('previewAnsweredPart — one part through the same read', () => {
     expect(p.meal).toBe('breakfast');
     expect(p.raw_text).toBe('whole milk');
     expect(p.items).toHaveLength(1);
-    // Priced, linked, and `said` is "milk": the confirm teaches "milk" → this record.
+    // Priced, linked, and `said` is the combined words: the confirm teaches "whole milk", never "milk".
     expect(p.items[0]).toMatchObject({
       name: 'Milk, whole',
       food_id: 'f-whole',
       basis: 'record',
       qty: 1,
       unit: 'cup',
-      said: 'milk',
+      said: 'whole milk',
     });
     expect(p.items[0]?.est?.kcal).toBeCloseTo(149, 0);
     expect(p.macros?.kcal).toBeCloseTo(149, 0);
     expect(p.coach).toMatchObject({ reached: true, calls: 1 });
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({
-        input: expect.objectContaining({ answered: { asked_about: 'milk', answer: 'Whole milk' } }),
+        // The merged words are on the log, so a merge that misfired is visible on the ai_log row.
+        input: expect.objectContaining({
+          answered: { asked_about: 'milk', answer: 'Whole milk', words: 'whole milk', chosen: true },
+        }),
       }),
     );
   });
 
-  it('a typed answer prices the same way but keeps the combined words, so "milk" does not learn to mean it', async () => {
-    const { d, calls } = deps({ reply: [wholePick('lactose-free milk')] });
+  it('a typed answer prices the same way and keeps the combined words too; the log says it was typed', async () => {
+    const { d, calls, log } = deps({ reply: [wholePick('lactose-free milk')] });
     const p = await previewAnsweredPart(USER, { asked_about: 'milk', answer: 'lactose-free', meal: 'breakfast' }, d);
     expect(calls[0]?.said).toBe('lactose-free milk');
     expect(p.items[0]).toMatchObject({ food_id: 'f-whole', basis: 'record', said: 'lactose-free milk' });
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ answered: expect.objectContaining({ chosen: false }) }),
+      }),
+    );
+  });
+
+  it('a chosen answer teaches the combined words, and the bare words are asked again', async () => {
+    const { d } = deps({ reply: [wholePick('whole milk')] });
+    const p = await previewAnsweredPart(USER, { asked_about: 'milk', answer: 'Whole milk', chosen: true }, d);
+    // What the confirm writes to the phrase memory from this row:
+    const taught = phraseLinksOf(p.items);
+    expect(taught).toEqual([{ phrase: 'whole milk', food_id: 'f-whole', qty: 1, unit: 'cup' }]);
+
+    // With exactly that in the memory: "whole milk" is a hit with no call ...
+    const memory = { [taught[0]!.phrase]: { ...taught[0]!, uses: 1 } };
+    const hit = deps({ memory, reply: [wholePick('whole milk')] });
+    const again = await previewDescribedMeal(USER, 'whole milk', 'breakfast', hit.d);
+    expect(hit.calls).toEqual([]);
+    expect(again.items[0]).toMatchObject({ food_id: 'f-whole', basis: 'remembered' });
+
+    // ... and "milk" is not in it, so the read goes to the coach and her question comes back.
+    const bare = deps({
+      memory,
+      reply: [item({ said: 'milk', pick: 'c1', question: 'Whole milk or skim?', choices: ['Whole milk', 'Skim'] })],
+    });
+    const asked = await previewDescribedMeal(USER, 'milk', 'breakfast', bare.d);
+    expect(bare.calls).toHaveLength(1);
+    expect(asked.items[0]).toMatchObject({ question: 'Whole milk or skim?', asked_about: 'milk' });
   });
 
   it('an answer with a comma is one part: one lookup, one part in the words the model reads', async () => {
@@ -233,7 +281,7 @@ describe('previewAnsweredPart — one part through the same read', () => {
     const p = await previewAnsweredPart(USER, { asked_about: 'milk', answer: 'Whole milk', chosen: true }, d);
     expect(lookups).toEqual([]);
     expect(calls).toEqual([]);
-    expect(p.items[0]).toMatchObject({ food_id: 'f-whole', basis: 'remembered', said: 'milk' });
+    expect(p.items[0]).toMatchObject({ food_id: 'f-whole', basis: 'remembered', said: 'whole milk' });
     expect(p.coach).toMatchObject({ reached: true, calls: 0 });
   });
 
@@ -250,8 +298,16 @@ describe('previewAnsweredPart — one part through the same read', () => {
       ],
     });
     const p = await previewAnsweredPart(USER, { asked_about: 'milk', answer: 'Whole milk', chosen: true }, d);
+    // It is about the words the read ran on — our merge, not the model's echo — so the next answer
+    // builds on this one.
     expect(p.items[0]).toEqual({ name: 'whole milk', basis: 'none', question: 'How much?', asked_about: 'whole milk' });
     expect(p.macros).toBeNull();
+  });
+
+  it('near-miss: a re-ask echoed by the model with other words is still about our merge', async () => {
+    const { d } = deps({ reply: [item({ said: 'milk, the whole kind', question: 'How much?' })] });
+    const p = await previewAnsweredPart(USER, { asked_about: 'a glass of milk', answer: 'Whole' }, d);
+    expect(p.items[0]).toMatchObject({ question: 'How much?', asked_about: 'a glass of whole milk' });
   });
 
   it('near-miss: a slot the words cannot carry comes from the caller, else other', async () => {

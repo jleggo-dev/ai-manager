@@ -7,6 +7,7 @@ import { macroLineProteinFirst } from './amounts.ts';
 import { MealAmountRows } from './MealAmountRows.tsx';
 import { MealVendorAsk } from './MealVendorAsk.tsx';
 import { MealItemEdit } from './MealItemEdit.tsx';
+import { NOT_REACHED_ANSWER } from './coachReadCopy.ts';
 import { settleButton, settleChip } from './settleWords.ts';
 import { useMealAmounts } from './useMealAmounts.ts';
 
@@ -71,14 +72,35 @@ export function MealParseCard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const invalidateNutritionDay = useInvalidateNutritionDay();
-  const { rows, setQty, setBrand, removeRow, renameRow, mergeRow, answerRow, asked, askedChoices, total, toPreview } =
-    useMealAmounts(preview);
+  const {
+    rows,
+    setQty,
+    setBrand,
+    removeRow,
+    renameRow,
+    mergeRow,
+    answerRow,
+    answering,
+    answerNotReached,
+    asked,
+    askedChoices,
+    total,
+    toPreview,
+  } = useMealAmounts(preview);
   const [editing, setEditing] = useState<number | null>(null);
 
   const draft = mode === 'draft' && !!onAppend;
+  /**
+   * What holds the button: in log mode every open row (an amount or her question); in draft mode
+   * only a row waiting on her question with answers to tap — an open amount waits on the drawer
+   * as it always has, but a question an amount cannot answer must not reach the draft with its
+   * question stripped (the add keeps none of `question`/`choices`). Answering it is one tap.
+   */
+  const held = draft ? askedChoices > 0 : asked > 0;
+  const heldCount = draft ? askedChoices : asked;
 
   async function confirm() {
-    if (busy || !rows.length || (!draft && asked > 0)) return;
+    if (busy || answering || !rows.length || held) return;
     setBusy(true);
     setErr('');
     try {
@@ -106,11 +128,14 @@ export function MealParseCard({
         {asked > 0 && <span className="fa-card-open">{settleChip(asked, askedChoices > 0)}</span>}
       </div>
 
+      {/* An answer's re-read that fell back to the automatic estimate is said here, and on its row. */}
+      {answerNotReached && <div className="fa-notice">{NOT_REACHED_ANSWER}</div>}
+
       {/* Her question's answers as buttons: a tap re-reads that part for the slot this card logs to
-          (FOOD-LOGGING-COACH-LED.md, "chips in her voice"). */}
+          (FOOD-LOGGING-COACH-LED.md, "chips in her voice"). While one runs, every row waits. */}
       <MealAmountRows
         rows={rows}
-        busy={busy}
+        busy={busy || answering}
         onQty={setQty}
         onRemove={removeRow}
         onEdit={setEditing}
@@ -174,18 +199,13 @@ export function MealParseCard({
       {err && <div className="food-empty">{err}</div>}
 
       <div className="food-confirm-actions">
-        <button
-          type="button"
-          className="fa-log"
-          disabled={busy || (!draft && asked > 0)}
-          onClick={() => void confirm()}
-        >
+        <button type="button" className="fa-log" disabled={busy || answering || held} onClick={() => void confirm()}>
           {busy
             ? 'Writing it down…'
-            : draft
-              ? `Add to ${mealLabel ?? meal}`
-              : asked > 0
-                ? settleButton(asked, askedChoices > 0)
+            : held
+              ? settleButton(heldCount, askedChoices > 0)
+              : draft
+                ? `Add to ${mealLabel ?? meal}`
                 : `Log to ${meal}`}
         </button>
         {onAddAnother && (

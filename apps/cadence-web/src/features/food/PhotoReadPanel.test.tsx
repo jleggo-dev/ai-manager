@@ -525,6 +525,9 @@ describe('PhotoReadPanel — draft mode', () => {
     expect(screen.queryByRole('button', { name: '1 glass' })).toBeNull();
     expect(screen.getByText('~560 kcal')).toBeTruthy();
     expect(screen.getByText('1 QUESTION TO SETTLE')).toBeTruthy();
+    // Draft mode: the add would strip the question, so it waits until the question is answered.
+    expect(screen.getByRole('button', { name: 'One question to settle first' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Add to dinner' })).toBeNull();
   });
 
   it('a failed read with no caption offers a retry, not a button that cannot work', async () => {

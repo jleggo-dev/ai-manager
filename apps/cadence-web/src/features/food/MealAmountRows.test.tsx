@@ -44,7 +44,7 @@ describe('MealAmountRows — the question is shown wherever the row lands', () =
         onQty={noop}
         onRemove={noop}
         onEdit={noop}
-        onAnswer={async () => true}
+        onAnswer={async () => 'replaced' as const}
       />,
     );
     expect(screen.getByRole('button', { name: 'Whole milk' })).toBeInTheDocument();

@@ -17,13 +17,18 @@ import { MicButton } from '../../../components/MicButton.tsx';
 import { PhotoButton } from '../../../components/PhotoButton.tsx';
 import { downscalePhoto } from '../../plan/occurrence/format.ts';
 import { fmtKcal } from '../bracket/copy.ts';
-import { NOT_REACHED, READING } from '../coachReadCopy.ts';
+import { NOT_REACHED, NOT_REACHED_ANSWER, READING } from '../coachReadCopy.ts';
+import { COULD_NOT_SETTLE } from '../MealAskedRow.tsx';
 import { MealQuestionChoices } from '../MealQuestionChoices.tsx';
-import { reReadAnswer } from '../reReadAnswer.ts';
+import { REASKS_MAX, reReadAnswer, type AnswerResult } from '../reReadAnswer.ts';
+import { settleButton } from '../settleWords.ts';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
 
-type Row = MealPreview['items'][number];
+/** A row of the read, with how many times an answer brought it back as a question (never on the wire). */
+type Row = MealPreview['items'][number] & { reasks?: number };
+/** A row waiting on her question with answers to tap, still within the re-ask cap. */
+const asksWithChoices = (r: Row): boolean => !!r.question && !!r.choices?.length && (r.reasks ?? 0) < REASKS_MAX;
 
 export function DescribeSheet({
   meal,
@@ -48,6 +53,10 @@ export function DescribeSheet({
   const [text, setText] = useState(seed);
   const [read, setRead] = useState<{ for: string; rows: Row[]; coach?: MealPreview['coach'] } | null>(null);
   const [looking, setLooking] = useState(false);
+  /** Re-reads in flight: the other rows' controls wait, so an answer never lands on a moved row. */
+  const [answering, setAnswering] = useState(0);
+  /** Set when an answer's re-read fell back to the automatic estimate: the sheet says so. */
+  const [answerNotReached, setAnswerNotReached] = useState(false);
   const [err, setErr] = useState('');
 
   const words = text.trim();
@@ -81,18 +90,41 @@ export function DescribeSheet({
   /**
    * Her question answered from this sheet — a tapped choice or a typed line. The part is re-read
    * with the answer (reReadAnswer.ts, the same call the confirm card makes) and the priced row(s)
-   * take the asked row's place, so "Looks right" adds a settled row. False keeps the row as it was.
+   * take the asked row's place — found by the row itself, never by its index, so a row dropped
+   * meanwhile cannot move the answer onto another — and "Looks right" adds a settled row. A
+   * question again counts the re-ask; at REASKS_MAX the row goes to the drawer as an amount.
    */
-  async function answer(i: number, text: string, chosen: boolean): Promise<boolean> {
+  async function answer(i: number, text: string, chosen: boolean): Promise<AnswerResult> {
     const row = read?.rows[i];
-    if (!row) return false;
-    const p = await reReadAnswer(row, text, chosen, meal);
-    if (!p) return false;
-    setRead((r) => (r ? { ...r, rows: r.rows.flatMap((x, j) => (j === i ? p.items : [x])) } : r));
-    return true;
+    if (!row) return 'failed';
+    setAnswering((n) => n + 1);
+    try {
+      const out = await reReadAnswer(row, text, chosen, meal);
+      if (!out.ok) return out.reason;
+      const fresh: Row[] = out.preview.items.map((it) => (it.question ? { ...it, reasks: (row.reasks ?? 0) + 1 } : it));
+      setRead((r) => {
+        const at = r ? r.rows.indexOf(row) : -1;
+        return r && at >= 0 ? { ...r, rows: [...r.rows.slice(0, at), ...fresh, ...r.rows.slice(at + 1)] } : r;
+      });
+      if (out.preview.coach?.reached === false) setAnswerNotReached(true);
+      return 'replaced';
+    } finally {
+      setAnswering((n) => n - 1);
+    }
   }
   const ready = !!fresh?.length;
-  const label = looking ? READING : ready ? `Looks right · ${fmtKcal(kcal)} kcal` : 'Look it up';
+  // A question an amount cannot answer must not reach the meal with its question stripped (the add
+  // keeps none of question/choices): the button waits while one is open. An open amount does not
+  // hold it — that waits on the drawer, as it always has.
+  const openChoices = (fresh ?? []).filter(asksWithChoices).length;
+  const inFlight = answering > 0;
+  const label = looking
+    ? READING
+    : openChoices > 0
+      ? settleButton(openChoices, true)
+      : ready
+        ? `Looks right · ${fmtKcal(kcal)} kcal`
+        : 'Look it up';
 
   return (
     <>
@@ -124,14 +156,24 @@ export function DescribeSheet({
             </div>
             {/* Her work as it happened — the true trace, one line per part, never canned copy. */}
             {coach?.checked?.length ? <div className="ms-ds-row-m">Checked {coach.checked.join('; ')}.</div> : null}
+            {answerNotReached && <div className="ms-ds-row-m">{NOT_REACHED_ANSWER}</div>}
             {fresh.map((r, i) => (
               <Fragment key={`${r.name}-${i}`}>
                 <div className="ms-ds-row">
                   <div className="ms-ds-row-w">
                     <div className="ms-ds-row-n">{r.brand ? `${r.brand} ${r.name}` : r.name}</div>
-                    {(macroLine(r.est) || r.assumption || r.question) && (
+                    {(macroLine(r.est) || r.basis === 'fallback' || r.assumption || r.question) && (
                       <div className="ms-ds-row-m">
-                        {[macroLine(r.est), r.assumption, r.question].filter(Boolean).join(' · ')}
+                        {[
+                          macroLine(r.est),
+                          // A row the automatic estimate priced because she could not be reached says so.
+                          r.basis === 'fallback' ? r.source_label : '',
+                          r.assumption,
+                          // Her question, or — when the buttons were tried REASKS_MAX times — that she could not settle it.
+                          r.question && (r.reasks ?? 0) >= REASKS_MAX ? COULD_NOT_SETTLE : r.question,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </div>
                     )}
                   </div>
@@ -140,18 +182,24 @@ export function DescribeSheet({
                     <b>{fmtKcal(r.est?.kcal)}</b>
                     <i>KCAL</i>
                   </span>
-                  <button type="button" className="ms-ds-drop" aria-label={`Drop ${r.name}`} onClick={() => drop(i)}>
+                  <button
+                    type="button"
+                    className="ms-ds-drop"
+                    aria-label={`Drop ${r.name}`}
+                    disabled={inFlight}
+                    onClick={() => drop(i)}
+                  >
                     ×
                   </button>
                 </div>
                 {/* Her answers as buttons under the row — the confirm card's own component, so the
                     two doors cannot drift (FOOD-LOGGING-COACH-LED.md, "chips in her voice"). */}
-                {r.question && r.choices?.length ? (
+                {asksWithChoices(r) ? (
                   <div className="ms-ds-ask">
                     <MealQuestionChoices
                       name={r.name}
-                      choices={r.choices}
-                      busy={busy || looking}
+                      choices={r.choices!}
+                      busy={busy || looking || inFlight}
                       onAnswer={(text, chosen) => answer(i, text, chosen)}
                     />
                   </div>
@@ -173,7 +221,7 @@ export function DescribeSheet({
           <button
             type="button"
             className="ms-ds-go"
-            disabled={!words || looking || busy}
+            disabled={!words || looking || busy || inFlight || openChoices > 0}
             onClick={() => void (ready ? confirm() : lookUp())}
           >
             {label}

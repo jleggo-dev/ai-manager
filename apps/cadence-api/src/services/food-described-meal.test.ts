@@ -261,6 +261,27 @@ describe('a row with an open question (the question is the answer it waits for)'
     expect(p.macros).toBeNull();
   });
 
+  it("asked_about is the person's own words from the split, even when the model's echo dropped the amount", async () => {
+    const { d } = deps({
+      reply: [item({ said: 'milk', pick: 'c1', question: 'Whole milk or skim?', choices: ['Whole milk', 'Skim'] })],
+    });
+    const p = await previewDescribedMeal(USER, '2 cups milk', 'breakfast', d);
+    // The echo said "milk"; the person said "2 cups milk", and that is what the answer is re-read with.
+    expect(p.items[0]).toMatchObject({ question: 'Whole milk or skim?', asked_about: '2 cups milk' });
+    expect(p.items[0]).not.toHaveProperty('said');
+  });
+
+  it('near-miss: when the model answers more items than there were parts, the echo is all there is to pair with', async () => {
+    const { d } = deps({
+      reply: [
+        item({ said: 'milk', pick: 'c1', question: 'Whole milk or skim?', choices: ['Whole milk', 'Skim'] }),
+        item({ said: 'sugar', name: 'sugar', estimate: { kcal: 16, protein_g: 0 } }),
+      ],
+    });
+    const p = await previewDescribedMeal(USER, '2 cups milk', 'breakfast', d);
+    expect(p.items[0]).toMatchObject({ asked_about: 'milk' });
+  });
+
   it('near-miss: a question with no choices carries none, and a model that echoed no words leaves the name to re-read with', async () => {
     const { d } = deps({ reply: [item({ said: '', name: 'milk', question: 'How much?' })] });
     const p = await previewDescribedMeal(USER, 'milk', 'breakfast', d);

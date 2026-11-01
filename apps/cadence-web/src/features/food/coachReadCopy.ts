@@ -20,5 +20,9 @@ export const NOT_REACHED = "The coach couldn't be reached just now, so these are
 /** The confirm card's version: its rows open an editor, so it adds the hint. */
 export const NOT_REACHED_CARD = `${NOT_REACHED} Tap a row to change anything.`;
 
+/** On the card when an answer's re-read fell back to the automatic estimate: that one row is not hers. */
+export const NOT_REACHED_ANSWER =
+  "The coach couldn't be reached for that answer, so that row is an automatic estimate.";
+
 /** The line above the confirm card when she read it. */
 export const FOUND_CARD = "Here's what I found — an amount you gave I've kept; anything you didn't, I'll ask.";
