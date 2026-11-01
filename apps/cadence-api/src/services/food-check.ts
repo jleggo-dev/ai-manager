@@ -67,6 +67,13 @@ export interface FoodCheckVars {
   book: string;
   round_rule: string;
   guard_notes: string;
+  /**
+   * What the photo reader could and could not tell about the meal (meal-photo-read.ts: the
+   * sentences above the list), so a doubt there can become her question or her stated assumption
+   * for that part (owner, 2026-11-01: "if it can't tell whole or skim milk, it should ask the
+   * user"). Empty for a typed meal.
+   */
+  notes: string;
 }
 
 export interface FoodCheckDeps {
@@ -186,7 +193,7 @@ export function guardNotes(items: FoodCheckItem[], problems: Map<number, string>
  * call asks for lookups; the second call sees the grown book and is the last.
  */
 export async function foodCheckRounds(
-  input: { meal: string; said: string; book: CandidateBook },
+  input: { meal: string; said: string; book: CandidateBook; notes?: string },
   deps: FoodCheckDeps,
 ): Promise<FoodCheckOutcome> {
   const out: FoodCheckOutcome = { items: [], problems: new Map(), calls: 0, lookups: [], error: null };
@@ -202,6 +209,7 @@ export async function foodCheckRounds(
       book: input.book.text(),
       round_rule: last ? ROUND_RULE_LAST : ROUND_RULE_OPEN,
       guard_notes: guardNotes(previous, problems),
+      notes: input.notes ?? '',
     });
     out.calls = call;
 

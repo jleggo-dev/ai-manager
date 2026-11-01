@@ -41,6 +41,7 @@ import { previewDescribedMeal, type DescribedMealDeps } from './food-described-m
 import { rememberedRows } from './food-described-rows.ts';
 import { phraseKey } from './food-phrases.ts';
 import {
+  NOTES_MAX,
   PHOTO_WORDS_MAX,
   isFoodLine,
   logMealFromReading,
@@ -152,12 +153,12 @@ const item = (over: Record<string, unknown>) => ({
 });
 
 function deps(over: Partial<DescribedMealDeps> & { reply?: Reply } = {}) {
-  const calls: Array<{ said: string; book: string }> = [];
+  const calls: Array<{ said: string; book: string; notes: string }> = [];
   const logs: Array<{ input: unknown; output: unknown; meta: unknown }> = [];
   const d: DescribedMealDeps = {
     lookup: async (l) => fanOut(l.q),
     call: async (vars) => {
-      calls.push({ said: vars.said, book: vars.book });
+      calls.push({ said: vars.said, book: vars.book, notes: vars.notes });
       return JSON.stringify({ items: over.reply ?? [], lookups: [] });
     },
     foods: async (ids) => FOODS.filter((f) => ids.includes(f.food_id)),
@@ -220,16 +221,21 @@ describe('a photographed latte and banana read like a typed one', () => {
       'venti Starbucks latte: your foods: 1 rows · USDA skipped',
       'banana: your foods: 1 rows · USDA skipped',
     ]);
-    // The model is asked the list's words only, and the notes above the list never reach a lookup.
+    // The model is asked the list's words only; the notes above the list never reach a lookup, and
+    // reach the call as its `notes` (owner 2026-11-01: a doubt there is her reason to ask).
     expect(calls).toHaveLength(1);
     expect(calls[0]?.said).toBe('1 venti Starbucks latte, 1 medium banana');
     expect(calls[0]?.book).not.toContain('paper cup');
+    expect(calls[0]?.notes).toBe(
+      'A tall paper cup with a Starbucks sleeve, a venti by its height against the hand, and a banana beside it.\nI cannot tell whether the milk is whole or skim.',
+    );
     // What was read is what the card calls their words, so a chip answer scales from it.
     expect(p.raw_text).toBe('1 venti Starbucks latte\n1 medium banana');
     // The log row is the typed path's, marked as the photo door's, with the notes for later.
     expect(logs).toHaveLength(1);
-    expect(logs[0]?.meta).toMatchObject({ photo: true, reached: true, parts: 2 });
+    expect(logs[0]?.meta).toMatchObject({ photo: true, reached: true, parts: 2, notes_cut: false, lines_not_read: [] });
     expect((logs[0]?.meta as { notes: string }).notes).toContain('whole or skim');
+    expect(p.coach.not_read).toEqual([]);
   });
 
   it('is the same read as typing the list: rows, trace and numbers match previewDescribedMeal', async () => {
@@ -238,11 +244,15 @@ describe('a photographed latte and banana read like a typed one', () => {
       { reading: READING, meal: 'breakfast' },
       deps({ reply: TWO_PICKS }).d,
     );
+    // The typed path given the same notes — the one thing the photo door adds to the call.
     const typed = await previewDescribedMeal(
       USER,
       '1 venti Starbucks latte\n1 medium banana',
       'breakfast',
       deps({ reply: TWO_PICKS }).d,
+      {
+        notes: readingWords(READING).notes,
+      },
     );
     expect(photo.items).toEqual(typed.items);
     expect(photo.coach).toEqual(typed.coach);
@@ -301,21 +311,37 @@ describe('a photographed latte and banana read like a typed one', () => {
     expect(not_read).toEqual([]);
   });
 
-  it('lines that were not read ride on the preview for the card, and on the log row', async () => {
+  it('lines that were not read ride on the coach block for the card, and on the log row', async () => {
     const { d, calls, logs } = deps({ reply: TWO_PICKS });
     const reading = `${READING}\n\nLet me know if you'd like any changes.`;
     const p = await previewMealFromReading(USER, { reading, meal: 'breakfast' }, d);
     expect(p.items).toHaveLength(2);
-    expect(p.not_read).toEqual(["Let me know if you'd like any changes."]);
+    // On the coach block, beside the split's own (none here), so the card says it all in one place.
+    expect(p.coach.not_read).toEqual(["Let me know if you'd like any changes."]);
     expect(calls[0]?.said).toBe('1 venti Starbucks latte, 1 medium banana');
-    expect(logs[0]?.meta).toMatchObject({ not_read: ["Let me know if you'd like any changes."] });
-    // Near-miss: nothing left out → no field at all, so an older card has nothing to draw.
-    const clean = await previewMealFromReading(
-      USER,
-      { reading: READING, meal: 'breakfast' },
-      deps({ reply: TWO_PICKS }).d,
+    expect(logs[0]?.meta).toMatchObject({ lines_not_read: ["Let me know if you'd like any changes."], not_read: 0 });
+  });
+
+  it("the split's own not-read lines and the reading's sit together on the coach block", async () => {
+    const lines = Array.from({ length: 11 }, (_, i) => `${i + 1} g food${i}`);
+    const p = await previewMealFromReading(USER, { reading: `Notes.\n\n${lines.join('\n')}\nThanks!` }, deps().d);
+    // The reading's cap (MAX_PARTS lines) reports the eleventh; the sign-off is reported too.
+    expect(p.coach.not_read).toEqual(['Thanks!', '11 g food10']);
+  });
+
+  it("the eyes' notes go to the call whole up to NOTES_MAX; a cut is said in the trace", async () => {
+    const long = 'I cannot tell whether the milk is whole or skim. '.repeat(20).trim();
+    expect(long.length).toBeGreaterThan(NOTES_MAX);
+    const { d, calls, logs } = deps({ reply: TWO_PICKS });
+    const p = await previewMealFromReading(USER, { reading: `${long}\n\n1 venti Starbucks latte\n1 medium banana` }, d);
+    expect(calls[0]?.notes).toBe(long.slice(0, NOTES_MAX));
+    expect(p.coach.checked.at(-1)).toBe(
+      `the photo's notes: the first ${NOTES_MAX} characters went to the coach, the rest did not`,
     );
-    expect(clean).not.toHaveProperty('not_read');
+    expect(logs[0]?.meta).toMatchObject({ notes_cut: true });
+    // Near-miss: short notes, no such line.
+    const short = await previewMealFromReading(USER, { reading: READING }, deps({ reply: TWO_PICKS }).d);
+    expect(short.coach.checked.join('\n')).not.toContain("the photo's notes");
   });
 
   it('prose with no line that reads as a food, and no caption, is a loud error that says the shape', async () => {

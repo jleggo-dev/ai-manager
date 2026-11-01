@@ -229,18 +229,22 @@ export interface MealPreview {
    * be reached and the old automatic estimate priced the card; `checked` is the true trace of what
    * ran, one line per part, never canned copy.
    */
-  coach?: { reached: boolean; calls: number; checked: string[] };
+  coach?: {
+    reached: boolean;
+    calls: number;
+    checked: string[];
+    /**
+     * What was NOT looked up, in their words — a part past the split's cap or said twice, and on
+     * the photo door a line that did not read as a food — so the card says so, never drops them.
+     */
+    not_read?: string[];
+  };
   /**
    * The photo door's (meal-photo-read.ts): the photo the read already stored, and the reading as
    * the person confirmed or corrected it. Both ride back on the confirm so the row keeps them.
    */
   photo_ref?: string;
   photo_reading?: string;
-  /**
-   * Lines of what they gave that were NOT looked up, in their words (the photo door: a sentence
-   * after the list, a heading, lines past the caps) — the card says so, never drops them quietly.
-   */
-  not_read?: string[];
 }
 
 /**

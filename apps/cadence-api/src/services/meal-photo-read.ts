@@ -30,8 +30,11 @@
  * by trusting that order: from the bottom, a run of lines that start with an amount is the list
  * and is split, looked up and priced exactly as typing "1 venti Starbucks latte, 1 medium banana"
  * is (FOOD-LOGGING-COACH-LED.md, build step 4); a line in or after the list that does not read as
- * a food, and any line past the caps, is handed back as `not_read` for the card to show — never
- * dropped quietly. The sentences above the list are notes for the person, never looked up.
+ * a food, and any line past the caps, is handed back on `coach.not_read` for the card to show —
+ * never dropped quietly. The sentences above the list are never looked up; they go to the
+ * food-check call as its `notes` (bounded at NOTES_MAX), so a doubt the eyes flagged — "I cannot
+ * tell whole or skim" — can become her question or her stated assumption for that part (owner,
+ * 2026-11-01: "if it can't tell whole or skim milk, it should ask the user").
  *
  * NOTHING IS PERSISTED BY STEP 1 except the photo itself. A read that the user abandons leaves no
  * meal behind — which is why the row is inserted on the confirm and not before.
@@ -249,6 +252,12 @@ export function plainReading(text: string): string {
  * past it is handed back as not read, never cut mid-word.
  */
 export const PHOTO_WORDS_MAX = 1000;
+/**
+ * The most characters of the eyes' sentences that go to the coach's call. The reading's prose
+ * runs to a few sentences; past this the trace says the notes were cut, so a doubt that fell off
+ * the end is not a silent loss.
+ */
+export const NOTES_MAX = 500;
 
 const NUMBER_WORD = /^(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|half|some|a few|a couple)\b/i;
 const SENTENCE_END = /[.!?:;]$/;
@@ -273,7 +282,7 @@ export function isFoodLine(line: string): boolean {
 export interface ReadingWords {
   /** The list's lines, one a line — what is split, looked up and priced. */
   words: string;
-  /** The sentences above the list — for the person and the log, never looked up. */
+  /** The sentences above the list — for the person, the log, and the coach's `notes`; never looked up. */
   notes: string;
   /** Lines in or after the list that do not read as a food, and lines past the caps — in their words. */
   not_read: string[];
@@ -328,7 +337,9 @@ export function readingWords(reading: string, caption?: string): ReadingWords {
  * what is read: the list's lines are the parts, and the same phrase memory, candidate book, one
  * `food-check` call and store pricing apply (food-described-meal.ts) — so a photo of a latte and a
  * banana produces the rows, the trace and the numbers that typing "a latte and a banana" does.
- * Lines that were not read come back on `not_read`, for the card to show.
+ * The eyes' sentences ride beside the list as the call's `notes`, so a doubt there becomes her
+ * question or her assumption for that part. Lines that were not read come back on
+ * `coach.not_read`, beside any the split itself left out, for the card to show.
  *
  * Writes nothing. The confirm goes through the `parsed` path (the draft's `appendParsed` with
  * `photo_ref` and `photo_reading`; nutrition.ts `logMeal({ parsed })` likewise) with each row's
@@ -350,14 +361,36 @@ export async function previewMealFromReading(
     );
   }
   const hint = input.meal && isMeal(input.meal) ? input.meal : undefined;
+  const notesForCoach = notes.slice(0, NOTES_MAX);
   // The same `food_check` log row as the typed path, marked as the photo door's and carrying the
   // notes the eyes wrote above the list and the lines not read, so a number can be explained
-  // later from what was and was not read.
+  // later from what was and was not read. (`not_read` on the row is the split's own count.)
   const log: DescribedMealDeps['log'] = (entry) =>
     deps.log({
       ...entry,
-      meta: { ...(entry.meta as Record<string, unknown>), photo: true, notes: notes.slice(0, 500), not_read },
+      meta: {
+        ...(entry.meta as Record<string, unknown>),
+        photo: true,
+        notes: notesForCoach,
+        notes_cut: notes.length > NOTES_MAX,
+        lines_not_read: not_read,
+      },
     });
-  const preview = await previewDescribedMeal(userId, words, hint, { ...deps, log }, { maxChars: PHOTO_WORDS_MAX });
-  return not_read.length ? { ...preview, not_read } : preview;
+  const preview = await previewDescribedMeal(
+    userId,
+    words,
+    hint,
+    { ...deps, log },
+    { maxChars: PHOTO_WORDS_MAX, notes: notesForCoach },
+  );
+  // The lines this reading left out join the split's own, so the card says everything in one
+  // place; a cut of the notes is said in the trace, since a doubt past the cut never reached her.
+  const checked =
+    notes.length > NOTES_MAX
+      ? [
+          ...preview.coach.checked,
+          `the photo's notes: the first ${NOTES_MAX} characters went to the coach, the rest did not`,
+        ]
+      : preview.coach.checked;
+  return { ...preview, coach: { ...preview.coach, checked, not_read: [...preview.coach.not_read, ...not_read] } };
 }

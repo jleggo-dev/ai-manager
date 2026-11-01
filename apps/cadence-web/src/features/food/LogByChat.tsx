@@ -103,7 +103,7 @@ export function LogByChat({
           </div>
         )}
         {/* Who read it, and her work as it happened — the same line the photo door shows. */}
-        {preview && !busy && <CoachReadLine coach={preview.coach} notRead={preview.not_read} />}
+        {preview && !busy && <CoachReadLine coach={preview.coach} />}
         {preview && (
           <MealParseCard
             preview={preview}

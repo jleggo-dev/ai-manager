@@ -579,7 +579,7 @@ and the meal screen's doors, and logs through the same confirm path the card use
    towards. (A question row's name is the model's plain name for the part when it gave one, else
    the person's words with the amount stripped — `rowsFromOutcome`; it carries no `said`.)
    On its own: `nothing changed: nothing was logged — "milk" waits on their answer: Whole milk or
-   2%?`. Beside settled rows: those are logged (`changed:` lines), and the open row is an
+2%?`. Beside settled rows: those are logged (`changed:` lines), and the open row is an
    `unchanged:` line, with "the rest of the meal is already on their file" — a person who said
    "milk and a banana" has eaten the banana whatever the milk turns out to be. She asks in
    conversation and calls `log_meal` again with that part's words plus the answer, which lands as
@@ -671,10 +671,14 @@ The photo door reads the way the typed one does (`services/meal-photo-read.ts`, 
    closing sentence, a sign-off) are skipped, the run of lines up to the blank above is the list,
    and a non-food line inside that run (the old prompt's "Compact Summary" heading, prose left in
    when the blank line is deleted) is skipped too. The sentences above the blank are the eyes'
-   notes, shown in the box and kept on the row as `photo_reading`, never looked up. **Nothing is
-   dropped quietly**: every skipped line, and every line past MAX_PARTS or past PHOTO_WORDS_MAX
-   (the door's own cap — a reading runs past the typed path's 500; whole lines, never a cut
-   mid-word), comes back on the preview as `not_read` and the card says "Not read: …". An empty
+   notes: shown in the box, kept on the row as `photo_reading`, never looked up — and handed to
+   the food-check call as its `notes` variable (at most NOTES_MAX, 500 characters; a cut is said
+   in the trace), so a doubt the eyes named becomes her question or her stated assumption for
+   that part (owner, 2026-11-01: "if it can't tell whole or skim milk, it should ask the user").
+   The job's prompt defines `<notes>` in one sentence of facts, not picks. **Nothing is dropped
+   quietly**: every skipped line, and every line past MAX_PARTS or past PHOTO_WORDS_MAX (the
+   door's own cap — a reading runs past the typed path's 500; whole lines, never a cut mid-word),
+   joins the split's own `coach.not_read` and the card says "Not read: …". An empty
    reading reads the caption (the read failed, the person went on from their words); no food line
    and no caption is a 400 that says the shape, never an empty card. The raw model output is what
    the log keeps (`markdown_stripped` flags a tidy), so the leak stays visible.
@@ -682,8 +686,8 @@ The photo door reads the way the typed one does (`services/meal-photo-read.ts`, 
    phrase memory, the book, one `food-check` call, the store's pricing, the labelled fallback — so
    a photo of a latte and a banana gives the rows, the trace and the numbers that typing "1 venti
    Starbucks latte, 1 medium banana" gives (`meal-photo-read.test.ts` asserts the two previews
-   equal through the `DescribedMealDeps` seam). The `food_check` log row is marked `photo: true`
-   and carries the notes.
+   equal through the `DescribedMealDeps` seam, notes aside). The `food_check` log row is marked
+   `photo: true` and carries the notes, whether they were cut, and the lines not read.
 4. **The same card.** `PhotoReadPanel` renders the chat door's own line (`CoachReadLine`: she
    could not be reached → the notice with the tap hint; she read it → "Here's what I found"; no
    coach block → the same line), her trace, the lines not read, and `MealParseCard` (→
@@ -717,9 +721,10 @@ Decided while building step 4, for the owner to overrule:
   number-word line); everything else in or after the list is reported, not looked up. A line
   typed by hand as "banana" is reported until it says "1 banana" — visible on the card, one edit
   away — rather than guessed at.
-- **The eyes' sentences do not reach the coach.** They are for the person (and the log row);
-  only the list is looked up. Passing them to the food-check call so she can state the doubt as
-  an assumption or a question is a design change for the owner.
+- ~~**The eyes' sentences do not reach the coach.**~~ Ruled the same day (owner, 2026-11-01: "If
+  it can't tell whole or skim milk, it should ask the user"): they reach her as the food-check
+  call's `notes`, bounded at 500 characters, the prompt's definition a sentence of facts. The
+  photo prompt's item 6 keeps its promise, worded to what is now true.
 - **`/photo/log` is kept** for clients built before this change; it runs the old write and goes
   with the next rebuild.
 - **The caption is no longer stored as `raw_text`.** The words read (the list) are; the caption

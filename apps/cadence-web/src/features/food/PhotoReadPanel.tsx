@@ -154,7 +154,7 @@ export function PhotoReadPanel({
         {r.phase === 'priced' && r.preview && (
           <div ref={cardRef}>
             {/* Who read it, her work as it happened, and any line that was not read — the chat door's own line. */}
-            <CoachReadLine coach={r.preview.coach} notRead={r.preview.not_read} />
+            <CoachReadLine coach={r.preview.coach} />
             <MealParseCard
               preview={r.preview}
               initialMeal={meal}

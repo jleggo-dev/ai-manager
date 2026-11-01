@@ -256,7 +256,10 @@ describe('PhotoReadPanel — the line above the card says who read it (the chat 
   });
 
   it('a line that was not read is said, in their words; nothing left out → nothing said', async () => {
-    api.previewMealFromReading.mockResolvedValue({ ...PRICED, not_read: ["Let me know if you'd like changes."] });
+    api.previewMealFromReading.mockResolvedValue({
+      ...PRICED,
+      coach: { ...PRICED.coach!, not_read: ["Let me know if you'd like changes."] },
+    });
     const { user } = setup();
     await toCard(user);
     expect(screen.getByText("Not read: Let me know if you'd like changes.")).toBeTruthy();

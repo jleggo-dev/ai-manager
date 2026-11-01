@@ -118,11 +118,23 @@ describe('food-check job config', () => {
     }
   });
 
-  it('wraps the words and the book in tags, and puts the round rule where the model reads it', () => {
+  it('wraps the words, the notes and the book in tags, and puts the round rule where the model reads it', () => {
     expect(template).toContain('<said>{{said}}</said>');
+    expect(template).toContain('<notes>{{notes}}</notes>');
     expect(template).toContain('<book>\n{{book}}\n</book>');
     expect(template).toContain('{{round_rule}}');
     expect(template).toContain('{{guard_notes}}');
+  });
+
+  it("the photo reader's notes: declared, not required, defined in one sentence of facts (owner, 2026-11-01)", () => {
+    const notes = job?.config.variables?.find((v) => v.name === 'notes');
+    expect(notes).toBeDefined();
+    expect(notes?.required).toBeUndefined();
+    expect(template).toContain(
+      'When the meal came as a photo, <notes> holds what the photo reader could and could not tell about it (empty for a typed meal); a doubt there is a reason to ask one question or to state an assumption for that part.',
+    );
+    // Facts, not picks: the sentence says what the notes are, never which answer to prefer.
+    expect(template).not.toMatch(/notes[^.]*\b(prefer|choose|pick|assume the)\b/i);
   });
 
   it('keeps the rules the guards rely on', () => {

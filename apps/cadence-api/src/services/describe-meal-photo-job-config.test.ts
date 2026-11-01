@@ -78,11 +78,13 @@ describe('describe-meal-photo job config', () => {
     expect(template).toContain('Put it on the line ("1 venti Starbucks latte")');
   });
 
-  it('promises only what the code does: the person corrects the list, and only the list is looked up', () => {
-    // The eyes' sentences go to the log row, not to the food-check call (review of #457); the
-    // prompt must not say the coach reads them.
-    expect(template).toContain('the person reads your sentences and corrects the list, and only the list is looked up');
-    expect(template).not.toContain('the coach will state an assumption or ask the person exactly where you flag it');
+  it('promises only what the code does: the list is looked up, and the coach reads the sentences beside it', () => {
+    // The eyes' sentences reach the food-check call as `notes` (owner, 2026-11-01: "if it can't
+    // tell whole or skim milk, it should ask the user"), so the prompt may say she reads them —
+    // and says what that is for in facts, not picks.
+    expect(template).toContain(
+      'the person reads your sentences and corrects the list; only the list is looked up, and the coach reads your sentences beside it, so a doubt you name is her reason to ask the person one question or to state an assumption for that part',
+    );
     expect(template).toContain('the person confirms the list, so make an assumed amount plain enough to correct');
     expect(template).not.toMatch(/pick the (flattering|alarming)/i);
   });

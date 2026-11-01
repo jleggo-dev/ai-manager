@@ -134,7 +134,9 @@ describe('runMealConfig — the shipped job, the production way', () => {
     });
     expect(sent).toHaveLength(1);
     // Exactly the variables the config declares — the engine wraps and caps them server-side.
-    expect(Object.keys(sent[0]!).sort()).toEqual(['book', 'guard_notes', 'meal', 'round_rule', 'said']);
+    expect(Object.keys(sent[0]!).sort()).toEqual(['book', 'guard_notes', 'meal', 'notes', 'round_rule', 'said']);
+    // A typed meal has no photo reader: its notes are empty, not absent.
+    expect(sent[0]!.notes).toBe('');
     expect(sent[0]!.book).toContain('c1 · usda · Banana, raw');
     expect(run.error).toBeNull();
     expect(run.final?.[0]?.pick).toBe('c1');
