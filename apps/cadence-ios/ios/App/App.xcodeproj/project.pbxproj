@@ -17,6 +17,7 @@
 		CAD0C0DE2FE3001300EA8C5F /* TimerActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE3000300EA8C5F /* TimerActivityAttributes.swift */; };
 		CAD0C0DE2FE3001400EA8C5F /* TimerActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE3000300EA8C5F /* TimerActivityAttributes.swift */; };
 		CAD0C0DE2FE3001500EA8C5F /* CadenceLiveActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE3000400EA8C5F /* CadenceLiveActivityPlugin.swift */; };
+		CAD0C0DE2FE5000200EA8C5F /* CadenceKeepAwakePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE5000100EA8C5F /* CadenceKeepAwakePlugin.swift */; };
 		CAD0C0DE2FE3001600EA8C5F /* CadenceTimerWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CAD0C0DE2FE3000500EA8C5F /* CadenceTimerWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
@@ -81,6 +82,7 @@
 		CAD0C0DE2FE3000200EA8C5F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CAD0C0DE2FE3000300EA8C5F /* TimerActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerActivityAttributes.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE3000400EA8C5F /* CadenceLiveActivityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CadenceLiveActivityPlugin.swift; path = CadenceLiveActivity/CadenceLiveActivityPlugin.swift; sourceTree = "<group>"; };
+		CAD0C0DE2FE5000100EA8C5F /* CadenceKeepAwakePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CadenceKeepAwakePlugin.swift; sourceTree = "<group>"; };
 		CAD0C0DE2FE3000500EA8C5F /* CadenceTimerWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CadenceTimerWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 				CAD0C0DE2FE0000700EA8C5F /* WorkoutActivityMap.swift */,
 				CAD0C0DE2FE1003200EA8C5F /* CadenceAuthSessionPlugin.swift */,
 				CAD0C0DE2FE3000400EA8C5F /* CadenceLiveActivityPlugin.swift */,
+				CAD0C0DE2FE5000100EA8C5F /* CadenceKeepAwakePlugin.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -537,6 +540,7 @@
 				CAD0C0DE2FE2001400EA8C5F /* CoachPortraitIntent.swift in Sources */,
 				CAD0C0DE2FE3001400EA8C5F /* TimerActivityAttributes.swift in Sources */,
 				CAD0C0DE2FE3001500EA8C5F /* CadenceLiveActivityPlugin.swift in Sources */,
+				CAD0C0DE2FE5000200EA8C5F /* CadenceKeepAwakePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,4 +1,5 @@
 import type { Capabilities, DictationSession } from './index.ts';
+import { browserKeepAwake } from './keep-awake.ts';
 
 type SpeechRecognitionCtor = new () => DictationSession;
 
@@ -65,6 +66,7 @@ export const webCapabilities: Capabilities = {
     pause: async () => {},
     end: async () => {},
   },
+  keepAwake: browserKeepAwake,
   // The browser's own file inputs do this job; unavailable sends PhotoButton to them.
   photos: {
     isAvailable: () => false,

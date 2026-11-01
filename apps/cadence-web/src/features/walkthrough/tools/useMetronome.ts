@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type MetronomeSpec, MAX_BPM, MIN_BPM, beatInBar, clampBpm, clampMeter, tapTempo } from '@cadence/shared';
 import { createMetronomeClock, type MetronomeClock } from './metronomeAudio.ts';
+import { capabilities } from '../../../lib/capability/index.ts';
 
 /**
  * The dock's state: tempo, meter, whether it is running, and where in the bar it is.
@@ -80,6 +81,15 @@ export function useMetronome(spec: MetronomeSpec, title: string, onSettle?: (t: 
   }, [bpm, meter]);
 
   useEffect(() => () => clock.current?.dispose(), []);
+
+  // The screen stays on while it clicks (owner, 2026-11-01): the click lives in the webview, and a
+  // phone that auto-locks on the music stand silences it mid-piece. Let go on stop and on unmount
+  // (leaving the step, closing the session) so nothing else ever holds the screen on.
+  useEffect(() => {
+    if (!running) return undefined;
+    void capabilities.keepAwake.set(true);
+    return () => void capabilities.keepAwake.set(false);
+  }, [running]);
 
   // Written on a short delay so dragging the slider doesn't hammer storage on every frame. Local
   // storage is now the OFFLINE COPY, not the record: the piece itself carries the settled tempo

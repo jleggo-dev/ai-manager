@@ -8,6 +8,7 @@ import { StartCoachAsk } from './start/StartCoachAsk.tsx';
 import { StartTrim } from './start/StartTrim.tsx';
 import { applyTrim, canTrim, proposeTrim, type TrimProposal } from './start/trim.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
+import { clearSessionInProgress, type SessionSnapshot } from '../walkthrough/sessionInProgress.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { getSessionInsight, setOccurrence, logOccurrence, type SessionInsight } from '../../lib/api.ts';
 
@@ -33,6 +34,10 @@ import { getSessionInsight, setOccurrence, logOccurrence, type SessionInsight } 
  *
  * A task with no session (a system check-in) gets a one-tap "mark it done" step. Food + weigh-in
  * tasks keep their dedicated sheet — this is the stepped-task popup.
+ *
+ * `resume` is a session the app was in the middle of when iOS reclaimed it (sessionInProgress.ts):
+ * the walkthrough opens straight away from what was remembered, without waiting on the detail —
+ * the person was mid-practice, not choosing how to start.
  */
 export function StartSheet({
   occurrenceId,
@@ -41,6 +46,7 @@ export function StartSheet({
   onLogged,
   onCustom,
   onTalk,
+  resume,
 }: {
   occurrenceId: string;
   title?: string; // the tapped node's title — lets the loader personalize before the detail lands
@@ -50,11 +56,14 @@ export function StartSheet({
   onCustom?: (steer: string) => void;
   /** Opens the coach from the post-session celebration. */
   onTalk?: () => void;
+  resume?: SessionSnapshot | null;
 }) {
   const { detail, state, retry } = useOccurrenceDetail(occurrenceId);
   const messages = useMemo(() => coachingMessages(title), [title]);
   const loadingMsg = useRotatingMessage(state === 'loading', messages);
-  const [run, setRun] = useState<WalkthroughData | null>(null);
+  const [run, setRun] = useState<WalkthroughData | null>(resume?.walkthrough ?? null);
+  // Used once: a later Start from this same sheet is a fresh run, not the remembered one.
+  const [resumeFrom, setResumeFrom] = useState(resume ?? null);
   const [trimLevel, setTrimLevel] = useState<number | null>(null); // null → not trimming
   const [insight, setInsight] = useState<SessionInsight | null>(null);
 
@@ -65,6 +74,15 @@ export function StartSheet({
       alive = false;
     };
   }, [occurrenceId]);
+
+  // The remembered session belongs to a task that has since moved on — replanned away, or logged
+  // somewhere else (the watch) — so there is nothing to go back to.
+  useEffect(() => {
+    if (!resumeFrom || !(state === 'gone' || (detail && detail.status !== 'pending'))) return;
+    clearSessionInProgress();
+    setResumeFrom(null);
+    setRun(null);
+  }, [resumeFrom, state, detail]);
 
   const wt = useMemo<WalkthroughData | null>(() => {
     if (!detail) return null;
@@ -93,11 +111,10 @@ export function StartSheet({
    * refresh then shows reality), so the trail catches up on its own.
    */
   function handleComplete(summary: string) {
-    if (!detail) return;
-    const write = summary.trim()
-      ? logOccurrence(detail.occurrence_id, summary)
-      : setOccurrence(detail.occurrence_id, 'done');
+    // The prop, not the detail: a resumed session can finish before the detail has landed.
+    const write = summary.trim() ? logOccurrence(occurrenceId, summary) : setOccurrence(occurrenceId, 'done');
     void write.catch(() => undefined).then(() => onLogged?.());
+    setResumeFrom(null);
     setRun(null);
     onClose();
   }
@@ -191,13 +208,17 @@ export function StartSheet({
         )}
       </div>
 
-      {run && detail && (
+      {run && (detail || resumeFrom) && (
         <Walkthrough
           walkthrough={run}
-          title={detail.title}
-          occurrenceId={detail.occurrence_id}
-          area={detail.area}
-          onClose={() => setRun(null)}
+          title={detail?.title ?? resumeFrom?.title ?? title ?? ''}
+          occurrenceId={occurrenceId}
+          area={detail?.area ?? resumeFrom?.area}
+          resume={resumeFrom}
+          onClose={() => {
+            setResumeFrom(null);
+            setRun(null);
+          }}
           onComplete={handleComplete}
           onTalk={onTalk}
         />

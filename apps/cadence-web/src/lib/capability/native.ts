@@ -12,6 +12,7 @@ import { webCapabilities } from './web.ts';
 import { nativeWorkoutPlan } from './workout-plan-native.ts';
 import { nativeWatchSync } from './watch-sync-native.ts';
 import { nativeLiveActivity } from './live-activity-native.ts';
+import { nativeKeepAwake } from './keep-awake.ts';
 import { nativePhotos } from './photos-native.ts';
 
 /**
@@ -416,5 +417,6 @@ export const nativeCapabilities: Capabilities = {
   watchSync: nativeWatchSync,
   liveActivity: nativeLiveActivity,
   photos: nativePhotos,
+  keepAwake: nativeKeepAwake,
   dictation: webCapabilities.dictation,
 };
