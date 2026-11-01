@@ -35,6 +35,7 @@ const fake = vi.hoisted(() => ({
   reviseSession: vi.fn(),
   startReplanRun: vi.fn(),
   logMeal: vi.fn(),
+  previewDescribedMeal: vi.fn(),
   logOccurrence: vi.fn(),
   composeProgressLayout: vi.fn(),
   geocodeCity: vi.fn(),
@@ -151,6 +152,9 @@ vi.mock('./session-generate.ts', () => ({ reviseSession: fake.reviseSession }));
 vi.mock('./replan-start.ts', () => ({ startReplanRun: fake.startReplanRun }));
 vi.mock('./plan-run.ts', () => ({ readPlanRun: () => null }));
 vi.mock('./nutrition.ts', () => ({ logMeal: fake.logMeal }));
+// log_meal reads the words the coach-led way before it writes (food-log-described.ts); the read is
+// faked at its own boundary so the action's choice of what to log, and what to hand back, runs for real.
+vi.mock('./food-described-meal.ts', () => ({ previewDescribedMeal: fake.previewDescribedMeal }));
 vi.mock('./session-log.ts', () => ({ logOccurrence: fake.logOccurrence }));
 vi.mock('./progress-layout-compose.ts', () => ({ composeProgressLayout: fake.composeProgressLayout }));
 vi.mock('./weather/weather.ts', () => ({ geocodeCity: fake.geocodeCity }));
@@ -179,6 +183,28 @@ const QUESTIONS = [
   { id: 'days_free', label: 'Which days are usually free?', kind: 'multi', options: ['Mon', 'Wed'] },
   { id: 'session_length', label: 'How long can a session be?', kind: 'number' },
 ];
+
+/** The coach-led read of "a banana": one record row, priced by the store, her words on it. */
+const describedBanana = () => ({
+  meal: 'snack',
+  items: [
+    {
+      name: 'Banana, raw',
+      qty: 1,
+      unit: 'medium',
+      est: { kcal: 105, source: 'ledger' },
+      food_id: '00000000-0000-4000-a000-0000000000a1',
+      said: 'a banana',
+      basis: 'record',
+      source_label: 'USDA',
+    },
+  ],
+  macros: { kcal: 105, source: 'ledger' },
+  confidence: null,
+  flags: {},
+  raw_text: 'a banana',
+  coach: { reached: true, calls: 1, checked: [], not_read: [] },
+});
 
 /** Bad or empty input changes nothing — every action gets this row. */
 const empty = (want: Shape = 'nothing-changed'): Case => ({ label: 'no arguments', params: {}, want });
@@ -244,10 +270,28 @@ const CASES: Record<string, Case[]> = {
     empty(),
     { label: 'a banana', params: { text: 'a banana' }, want: 'changed' },
     {
+      label: 'a part waits on their answer',
+      params: { text: 'milk' },
+      want: 'nothing-changed',
+      setup: () =>
+        fake.previewDescribedMeal.mockResolvedValue({
+          ...describedBanana(),
+          items: [{ name: 'milk', basis: 'none', question: 'Whole milk or 2%?' }],
+          macros: null,
+          raw_text: 'milk',
+        }),
+    },
+    {
       label: 'the ledger throws',
       params: { text: 'a banana' },
       want: 'fault',
       setup: () => fake.logMeal.mockRejectedValue(new Error('down')),
+    },
+    {
+      label: 'the read fails past its fallback',
+      params: { text: 'a banana' },
+      want: 'fault',
+      setup: () => fake.previewDescribedMeal.mockRejectedValue(new Error('down')),
     },
   ],
   set_micro_target: [
@@ -316,10 +360,19 @@ beforeEach(() => {
     session: { blocks: [{ items: [1, 2] }], note: 'n' },
   });
   fake.startReplanRun.mockResolvedValue('started');
+  fake.previewDescribedMeal.mockResolvedValue(describedBanana());
   fake.logMeal.mockResolvedValue({
     date: '2026-10-31',
     meal: 'snack',
-    items: [{ name: 'banana' }],
+    items: [
+      {
+        name: 'Banana, raw',
+        qty: 1,
+        unit: 'medium',
+        est: { kcal: 105 },
+        food_id: '00000000-0000-4000-a000-0000000000a1',
+      },
+    ],
     macros: { kcal: 105 },
     provisional: false,
   });

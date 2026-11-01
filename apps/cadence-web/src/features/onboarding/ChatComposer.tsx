@@ -3,6 +3,7 @@ import { MicButton } from '../../components/MicButton.tsx';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { useAutoGrow } from './useAutoGrow.ts';
 import { AttachButton, AttachmentTray } from './AttachmentTray.tsx';
+import { PhotoButton } from '../../components/PhotoButton.tsx';
 import type { CoachAttachmentsTray } from './useCoachAttachments.ts';
 
 /** A plain square. Every chat app uses one for stop; there is nothing to be clever about here. */
@@ -100,6 +101,8 @@ export function ChatComposer({
           </button>
         ) : (
           <>
+            {/* The camera for photos (take one or pick one); the paperclip for documents. */}
+            {tray && <PhotoButton multiple onPick={(files) => void tray.add(files)} />}
             {tray && <AttachButton tray={tray} />}
             {/* The mic is ALWAYS here — mounted and visible — and both of those are bugs paid for.
                 It was once the `else` branch of the send button, so the first dictated word made

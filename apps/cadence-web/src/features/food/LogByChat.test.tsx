@@ -7,6 +7,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 vi.mock('../../components/MicButton.tsx', () => ({ MicButton: () => <button type="button">mic</button> }));
 vi.mock('./MealParseCard.tsx', () => ({ MealParseCard: () => <div>the card</div> }));
+vi.mock('../plan/occurrence/format.ts', () => ({ downscalePhoto: async () => 'data:image/jpeg;base64,eA==' }));
 const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../lib/api.ts', () => api);
 
@@ -70,5 +71,27 @@ describe('LogByChat — the line above the card says who read it', () => {
     fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'a banana' } });
     fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
     expect(screen.getByRole('status')).toHaveTextContent(READING);
+  });
+});
+
+function pickPhoto() {
+  fireEvent.click(screen.getByRole('button', { name: 'Add a photo' }));
+  const input = screen.getByRole('menuitem', { name: 'Take a photo' }).querySelector('input')!;
+  fireEvent.change(input, { target: { files: [new File(['x'], 'plate.jpg', { type: 'image/jpeg' })] } });
+}
+
+/** Photos in every chat (owner, 2026-11-01): the camera hands the photo AND the words over. */
+describe('LogByChat — the camera', () => {
+  it('hands the photo to the photo read with what is typed as its caption', async () => {
+    const onPhoto = vi.fn();
+    render(<LogByChat meal="dinner" onLogged={() => {}} onBack={() => {}} onPhoto={onPhoto} />);
+    fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'oat milk in it' } });
+    pickPhoto();
+    await vi.waitFor(() => expect(onPhoto).toHaveBeenCalledWith('data:image/jpeg;base64,eA==', 'oat milk in it'));
+  });
+
+  it('no onPhoto, no camera', () => {
+    render(<LogByChat meal="dinner" onLogged={() => {}} onBack={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Add a photo' })).toBeNull();
   });
 });

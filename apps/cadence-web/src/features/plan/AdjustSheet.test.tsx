@@ -16,6 +16,20 @@ vi.mock('../../lib/api.ts', () => ({
   dismissReplanPreview: (...a: unknown[]) => dismissReplanPreview(...a),
 }));
 vi.mock('../../lib/applied-week-note.ts', () => ({ markWeekApplied: vi.fn() }));
+// The photo tray's real pipeline, stubbed at its two seams: shrink-and-describe, then upload.
+vi.mock('../../lib/attachments/prepare.ts', () => ({
+  prepareAttachment: async (f: File) => ({
+    kind: 'image',
+    name: f.name,
+    mime: 'image/jpeg',
+    blob: f,
+    previewUrl: null,
+  }),
+}));
+vi.mock('../../lib/api/coach-attachments.ts', () => ({
+  uploadCoachAttachment: async (p: { name: string }) => ({ ref: `u/${p.name}`, kind: 'image', name: p.name }),
+}));
+const NO_PHOTOS = { refs: [], labels: [] };
 /** The committed week the diff compares against — empty means a first plan (whole week opens). */
 const committed = vi.hoisted(() => ({ activities: [] as unknown[] }));
 vi.mock('../../lib/query/index.ts', () => ({
@@ -51,7 +65,7 @@ describe('AdjustSheet — the typed steer goes to the coach', () => {
     fireEvent.change(box, { target: { value: "add chest and abs to today's workout" } });
     fireEvent.click(screen.getByText('Send it over →'));
 
-    expect(onSteerToCoach).toHaveBeenCalledWith("add chest and abs to today's workout");
+    expect(onSteerToCoach).toHaveBeenCalledWith("add chest and abs to today's workout", NO_PHOTOS);
     expect(previewReplan).not.toHaveBeenCalled();
     expect(replan).not.toHaveBeenCalled();
   });
@@ -83,7 +97,7 @@ describe('AdjustSheet — the typed steer goes to the coach', () => {
     fireEvent.change(box, { target: { value: "About today's hill intervals: keep it to 20 minutes" } });
     fireEvent.click(screen.getByText('Send it over →'));
 
-    expect(onSteerToCoach).toHaveBeenCalledWith("About today's hill intervals: keep it to 20 minutes");
+    expect(onSteerToCoach).toHaveBeenCalledWith("About today's hill intervals: keep it to 20 minutes", NO_PHOTOS);
     expect(previewReplan).not.toHaveBeenCalled();
   });
 
@@ -192,5 +206,38 @@ describe('AdjustSheet — changes first', () => {
     await screen.findByText('Make this my week');
     expect(screen.getByText('Easy run')).toBeTruthy();
     expect(screen.queryByText('What changes')).toBeNull();
+  });
+});
+
+/** Photos in every chat (owner, 2026-11-01): the camera on the box rides the same hand-off. */
+describe('AdjustSheet — a photo goes over with the words', () => {
+  async function pickPhoto(name = 'knee.jpg') {
+    fireEvent.click(screen.getByRole('button', { name: 'Add a photo' }));
+    const input = screen.getByRole('menuitem', { name: 'Choose from your photos' }).querySelector('input')!;
+    fireEvent.change(input, { target: { files: [new File(['x'], name, { type: 'image/jpeg' })] } });
+    await screen.findByRole('button', { name: `Remove ${name}` });
+  }
+
+  it('carries the photo with the steer', async () => {
+    const onSteerToCoach = vi.fn();
+    render(<AdjustSheet onClose={vi.fn()} onCommitted={vi.fn()} onSteerToCoach={onSteerToCoach} />);
+    fireEvent.change(screen.getByPlaceholderText(/one run day/), { target: { value: 'my knee looks like this' } });
+    await pickPhoto();
+    await waitFor(() => expect(screen.getByText('Send it over →')).not.toBeDisabled());
+    fireEvent.click(screen.getByText('Send it over →'));
+    expect(onSteerToCoach).toHaveBeenCalledWith('my knee looks like this', {
+      refs: [{ ref: 'u/knee.jpg', kind: 'image', name: 'knee.jpg' }],
+      labels: ['knee.jpg'],
+    });
+  });
+
+  it('a photo alone is an ask', async () => {
+    const onSteerToCoach = vi.fn();
+    render(<AdjustSheet onClose={vi.fn()} onCommitted={vi.fn()} onSteerToCoach={onSteerToCoach} />);
+    expect(screen.getByText('Send it over →')).toBeDisabled();
+    await pickPhoto();
+    await waitFor(() => expect(screen.getByText('Send it over →')).not.toBeDisabled());
+    fireEvent.click(screen.getByText('Send it over →'));
+    expect(onSteerToCoach).toHaveBeenCalledWith('', expect.objectContaining({ labels: ['knee.jpg'] }));
   });
 });

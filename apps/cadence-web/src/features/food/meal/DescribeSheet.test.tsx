@@ -8,6 +8,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 vi.mock('../../../components/MicButton.tsx', () => ({ MicButton: () => <button type="button">mic</button> }));
 vi.mock('../../../components/CoachFace.tsx', () => ({ CoachFace: () => <span /> }));
+vi.mock('../../plan/occurrence/format.ts', () => ({ downscalePhoto: async () => 'data:image/jpeg;base64,eA==' }));
 const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../../lib/api.ts', () => api);
 
@@ -86,5 +87,28 @@ describe('DescribeSheet — who read it, and what the rows say', () => {
     expect(screen.getByText('Whole milk or 2%?')).toBeInTheDocument();
     expect(screen.getByText('how much?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+  });
+});
+
+function pickPhoto() {
+  fireEvent.click(screen.getByRole('button', { name: 'Add a photo' }));
+  const input = screen.getByRole('menuitem', { name: 'Take a photo' }).querySelector('input')!;
+  fireEvent.change(input, { target: { files: [new File(['x'], 'plate.jpg', { type: 'image/jpeg' })] } });
+}
+
+/** Photos in every chat (owner, 2026-11-01): the camera hands the photo AND the words over. */
+describe('DescribeSheet — the camera', () => {
+  it('hands the photo to the photo read with what is typed as its caption', async () => {
+    const onPhoto = vi.fn();
+    render(
+      <DescribeSheet meal="lunch" seed="the small one" onAdd={async () => true} onClose={() => {}} onPhoto={onPhoto} />,
+    );
+    pickPhoto();
+    await vi.waitFor(() => expect(onPhoto).toHaveBeenCalledWith('data:image/jpeg;base64,eA==', 'the small one'));
+  });
+
+  it('no onPhoto, no camera', () => {
+    render(<DescribeSheet meal="lunch" onAdd={async () => true} onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Add a photo' })).toBeNull();
   });
 });

@@ -51,8 +51,11 @@ export function withParsedBody<T>(
 
 export const mealKindSchema = z.enum(['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other']);
 
-/** A previewed meal parse, confirmed verbatim. Bounded exactly like the parser's own output. */
-const parsedMealSchema = z.object({
+/**
+ * A previewed meal parse, confirmed verbatim. Bounded exactly like the parser's own output. Exported
+ * so the coach's `log_meal` (food-log-described.ts) runs its rows through the SAME caps as the card.
+ */
+export const parsedMealSchema = z.object({
   meal: mealKindSchema,
   items: z
     .array(

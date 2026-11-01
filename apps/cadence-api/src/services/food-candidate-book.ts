@@ -65,14 +65,18 @@ const AMOUNT =
   /^(?:(?:\d+(?:[./]\d+)?|\d*\.\d+|a|an|one|two|three|four|half|quarter|a few|some|a bit of|a splash of)\s*)?(?:(?:ml|l|g|kg|grams?|oz|ounces?|lbs?|cups?|c|tbsp|tablespoons?|tsp|teaspoons?|slices?|shots?|scoops?|cans?|pieces?|handful|small|medium|large)\b\s*)?(?:of\s+)?/i;
 const MEASURE_WORD = /\d|cup|tbsp|tsp|oz|ml|g\b|slice|shot|scoop|handful|small|medium|large|half|quarter/i;
 
-/** The parts of a meal, in order, as the person wrote them. Never empty for non-blank text. */
-export function splitMealParts(text: string): string[] {
+/** Every part, in order, as the person wrote them — no cap. Never empty for non-blank text. */
+function splitAllParts(text: string): string[] {
   const parts = text
     .split(SEPARATORS)
     .map((p) => p.replace(/^[\s.]+|[\s.]+$/g, ''))
-    .filter(Boolean)
-    .slice(0, MAX_PARTS);
+    .filter(Boolean);
   return parts.length ? parts : [text.trim()].filter(Boolean);
+}
+
+/** The parts of a meal, in order, as the person wrote them, at most MAX_PARTS. Never empty for non-blank text. */
+export function splitMealParts(text: string): string[] {
+  return splitAllParts(text).slice(0, MAX_PARTS);
 }
 
 /** "150ml 2% milk" → { q: "2% milk", measure: "150ml" }; "a banana" → { q: "banana", measure: null }. */
@@ -97,21 +101,42 @@ export interface MealPartLookup extends BookLookup {
   said: string;
 }
 
+/**
+ * The split's answer: one lookup per distinct part, the amount peeled off into its measure, and
+ * what was NOT read — said in words the card and the coach can both show, because a part dropped
+ * in silence reads as a meal that never had it (tool-response.ts rule 2). Two things are left
+ * out: parts past MAX_PARTS, and a part said more than once (the same food, amount stripped, is
+ * looked up once; "a latte, a latte" is one lookup and the line says so).
+ */
+export interface DescribedParts {
+  lookups: MealPartLookup[];
+  /** One line per part not read, e.g. `"berries" not read — the read takes at most 10 parts`. */
+  not_read: string[];
+}
+
+export function describedParts(text: string): DescribedParts {
+  const all = splitAllParts(text);
+  const kept = all.slice(0, MAX_PARTS);
+  const not_read = all.slice(MAX_PARTS).map((p) => `"${p}" not read — the read takes at most ${MAX_PARTS} parts`);
+  const byKey = new Map<string, { lookup: MealPartLookup; times: number }>();
+  for (const part of kept) {
+    const said = part.slice(0, SAID_MAX);
+    const { q, measure } = stripAmount(said);
+    const lookup: MealPartLookup = { said, q: q.slice(0, 80), measure, brand: null };
+    const k = lookup.q.toLowerCase();
+    const seen = byKey.get(k);
+    if (seen) seen.times += 1;
+    else byKey.set(k, { lookup, times: 1 });
+  }
+  for (const { lookup, times } of byKey.values()) {
+    if (times > 1) not_read.push(`"${lookup.q}" said ${times === 2 ? 'twice' : `${times} times`}, read once`);
+  }
+  return { lookups: [...byKey.values()].map((v) => v.lookup), not_read };
+}
+
 /** One lookup per distinct part, the amount peeled off into its measure. */
 export function partsToLookups(text: string): MealPartLookup[] {
-  const seen = new Set<string>();
-  return splitMealParts(text)
-    .map((part) => {
-      const said = part.slice(0, SAID_MAX);
-      const { q, measure } = stripAmount(said);
-      return { said, q: q.slice(0, 80), measure, brand: null };
-    })
-    .filter((l) => {
-      const k = l.q.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+  return describedParts(text).lookups;
 }
 
 export interface BookEntry {

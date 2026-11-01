@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../lib/api.ts';
 import { MicButton } from '../../components/MicButton.tsx';
+import { PhotoButton } from '../../components/PhotoButton.tsx';
+import { downscalePhoto } from '../plan/occurrence/format.ts';
 import { MealParseCard } from './MealParseCard.tsx';
 import { CoachReadLine } from './CoachReadLine.tsx';
 import { READING } from './coachReadCopy.ts';
@@ -29,6 +31,7 @@ export function LogByChat({
   onAppend,
   onLogged,
   onBack,
+  onPhoto,
 }: {
   meal: MealKind;
   /** Opened from the Voice tile — the mic starts live. */
@@ -42,6 +45,12 @@ export function LogByChat({
   onAppend?: (preview: MealPreview) => Promise<boolean>;
   onLogged: (preview: MealPreview) => void;
   onBack: () => void;
+  /**
+   * A photo picked from the composer's camera (owner, 2026-11-01: photos in every chat). It goes
+   * to the meal's photo read, with whatever is in the box as its caption — the words are evidence
+   * the picture cannot give. Absent = no camera.
+   */
+  onPhoto?: (photo: string, caption: string) => void;
 }) {
   const [text, setText] = useState('');
   const [said, setSaid] = useState<string | null>(null);
@@ -121,6 +130,12 @@ export function LogByChat({
           onSubmit={() => void read()}
         />
         <MicButton value={text} onChange={setText} disabled={busy} autoStart={listening} />
+        {onPhoto && (
+          <PhotoButton
+            disabled={busy}
+            onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, text.trim()))}
+          />
+        )}
         {text.trim() && (
           <button type="button" className="fc-send" disabled={busy} aria-label="Read that" onClick={() => void read()}>
             ›

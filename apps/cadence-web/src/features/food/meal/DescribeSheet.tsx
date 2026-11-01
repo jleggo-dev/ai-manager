@@ -14,6 +14,8 @@ import { previewMeal, type MealKind, type MealPreview } from '../../../lib/api.t
 import { CoachFace } from '../../../components/CoachFace.tsx';
 import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
+import { PhotoButton } from '../../../components/PhotoButton.tsx';
+import { downscalePhoto } from '../../plan/occurrence/format.ts';
 import { fmtKcal } from '../bracket/copy.ts';
 import { NOT_REACHED, READING } from '../coachReadCopy.ts';
 import { amountWords } from './amountWords.ts';
@@ -28,6 +30,7 @@ export function DescribeSheet({
   busy,
   onAdd,
   onClose,
+  onPhoto,
 }: {
   meal: MealKind;
   /** Words already typed elsewhere — the filter bar's "Tell the coach" hands its phrase over. */
@@ -37,6 +40,8 @@ export function DescribeSheet({
   /** Append the rows verbatim into the open meal; resolves false when it did not land. */
   onAdd: (items: Row[], rawText: string) => Promise<boolean>;
   onClose: () => void;
+  /** The camera (owner, 2026-11-01): the photo goes to the meal's photo read, the words as its caption. */
+  onPhoto?: (photo: string, caption: string) => void;
 }) {
   const [text, setText] = useState(seed);
   const [read, setRead] = useState<{ for: string; rows: Row[]; coach?: MealPreview['coach'] } | null>(null);
@@ -128,6 +133,13 @@ export function DescribeSheet({
         {err && <div className="food-empty ms-err">{err}</div>}
         <div className="ms-ds-foot">
           <MicButton value={text} onChange={setText} disabled={looking} autoStart={listening} />
+          {onPhoto && (
+            <PhotoButton
+              className="is-left"
+              disabled={looking}
+              onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, words))}
+            />
+          )}
           <button
             type="button"
             className="ms-ds-go"

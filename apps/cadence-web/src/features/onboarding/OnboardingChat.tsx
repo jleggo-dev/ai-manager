@@ -17,7 +17,7 @@ import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
 import { useStickToBottom } from './useStickToBottom.ts';
 import { useAnchorOnPrepend } from './useAnchorOnPrepend.ts';
 import { useFloatingInset } from './useFloatingInset.ts';
-import { useCoachChat } from './useCoachChat.ts';
+import { useCoachChat, type SendAttachments } from './useCoachChat.ts';
 import { useCoachAttachments } from './useCoachAttachments.ts';
 import { useCoachHistory } from './useCoachHistory.ts';
 import { useReplanWatch } from './useReplanWatch.ts';
@@ -95,6 +95,14 @@ const WALKTHROUGH_NOTES = {
  * floating settings gear). Both use the same turns, the same picks and the same composer —
  * deliberately, because "one running chat" stops being true the moment the tab is a different chat.
  */
+/** A visible send the app makes for them (MainTabs' bridge): their words, keyed so each fires
+ *  once, and any photos that rode with them (the plan's "Tell me what to change"). */
+export interface AutoSend {
+  text: string;
+  key: number;
+  attached?: SendAttachments;
+}
+
 export function OnboardingChat({
   onBuild,
   onBack,
@@ -148,7 +156,7 @@ export function OnboardingChat({
    * her). `key` is what makes a REPEAT of the same text fire again on a later end-of-trail: bump it
    * on every tap, because a plain "have I ever sent this" latch would never re-arm after the first.
    */
-  autoSend?: { text: string; key: number } | null;
+  autoSend?: AutoSend | null;
 }) {
   const {
     turns,
@@ -272,8 +280,8 @@ export function OnboardingChat({
   useEffect(() => {
     if (!autoSend || !restored || autoSendKeyRef.current === autoSend.key) return;
     autoSendKeyRef.current = autoSend.key;
-    const { text } = autoSend;
-    void sendText(text).then((ok) => {
+    const { text, attached } = autoSend;
+    void sendText(text, attached).then((ok) => {
       // A dead/stale session (or a turn already in flight) must not eat the tap silently — the
       // text lands back in the composer so the SAME Send the user already trusts can retry it.
       if (!ok) setInput(text);

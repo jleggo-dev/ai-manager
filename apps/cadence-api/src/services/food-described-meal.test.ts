@@ -319,6 +319,63 @@ describe('rememberedRows — the memory never skips a part it holds', () => {
   });
 });
 
+describe('the slot: the hint, else the words, else other — on both paths', () => {
+  const pick = item({ said: 'a banana', pick: 'c1', measure: '1 medium (118g)', count: 1 });
+
+  it('words that name a slot file the meal there when no hint is given (reached), and the phrase is not looked up', async () => {
+    const { d, calls } = deps({ reply: [pick] });
+    const p = await previewDescribedMeal(USER, 'a banana for breakfast', undefined, d);
+    expect(p.meal).toBe('breakfast');
+    expect(p.coach.reached).toBe(true);
+    expect(calls[0]?.said).toBe('a banana');
+    expect(p.items[0]).toMatchObject({ name: 'Banana, raw', food_id: 'f-banana', said: 'a banana' });
+    expect(p.raw_text).toBe('a banana for breakfast');
+  });
+
+  it('the fallback files it under the same slot and is told it — never its own guess', async () => {
+    // The old parse-meal path would say "other" here; the words say breakfast and that wins.
+    const { d } = deps({ call: async () => Promise.reject(new Error('503')) });
+    const p = await previewDescribedMeal(USER, 'a banana for breakfast', undefined, d);
+    // The slot phrase is not food: the fallback reads the words without it, under that slot.
+    expect(d.fallback).toHaveBeenCalledWith('a banana', 'breakfast');
+    expect(p.meal).toBe('breakfast');
+    expect(p.coach.reached).toBe(false);
+  });
+
+  it('the hint wins over the words', async () => {
+    const { d } = deps({ reply: [pick] });
+    const p = await previewDescribedMeal(USER, 'a banana for breakfast', 'snack', d);
+    expect(p.meal).toBe('snack');
+  });
+
+  it('near-miss: words that name no slot, and no hint, file under other on both paths', async () => {
+    const { d } = deps({ reply: [pick] });
+    expect((await previewDescribedMeal(USER, 'a banana', undefined, d)).meal).toBe('other');
+    const { d: down } = deps({ call: async () => Promise.reject(new Error('503')) });
+    expect((await previewDescribedMeal(USER, 'a breakfast bar', undefined, down)).meal).toBe('other');
+    expect(down.fallback).toHaveBeenCalledWith('a breakfast bar', 'other');
+  });
+});
+
+describe('parts the split did not read ride on the preview', () => {
+  it('names the parts past the cap and a part said twice; nothing when all were read', async () => {
+    const twelve = Array.from({ length: 12 }, (_, i) => `food${i + 1}`).join(', ');
+    const { d } = deps({ reply: [], call: async () => Promise.reject(new Error('503')) });
+    const p = await previewDescribedMeal(USER, twelve, 'lunch', d);
+    expect(p.coach.not_read).toEqual([
+      '"food11" not read — the read takes at most 10 parts',
+      '"food12" not read — the read takes at most 10 parts',
+    ]);
+    const { d: twice } = deps({
+      reply: [item({ said: 'a banana', pick: 'c1', measure: '1 medium (118g)', count: 1 })],
+    });
+    expect((await previewDescribedMeal(USER, 'a banana, a banana', 'snack', twice)).coach.not_read).toEqual([
+      '"banana" said twice, read once',
+    ]);
+    expect((await previewDescribedMeal(USER, 'a banana', 'snack', twice)).coach.not_read).toEqual([]);
+  });
+});
+
 describe('when she cannot be reached', () => {
   it('the fallback prices the pending words, every row labelled, and the trace does not repeat the notice', async () => {
     const { d } = deps({ call: async () => Promise.reject(new Error('503 from the provider')) });

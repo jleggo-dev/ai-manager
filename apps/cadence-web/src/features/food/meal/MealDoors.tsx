@@ -19,7 +19,7 @@ import type { MealDraft } from './useMealDraft.ts';
 export type MealDoor =
   | { at: 'add'; seed?: string }
   | { at: 'chat'; listening?: boolean }
-  | { at: 'photo'; photo: string }
+  | { at: 'photo'; photo: string; caption?: string }
   | { at: 'barcode' }
   | { at: 'shelf' };
 
@@ -71,6 +71,7 @@ export function MealDoors({
         }}
         onLogged={onClose}
         onBack={onClose}
+        onPhoto={(photo, caption) => onSwitch({ at: 'photo', photo, caption })}
       />
     );
   }
@@ -80,6 +81,7 @@ export function MealDoors({
       <PhotoReadPanel
         photo={door.photo}
         meal={kind}
+        initialCaption={door.caption}
         mode="draft"
         appendDraft={async (items, rawText, photo) => {
           const m = await draft.appendParsed(items, 'assumed', rawText, photo);
