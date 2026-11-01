@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../../lib/api.ts', () => api);
 
 const { DescribeSheet } = await import('./DescribeSheet.tsx');
-const { NOT_REACHED } = await import('../LogByChat.tsx');
+const { NOT_REACHED } = await import('../coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,

@@ -248,3 +248,45 @@ describe('parseBody / repertoire item patch schema — note', () => {
     expect(() => parseBody(patchRepertoireItemBodySchema, {})).toThrow(/nothing to update/);
   });
 });
+
+describe("parsedMealSchema — the photo door's confirm", () => {
+  const parsed = {
+    meal: 'breakfast',
+    items: [
+      {
+        name: 'Banana, raw',
+        qty: 1,
+        unit: 'medium',
+        est: { kcal: 105 },
+        food_id: '11111111-1111-4111-8111-111111111111',
+        said: '1 medium banana',
+      },
+    ],
+    macros: { kcal: 105 },
+    confidence: null,
+    flags: {},
+    raw_text: '1 medium banana',
+  };
+
+  it('carries the stored photo and the reading they stood behind', () => {
+    const out = parseBody(logMealBodySchema, {
+      parsed: { ...parsed, photo_ref: 'u/2026-11-01/p.jpg', photo_reading: 'A banana.\n\n1 medium banana' },
+    });
+    expect(out.parsed?.photo_ref).toBe('u/2026-11-01/p.jpg');
+    expect(out.parsed?.photo_reading).toBe('A banana.\n\n1 medium banana');
+  });
+
+  it('near-miss: a words card has neither, and an empty photo_ref is refused', () => {
+    expect(parseBody(logMealBodySchema, { parsed }).parsed?.photo_ref).toBeUndefined();
+    expect(() => parseBody(logMealBodySchema, { parsed: { ...parsed, photo_ref: '' } })).toThrow(BodyValidationError);
+  });
+
+  it("the words read run to the photo list's cap, not past it", () => {
+    expect(
+      parseBody(logMealBodySchema, { parsed: { ...parsed, raw_text: 'x'.repeat(1000) } }).parsed?.raw_text,
+    ).toHaveLength(1000);
+    expect(() => parseBody(logMealBodySchema, { parsed: { ...parsed, raw_text: 'x'.repeat(1001) } })).toThrow(
+      BodyValidationError,
+    );
+  });
+});

@@ -2,8 +2,9 @@
  * A described meal, coach-led: software splits and fetches, the food-check model decides once,
  * the store prices, the person confirms (docs/cadence/FOOD-LOGGING-COACH-LED.md, owner
  * 2026-10-29). This is what POST /nutrition/meals/preview runs — the typed and spoken doors on
- * the meal screen, and the coach's own preview_meal and log_meal (food-log-described.ts writes
- * what this reads) — in four steps:
+ * the meal screen, the coach's own preview_meal and log_meal (food-log-described.ts writes
+ * what this reads) — and the photo door's confirmed reading (POST /nutrition/photo/preview,
+ * meal-photo-read.ts) — in four steps:
  *
  *   1. Words this person confirmed before are priced from memory (food-phrases.ts): the
  *      deterministic rung, no lookup and no call.
@@ -63,7 +64,11 @@ export interface DescribedMealPreview extends Omit<ParsedMealResult, 'items'> {
     calls: number;
     /** What actually ran, one line per part — the trace the card shows, never canned copy. */
     checked: string[];
-    /** Parts the split did not read — past the cap, or said more than once — one line each. */
+    /**
+     * Parts the split did not read — past the cap, or said more than once — one line each. The
+     * photo door adds the reading's lines it did not read (meal-photo-read.ts), so the card says
+     * every line that was left out, from either side, in one place.
+     */
     not_read: string[];
   };
 }
@@ -135,14 +140,24 @@ export function traceLines(book: Pick<CandidateBook, 'sections'>, remembered: Me
   return lines;
 }
 
-/** The preview behind the described-meal doors. Throws only when there are no words at all. */
+/** The most characters of a typed or spoken meal that are read — the words path's own cap (validation/body.ts). */
+export const DESCRIBED_WORDS_MAX = 500;
+
+/**
+ * The preview behind the described-meal doors. Throws only when there are no words at all.
+ * `maxChars` is the typed path's cap unless the caller has its own (the photo door's list of
+ * lines, meal-photo-read.ts); the split caps the parts at MAX_PARTS either way. `notes` is what
+ * the photo reader could and could not tell, handed to the food-check call as its `notes`
+ * variable so a doubt there can become her question or her stated assumption; empty for words.
+ */
 export async function previewDescribedMeal(
   userId: string,
   text: string,
   mealHint?: MealKind,
   deps: DescribedMealDeps = productionDeps(userId),
+  opts: { maxChars?: number; notes?: string } = {},
 ): Promise<DescribedMealPreview> {
-  const trimmed = text.trim().slice(0, 500);
+  const trimmed = text.trim().slice(0, opts.maxChars ?? DESCRIBED_WORDS_MAX);
   if (!trimmed) throw new Error('a meal needs words');
   const named = readMealSlot(trimmed);
   const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : (named.slot ?? 'other');
@@ -166,7 +181,10 @@ export async function previewDescribedMeal(
   if (pending.length) {
     await addLookups(book, pending, deps.lookup);
     try {
-      outcome = await foodCheckRounds({ meal, said: pendingWords, book }, { call: deps.call, lookup: deps.lookup });
+      outcome = await foodCheckRounds(
+        { meal, said: pendingWords, book, notes: opts.notes ?? '' },
+        { call: deps.call, lookup: deps.lookup },
+      );
       failure = outcome.error;
     } catch (e) {
       failure = e instanceof Error ? `${e.name}: ${e.message}` : String(e);

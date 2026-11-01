@@ -29,6 +29,7 @@ import {
   listOverdueOpenMeals,
   updateNutritionLog,
 } from '../repos/nutrition.ts';
+import { assertOwnPhotoRef } from './photo-validate.ts';
 import { getFood, touchFoodUsage } from '../repos/foods.ts';
 import { getRecipe } from '../repos/recipes.ts';
 import { findPendingFoodLogOccurrence, findPendingMealOccurrence, setOccurrenceStatus } from '../repos/occurrences.ts';
@@ -209,14 +210,26 @@ async function learnPostLogAdds(userId: string, meal: NutritionLog, appended: Nu
 }
 
 /** Write items(+parts) and the recomputed running total. `{}` macros = an honest empty draft. */
+/**
+ * One statement for everything an add changes — the rows, the parts, the total and, from the
+ * photo door, the picture and its reading — so a failure leaves the meal as it was: never rows
+ * on the meal with the add reported failed and a retry doubling them (review of #457, round 2).
+ */
 async function writeItems(
   userId: string,
   logId: string,
   items: NutritionLog['items'],
   parts: NutritionLog['parts'],
+  photo: DraftPhoto = {},
 ): Promise<NutritionLog> {
   const macros: Macros = sumItemNutrients(items) ?? {};
-  const row = await updateNutritionLog(userId, logId, { items, parts: parts ?? [], macros });
+  const row = await updateNutritionLog(userId, logId, {
+    items,
+    parts: parts ?? [],
+    macros,
+    ...(photo.photo_ref ? { photo_ref: photo.photo_ref } : {}),
+    ...(photo.photo_reading ? { photo_reading: photo.photo_reading } : {}),
+  });
   if (!row) throw new Error('meal not found');
   return row;
 }
@@ -301,13 +314,28 @@ export interface ParsedDraftItem {
   said?: string;
 }
 
+/** The photo door's add (FOOD-LOGGING-COACH-LED step 4): the photo its read stored, the reading they confirmed. */
+export interface DraftPhoto {
+  photo_ref?: string;
+  photo_reading?: string;
+}
+
 /**
  * Append rows a parser already produced (the chat/voice/photo doors) — passed through verbatim,
  * never re-parsed. Resolved rows keep their food_id and est; numbers only pass the same
- * sanitizer every client-supplied estimate passes.
+ * sanitizer every client-supplied estimate passes. The photo door's add also puts its picture
+ * and its reading on the meal: the meal's FIRST photo stays and every reading is appended
+ * (repos/nutrition.ts updateNutritionLog says why), and a ref that is not this person's is refused
+ * before anything is written.
  */
-export async function appendParsed(userId: string, logId: string, parsed: ParsedDraftItem[]): Promise<NutritionLog> {
+export async function appendParsed(
+  userId: string,
+  logId: string,
+  parsed: ParsedDraftItem[],
+  photo: DraftPhoto = {},
+): Promise<NutritionLog> {
   const meal = await requireAddableMeal(userId, logId);
+  if (photo.photo_ref) assertOwnPhotoRef(userId, photo.photo_ref);
   const kept = parsed.filter((i) => i && typeof i.name === 'string' && i.name.trim()).slice(0, 20);
   const appended: NutritionLog['items'] = kept.map((i) => {
     const est = sanitizeMacros(i.est);
@@ -321,7 +349,9 @@ export async function appendParsed(userId: string, logId: string, parsed: Parsed
       ...(i.food_id ? { food_id: i.food_id } : {}),
     };
   });
-  const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts);
+  // The rows and the photo land in the same statement (writeItems), so neither can be on the
+  // meal without the other.
+  const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts, photo);
   await learnPostLogAdds(userId, meal, appended);
   // Logged, and learned (FOOD-LOGGING-COACH-LED.md): the words a linked row was said in now
   // price without a call next time — from the rows as written (sanitised, amount kept only when

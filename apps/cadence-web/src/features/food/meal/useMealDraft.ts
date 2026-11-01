@@ -17,6 +17,7 @@ import type { MealKind, Macros } from '@cadence/shared';
 import {
   appendFood as apiAppendFood,
   appendParsed as apiAppendParsed,
+  type DraftPhoto,
   appendRecipe as apiAppendRecipe,
   closeMeal as apiCloseMeal,
   editMealParts as apiEditMealParts,
@@ -41,7 +42,7 @@ import {
   type DraftCore,
 } from './useDraftCore.ts';
 
-export type { DoorTag };
+export type { DoorTag, DraftPhoto };
 
 export interface ParsedAppendItem {
   name: string;
@@ -95,9 +96,9 @@ function useDraftAppends(core: DraftCore) {
    * an amount Cadence supplied reads ASSUMED; everything else keeps the door it came through.
    */
   const appendParsed = useCallback(
-    async (items: ParsedAppendItem[], tag: DoorTag, rawText?: string) => {
+    async (items: ParsedAppendItem[], tag: DoorTag, rawText?: string, photo: DraftPhoto = {}) => {
       if (!items.length) return null;
-      const updated = await mutate((id) => apiAppendParsed(id, { items }));
+      const updated = await mutate((id) => apiAppendParsed(id, { items, ...photo }));
       if (updated) {
         tagNew(updated, items.length, (n) => {
           const it = items[n];

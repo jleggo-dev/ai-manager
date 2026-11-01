@@ -17,7 +17,7 @@ import { MicButton } from '../../../components/MicButton.tsx';
 import { PhotoButton } from '../../../components/PhotoButton.tsx';
 import { downscalePhoto } from '../../plan/occurrence/format.ts';
 import { fmtKcal } from '../bracket/copy.ts';
-import { NOT_REACHED, READING } from '../LogByChat.tsx';
+import { NOT_REACHED, READING } from '../coachReadCopy.ts';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
 

@@ -148,6 +148,57 @@ d('meal draft lifecycle (DB)', () => {
     expect(after.macros?.kcal).toBeCloseTo(450, 0);
   });
 
+  /**
+   * The photo door's add (FOOD-LOGGING-COACH-LED step 4): the meal keeps its picture and its
+   * reading. One row, one photo: the FIRST stays; every reading is appended; a ref that is not
+   * this person's is refused before anything is written.
+   */
+  it('a photo add puts the first photo and every reading on the meal', async () => {
+    const meal = await draft.openDraft(USER, { meal: 'lunch', date: today() });
+    const first = `${USER}/${today()}/first.jpg`;
+    const second = `${USER}/${today()}/second.jpg`;
+    const after1 = await draft.appendParsed(
+      USER,
+      meal.log_id,
+      [{ name: 'zzq latte', qty: 1, unit: 'venti', est: { kcal: 250 } }],
+      {
+        photo_ref: first,
+        photo_reading: 'A latte.\n\n1 venti latte',
+      },
+    );
+    expect(after1.photo_ref).toBe(first);
+    const after2 = await draft.appendParsed(
+      USER,
+      meal.log_id,
+      [{ name: 'zzq banana', qty: 1, unit: 'medium', est: { kcal: 105 } }],
+      {
+        photo_ref: second,
+        photo_reading: 'A banana.\n\n1 medium banana',
+      },
+    );
+    expect(after2.photo_ref).toBe(first);
+    expect(after2.items).toHaveLength(2);
+    const [row] = await sql<{ photo_reading: string | null }[]>`
+      select photo_reading from cadence.nutrition_logs where log_id = ${meal.log_id}`;
+    expect(row?.photo_reading).toBe('A latte.\n\n1 venti latte\n\nA banana.\n\n1 medium banana');
+  });
+
+  it("a photo add with a ref that is not this person's is refused, and nothing is written", async () => {
+    const meal = await draft.openDraft(USER, { meal: 'lunch', date: today() });
+    await expect(
+      draft.appendParsed(USER, meal.log_id, [{ name: 'zzq latte', est: { kcal: 250 } }], {
+        photo_ref: 'someone-else/2026-11-01/p.jpg',
+      }),
+    ).rejects.toThrow(/invalid photo/);
+    expect((await findNutritionLog(USER, meal.log_id))?.items).toEqual([]);
+  });
+
+  it('a words add leaves the photo columns alone', async () => {
+    const meal = await draft.openDraft(USER, { meal: 'lunch', date: today() });
+    const after = await draft.appendParsed(USER, meal.log_id, [{ name: 'zzq roll', est: { kcal: 140 } }]);
+    expect(after.photo_ref ?? null).toBeNull();
+  });
+
   it('remove keeps an emptied draft open — only close/expiry deletes it', async () => {
     const oats = await seedFood('zzq draft oats', 380, 80);
     const meal = await draft.openDraft(USER, { meal: 'breakfast', date: today() });

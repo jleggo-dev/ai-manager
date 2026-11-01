@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MEAL_KINDS } from '@cadence/shared';
-import { logPreviewedMeal, type MealKind, type MealPreview, type PlateAdvice } from '../../lib/api.ts';
+import { logPreviewedMeal, type Meal, type MealKind, type MealPreview, type PlateAdvice } from '../../lib/api.ts';
 import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { mealForNow } from '../plan/occurrence/format.ts';
 import { macroLineProteinFirst } from './amounts.ts';
@@ -54,7 +54,8 @@ export function MealParseCard({
   mealLabel?: string;
   /** Draft mode's write: hand the card's contents to the draft. Resolves false on failure. */
   onAppend?: (preview: MealPreview) => Promise<boolean>;
-  onLogged: () => void;
+  /** Called with the row that landed; draft mode's add has none to give. */
+  onLogged: (logged?: Meal) => void;
   /** "Just one food?" — re-run the same words through the single-food resolver. */
   onNotAMeal?: () => void;
   onCancel: () => void;
@@ -86,9 +87,9 @@ export function MealParseCard({
         else onLogged();
         return;
       }
-      await logPreviewedMeal(toPreview(), meal);
+      const logged = await logPreviewedMeal(toPreview(), meal);
       await invalidateNutritionDay();
-      onLogged();
+      onLogged(logged);
     } catch {
       setErr("Couldn't write that down just now — try again in a moment.");
     } finally {

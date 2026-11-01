@@ -72,9 +72,17 @@ export async function appendRecipe(logId: string, input: { recipe_id: string; se
   return r.meal;
 }
 
+/** The photo door's add: the photo its read stored and the reading they confirmed, kept on the meal. */
+export interface DraftPhoto {
+  photo_ref?: string;
+  photo_reading?: string;
+}
+
 /**
  * Append rows a parser already produced (the chat/voice/photo doors) — passed through verbatim,
  * never re-parsed. Items keep their given/assumed/asked amounts exactly as MealPreview holds them.
+ * The photo door also sends its photo and reading, so the meal keeps its picture (the server
+ * keeps the first and appends every reading — meal-draft.ts).
  */
 export async function appendParsed(
   logId: string,
@@ -88,9 +96,13 @@ export async function appendParsed(
       food_id?: string;
       said?: string;
     }[];
-  },
+  } & DraftPhoto,
 ): Promise<Meal> {
-  const r = await post<{ meal: Meal }>(`/nutrition/meals/${encodeURIComponent(logId)}/items`, { parsed: input.items });
+  const r = await post<{ meal: Meal }>(`/nutrition/meals/${encodeURIComponent(logId)}/items`, {
+    parsed: input.items,
+    ...(input.photo_ref ? { photo_ref: input.photo_ref } : {}),
+    ...(input.photo_reading ? { photo_reading: input.photo_reading } : {}),
+  });
   return r.meal;
 }
 
