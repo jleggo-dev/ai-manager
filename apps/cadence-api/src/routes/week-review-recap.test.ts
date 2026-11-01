@@ -35,6 +35,15 @@ vi.mock('../services/week-review-write.ts', () => ({
 vi.mock('../services/recap-write.ts', () => ({
   writeRecapForReview: (...a: unknown[]) => writeRecapForReview(...a),
 }));
+const maybeRunFactReview = vi.fn();
+vi.mock('../services/fact-review-trigger.ts', () => ({
+  maybeRunFactReview: (...a: unknown[]) => maybeRunFactReview(...a),
+}));
+// Catches like the real one (services/background.ts), so a rejected review is logged, never unhandled.
+const runInBackground = vi.fn((_label: string, work: Promise<unknown>) => void work.catch(() => {}));
+vi.mock('../services/background.ts', () => ({
+  runInBackground: (label: string, work: Promise<unknown>) => runInBackground(label, work),
+}));
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
     req.cadenceUserId = 'u1';
@@ -75,6 +84,7 @@ beforeEach(() => {
   writeRecapForReview.mockResolvedValue({ id: 'r1' });
   restartActiveWeek.mockResolvedValue(true);
   ensureHorizon.mockResolvedValue(12);
+  maybeRunFactReview.mockResolvedValue({ ran: false, reason: 'no_week' });
 });
 
 /**
@@ -184,5 +194,58 @@ describe('POST /plan/week-review/recap', () => {
     writeRecapForReview.mockRejectedValue(new Error('db down'));
     const r = await post();
     expect(r.status).toBe(500);
+  });
+});
+
+/**
+ * The weekly fact review (HARNESS-V3 C7) rides the check-in close. It runs for the week the recap
+ * was written for, only once that write landed, and only after the person has their answer — a
+ * slow or failed review must never turn "Confirm my week" into a wait or an error.
+ */
+describe('POST /plan/week-review/recap — the weekly fact review', () => {
+  beforeEach(() => {
+    writeRecapForReview.mockResolvedValue({ id: 'r1', week_start: '2026-08-17' });
+  });
+
+  it("runs for the recap's own week once the recap is written", async () => {
+    const r = await post();
+    expect(r.status).toBe(200);
+    expect(maybeRunFactReview).toHaveBeenCalledTimes(1);
+    expect(maybeRunFactReview).toHaveBeenCalledWith('u1', '2026-08-17');
+  });
+
+  it('hands the review to runInBackground — a bare await after the response is frozen on Vercel', async () => {
+    const work = Promise.resolve({ ran: true, reason: 'reviewed' });
+    maybeRunFactReview.mockReturnValue(work);
+    await post();
+    expect(runInBackground).toHaveBeenCalledTimes(1);
+    expect(runInBackground).toHaveBeenCalledWith('fact-review', work);
+  });
+
+  it('never runs when the recap write fails — the week did not close', async () => {
+    writeRecapForReview.mockRejectedValue(new Error('db down'));
+    await post();
+    expect(maybeRunFactReview).not.toHaveBeenCalled();
+    expect(runInBackground).not.toHaveBeenCalled();
+  });
+
+  it('never runs on a 404 — nothing pending is not a closed week', async () => {
+    getUser.mockResolvedValue({ pending_week_review: null, baseline: {} });
+    await post();
+    expect(maybeRunFactReview).not.toHaveBeenCalled();
+    expect(runInBackground).not.toHaveBeenCalled();
+  });
+
+  it('answers before the review finishes — nobody waits on it', async () => {
+    maybeRunFactReview.mockReturnValue(new Promise(() => {}));
+    const r = await post();
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ ok: true });
+  });
+
+  it('still confirms (200) when the review rejects', async () => {
+    maybeRunFactReview.mockRejectedValue(new Error('job down'));
+    const r = await post();
+    expect(r.status).toBe(200);
   });
 });

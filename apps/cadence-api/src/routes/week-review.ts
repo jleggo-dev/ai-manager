@@ -30,6 +30,8 @@ import { restartActiveWeek } from '../repos/plans.ts';
 import { buildWeekReviewFacts } from '../services/week-review-facts.ts';
 import { confirmSession, toggleMealSlot, toggleMindStep } from '../services/week-review-write.ts';
 import { writeRecapForReview } from '../services/recap-write.ts';
+import { maybeRunFactReview } from '../services/fact-review-trigger.ts';
+import { runInBackground } from '../services/background.ts';
 import { addDaysIso, mondayOnOrBefore } from '../services/progress-rhythm.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon, writtenAheadDays } from '../services/plan-horizon.ts';
 import {
@@ -184,7 +186,7 @@ router.post('/week-review/recap', async (req: Request, res: Response) => {
     const review = user?.pending_week_review ?? null;
     if (!review) return void res.status(404).json({ error: 'no review pending' });
     const unit: 'kg' | 'lb' = user?.baseline?.weight_unit === 'lbs' ? 'lb' : 'kg';
-    await writeRecapForReview(userId, review, unit, line);
+    const recap = await writeRecapForReview(userId, review, unit, line);
     // The week clock (0058): "Confirm my week" is one of the two check-in exits, and the only
     // one that may commit NOTHING — a confirmed week the coach has no changes for never reaches
     // `commitActivities`, so the wall on the trail would stay up forever. This route is the
@@ -205,6 +207,13 @@ router.post('/week-review/recap', async (req: Request, res: Response) => {
       console.error('[POST /plan/week-review/recap] horizon', e),
     );
     res.json({ ok: true });
+    // The weekly fact review (HARNESS-V3 C7) rides the check-in close: facts in their file that
+    // disagree become questions for the coach, never edits. Handed to runInBackground, so nobody
+    // waits on it: its `waitUntil` keeps the invocation alive until the review settles. A bare
+    // `await` after the response does not — Vercel freezes the instance the moment the response is
+    // sent, and work still in flight never runs (services/background.ts). runInBackground also
+    // catches and logs, so a failed review never reaches the confirm.
+    runInBackground('fact-review', maybeRunFactReview(userId, recap?.week_start));
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/week-review/recap]', err);
