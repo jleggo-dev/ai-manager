@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { MetronomeSpec, Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/shared';
 import { StepReps } from './tools/StepReps.tsx';
-import { StepTimer } from './tools/StepTimer.tsx';
+import { StepTimer, type TimerClock } from './tools/StepTimer.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
 import { StepInterval, type StepChrome } from './tools/StepInterval.tsx';
 import { StepBreathing } from './tools/StepBreathing.tsx';
@@ -19,6 +19,8 @@ import { Pip, StepHeader } from './wt-parts.tsx';
 import { overlay, closeBtn, caption, navBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
 import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
+import { clearSessionInProgress, type RunningClock, type SessionSnapshot } from './sessionInProgress.ts';
+import { useRememberSession } from './useRememberSession.ts';
 
 /**
  * The task walkthrough (v2 — design "browse / do / commit"). Moving between steps (Back ↔ Next, the
@@ -26,6 +28,10 @@ import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
  * nothing commits until Finish. The header bar is the workout to scale (one pip per step, width = its
  * minutes) and captions where you are; the last step hands to the Recap; Finish is the single write,
  * then a celebration. Free browsing before touching a tool IS the preview — no separate mode.
+ *
+ * A plan task's walkthrough (one with an `occurrenceId`) is remembered on disk as it goes and
+ * forgotten on close or Finish, so the app coming back after iOS reclaimed it reopens the session
+ * where it was — step, logs, tempos and a running timer, caught up (sessionInProgress.ts).
  */
 export function Walkthrough({
   walkthrough,
@@ -35,6 +41,7 @@ export function Walkthrough({
   onClose,
   onComplete,
   onTalk,
+  resume,
 }: {
   walkthrough: WalkthroughData;
   title: string;
@@ -49,12 +56,17 @@ export function Walkthrough({
   /** Opens the coach from the celebration's "Talk to me". Omitted → the button isn't shown,
    *  rather than shown and inert. */
   onTalk?: () => void;
+  /** The remembered session this one reopens, when the app came back mid-session. */
+  resume?: SessionSnapshot | null;
 }) {
   const steps = walkthrough.steps;
-  const [idx, setIdx] = useState(0);
-  const [visited, setVisited] = useState<ReadonlySet<number>>(() => new Set([0]));
-  const [logs, setLogs] = useState<StepLogs>({});
-  const [phase, setPhase] = useState<'step' | 'recap' | 'done'>('step');
+  const [idx, setIdx] = useState(resume?.idx ?? 0);
+  const [visited, setVisited] = useState<ReadonlySet<number>>(() => new Set(resume?.visited ?? [0]));
+  const [logs, setLogs] = useState<StepLogs>(resume?.logs ?? {});
+  const [phase, setPhase] = useState<'step' | 'recap' | 'done'>(resume?.phase ?? 'step');
+  // A timer that is RUNNING, so a reload can reopen it running. Forgotten on leaving the step —
+  // stepping away has always stopped a timer.
+  const [clock, setClock] = useState<RunningClock | null>(resume?.clock ?? null);
   const [allSteps, setAllSteps] = useState(false);
   // A step may recolour the shell while it is on screen — today only the interval player, whose
   // whole instruction IS the frame colour. Null means the ordinary walkthrough tone.
@@ -62,17 +74,32 @@ export function Walkthrough({
   // Tempos settled during the session, keyed by STEP TITLE — that is what the server matches a
   // piece on. Held here rather than posted per change so they ride the walkthrough's own commit
   // rule: nothing about a session reaches the store until Finish.
-  const [tempos, setTempos] = useState<Record<string, MetronomeSpec>>({});
+  const [tempos, setTempos] = useState<Record<string, MetronomeSpec>>(resume?.tempos ?? {});
+
+  useRememberSession(
+    occurrenceId
+      ? { occurrenceId, title, area, walkthrough, idx, visited: [...visited], logs, tempos, phase, clock }
+      : null,
+  );
+  const close = () => {
+    clearSessionInProgress();
+    onClose();
+  };
 
   const step = steps[idx];
   const left = minutesLeft(steps, idx, visited);
 
   const go = (i: number) => {
+    if (i !== idx) setClock(null);
     setIdx(i);
     setVisited((v) => new Set(v).add(i));
     setAllSteps(false);
   };
-  const next = () => (idx + 1 < steps.length ? go(idx + 1) : setPhase('recap'));
+  const toPhase = (p: 'step' | 'recap' | 'done') => {
+    if (p !== 'step') setClock(null);
+    setPhase(p);
+  };
+  const next = () => (idx + 1 < steps.length ? go(idx + 1) : toPhase('recap'));
   const prev = () => idx > 0 && go(idx - 1);
   const setLog = (id: string, log: StepLog) => setLogs((l) => ({ ...l, [id]: log }));
 
@@ -102,6 +129,7 @@ export function Walkthrough({
         void settleTempo(occurrenceId, { title, bpm: tempo.bpm, meter: tempo.meter }).catch(() => undefined);
       }
     }
+    clearSessionInProgress();
     onComplete(recapSummary(steps, logs));
   };
 
@@ -126,13 +154,13 @@ export function Walkthrough({
         steps={steps}
         logs={logs}
         title={title}
-        onBack={() => setPhase('step')}
+        onBack={() => toPhase('step')}
         onJump={(i) => {
-          setPhase('step');
+          toPhase('step');
           go(i);
         }}
         onResolve={setLog}
-        onFinish={() => setPhase('done')}
+        onFinish={() => toPhase('done')}
       />
     );
   }
@@ -144,7 +172,7 @@ export function Walkthrough({
       aria-label="Task walkthrough"
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button style={closeBtn} onClick={onClose} aria-label="Close">
+        <button style={closeBtn} onClick={close} aria-label="Close">
           ✕
         </button>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -218,7 +246,10 @@ export function Walkthrough({
                 position — and the new step opened with the old step's finished clock: 0:00 left,
                 "Resume" (2026-09-06). */}
             <div key={step.id} style={{ marginTop: 18 }}>
-              {renderTool(step, logs, setLog, next, steps[idx + 1]?.title)}
+              {renderTool(step, logs, setLog, next, steps[idx + 1]?.title, {
+                resume: clock?.stepId === step.id ? clock : null,
+                set: (c) => setClock(c ? { stepId: step.id, ...c } : null),
+              })}
             </div>
             {/* The metronome rides ALONGSIDE the tool rather than being one, so it is attached here
                 — once, under whatever card the step rendered — instead of inside each tool that
@@ -282,7 +313,7 @@ export function Walkthrough({
           onJump={go}
           onReview={() => {
             setAllSteps(false);
-            setPhase('recap');
+            toPhase('recap');
           }}
         />
       )}
@@ -298,6 +329,7 @@ function renderTool(
   setLog: (id: string, l: StepLog) => void,
   onAdvance: () => void,
   nextTitle?: string,
+  clock?: { resume: TimerClock | null; set: (c: TimerClock | null) => void },
 ): ReactNode {
   const t = step.tool;
   const log = logs[step.id];
@@ -323,6 +355,8 @@ function renderTool(
           title={step.title}
           nextTitle={nextTitle}
           log={log?.kind === 'timer' ? log : undefined}
+          resumeClock={clock?.resume}
+          onClock={clock?.set}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}
         />

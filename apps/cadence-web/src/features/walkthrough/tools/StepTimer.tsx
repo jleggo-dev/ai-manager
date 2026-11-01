@@ -16,6 +16,12 @@ const minutesOf = (s: number) => Math.round(s / 60) || 1;
 const PREROLL = 5;
 const TIMER_COMMANDS: HandsFreeCommand[] = ['start', 'pause', 'restart'];
 
+/** A running clock as the session remembers it: the instant this run began and what came before. */
+export interface TimerClock {
+  startedAt: number;
+  base: number;
+}
+
 /**
  * Timer tool (walkthrough v2, design E) — the ring is the clock (one continuous arc), the centre
  * counts m:ss down. Start hands to a **5 s grey pre-roll** (design B3): a cool-grey sweep counting
@@ -46,6 +52,8 @@ export function StepTimer({
   title,
   nextTitle,
   log,
+  resumeClock,
+  onClock,
   onLog,
   onDone,
 }: {
@@ -56,14 +64,19 @@ export function StepTimer({
   title?: string;
   nextTitle?: string;
   log?: TimerLog;
+  /** A clock that was running when the app was last seen (sessionInProgress.ts) — the timer opens
+   *  already running from that instant, caught up, instead of idle at its last pause. */
+  resumeClock?: TimerClock | null;
+  /** Told every time the clock starts or stops, so the session can remember a RUNNING timer. */
+  onClock?: (clock: TimerClock | null) => void;
   onLog: (l: TimerLog) => void;
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<'idle' | 'preroll' | 'running'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'preroll' | 'running'>(resumeClock ? 'running' : 'idle');
   const [preroll, setPreroll] = useState(PREROLL);
   // The clock: `base` is what was done before the current run; `startedAt` the instant it began.
-  const [base, setBase] = useState(log?.done ? log.elapsedSec : (log?.elapsedSec ?? 0));
-  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [base, setBase] = useState(resumeClock?.base ?? (log?.done ? log.elapsedSec : (log?.elapsedSec ?? 0)));
+  const [startedAt, setStartedAt] = useState<number | null>(resumeClock?.startedAt ?? null);
   const elapsed = useWallClock(startedAt, base);
   const [chimeOn, setChimeOn] = useState(chime);
   const [didIt, setDidIt] = useState(false);
@@ -82,6 +95,7 @@ export function StepTimer({
     setPhase('running');
     if (base < seconds) bookTimerAlarm(now + (seconds - base) * 1000, title ?? 'Time', mmss(seconds));
     startTimerActivity(title ?? 'Timer', seconds, now, base);
+    onClock?.({ startedAt: now, base });
   }
 
   /**
@@ -92,6 +106,7 @@ export function StepTimer({
     setBase(at);
     setStartedAt(null);
     setPhase('idle');
+    onClock?.(null);
     cancelTimerAlarm();
     if (why === 'paused') pauseTimerActivity(at);
     else endTimerActivity();
@@ -130,7 +145,8 @@ export function StepTimer({
   });
 
   // Whatever is booked on the notification centre, and whatever is on the lock screen, dies
-  // with the tool.
+  // with the tool. (The session forgets a running clock when it leaves the step — Walkthrough's
+  // `go` — not here, so a StrictMode remount can't wipe a clock that is still running.)
   useEffect(
     () => () => {
       cancelTimerAlarm();

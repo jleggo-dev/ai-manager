@@ -277,6 +277,15 @@ export interface PhotosCapability {
 
 export type PhotoSource = 'camera' | 'library';
 
+/**
+ * Keep the screen from auto-locking (owner, 2026-11-01): held while the metronome clicks, because
+ * the click lives in the webview and a locked phone silences it. Never throws; where nothing can
+ * hold the screen it simply doesn't, and the metronome behaves as it always did.
+ */
+export interface KeepAwakeCapability {
+  set(on: boolean): Promise<void>;
+}
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
@@ -288,6 +297,7 @@ export interface Capabilities {
   workoutPlan: WorkoutPlanCapability;
   watchSync: WatchSyncCapability;
   photos: PhotosCapability;
+  keepAwake: KeepAwakeCapability;
 }
 
 import type { LocalNotificationSpec, WatchWeekPayload, WorkoutPlanSpec } from '@cadence/shared';

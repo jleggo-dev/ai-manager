@@ -10,6 +10,7 @@ import { TrailHeader } from '../today/TrailHeader.tsx';
 import { DailyCheckIn } from '../today/DailyCheckIn.tsx';
 import { PlanAdjustNote, PlanProposalBanner } from './PlanProposalBanner.tsx';
 import { PlanSkeleton } from './PlanSkeleton.tsx';
+import { readSessionInProgress } from '../walkthrough/sessionInProgress.ts';
 import { DetourBar } from './DetourBar.tsx';
 import { DetourStateSheet } from './DetourStateSheet.tsx';
 import { DetourSetup, type DetourChoice } from './DetourSetup.tsx';
@@ -109,7 +110,16 @@ export function PlanView({
   const shelfKey =
     data?.pendingProposal && isShelvedProposal(data.pendingProposal.action) ? data.pendingProposal.created_at : null;
   const shelf = usePullReveal(shelfKey);
-  const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(null); // redesign start sheet (stepped task)
+  // A session the app was in the middle of when iOS reclaimed it reopens on mount, mid-session
+  // (owner, 2026-11-01: a session behaves like a running app). Read once; dropped when its sheet
+  // closes, so reopening that task later starts fresh.
+  const [resumeSession, setResumeSession] = useState(() => readSessionInProgress());
+  const [startOcc, setStartOcc] = useState<{ id: string; title: string } | null>(() =>
+    resumeSession ? { id: resumeSession.occurrenceId, title: resumeSession.title } : null,
+  ); // redesign start sheet (stepped task)
+  useEffect(() => {
+    if (!startOcc) setResumeSession(null);
+  }, [startOcc]);
   // The capture sheet, WITH what the trail already knew when it was tapped. Storing only the id
   // meant the sheet had to re-learn the row's own title from the server before it could draw its
   // header — a round trip to render words the phone was already holding (PERF-06).
@@ -428,6 +438,7 @@ export function PlanView({
         <StartSheet
           occurrenceId={startOcc.id}
           title={startOcc.title}
+          resume={resumeSession?.occurrenceId === startOcc.id ? resumeSession : null}
           onClose={() => setStartOcc(null)}
           onLogged={() => {
             refresh();
