@@ -287,6 +287,49 @@ dearer; Gemini is too slow here.
 top rows in the book, every model on every run picked "Caffè Latte (Venti)" over the Matcha the
 code logs today, stating the assumption. The code fix that was paused is this design.
 
+### Eval results — run 3, the shipped job (2026-11-01)
+
+`npm run eval:food-check -- --prompt-from-config`: the `food-check` job's own prompt and strict
+schema as the config ships them, through the service's split, book and round loop
+(`food-candidate-book.ts`, `food-candidate-sources.ts`, `food-check.ts`) — the eval of what
+production runs, not of a prompt kept beside it. Same 20 meals, lookups against the owner's real
+ledger, USDA and FatSecret's top 5 rows. gpt-5.4-mini run twice (3a, 3b), claude-sonnet-5-5 once;
+71 model calls in all. The bar was run 2: 35/40 at about 4,800 prompt tokens a call.
+
+| Model             | Right 3a | Right 3b | Both runs | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) |
+| ----------------- | -------: | -------: | --------: | ----------: | ------------------: | ----: | ----------------------------------: |
+| **gpt-5.4-mini**  |    18/20 |    18/20 | **36/40** |       **0** |               16–17 |   5–6 |                     5,300–5,700 · ~4,600 |
+| claude-sonnet-5-5 |    19/20 |        — |     19/20 |           0 |                  17 |   8.0 |                        8,200 · ~7,400 |
+
+Reading it:
+
+- **The bar holds: 36/40 against 35/40**, with no made-up id in 71 calls and no failed meal. Both
+  pointers of ruling 1 answered live on 2026-11-01, so both are proved callable today.
+- **The Starbucks Venti latte (#426) lands.** Every run on both models picked "Caffè Latte
+  (Venti)" at 250 kcal / 16 g protein — the case that started this.
+- **Tokens: the median call is at the bar, the average above it.** ~4,600 median against ~4,800;
+  the average (5,300–5,700) is pulled up by the two six-part meals (the eggs plate's second call
+  carried an 11k-token book). Two things grew the book on purpose: eight records shown per lookup
+  (was six) and the plain-name/brand rules for estimates. Through the gateway the Devs.ai preamble
+  (~2,600 of each call) goes to zero.
+- **The two misses are the same two every time, and neither is new.** (1) `pair-coconut-canned`:
+  every model on every run picks the same canned coconut milk record (142 kcal for ¼ cup against
+  the hand-written 110) — run 2 already called that yardstick doubtful; it wants checking before
+  it counts against anyone. (2) `pair-latte-small`: gpt-5.4-mini twice picked a record with no
+  small size — once "1 serving" at 60 kcal, once the shared ledger's **"Cafe Latte · 1 drink · 0
+  kcal"** even though the book marked it `incomplete: no usable calories`. Sonnet picked a sized
+  latte at 150. The marker is in the book and in the prompt; the model read past it once. The
+  software fix the run-2 notes asked for still stands: that ledger row wants cleaning (an
+  `incomplete` record is still a record she can pick, by design — a guard reports, it does not
+  veto).
+- **The guard round fired zero times** across 71 calls: no pick outside the book, no measure a
+  record did not offer. The one-extra-lookups round fired on 3–4 meals per run, always the
+  dictated or six-part ones.
+- **Caveats, as before:** n = 2 for the mini and 1 for Sonnet (a pointer, not a verdict); two
+  Sonnet calls came back with no usage figures and count as 0 in its average; USDA answered 400
+  on a few lookups during the run and the trace recorded it as "USDA failed" (the fan-out moved
+  on, as designed).
+
 ## When she can't be reached
 
 The model provider fails sometimes (2026-10-27 outage). A meal must never vanish because a model

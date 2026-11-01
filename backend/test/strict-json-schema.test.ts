@@ -87,7 +87,7 @@ describe('closeSchemaForStrictMode over every schema job in ai-admin.config.json
   it('food_check goes strict', () => {
     const job = schemaJobs.find((j) => j.name === 'food_check');
     expect(job).toBeDefined();
-    expect(closeSchemaForStrictMode(job!.schema).strict).toBe(true);
+    expect(closeSchemaForStrictMode(job?.schema ?? {}).strict).toBe(true);
   });
 
   it('sends exactly these jobs non-strict (a bare object somewhere in their schema)', () => {
