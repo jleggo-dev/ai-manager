@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { MicButton } from '../../components/MicButton.tsx';
+import { PhotoButton } from '../../components/PhotoButton.tsx';
 
 /**
  * The "tell me what to change" box — a textarea that grows with what you type.
@@ -22,12 +23,15 @@ export function SteerBox({
   disabled,
   placeholder,
   autoFocus,
+  onPhotos,
 }: {
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  /** The camera (owner, 2026-11-01: photos in every chat) — the photos go to the coach with the words. */
+  onPhotos?: (files: File[]) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -74,6 +78,7 @@ export function SteerBox({
         disabled={disabled}
       />
       <MicButton value={value} onChange={onChange} disabled={disabled} />
+      {onPhotos && <PhotoButton multiple disabled={disabled} onPick={onPhotos} />}
     </div>
   );
 }

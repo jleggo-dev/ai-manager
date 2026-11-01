@@ -46,6 +46,8 @@ import './styles/seed-review.css';
 // The list screen itself (.rl-*, P6 "the room") — leans on `.ri-collision` above for the collision
 // card and on styles.css's `.sheet-*`/`.ld-row`/`.detour-chip`/`.cta`, so it loads last of the three.
 import './styles/repertoire-list.css';
+// The camera on every chat (.photo-btn/.photo-menu) — components/PhotoButton.tsx.
+import './styles/photo-button.css';
 import { App } from './App.tsx';
 import { createAppQueryClient, persistBootCache, seedBootCache } from './lib/query/index.ts';
 import { warmApi } from './lib/api.ts';

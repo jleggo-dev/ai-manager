@@ -1,0 +1,62 @@
+/* ── The camera on every chat (owner, 2026-11-01) ─────────────────────────────────── */
+/* Same footprint and quiet colour as the mic beside it: adding a photo is as ordinary as talking.
+   The choice opens ABOVE the button, because every composer sits at the bottom of its screen. */
+.photo-btn {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.photo-btn-i {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.photo-btn-i:hover {
+  color: var(--text);
+}
+.photo-btn-i:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.photo-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--ink);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(44, 47, 51, 0.14);
+}
+.photo-btn.is-left .photo-menu {
+  right: auto;
+  left: 0;
+}
+.photo-menu > button,
+.photo-menu > label {
+  display: block;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.photo-menu > button:hover,
+.photo-menu > label:hover {
+  background: var(--ink-2);
+}

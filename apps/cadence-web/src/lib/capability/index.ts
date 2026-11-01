@@ -263,6 +263,20 @@ export interface TimerActivityStart {
   baseSeconds: number;
 }
 
+/**
+ * A photo for a chat, from the place the person chose: the camera, or the photos they already
+ * have (owner, 2026-11-01: "a camera icon and to choose from camera and photo"). A plain file
+ * input cannot make that choice — iOS always puts its own menu in between — so on the phone the
+ * native picker opens the one they tapped. Web reports unavailable and the button falls back to
+ * file inputs. `pick` answers null when they backed out; it never throws.
+ */
+export interface PhotosCapability {
+  isAvailable(): boolean;
+  pick(source: PhotoSource): Promise<File | null>;
+}
+
+export type PhotoSource = 'camera' | 'library';
+
 export interface Capabilities {
   health: HealthCapability;
   push: PushCapability;
@@ -273,6 +287,7 @@ export interface Capabilities {
   dictation: DictationCapability;
   workoutPlan: WorkoutPlanCapability;
   watchSync: WatchSyncCapability;
+  photos: PhotosCapability;
 }
 
 import type { LocalNotificationSpec, WatchWeekPayload, WorkoutPlanSpec } from '@cadence/shared';
