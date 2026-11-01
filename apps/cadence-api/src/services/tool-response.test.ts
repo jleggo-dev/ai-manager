@@ -1,7 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
-import { boundToolResponse, toolEmptyText, toolFaultText, TOOL_RESPONSE_LIMIT } from './tool-response.ts';
+import {
+  boundToolResponse,
+  toolActionFaultText,
+  toolChangeText,
+  toolEmptyText,
+  toolFaultText,
+  toolNothingChangedText,
+  toolOutputShape,
+  TOOL_RESPONSE_LIMIT,
+} from './tool-response.ts';
 import { executeCoachToolCalls } from './coach-tools.ts';
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
+import { COACH_ACTION_TOOLS } from './coach-actions.ts';
 
 const HOW = 'see docs/cadence/TOOL-HARNESS.md → "Adding a tool: the checklist", step 4';
 
@@ -106,5 +116,88 @@ describe('every tool path is bounded, not just the ones someone remembered', () 
       spy.mockRestore();
       runSpy.mockRestore();
     }
+  });
+});
+
+/**
+ * Actions too (HARNESS-V3 C4, gap 1). `actionOutputs` used to pass straight through — the one path
+ * in the harness where a tool could hand her text of any length. The catch path is bounded as well,
+ * so nothing an action produces, thrown or returned, escapes the limit.
+ */
+describe('what an action hands back is bounded too', () => {
+  it('cuts an action that returns an enormous answer, and says it was cut', async () => {
+    const huge = Array.from({ length: 5000 }, (_, i) => `changed: row ${i}`).join('\n');
+    const spy = vi.spyOn(COACH_ACTION_TOOLS.log_session!, 'run').mockResolvedValue(huge);
+    try {
+      const [out] = await executeCoachToolCalls('u1', [{ toolCallId: '1', name: 'log_session' }]);
+      expect(out!.output.length, HOW).toBeLessThanOrEqual(TOOL_RESPONSE_LIMIT + 200);
+      expect(out!.output).toMatch(/TRUNCATED/);
+      expect(out!.output.startsWith('changed: row 0')).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('an action that throws reaches her as a fault, in the fault shape, and bounded', async () => {
+    const spy = vi.spyOn(COACH_ACTION_TOOLS.log_session!, 'run').mockRejectedValue(new Error('db down'));
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const [out] = await executeCoachToolCalls('u1', [{ toolCallId: '1', name: 'log_session' }]);
+      expect(out!.output).toBe(toolActionFaultText());
+      expect(toolOutputShape(out!.output)).toBe('fault');
+      expect(out!.output.length).toBeLessThan(TOOL_RESPONSE_LIMIT);
+    } finally {
+      spy.mockRestore();
+      quiet.mockRestore();
+    }
+  });
+});
+
+/**
+ * The three shapes an action answers in (HARNESS-V3 C4, gap 3). The first line decides which, so a
+ * model skimming — or a log reader — can tell "it changed", "it did not" and "it broke" apart from
+ * the first few words. coach-action-contract.test.ts holds every action to these.
+ */
+describe('an action says what changed, what did not, or that it broke', () => {
+  it('writes one changed: line per fact, then unchanged: lines, then her next steps', () => {
+    const out = toolChangeText({
+      changed: ['"Read 50 books" now aims at 50 books (was 100).'],
+      unchanged: ['their current week — it still holds the sessions built before this.'],
+      next: ['Say what changed.'],
+    });
+    expect(out.split('\n')).toEqual([
+      'changed: "Read 50 books" now aims at 50 books (was 100).',
+      'unchanged: their current week — it still holds the sessions built before this.',
+      'Say what changed.',
+    ]);
+    expect(toolOutputShape(out)).toBe('changed');
+  });
+
+  it('says nothing changed, and why, on its first line', () => {
+    const out = toolNothingChangedText('no goal was named.', ['Ask which goal they mean.']);
+    expect(out).toBe('nothing changed: no goal was named.\nAsk which goal they mean.');
+    expect(toolOutputShape(out)).toBe('nothing-changed');
+  });
+
+  it('an action fault is a fault — and shares the read fault its marker', () => {
+    expect(toolOutputShape(toolActionFaultText())).toBe('fault');
+    expect(toolOutputShape(toolActionFaultText('logged', 'point them at the Food screen.'))).toBe('fault');
+    expect(toolOutputShape(toolFaultText('get_workout_history'))).toBe('fault');
+    expect(toolActionFaultText()).not.toMatch(/nothing on file|nothing changed/i);
+  });
+
+  /** Table: the first line decides, and near-misses are not mistaken for a shape. */
+  it.each([
+    ['changed: x', 'changed'],
+    ['changed: x\nnothing changed: y', 'changed'],
+    ['nothing changed: x\nchanged: y', 'nothing-changed'],
+    ['Changed: x', 'unshaped'], // capital — not the helper's output
+    ['unchanged: x', 'unshaped'], // a call that only lists what stayed is not a change
+    ['Done — x\nchanged: y', 'unshaped'], // the shape is the FIRST line, not any line
+    ['changed:x', 'unshaped'], // no space: hand-typed, not the helper
+    ['Nothing was changed: x', 'unshaped'], // the old wording, before the helper
+    ['', 'unshaped'],
+  ] as const)('%j → %s', (text, shape) => {
+    expect(toolOutputShape(text)).toBe(shape);
   });
 });

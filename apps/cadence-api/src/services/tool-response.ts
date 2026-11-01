@@ -18,7 +18,13 @@
  *     or a long journal can crowd out the conversation it was fetched to serve. Anthropic caps
  *     Claude Code's tool results at 25,000 tokens; Cloudflare truncates every result and tells the
  *     model how to narrow. Both are right, and the telling matters as much as the cutting — a
- *     silent truncation is a quiet lie about completeness.
+ *     silent truncation is a quiet lie about completeness. Since HARNESS-V3 P5 this covers what
+ *     ACTIONS hand back too, not only reads (coach-tools.ts).
+ *  3. **An action says what changed** (HARNESS-V3 C4). Every action that changes data — or puts
+ *     something on their screen to accept — answers in one of three shapes, decided by its first
+ *     line: `changed:` lines (`toolChangeText`), one `nothing changed:` line (`toolNothingChangedText`),
+ *     or a fault (`toolActionFaultText`). Her confirmation to the user is then read from facts the
+ *     tool stated, not inferred from prose. coach-action-contract.test.ts walks every action.
  */
 
 /**
@@ -58,4 +64,56 @@ export function boundToolResponse(text: string, limit = TOOL_RESPONSE_LIMIT): st
     `${kept}\n— TRUNCATED — this is only the first part. Ask for a narrower period or fewer items ` +
     'if you need the rest, and do not describe this to the user as everything on file.'
   );
+}
+
+/** The words every fault carries, read or action, so the two kinds of fault are one shape. */
+const FAULT_MARK = 'this is a fault on our side';
+
+/**
+ * Said when an ACTION broke — it threw, or a write it depends on failed in a way the tool could not
+ * check. Nothing is claimed either way about what landed, because a throw partway through can leave
+ * part of a change behind. `verb` names the act ("logged", "composed"); `next` is what she should
+ * do about it.
+ */
+export function toolActionFaultText(verb = 'done', next = 'tell the user plainly and offer to try again.'): string {
+  return `That could not be ${verb} just now — ${FAULT_MARK}; ${next}`;
+}
+
+/** What an action that changed something hands back. */
+export interface ToolChange {
+  /** What is now different, one fact per line — read back from the store where the tool can. */
+  changed: [string, ...string[]];
+  /** What the call left as it was, named so she does not have to guess. */
+  unchanged?: string[];
+  /** Next steps for THIS result (TOOL-HARNESS.md, Responses), after the facts. */
+  next?: string[];
+}
+
+/**
+ * `changed:` lines, then `unchanged:` lines, then her next steps. The `changed` list cannot be
+ * empty — by type — because a call that changed nothing says so with `toolNothingChangedText`.
+ */
+export function toolChangeText({ changed, unchanged = [], next = [] }: ToolChange): string {
+  return [...changed.map((c) => `changed: ${c}`), ...unchanged.map((u) => `unchanged: ${u}`), ...next]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * Said when the call changed nothing — bad input, nothing matched, already that way, or a write
+ * that verifiably did not take. `reason` says which, in words she can repeat; `next` is optional.
+ */
+export function toolNothingChangedText(reason: string, next: string[] = []): string {
+  return [`nothing changed: ${reason}`, ...next].filter(Boolean).join('\n');
+}
+
+export type ToolOutputShape = 'changed' | 'nothing-changed' | 'fault' | 'unshaped';
+
+/** Which of the three shapes an action's answer takes, by its first line; 'unshaped' if none. */
+export function toolOutputShape(text: string): ToolOutputShape {
+  const first = text.split('\n', 1)[0] ?? '';
+  if (first.startsWith('changed: ')) return 'changed';
+  if (first.startsWith('nothing changed: ')) return 'nothing-changed';
+  if (first.includes(FAULT_MARK)) return 'fault';
+  return 'unshaped';
 }

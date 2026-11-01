@@ -1,5 +1,5 @@
 import { RETRIEVAL_FUNCTIONS } from './retrieval/registry.ts';
-import { boundToolResponse, toolEmptyText, toolFaultText } from './tool-response.ts';
+import { boundToolResponse, toolActionFaultText, toolEmptyText, toolFaultText } from './tool-response.ts';
 import { COACH_ACTION_TOOLS } from './coach-actions.ts';
 import { executeCalls } from './retrieval/select-and-run.ts';
 import type { Mutates } from './tool-mutates.ts';
@@ -297,7 +297,7 @@ export const COACH_META_TOOLS: Record<string, MetaTool> = {
           return await action.run(userId, args);
         } catch (e) {
           console.error('[use_tool] action failed:', name, e);
-          return 'That could not be done just now — tell the user plainly and offer to try again.';
+          return toolActionFaultText();
         }
       }
 
