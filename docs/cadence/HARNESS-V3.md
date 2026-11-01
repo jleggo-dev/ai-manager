@@ -446,12 +446,12 @@ Differences from the design above, each from the code:
    comparable; re-run after the cap is dealt with.
 
    **Built (P3c, 2026-11-01): the summary is a list, and the fold copies it.** The re-run after P1b
-   (3 runs, 0 of 23 rounds over the cap) kept **53% (27/51)**: facts first summarized in round 1
-   kept 17%, decisions 11%, constraints 22%. The engine was no longer the cause; the fold was. Round
-   2 re-wrote the prose from scratch, spent its words on her advice (29 sentences like "the coach
-   advised…" or "they were told…" across 23 summaries), and twice ended on a claim that everything
-   had been "integrated". The two P3 lines were in the prompt and not obeyed at this size; nor was
-   "aim for 200 words" (final summaries 261–683).
+   (80-exchange fixtures, 3 runs, 0 of 23 rounds over the cap) kept **53% (27/51)**: facts first
+   summarized in round 1 kept 17%, decisions 11%, constraints 22%. The engine was no longer the
+   cause; the fold was. Round 2 re-wrote the prose from scratch, spent its words on her advice (29
+   sentences like "the coach advised…" or "they were told…" across 23 summaries), and twice ended on
+   a claim that everything had been "integrated". The two P3 lines were in the prompt and not
+   obeyed at this size; nor was "aim for 200 words" (final summaries 261–683).
    - **The shape.** Seven fixed headings in the KEEP order: `DECIDED`, `CONSTRAINTS`, `CORRECTIONS`,
      `THEIR WORDS`, `STILL OPEN`, `TRIED AND DID NOT WORK`, `WHERE THINGS STAND`. One fact per line,
      at most 15 words, in their words; `- none` under an empty heading. Plain text, no schema: the
@@ -478,16 +478,28 @@ Differences from the design above, each from the code:
    | final summaries over 500 words | 1 of 9 | 8 of 9 | 5 of 9 |
    | "she advised" sentences / closing claims | 29 / 2 | 0 / 0 | 0 / 0 |
 
-   All three arms ran the 80-exchange fixtures (17 facts a run; the meditation "still open" fact sat
-   past the final mark). #446 lengthened them to 100 exchanges right after, so the next reading has
-   18 facts a run and likely one more fold, and is not directly comparable with these.
+   **Read this table with care: it is on the 80-exchange fixtures,** 17 facts a run, at most three
+   folds (two for meditation, whose "still open" fact sat past the final mark). #446 lengthened them
+   to 100 exchanges the same night so every fact is folded with a round to spare: four folds per
+   fixture, 18 facts a run. On those, the OLD prompt keeps **13% (7/54)** (3 runs, measured
+   2026-11-01): decisions, constraints and tried-and-failed 0%, corrections and own words 11%, open
+   56%; round-1 facts 0%, round 2 15%, round 3 33%. Its round 2 still carries round 1's facts; its
+   rounds 3 and 4 mostly hold none, because it rewrites from the new transcript once the old summary
+   is long. **The new prompt has not been measured there yet**, so whether its round 4 still holds
+   round 1's lines is open. What the 80-exchange runs do show about copying: the planted facts
+   survived every fold, but the lines did not stay word for word. Of round 1's lines, 35–89% were
+   still verbatim one fold later (9 fixture runs) and 20–81% two folds later (6); the rest were
+   reworded with the fact kept. Rewording compounds, so a fourth fold is a real test, not a
+   formality. The first 80 exchanges of the 100-exchange fixtures are identical to the old ones
+   (the seeded streams run in order), so their first three folds (two for meditation) read the
+   same transcripts, give or take an exchange; the new reading differs mainly by the last fold.
 
    - **The first try** had the headings and the fold but loose heading definitions. CORRECTIONS
-     filled with things SHE had set straight (8–16 lines in a final summary; the fixtures plant one), THEIR
-     WORDS with common terms ("body scan", "strides"), DECIDED with her suggestions; and a correction
-     left the old value under another heading ("E-flat nocturne" in THEIR WORDS). The shipped prompt
-     adds the rule for every line, "only THEY" in each heading's definition, and the every-heading
-     delete for a correction.
+     filled with things SHE had set straight (8–16 lines in a final summary; the fixtures plant
+     one), THEIR WORDS with common terms ("body scan", "strides"), DECIDED with her suggestions;
+     and a correction left the old value under another heading ("E-flat nocturne" in THEIR WORDS).
+     The shipped prompt adds the rule for every line, "only THEY" in each heading's definition, and
+     the every-heading delete for a correction.
    - **The three misses left.** Two corrections wrote the new value but kept a copied line with the
      old one ("Vegetarian diet, no meat." under CONSTRAINTS; the Chopin under STILL OPEN). Copying
      word for word is obeyed better than deleting the old value, which is why corrections are the one
@@ -504,12 +516,14 @@ Differences from the design above, each from the code:
      2.4K. Before any prompt-cache discount (the summary changes only at a fold). It also counts
      toward the trigger: ~830 units against the ~400 the policy comment assumes, about half an
      average exchange less room between folds.
-   - **Open.** (1) `existingSummary` is cut at 10,000 characters like any job variable; at ~130 words
-     a round the summary gets there after roughly 7–8 folds (~160–190 exchanges; the longest session
-     on file has 53 messages). The heading order means a cut loses the last headings first, silently.
-     It needs a guard before sessions get that long. (2) Advice still gets in as bare lines under
+   - **Open.** (1) **Owed before merge:** a 3-run reading on the 100-exchange fixtures (~170K
+     billed), with each fixture's round 4 checked for round 1's lines. (2) `existingSummary` is cut
+     at 10,000 characters like any job variable; at ~130 words a round the summary gets there
+     after roughly 7–8 folds (~160–190 exchanges; the longest session on file has 53 messages).
+     The heading order means a cut loses the last headings first, silently.
+     It needs a guard before sessions get that long. (3) Advice still gets in as bare lines under
      DECIDED and CORRECTIONS, mostly on the food fixture: that is the size problem, not the retention
-     one. Next to try: a stronger model for this one job, or a line cap per heading. (3) Whether she
+     one. Next to try: a stronger model for this one job, or a line cap per heading. (4) Whether she
      answers the probes from the list is still not measured.
 
    **Rollout:** `sync-jobs`; the prompt is not live until then. No `set-coach-persona` run: neither
