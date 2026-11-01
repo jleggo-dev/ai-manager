@@ -7,7 +7,7 @@ import {
 } from '@cadence/shared';
 import { getUser, setMacroTargets } from '../repos/users.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `set_micro_target` — the one thing allowed to override a published reference intake.
@@ -42,10 +42,11 @@ const isKey = (v: unknown): v is MicronutrientKey => KEYS.includes(v as Micronut
 /** "iron_mg, zinc_mg, …" — what to say back when she names something that isn't one. */
 const KEY_LIST = KEYS.join(', ');
 
-export const SET_MICRO_TARGET: CoachActionTool = {
+export const SET_MICRO_TARGET: CoachActionTool = defineAction({
   name: 'set_micro_target',
+  mutates: 'immediate',
   description:
-    'Record a daily micronutrient target this person was given OUTSIDE the app — a doctor, a prescription, a blood result. Takes effect immediately and stands in for the published reference intake for that one nutrient, in every later read. Use only when they report a number someone gave them: the reference intakes already apply to everybody, so never set one from your own reasoning, and never to make a nutrient easier to hit. Pass {"nutrient": "vitamin_c_mg", "amount": 2000, "why": "her doctor asked for 2000mg a day"}. Omit amount to remove an override and go back to the published figure. An amount outside the published safe range for that nutrient is refused and nothing changes.',
+    'Record a daily micronutrient target this person was given OUTSIDE the app — a doctor, a prescription, a blood result. {gate} and stands in for the published reference intake for that one nutrient, in every later read. Use only when they report a number someone gave them: the reference intakes already apply to everybody, so never set one from your own reasoning, and never to make a nutrient easier to hit. Pass {"nutrient": "vitamin_c_mg", "amount": 2000, "why": "her doctor asked for 2000mg a day"}. Omit amount to remove an override and go back to the published figure. An amount outside the published safe range for that nutrient is refused and nothing changes.',
   parameters: {
     properties: {
       nutrient: {
@@ -136,4 +137,4 @@ export const SET_MICRO_TARGET: CoachActionTool = {
     const direction = resolved.direction === 'ceiling' ? 'to stay under' : 'to reach';
     return `On file and verified: ${resolved.label} ${direction} ${String(resolved.amount)}${resolved.unit} a day, standing in for the published reference intake. Say it back so they can correct you.`;
   },
-};
+});

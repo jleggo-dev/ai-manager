@@ -1,5 +1,5 @@
 import { buildWeekAhead } from './week-build.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `build_week_ahead` — "build next week" before the check-in (owner, 2026-09-09: "the coach can
@@ -16,10 +16,11 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * Thin by contract: `buildWeekAhead` (week-build.ts) owns the guard, the materialization and the
  * `built_through` write. This file only translates its outcomes into what she should say.
  */
-export const BUILD_WEEK_AHEAD: CoachActionTool = {
+export const BUILD_WEEK_AHEAD: CoachActionTool = defineAction({
   name: 'build_week_ahead',
+  mutates: 'immediate',
   description:
-    'Write NEXT week now, before their weekly check-in, on the rhythm they already have — every commitment unchanged. Use it when they ask to see or plan the days past their check-in ("build next week", "what does next week look like", a locked day they want open). Takes effect immediately: those days open on their trail. Their check-in date does NOT move and still asks when it arrives. No parameters. It never redesigns — a changed week is propose_plan_change; a week that is already over rolls forward with build_next_week (this refuses then); running this week itself longer is extend_horizon. It refuses safely with no plan.',
+    'Write NEXT week now, before their weekly check-in, on the rhythm they already have — every commitment unchanged. Use it when they ask to see or plan the days past their check-in ("build next week", "what does next week look like", a locked day they want open). {gate}: those days open on their trail. Their check-in date does NOT move and still asks when it arrives. No parameters. It never redesigns — a changed week is propose_plan_change; a week that is already over rolls forward with build_next_week (this refuses then); running this week itself longer is extend_horizon. It refuses safely with no plan.',
   parameters: { properties: {} },
   async run(userId) {
     const result = await buildWeekAhead(userId);
@@ -38,4 +39,4 @@ export const BUILD_WEEK_AHEAD: CoachActionTool = {
       'Say that next week is there to look at. Do not recite what is in it, and do not put up a build card — it is already built.',
     ].join('\n');
   },
-};
+});

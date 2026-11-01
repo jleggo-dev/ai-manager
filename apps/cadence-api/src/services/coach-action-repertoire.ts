@@ -12,7 +12,7 @@ import {
 } from './repertoire-practice.ts';
 import { normTitle } from './goal-identity.ts';
 import { matchActivity } from './plan-edit.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 import { qualifierMeta, type RepertoireStatus } from '@cadence/shared';
 
 /**
@@ -119,8 +119,9 @@ interface ItemParam {
  * the dock's engagement gate exists to prevent; it should not be reintroduced from the other end.
  */
 
-export const UPDATE_REPERTOIRE: CoachActionTool = {
+export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
   name: 'update_repertoire',
+  mutates: 'immediate',
   // 795 of the 800-char action bound (retrieval/description-audit.test.ts). It teaches five verbs
   // and six fields, so the clauses that could not change a choice went: "mean to learn", "it is
   // their own account", "not revisited", and the per-field "omit if" repeats, which one closing
@@ -129,7 +130,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
   // definitions, verbatim from `STANDING_MEANS` — she reads them in the shelf render too, and two
   // spellings would drift.
   description:
-    'Write down what the user is learning or already knows — pieces, katas, poems, techniques. Use the moment they name any of it; get_repertoire reads it back. Takes effect immediately: reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise", "status": "known", "collection": "Suzuki Book 2", "description": "the fast one in G"}], "goal": "Piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands; a new one starts working. "kind" is plain words; "collection" is the book or list it is part of; "description" is their own words for which one it is; "goal" is a goal\'s exact title. Omit any that do not fit.',
+    'Write down what the user is learning or already knows — pieces, katas, poems, techniques. Use the moment they name any of it; get_repertoire reads it back. {gate}: reflecting it back is the confirmation. Pass {"items": [{"label": "Écossaise", "status": "known", "collection": "Suzuki Book 2", "description": "the fast one in G"}], "goal": "Piano"} — "status" is queued (not started), working (being worked on), known (learned and still played), learned (crossed just now — stored as known, celebrated once), or retired (finished); omit it to keep an item as it stands; a new one starts working. "kind" is plain words; "collection" is the book or list it is part of; "description" is their own words for which one it is; "goal" is a goal\'s exact title. Omit any that do not fit.',
   parameters: {
     properties: {
       items: {
@@ -315,4 +316,4 @@ export const UPDATE_REPERTOIRE: CoachActionTool = {
       'Say in one line what you noted down.',
     ].join('\n');
   },
-};
+});

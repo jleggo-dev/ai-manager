@@ -1,7 +1,7 @@
 import type { Equipment, EquipmentCategory } from '@cadence/shared';
 import { deleteEquipment, insertEquipment, listEquipment, updateEquipment } from '../repos/equipment.ts';
 import { sameEquipmentName } from './fact-tokens.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `update_equipment` — the WRITE half of what they own. The read half (get_equipment) rides the
@@ -37,10 +37,11 @@ function matching(rows: Equipment[], name: string): Equipment[] {
   return rows.filter((r) => sameEquipmentName(r.name, name));
 }
 
-export const UPDATE_EQUIPMENT: CoachActionTool = {
+export const UPDATE_EQUIPMENT: CoachActionTool = defineAction({
   name: 'update_equipment',
+  mutates: 'immediate',
   description:
-    'Change what equipment is on their file — what they own to train, practice, or study with. Takes effect immediately. Use add when they got something new mid-conversation and you need it on file NOW (mentioning gear in passing is captured automatically — do not add what you merely heard); remove when they no longer have it or it was recorded wrongly; reword (with new_label) when the item is right but the name is wrong — "2x50lb dumbbells" when they actually own 25s. Read get_equipment first and name the item as listed. Pass {"item": "2x50lb dumbbells", "action": "reword", "new_label": "2x25lb dumbbells"}; {"item": "rowing machine", "action": "add", "category": "cardio"}; {"item": "treadmill", "action": "remove"}.',
+    'Change what equipment is on their file — what they own to train, practice, or study with. {gate}. Use add when they got something new mid-conversation and you need it on file NOW (mentioning gear in passing is captured automatically — do not add what you merely heard); remove when they no longer have it or it was recorded wrongly; reword (with new_label) when the item is right but the name is wrong — "2x50lb dumbbells" when they actually own 25s. Read get_equipment first and name the item as listed. Pass {"item": "2x50lb dumbbells", "action": "reword", "new_label": "2x25lb dumbbells"}; {"item": "rowing machine", "action": "add", "category": "cardio"}; {"item": "treadmill", "action": "remove"}.',
   parameters: {
     properties: {
       item: {
@@ -121,4 +122,4 @@ export const UPDATE_EQUIPMENT: CoachActionTool = {
 
     return `"${action}" is not something this tool does. The actions are: add, remove, reword.`;
   },
-};
+});

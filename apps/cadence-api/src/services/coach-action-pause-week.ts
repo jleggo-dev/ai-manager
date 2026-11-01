@@ -1,7 +1,7 @@
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { enterEpisode } from './episode.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `pause_week` — clear a stretch of the plan instead of refusing to.
@@ -57,10 +57,11 @@ function openStretch(episode: { type: string; start: string; end: string; constr
   return paused ? 'a pause' : `a detour (${episode.type})`;
 }
 
-export const PAUSE_WEEK: CoachActionTool = {
+export const PAUSE_WEEK: CoachActionTool = defineAction({
   name: 'pause_week',
+  mutates: 'immediate',
   description:
-    'Pause every scheduled session between two dates. Takes effect immediately: nothing is deleted, the plan itself is not edited, and the sessions come back on their own the day after the last paused day. Use it when they want a stretch with nothing on their plate — a death in the family, a deliberate stretch off, days too full to train — instead of dropping commitments with propose_plan_change, which refuses an edit that would leave the plan with nothing on it. Pass {"start": "2026-09-07", "end": "2026-09-13", "reason": "funeral, travelling all week"}. "start" defaults to today, "end" is the last paused day, "reason" is their own words and may be omitted. It refuses a stretch over eight weeks, and refuses while a pause or detour is already running.',
+    'Pause every scheduled session between two dates. {gate}: nothing is deleted, the plan itself is not edited, and the sessions come back on their own the day after the last paused day. Use it when they want a stretch with nothing on their plate — a death in the family, a deliberate stretch off, days too full to train — instead of dropping commitments with propose_plan_change, which refuses an edit that would leave the plan with nothing on it. Pass {"start": "2026-09-07", "end": "2026-09-13", "reason": "funeral, travelling all week"}. "start" defaults to today, "end" is the last paused day, "reason" is their own words and may be omitted. It refuses a stretch over eight weeks, and refuses while a pause or detour is already running.',
   parameters: {
     properties: {
       end: {
@@ -133,4 +134,4 @@ export const PAUSE_WEEK: CoachActionTool = {
     const { start: from, end: to } = entered.episode;
     return `Paused from ${from} to ${to}: their scheduled sessions in that window are paused, nothing is deleted, and the rhythm resumes on ${addDaysIso(to, 1)}. Their plan is otherwise unchanged.`;
   },
-};
+});

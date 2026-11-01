@@ -1,6 +1,6 @@
 import type { MealKind } from '@cadence/shared';
 import { logMeal } from './nutrition.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 const MEAL_KINDS: readonly MealKind[] = ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'];
 const isMealKind = (v: unknown): v is MealKind => (MEAL_KINDS as readonly string[]).includes(String(v));
@@ -26,10 +26,11 @@ const isMealKind = (v: unknown): v is MealKind => (MEAL_KINDS as readonly string
  * considering. That protection is gone; the eval's restraint cases (`eval-tool-selection-cases.ts`)
  * are what stand in for it now, and this description carries the same gate in words.
  */
-export const LOG_MEAL: CoachActionTool = {
+export const LOG_MEAL: CoachActionTool = defineAction({
   name: 'log_meal',
+  mutates: 'immediate',
   description:
-    'Log a meal exactly as the person described eating it — pass their own words and it parses, prices from their saved foods and the shared database, and writes one row. Takes effect immediately. Use it once they have actually eaten or drunk something — never for something they are only considering, asking the calories of, or might cook later; call preview_meal first instead if you are not confident the words alone will price cleanly. Pass {"text": "a protein shake and a banana"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when said, omit and the parse guesses; add {"date": "2026-08-27"} only when it was not today, omit it for today — "forgot to log lunch" still means today.',
+    'Log a meal exactly as the person described eating it — pass their own words and it parses, prices from their saved foods and the shared database, and writes one row. {gate}. Use it once they have actually eaten or drunk something — never for something they are only considering, asking the calories of, or might cook later; call preview_meal first instead if you are not confident the words alone will price cleanly. Pass {"text": "a protein shake and a banana"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when said, omit and the parse guesses; add {"date": "2026-08-27"} only when it was not today, omit it for today — "forgot to log lunch" still means today.',
   parameters: {
     properties: {
       text: {
@@ -75,4 +76,4 @@ export const LOG_MEAL: CoachActionTool = {
     }
     return `Logged: "${items}" for ${row.date} (${row.meal})${kcal ? `, ${kcal}` : ''}.`;
   },
-};
+});

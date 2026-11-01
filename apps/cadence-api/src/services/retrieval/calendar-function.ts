@@ -214,6 +214,7 @@ export function renderPlanEdits(
 
 export const GET_CALENDAR: RetrievalFunction = {
   name: 'get_calendar',
+  mutates: 'none',
   description:
     'The user\'s calendar as actually written, day by day: which sessions and habits sit on each date, with the time and whether each was done, skipped or is still to do. Use when a specific date matters — what is on next Tuesday, why a day looks empty, what they did on a past day. The plan read already shows the next 7 days this way; use this to look further ahead or back. Pass {"days": 14} for that many days from today (default 14, up to 28), or {"from": "2026-10-01", "days": 7} to start on a date.',
   domains: ['plans', 'occurrences'],

@@ -89,8 +89,12 @@ describe('what the facades cover', () => {
     );
   });
 
+  /** The sentence is generated from `mutates` (tool-mutates.ts); `rebuild` is 'immediate' because its
+   *  session scope is, and its own words say the week scope waits for a tap. */
   it('marks both as actions in their descriptions — the gate the audit reads', () => {
-    expect(SHAPE_WEEK.description).toMatch(/taking effect immediately/);
+    expect(SHAPE_WEEK.mutates).toBe('immediate');
+    expect(REBUILD.mutates).toBe('immediate');
+    expect(SHAPE_WEEK.description).toMatch(/each takes effect immediately/);
     expect(REBUILD.description).toMatch(/takes effect immediately/);
     expect(REBUILD.description).toMatch(/nothing changes until that tap/);
   });

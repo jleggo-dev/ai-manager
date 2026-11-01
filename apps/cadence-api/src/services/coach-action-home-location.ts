@@ -1,6 +1,6 @@
 import { getUser, setHomeLocation } from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `set_home_location` — the coach's own write path for a fact that, until now, only Settings and
@@ -27,10 +27,11 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * geolocation — it records only what the person said, in their own words.
  */
 
-export const SET_HOME_LOCATION: CoachActionTool = {
+export const SET_HOME_LOCATION: CoachActionTool = defineAction({
   name: 'set_home_location',
+  mutates: 'immediate',
   description:
-    'Record the place their weather and daylight are read from. Takes effect immediately. Use when they tell you where they live or have moved to — "I just moved to Denver", "I\'m based in Lisbon, Portugal" — so outdoor conditions can be checked from here on; do not use this for where they are right now on a trip, only for home. Pass {"place": "Bend OR"} in their own words, a city name with as much state or country as they gave. The place is geocoded; if it cannot be found, nothing is changed and you are told so.',
+    'Record the place their weather and daylight are read from. {gate}. Use when they tell you where they live or have moved to — "I just moved to Denver", "I\'m based in Lisbon, Portugal" — so outdoor conditions can be checked from here on; do not use this for where they are right now on a trip, only for home. Pass {"place": "Bend OR"} in their own words, a city name with as much state or country as they gave. The place is geocoded; if it cannot be found, nothing is changed and you are told so.',
   parameters: {
     properties: {
       place: {
@@ -67,4 +68,4 @@ export const SET_HOME_LOCATION: CoachActionTool = {
 
     return `Home location set to ${geo.label} (${geo.lat}, ${geo.lon}). Weather and daylight for outdoor sessions are read from here from now on.`;
   },
-};
+});

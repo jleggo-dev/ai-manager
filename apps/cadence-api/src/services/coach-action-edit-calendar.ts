@@ -2,7 +2,7 @@ import { getUser } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 import { duplicateOccurrence, moveOccurrence, removeOccurrence, type OccurrenceEditResult } from './occurrence-edit.ts';
 import { titlesFor } from './retrieval/calendar-function.ts';
 
@@ -65,10 +65,11 @@ function said(action: Action, title: string, date: string, to: string | undefine
   }
 }
 
-export const EDIT_CALENDAR: CoachActionTool = {
+export const EDIT_CALENDAR: CoachActionTool = defineAction({
   name: 'edit_calendar',
+  mutates: 'immediate',
   description:
-    'Move, copy or delete ONE dated session on their calendar, this week only — what holding a task on their plan screen does. Takes effect immediately; say what changed in one line. Use it for a one-off ("move tomorrow\'s hill intervals to Thursday", "take Friday\'s run off", "put a second sit on Sunday"); for a change to EVERY week from now on, use propose_plan_change instead. Name the session by its date and title as the calendar shows them: {"action": "move", "date": "2026-09-15", "title": "Hill intervals", "to": "2026-09-17"}. "copy" needs "to" as well; "delete" needs only "date" and "title". A day outside this week, or one that already holds that session, is refused with the reason.',
+    'Move, copy or delete ONE dated session on their calendar, this week only — what holding a task on their plan screen does. {gate}; say what changed in one line. Use it for a one-off ("move tomorrow\'s hill intervals to Thursday", "take Friday\'s run off", "put a second sit on Sunday"); for a change to EVERY week from now on, use propose_plan_change instead. Name the session by its date and title as the calendar shows them: {"action": "move", "date": "2026-09-15", "title": "Hill intervals", "to": "2026-09-17"}. "copy" needs "to" as well; "delete" needs only "date" and "title". A day outside this week, or one that already holds that session, is refused with the reason.',
   parameters: {
     properties: {
       action: {
@@ -136,4 +137,4 @@ export const EDIT_CALENDAR: CoachActionTool = {
             : { status: 'not_found' };
     return said(action, found.row.title, date, to, result);
   },
-};
+});

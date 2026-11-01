@@ -1,7 +1,7 @@
 import { listUpcomingForRevision } from '../repos/occurrence-sessions.ts';
 import { reviseSession } from './session-generate.ts';
 import { matchActivity } from './plan-edit.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `revise_session` — the coach's scalpel for "add chest and abs to today's workout" said in chat
@@ -16,10 +16,11 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * never a coin flip. The list it matches against floors at today (you cannot rebuild the past)
  * the way logging's list is ceilinged at today (you cannot log the future).
  */
-export const REVISE_SESSION: CoachActionTool = {
+export const REVISE_SESSION: CoachActionTool = defineAction({
   name: 'revise_session',
+  mutates: 'immediate',
   description:
-    'Rebuild what is INSIDE one upcoming session from their words — "add chest and abs to today\'s workout", "make tomorrow\'s run easier on my knee". Takes effect immediately: the session is reprogrammed around what they asked and is on their plan when you reply. Use it when they want the work within a session different; moving, resizing, or dropping the session itself is propose_plan_change, and reshaping the whole week is start_replan. Pass {"session": "Strength", "steer": "add chest and abs", "date": "2026-09-01"} — "session" names it as the plan lists it, "steer" carries their words, and omitting "date" takes the soonest one coming up. Only a session still to do, today or later, can be rebuilt; a wrong record of a finished one is correct_log.',
+    'Rebuild what is INSIDE one upcoming session from their words — "add chest and abs to today\'s workout", "make tomorrow\'s run easier on my knee". {gate}: the session is reprogrammed around what they asked and is on their plan when you reply. Use it when they want the work within a session different; moving, resizing, or dropping the session itself is propose_plan_change, and reshaping the whole week is start_replan. Pass {"session": "Strength", "steer": "add chest and abs", "date": "2026-09-01"} — "session" names it as the plan lists it, "steer" carries their words, and omitting "date" takes the soonest one coming up. Only a session still to do, today or later, can be rebuilt; a wrong record of a finished one is correct_log.',
   parameters: {
     properties: {
       session: { type: 'string', description: 'Which session, by the title the plan lists.' },
@@ -78,4 +79,4 @@ export const REVISE_SESSION: CoachActionTool = {
       'It is already on their plan — nothing to tap. Say what changed and why it fits.',
     ].join('\n');
   },
-};
+});

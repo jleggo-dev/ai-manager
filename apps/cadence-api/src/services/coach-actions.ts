@@ -12,7 +12,7 @@ import {
 import { logOccurrence } from './session-log.ts';
 import { getUser, setMacroTargets, setPendingPlan } from '../repos/users.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
@@ -119,10 +119,11 @@ function asEdits(raw: unknown): { edits: PlanEdit[]; unknown: string[] } {
 }
 
 export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
-  propose_plan_change: {
+  propose_plan_change: defineAction({
     name: 'propose_plan_change',
+    mutates: 'proposes',
     description:
-      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. Does NOT change anything — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits name commitments BY its handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with them, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before saying it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A full rebuild from their words is rebuild with scope "week".',
+      'Propose a plan change — move, retime, resize, drop, add, or rework what one CONTAINS. {gate} — the card needs a tap; never say it is done before that. Use it for any change they name; read get_active_plan first — edits name commitments BY its handles. A whole week is reshaped by SEVERAL edits in one call: settle the shape with them, then ONE call carrying the full slate; the return reports the proposed week\'s shape and clashes to check before saying it is up. Pass {"plan_version": 7, "edits": [{"action": "resize", "activities": ["a3f19c2b"], "duration_min": 45, "reason": "..."}]}. Calling again ADDS to the card; on a mistake never add a fix beside it — redo with "start_over": true, ONLY the corrected edits. A full rebuild from their words is rebuild with scope "week".',
     parameters: {
       properties: {
         edits: EDIT_SCHEMA,
@@ -325,12 +326,13 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         .filter(Boolean)
         .join('\n');
     },
-  },
+  }),
 
-  update_goal: {
+  update_goal: defineAction({
     name: 'update_goal',
+    mutates: 'immediate',
     description:
-      'Change one of the user\'s goals: lower or raise the number they are aiming at, move the date, mark it finished, stop working on it, set it aside, or bring one back. Use when they have plainly decided one of those in words — never on your own read that a goal looks too hard, and never to tidy up. Takes effect immediately: a goal is one fact you can say out loud, so your sentence confirming it is the confirmation, and every change is written to the goal\'s own history. Name the goal exactly as get_objectives lists it — a set-aside goal will not be listed there; use the name they just said. Pass {"goal": "Read 100 books", "action": "retarget", "target": 50, "unit": "books"}, {"goal": "Run a 10k", "action": "redate", "date": "2026-11-01"}, or {"goal": "Obstacle race", "action": "retire"}.',
+      'Change one of the user\'s goals: lower or raise the number they are aiming at, move the date, mark it finished, stop working on it, set it aside, or bring one back. Use when they have plainly decided one of those in words — never on your own read that a goal looks too hard, and never to tidy up. {gate}: a goal is one fact you can say out loud, so your sentence confirming it is the confirmation, and every change is written to the goal\'s own history. Name the goal exactly as get_objectives lists it — a set-aside goal will not be listed there; use the name they just said. Pass {"goal": "Read 100 books", "action": "retarget", "target": 50, "unit": "books"}, {"goal": "Run a 10k", "action": "redate", "date": "2026-11-01"}, or {"goal": "Obstacle race", "action": "retire"}.',
     parameters: {
       properties: {
         goal: { type: 'string', description: 'Which goal, by its title exactly as get_objectives lists it.' },
@@ -440,12 +442,13 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       }).catch(() => null);
       return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. Their plan still holds the sessions built for the old date. get_active_plan shows them; rebuild (scope "week") rebuilds the week.`;
     },
-  },
+  }),
 
-  correct_log: {
+  correct_log: defineAction({
     name: 'correct_log',
+    mutates: 'immediate',
     description:
-      'Fix a session that was recorded wrong — the distance or duration was off, or it never happened. Use when the user corrects something already on file; to record something new they just did, let them log it normally instead. Takes effect immediately, because it is their own correction of their own record and asking twice is absurd. Read get_recent_logs or get_workout_history first so you name the right session. Pass {"activity": "Easy run", "date": "2026-08-12", "metrics": {"distance_km": 5}}, or add {"not_done": true} when it did not happen.',
+      'Fix a session that was recorded wrong — the distance or duration was off, or it never happened. Use when the user corrects something already on file; to record something new they just did, let them log it normally instead. {gate}, because it is their own correction of their own record and asking twice is absurd. Read get_recent_logs or get_workout_history first so you name the right session. Pass {"activity": "Easy run", "date": "2026-08-12", "metrics": {"distance_km": 5}}, or add {"not_done": true} when it did not happen.',
     parameters: {
       properties: {
         activity: { type: 'string', description: 'Which session, by the title the plan lists.' },
@@ -524,7 +527,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       });
       return `Corrected: ${found.title} on ${found.date} now reads ${summary}. Confirm it back.`;
     },
-  },
+  }),
 
   update_constraint: UPDATE_CONSTRAINT,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: corrections to gear are occasional, and the
@@ -575,10 +578,11 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // their screen. The persona has offered a questionnaire since v2 and there was no such surface.
   send_questionnaire: SEND_QUESTIONNAIRE,
 
-  log_session: {
+  log_session: defineAction({
     name: 'log_session',
+    mutates: 'immediate',
     description:
-      'Write down how a session went, in their own words, and mark it done. Takes effect immediately. Use when they tell you about one — "that run was good but my HR was all over the place" — because that IS how a session gets logged: they finish it, they come to talk, and talking about it is the record. Use it again to REVISE something already logged when they add or correct it later. Their report is parsed and kept on that session, so it outlives the conversation and the weekly check-in can read it back. Read get_active_plan or get_recent_logs to name the session as the plan lists it. Pass {"session": "Long run", "report": "77 minutes, felt strong for the first hour, HR high on the hills", "date": "2026-08-15"}.',
+      'Write down how a session went, in their own words, and mark it done. {gate}. Use when they tell you about one — "that run was good but my HR was all over the place" — because that IS how a session gets logged: they finish it, they come to talk, and talking about it is the record. Use it again to REVISE something already logged when they add or correct it later. Their report is parsed and kept on that session, so it outlives the conversation and the weekly check-in can read it back. Read get_active_plan or get_recent_logs to name the session as the plan lists it. Pass {"session": "Long run", "report": "77 minutes, felt strong for the first hour, HR high on the hills", "date": "2026-08-15"}.',
     parameters: {
       properties: {
         session: { type: 'string', description: 'Which session, by the title the plan lists.' },
@@ -616,12 +620,13 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         'It is on their file.',
       ].join('\n');
     },
-  },
+  }),
 
-  set_macro_targets: {
+  set_macro_targets: defineAction({
     name: 'set_macro_targets',
+    mutates: 'immediate',
     description:
-      'Set or adjust the daily calorie and macro targets their eating is coached against. Takes effect immediately. Use to establish targets once you have worked them out together, and — the part that matters most — to ADJUST them when the evidence says they are not doing their job: get_macro_targets reports the actual weekly weight change against a safe rate, and if they are following the numbers and not moving, or moving too fast to be healthy, changing the numbers is the coaching. Say what you changed and why. Never set a calorie target you would not defend out loud; the safety bounds you plan by apply here too. Pass {"kcal": 2100, "protein_g": 150, "carbs_g": 220, "fat_g": 70, "why": "losing 1.1kg/wk is faster than is safe for you — adding 200 back"}.',
+      'Set or adjust the daily calorie and macro targets their eating is coached against. {gate}. Use to establish targets once you have worked them out together, and — the part that matters most — to ADJUST them when the evidence says they are not doing their job: get_macro_targets reports the actual weekly weight change against a safe rate, and if they are following the numbers and not moving, or moving too fast to be healthy, changing the numbers is the coaching. Say what you changed and why. Never set a calorie target you would not defend out loud; the safety bounds you plan by apply here too. Pass {"kcal": 2100, "protein_g": 150, "carbs_g": 220, "fat_g": 70, "why": "losing 1.1kg/wk is faster than is safe for you — adding 200 back"}.',
     parameters: {
       properties: {
         kcal: { type: 'integer', description: 'Daily calories. Required — the others hang off it.' },
@@ -671,7 +676,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         'Tell them what changed and why — this is the adjustment they are paying you for, so it should sound like a decision you made, not a setting that moved.',
       ].join('\n');
     },
-  },
+  }),
 };
 
 export const coachActionNames = (): Set<string> => new Set(Object.keys(COACH_ACTION_TOOLS));

@@ -1,6 +1,6 @@
 import { getActivePlan } from '../repos/plans.ts';
 import { getUser, setPendingWeekReview } from '../repos/users.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 import { localDayIso } from './plan-day.ts';
 import { computeWeekState } from './plan-view.ts';
 
@@ -25,10 +25,11 @@ import { computeWeekState } from './plan-view.ts';
  * does not claim days that have not happened yet. A windowed `review_period(from, to)` for "look back at last
  * month" is a later tool; this one answers "let's do my check-in" — the ordinary case.
  */
-export const OPEN_WEEK_REVIEW: CoachActionTool = {
+export const OPEN_WEEK_REVIEW: CoachActionTool = defineAction({
   name: 'open_week_review',
+  mutates: 'proposes',
   description:
-    'Put this week up on their screen for a check-in — the actual days, not a description of them. Use it the moment they ask to do their check-in, review their week, or look back at how the week went. This does NOT change anything in their plan or their log — it puts a "Week review" card on their screen, and the app draws every number from what they actually logged. Say one short line that it is up, then STOP: do not recite figures yourself — the card is about to show the real ones, and you have not read them. Wait for what they say once they have looked. If they have no active plan yet, it tells you so instead of putting up a card — offer to build one.',
+    'Put this week up on their screen for a check-in — the actual days, not a description of them. Use it the moment they ask to do their check-in, review their week, or look back at how the week went. This {gate} in their plan or their log — it puts a "Week review" card on their screen, and the app draws every number from what they actually logged. Say one short line that it is up, then STOP: do not recite figures yourself — the card is about to show the real ones, and you have not read them. Wait for what they say once they have looked. If they have no active plan yet, it tells you so instead of putting up a card — offer to build one.',
   parameters: { properties: {} },
   async run(userId) {
     const plan = await getActivePlan(userId);
@@ -55,4 +56,4 @@ export const OPEN_WEEK_REVIEW: CoachActionTool = {
       'Their week is up for them to look at. Do not describe any of the numbers — you have not seen them, the app has, and reciting a guess would contradict what they are about to read. Wait for them to look and tell you what stood out, then talk it through from there.',
     ].join('\n');
   },
-};
+});

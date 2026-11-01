@@ -42,6 +42,7 @@ interface DietaryPlusWindow {
 export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
   get_food_log: {
     name: 'get_food_log',
+    mutates: 'none',
     description:
       'What the user has actually eaten over the last 7 days — each logged meal, plus a short summary (days logged, meals per day, items that come up often, days with alcohol); lists the 10 most recent meals. Use for "how has my eating been?" or any question about their recent diet. For dishes they could MAKE, use get_recipes.',
     domains: ['nutrition'],
@@ -80,6 +81,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
    */
   lookup_food: {
     name: 'lookup_food',
+    mutates: 'none',
     description:
       'Nutrition facts for a food, looked up by name — calories, protein and key nutrients per standard amount, from the user\'s saved foods plus a public food database. Use when they ask what is in a food, or before recommending one. Not for barcode scans — the app\'s Food tab handles those. Pass {"q": "lentils"}; add {"limit": 8} for more matches (default 5, up to 10).',
     domains: ['nutrition', 'foods'],
@@ -129,6 +131,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
    */
   get_journal: {
     name: 'get_journal',
+    mutates: 'none',
     description:
       'Recent journal entries the user has written, in their own words (entries they marked private are never included). Use when they refer to something they wrote, when a pattern across entries would help, or to remember what has mattered to them lately. Pass {"limit": 15} for more entries (default 8, up to 20).',
     domains: ['journal', 'mind'],
@@ -163,6 +166,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
    */
   get_dietary_profile: {
     name: 'get_dietary_profile',
+    mutates: 'none',
     description:
       'What the user can and will eat: allergies (never suggest these), diet pattern (vegan, vegetarian, …), foods they dislike, and the hours of the day they eat in (16:8, OMAD, Ramadan) when they have said. Use before suggesting any food, meal or recipe, and whenever they mention allergies, diet, or meal timing.',
     domains: ['nutrition', 'safety'],
@@ -196,6 +200,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_health_history: {
     name: 'get_health_history',
+    mutates: 'none',
     description:
       'A summary of the user\'s recorded exercise from Apple Health — workout types, each with how often per week it happens. Use for the overall picture of what they actually do ("runs about twice a week"), and during onboarding instead of asking them to type their history. For individual sessions on specific days, use get_workout_history.',
     domains: ['movement', 'history'],
@@ -215,6 +220,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_workout_history: {
     name: 'get_workout_history',
+    mutates: 'none',
     description:
       "Individual recorded workouts from the user's devices (Apple Health), newest first — date, type, duration, distance. Use when specific days or sessions matter: what they did this morning, this week's actual runs, the gap since the last one. This is the session-by-session detail behind get_health_history's summary; for how a session FELT, use get_recent_logs (their own reports). Pass {\"days\": 7} to set the period (default 30, up to 90).",
     domains: ['movement', 'history'],
@@ -241,6 +247,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_recipes: {
     name: 'get_recipes',
+    mutates: 'none',
     description:
       'The user\'s own recipe book — dishes they saved or you cooked up with them before, with servings and per-serving calories. Use when they ask what they can make, refer to a saved dish ("that chilli"). For nutrition facts on a single ingredient, use lookup_food. Pass {"query": "chilli"} to search by name; with no query it returns their saved dishes (up to 15).',
     domains: ['nutrition', 'recipes'],
@@ -265,6 +272,7 @@ export const FOOD_HEALTH_FUNCTIONS: Record<string, RetrievalFunction> = {
 
   get_macro_targets: {
     name: 'get_macro_targets',
+    mutates: 'none',
     description:
       "The user's daily nutrition targets, how today is tracking against them, and — when they weigh in — whether the scale says those targets are working. Use before any conversation about what they should be eating, before proposing a change to their targets, and whenever they ask how they are doing on food. If they have no targets set, this says so; set_macro_targets writes them.",
     domains: ['nutrition', 'progress'],

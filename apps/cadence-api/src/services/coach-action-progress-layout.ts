@@ -1,5 +1,5 @@
 import { composeProgressLayout } from './progress-layout-compose.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `propose_progress_layout` — the progress talk's one write (docs/cadence/PROGRESS-ENGINE.md "The
@@ -20,10 +20,11 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * (found every time behind `find_tools`, called 0 of 3) is the argument against leaving an act
  * like this one round-trip away.
  */
-export const PROPOSE_PROGRESS_LAYOUT: CoachActionTool = {
+export const PROPOSE_PROGRESS_LAYOUT: CoachActionTool = defineAction({
   name: 'propose_progress_layout',
+  mutates: 'proposes',
   description:
-    'Propose a new Progress page for them to look at, built from what they just told you progress means to them. Use it the moment they ask their Progress page to watch something different, or tell you in their own words what progress looks like to them ("I don\'t care about a streak, I want to see the pages I have written"). This does NOT change anything on their Progress page today — it puts up a proposal card, and their page stays exactly as it is until they tap to accept it. Pass {"what_they_want": "wants to see pages written, not a daily streak"}. Say ONE short line that the proposal is up, then STOP: do not describe the sections yourself — the card is about to show them, and you have not composed it.',
+    'Propose a new Progress page for them to look at, built from what they just told you progress means to them. Use it the moment they ask their Progress page to watch something different, or tell you in their own words what progress looks like to them ("I don\'t care about a streak, I want to see the pages I have written"). This {gate} on their Progress page today — it puts up a proposal card, and their page stays exactly as it is until they tap to accept it. Pass {"what_they_want": "wants to see pages written, not a daily streak"}. Say ONE short line that the proposal is up, then STOP: do not describe the sections yourself — the card is about to show them, and you have not composed it.',
   parameters: {
     properties: {
       what_they_want: {
@@ -58,4 +59,4 @@ export const PROPOSE_PROGRESS_LAYOUT: CoachActionTool = {
       'It is up for them to look at. Do not describe any of the sections — you have not seen the card, they are about to. Wait for them to look and tell you what stood out, then talk it through from there. Their current page has not changed and will not until they accept it.',
     ].join('\n');
   },
-};
+});

@@ -1,5 +1,5 @@
 import { extendHorizon, MAX_HORIZON_DAYS } from './plan-horizon.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `extend_horizon` — the answer to "can we plan two weeks ahead?" (owner, 2026-08-31).
@@ -14,10 +14,11 @@ import type { CoachActionTool } from './coach-action-types.ts';
  * Thin by contract, like build_next_week: `extendHorizon` (plan-horizon.ts) owns the guard, the
  * column write, and the top-up. This file only translates its outcomes into what she should say.
  */
-export const EXTEND_HORIZON: CoachActionTool = {
+export const EXTEND_HORIZON: CoachActionTool = defineAction({
   name: 'extend_horizon',
+  mutates: 'immediate',
   description:
-    'Run their CURRENT week longer instead of ending it on day seven — the "can we plan two weeks ahead?" ask. Pass the total length in days counted from the day the week began: {"days": 14} makes it a two-week stretch (28 is the most). Takes effect immediately — their weekly check-in moves to the new end date and the added days follow their existing rhythm unchanged; nothing is redesigned. Use it only when they have plainly asked to see or plan further ahead. It never shortens a week and never changes what is IN the week — specific edits are propose_plan_change, and rolling a finished week forward is build_next_week. It refuses safely when they have no plan yet.',
+    'Run their CURRENT week longer instead of ending it on day seven — the "can we plan two weeks ahead?" ask. Pass the total length in days counted from the day the week began: {"days": 14} makes it a two-week stretch (28 is the most). {gate} — their weekly check-in moves to the new end date and the added days follow their existing rhythm unchanged; nothing is redesigned. Use it only when they have plainly asked to see or plan further ahead. It never shortens a week and never changes what is IN the week — specific edits are propose_plan_change, and rolling a finished week forward is build_next_week. It refuses safely when they have no plan yet.',
   parameters: {
     properties: {
       days: {
@@ -49,4 +50,4 @@ export const EXTEND_HORIZON: CoachActionTool = {
       'The week now runs further ahead and when the check-in lands. This applies to the CURRENT week only — the next week they build returns to seven days unless they ask again.',
     ].join('\n');
   },
-};
+});

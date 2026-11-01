@@ -7,7 +7,7 @@ import {
 } from '../repos/users.ts';
 import { sameConstraint } from './constraint-merge.ts';
 import { factTokens } from './fact-tokens.ts';
-import type { CoachActionTool } from './coach-action-types.ts';
+import { defineAction, type CoachActionTool } from './coach-action-types.ts';
 
 /**
  * `update_constraint` — the safety input to every plan, and the one action tool whose wording the
@@ -38,10 +38,11 @@ export async function verifyConstraints(userId: string): Promise<Array<{ label: 
   return (u?.baseline?.constraints ?? []) as Array<{ label: string; plan_around?: boolean }>;
 }
 
-export const UPDATE_CONSTRAINT: CoachActionTool = {
+export const UPDATE_CONSTRAINT: CoachActionTool = defineAction({
   name: 'update_constraint',
+  mutates: 'immediate',
   description:
-    'Record a change to something they work around — a knee, a night shift, a hard stretch. Takes effect immediately. Use when one has EASED ("my knee is fine now" → lift, kept on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is worded badly (reword, with new_label). Use remove ONLY when it was recorded wrongly and never true ("I have never had a knee injury") — an error to erase, not history; recovering is never a reason to remove. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}; {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}; or {"constraint": "ramp gently", "action": "reword", "new_label": "left ankle tendinitis"}.',
+    'Record a change to something they work around — a knee, a night shift, a hard stretch. {gate}. Use when one has EASED ("my knee is fine now" → lift, kept on file as quiet so you still know it happened), FLARED again (flare), is genuinely NEW (add), or is worded badly (reword, with new_label). Use remove ONLY when it was recorded wrongly and never true ("I have never had a knee injury") — an error to erase, not history; recovering is never a reason to remove. Read get_constraints first and name it as listed. Pass {"constraint": "left knee", "action": "lift"}; {"constraint": "night shifts", "action": "add", "kind": "life", "plan_around": true, "until": "2026-09-30"}; or {"constraint": "ramp gently", "action": "reword", "new_label": "left ankle tendinitis"}.',
   parameters: {
     properties: {
       constraint: { type: 'string', description: 'Which one, by its label as get_constraints lists it.' },
@@ -164,7 +165,7 @@ export const UPDATE_CONSTRAINT: CoachActionTool = {
         : ''
     }`;
   },
-};
+});
 
 /** Another stored label sharing 2+ significant tokens with the one just written — evidence of a
  *  possible twin the containment rule could not merge, for the coach to raise, not act on. */

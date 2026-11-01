@@ -187,9 +187,14 @@ describe('send_questionnaire — the description the harness would audit', () =>
     expect(d).toMatch(/ask in chat instead/);
   });
 
-  it('states its gate — that it writes nothing until they send the card', () => {
-    expect(d).toMatch(/This writes nothing/);
-    expect(d).toMatch(/nothing is on file until then/);
+  /**
+   * The gate is generated from `mutates: 'proposes'` (tool-mutates.ts, HARNESS-V3 P5). It read
+   * "This writes nothing: … and nothing is on file until then"; the generated "This does NOT change
+   * anything" says the second half already, so that clause went rather than saying it twice.
+   */
+  it('states its gate — that it changes nothing until they send the card', () => {
+    expect(SEND_QUESTIONNAIRE.mutates).toBe('proposes');
+    expect(d).toMatch(/This does NOT change anything: their answers come back as their own message/);
   });
 
   it('teaches every declared parameter with a quoted example', () => {
