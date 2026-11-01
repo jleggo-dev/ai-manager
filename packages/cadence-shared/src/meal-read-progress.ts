@@ -43,13 +43,18 @@ export const READ_PHOTO_STEPS: ReadProgressStep[] = [
   { at: 30000, text: 'Writing up what it can and can’t tell…' },
 ];
 
-/** Stage 2 — the arithmetic. Measured 23–38s. */
+/**
+ * Stage 2 — the coach-led read of the confirmed list (FOOD-LOGGING-COACH-LED.md, since
+ * 2026-11-01): every part looked up at once, one decision, the store prices. Measured 4–14s
+ * typed; the tail line holds for a slow one. Each line is a thing that genuinely happens on this
+ * path, in the order it happens — nothing is added to the day until the card is confirmed.
+ */
 export const NUTRITION_STEPS: ReadProgressStep[] = [
-  { at: 0, text: 'Working out the nutrition…' },
-  { at: 3000, text: 'Counting the calories…' },
-  { at: 8000, text: 'Splitting out protein, carbs and fat…' },
-  { at: 15000, text: 'Checking the micronutrients…' },
-  { at: 23000, text: 'Adding it to your day…' },
+  { at: 0, text: 'Looking each line up in your foods and the food databases…' },
+  { at: 4000, text: 'The coach is reading what the lookups found…' },
+  { at: 9000, text: 'Choosing the closest record for each line…' },
+  { at: 15000, text: 'Pricing the amounts from the records…' },
+  { at: 22000, text: 'Noting what was assumed and what to ask you…' },
 ];
 
 /**

@@ -166,7 +166,6 @@ export {
   clearMacroTargets,
   logMeal,
   readMealPhoto,
-  logMealFromReading,
   previewMealFromReading,
   logMealFromFood,
   previewMeal,

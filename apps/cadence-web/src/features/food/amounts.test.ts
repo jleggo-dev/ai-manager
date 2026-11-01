@@ -65,8 +65,18 @@ describe('amountChoices — chips, never a keypad', () => {
     ]);
   });
 
-  it('pluralises an -h unit properly', () => {
-    expect(amountChoices({ name: 'cashews' })[1]?.label).toBe('2 handfuls');
+  it.each([
+    // food or unit → the "two" chip; a unit ending in a hiss takes "es" ("2 glasss" was on the
+    // latte's chips until 2026-11-01, found by the photo door's question-row table)
+    [{ name: 'cashews' }, '2 handfuls'],
+    [{ name: 'latte' }, '2 glasses'],
+    [{ name: 'sourdough toast' }, '2 slices'],
+    [{ name: 'rice' }, '2 cups'],
+    [{ name: 'curry', unit: 'dish' }, '2 dishes'],
+    [{ name: 'raisins', unit: 'box' }, '2 boxes'],
+    [{ name: 'salsa', unit: 'tbsp' }, '2 tbsps'],
+  ])('pluralises the unit: %j → %s', (item, label) => {
+    expect(amountChoices(item)[1]?.label).toBe(label);
   });
 });
 

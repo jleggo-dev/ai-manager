@@ -15,7 +15,7 @@ import { CoachFace } from '../../../components/CoachFace.tsx';
 import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
 import { fmtKcal } from '../bracket/copy.ts';
-import { NOT_REACHED, READING } from '../LogByChat.tsx';
+import { NOT_REACHED, READING } from '../coachReadCopy.ts';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
 

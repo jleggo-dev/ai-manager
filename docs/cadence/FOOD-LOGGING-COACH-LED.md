@@ -1,8 +1,9 @@
 # Food logging, coach-led — design draft
 
-_Status: build step 2 SHIPPED 2026-11-01 (the `food-check` job on its own profile, the candidate
-book as a service, the described-meal doors wired through it — see "Suggested build order" and
-"What was built" at the end). Rulings 2, 3, 4 and 6 are still the owner's._
+_Status: build steps 2 and 4 SHIPPED 2026-11-01 (the `food-check` job on its own profile, the
+candidate book as a service, every described-meal door wired through it — chat, voice and, since
+step 4, photo — see "Suggested build order" and "What was built" at the end). Rulings 2, 3, 4 and
+6 are still the owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -431,12 +432,12 @@ on the card as an automatic estimate, not hers.
    coach-led read because it wraps the same service; a confirmed row that names its food is priced
    from that food and never re-matched (`food-pricing.ts`). `log_meal` (the coach's one-call
    write) still runs the old waterfall._
-4. Route the meal screen's Chat / Voice / Photo doors to it; the trace UI, per-row source labels,
-   the assumption line, question rows that do not count. _Chat and Voice (`LogByChat`, the
-   quick-log `DescribeSheet`, the plan sheet's capture) are on it, with the trace line, the
-   assumption on the row, her question on an asked row, and the not-reached notice. Photo is
-   not: `parse-meal-description` still prices the reading. Per-row source labels are on the wire
-   (`source_label`) and not yet drawn._
+4. ~~Route the meal screen's Chat / Voice / Photo doors to it; the trace UI, the assumption line,
+   question rows that do not count~~ — **built 2026-11-01**, see "What was built (step 4)" below.
+   Chat and Voice (`LogByChat`, the quick-log `DescribeSheet`, the plan sheet's capture) and Photo
+   (`PhotoReadPanel`, inside an open meal and from the plan) are on it, with the trace line, the
+   assumption on the row, her question on an asked row, and the not-reached notice. _Still owed
+   from this step: per-row source labels are on the wire (`source_label`) and not yet drawn._
 5. ~~Write-back of her verdicts (phrase → food) so repeats get faster~~ — built in step 2
    (`food_phrases`, migration 0064): the confirm teaches it, the next read of the same words is a
    deterministic hit and no call.
@@ -513,9 +514,10 @@ The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.t
    proves the primary with a live call after the sync; `sync-jobs.ts` then binds the job to it
    (the `<CADENCE_FOOD_CHECK_PROFILE_UUID>` token).
 
-What stays as it was: `log_meal` (the coach's one-call write) and the photo door run the old
-pipeline; `acceptMatch` and the research trigger stay behind them and behind the fallback;
-`ai_log` gets a `food_check` row per read (calls, reached, parts, remembered, records, problems).
+What stays as it was: `log_meal` (the coach's one-call write) runs the old pipeline (the photo
+door moved in step 4, below); `acceptMatch` and the research trigger stay behind it and behind the
+fallback; `ai_log` gets a `food_check` row per read (calls, reached, parts, remembered, records,
+problems).
 
 Decided while building, for the owner to overrule:
 
@@ -524,7 +526,7 @@ Decided while building, for the owner to overrule:
   number and no food link, and once an amount is chosen the confirm re-matches the row by name.
   A question that is not about the amount ("whole or 2%?") still waits on the chips, and the
   answer the chips give is an amount, not the identity — the model's lean is never logged on the
-  strength of it. Step 4's chips in her voice would replace this.
+  strength of it. Step 4 kept this: the photo door asks through the same chips.
 - **A merged row is a new reading.** Folding two rows keeps the sum of their nutrients and drops
   the kept half's food link and words: the server would otherwise re-price the sum from one food
   alone and lose the other's nutrients. The merged row re-matches by name and teaches nothing.
@@ -535,3 +537,48 @@ Decided while building, for the owner to overrule:
   link too: renaming on the card does not re-match.
 - **FatSecret is always asked on this path** (five rows per part, billed unless already fresh in
   the ledger). Ruling 6 decides whether that stays.
+
+## What was built (step 4, 2026-11-01)
+
+The photo door reads the way the typed one does (`services/meal-photo-read.ts`, the web's
+`PhotoReadPanel`):
+
+1. **The reading is plain text, and ends with a list.** The `describe-meal-photo` job now asks for
+   a few plain sentences for the person (what it is, what the size was anchored to, what it could
+   not tell), a blank line, then one line per food or drink with the amount first and the brand on
+   the line — "1 venti Starbucks latte" — and nothing after it; the qualifiers go before the food
+   ("1 venti oat milk latte"), no commas, "and", "with" or "&" inside a line, because each line is
+   one part to the split. No asterisks, no bold, no headings, no bullet marks (the owner found
+   "***" and "**Compact Summary for Data Entry:**" in the editable box, 2026-10-31).
+   `describe-meal-photo-job-config.test.ts` pins the rules and runs the prompt's own example list
+   through the split. The read also takes off any markdown a model writes anyway
+   (`plainReading`), so the box never shows it. **The prompt is not live until
+   `scripts/sync-jobs.ts` runs.**
+2. **The last block is the words.** `readingWords` takes the reading's last block of non-blank
+   lines as the meal's words (at most MAX_PARTS lines and PHOTO_WORDS_MAX characters — the photo
+   door's own cap, since a reading runs past the typed path's 500); the blocks above it are the
+   eyes' notes, shown in the box and kept on the row as `photo_reading`, never looked up. An empty
+   reading reads the caption (the read failed, the person went on from their words); nothing at
+   all is a 400, never an empty card.
+3. **The same read.** `previewMealFromReading` hands the words to `previewDescribedMeal`: the
+   phrase memory, the book, one `food-check` call, the store's pricing, the labelled fallback — so
+   a photo of a latte and a banana gives the rows, the trace and the numbers that typing "1 venti
+   Starbucks latte, 1 medium banana" gives (`meal-photo-read.test.ts` asserts the two previews
+   equal through the `DescribedMealDeps` seam). The `food_check` log row is marked `photo: true`
+   and carries the notes.
+4. **The same card.** `PhotoReadPanel` renders the chat door's own line (`CoachReadLine`: she
+   could not be reached → the notice with the tap hint; she read it → "Here's what I found"; no
+   coach block → the same line), her trace, and `MealParseCard` (→ `MealAmountRows`,
+   `useMealAmounts`) in both modes — inside an open meal the card's button adds the rows to the
+   draft; from the plan it logs. A question row asks through the chips in her words and counts
+   nothing until answered. Log mode used to write a row straight from `parse-meal-description`
+   with no card and no trace; now nothing is written before the confirm in either mode. The
+   stage-2 progress copy (`NUTRITION_STEPS`) narrates the read, not a write.
+5. **The confirm keeps the photo.** `POST /nutrition/meals` `parsed` takes `photo_ref` and
+   `photo_reading` (validation/body.ts, `raw_text` up to the photo list's 1,000); the row lands as
+   `input_method: 'photo'` with its picture and its reading, and each row's `food_id` and `said`
+   teach the phrase memory as on the typed door.
+6. **Left as it was, to go with the next phone rebuild:** `POST /nutrition/photo/log` and
+   `logMealFromReading` (the old one-call write) stay for clients built before this change;
+   `parse-meal-description` is referenced only there. `MealCapturePhoto` (the plan's photo host)
+   has no caller in the web today.

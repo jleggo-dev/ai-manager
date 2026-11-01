@@ -72,8 +72,15 @@ const parsedMealSchema = z.object({
   macros: z.record(z.string(), z.unknown()).nullable(),
   confidence: z.number().min(0).max(1).nullable(),
   flags: z.object({ alcohol: z.boolean().optional(), caffeine: z.boolean().optional() }),
-  raw_text: z.string().max(500),
+  /** The words that were read: the typed path's 500, or the photo door's list (PHOTO_WORDS_MAX). */
+  raw_text: z.string().max(1000),
   date: z.string().optional(),
+  /**
+   * The photo door's confirm (meal-photo-read.ts): the photo already stored by the read, and the
+   * reading as the person stood behind it, so the row keeps its picture and its explanation.
+   */
+  photo_ref: z.string().min(1).max(400).optional(),
+  photo_reading: z.string().max(20000).optional(),
 });
 
 export const previewMealBodySchema = z.object({

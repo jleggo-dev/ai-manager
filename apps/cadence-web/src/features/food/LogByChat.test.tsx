@@ -10,7 +10,8 @@ vi.mock('./MealParseCard.tsx', () => ({ MealParseCard: () => <div>the card</div>
 const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../lib/api.ts', () => api);
 
-const { LogByChat, NOT_REACHED, READING } = await import('./LogByChat.tsx');
+const { LogByChat } = await import('./LogByChat.tsx');
+const { NOT_REACHED, READING } = await import('./coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,

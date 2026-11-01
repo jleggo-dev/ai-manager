@@ -9,8 +9,13 @@
  * time; the boredom is alleviated usually by seeing the stream of reasoning." So the pipeline is
  * split at its natural seam and exposed as two calls rather than one:
  *
- *   1. `readMealPhoto`   — upload, then ask the eyes what they see. Returns PROSE, persists nothing.
- *   2. `logMealFromReading` — turn that prose into numbers and write the row.
+ *   1. `readMealPhoto`          — upload, then ask the eyes what they see. Returns PLAIN TEXT,
+ *                                 persists nothing but the photo.
+ *   2. `previewMealFromReading` — the reading, as the person confirmed or corrected it, goes
+ *                                 through the same coach-led read a typed meal gets
+ *                                 (food-described-meal.ts: the phrase memory, the candidate book,
+ *                                 one `food-check` call, the store's pricing). Rows come back for
+ *                                 the card; nothing is written until the confirm.
  *
  * The client rotates its own copy during each call and shows the real reading in between, which is
  * what makes 60s feel like progress instead of a hang. Two calls rather than SSE because the seam
@@ -18,18 +23,32 @@
  * computed from it.** That is the confirm step the brand asks for ("here's what I heard — did I get
  * it right?"), and it is free here rather than bolted on.
  *
+ * THE READING'S SHAPE (the `describe-meal-photo` job, config/ai-admin/ai-admin.config.json): a few
+ * plain sentences for the person — what it is, what the size was anchored to, what the eyes could
+ * not tell — then a blank line, then the list: one line per food or drink, the amount first, in
+ * the words a food list would use, nothing after it. `readingWords` takes that last block as the
+ * meal's words, so "1 venti Starbucks latte / 1 medium banana" splits, looks up and prices exactly
+ * as typing "a venti Starbucks latte and a banana" does (FOOD-LOGGING-COACH-LED.md, build step 4).
+ *
  * NOTHING IS PERSISTED BY STEP 1 except the photo itself. A read that the user abandons leaves no
- * meal behind — which is why the row is inserted in step 2 and not before.
+ * meal behind — which is why the row is inserted on the confirm and not before.
  */
 import { runJobBySlug } from '../ai/aim.ts';
 import { putMealPhoto, signMealPhotoUrl } from './meal-photos.ts';
 import { logAi } from './ai-log.ts';
 import { insertNutritionLog } from '../repos/nutrition.ts';
-import { isMeal, parseMealResult, usageSlot, PROVISIONAL_BELOW, type ParsedMealResult } from './nutrition-parse.ts';
+import { isMeal, parseMealResult, usageSlot, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { tickFoodLogOccurrence } from './nutrition.ts';
 import { priceParsedMeal } from './food-pricing.ts';
 import type { MealKind, Macros, NutritionLog } from '@cadence/shared';
 import { enrichFlags } from './meal-enrich.ts';
+import { MAX_PARTS } from './food-candidate-book.ts';
+import {
+  previewDescribedMeal,
+  productionDeps,
+  type DescribedMealDeps,
+  type DescribedMealPreview,
+} from './food-described-meal.ts';
 
 export interface MealPhotoReading {
   photo_ref: string;
@@ -58,7 +77,9 @@ export async function readMealPhoto(
   try {
     const images = [await signMealPhotoUrl(photo_ref)];
     const res = await runJobBySlug(userId, 'describe-meal-photo', { caption: input.caption ?? '' }, { images });
-    const reading = (res.formatted ?? res.raw ?? '').trim();
+    // Plain text is what the job is asked for; a model that writes markdown anyway ("***", a bold
+    // heading) is tidied here so the box the person edits never shows it.
+    const reading = plainReading(res.formatted ?? res.raw ?? '');
 
     void logAi(userId, {
       kind: 'describe_meal_photo',
@@ -187,46 +208,88 @@ export async function logMealFromReading(userId: string, input: ReadingLogInput)
 }
 
 /**
- * Step 2 WITHOUT the row — the photo door inside an open meal (meal-logging rework, 1b).
+ * The markdown a model leaves in a text reading, taken off: bold and italic marks, heading marks,
+ * bullet and numbering marks at the start of a line, and lines that are only a rule ("***", "---").
+ * The words stay as they were; only the marks go. Deterministic, so the table test is the contract.
+ */
+export function plainReading(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s*#{1,6}\s+/, '')
+        .replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')
+        .replace(/(\*\*|__)(.+?)\1/g, '$2')
+        .replace(/(^|[\s(])[*_]([^*_\n]+?)[*_](?=$|[\s).,;:!?])/g, '$1$2')
+        .replace(/`([^`]*)`/g, '$1')
+        .trimEnd(),
+    )
+    .filter((line) => !/^\s*(?:[*\-_=]\s*){3,}$/.test(line))
+    .join('\n')
+    .trim();
+}
+
+/**
+ * The most characters of a photo reading's list that are read. Ten lines (MAX_PARTS) of "amount,
+ * brand, food" run to about half this; the rest is room for the person's own corrections.
+ */
+export const PHOTO_WORDS_MAX = 1000;
+
+/**
+ * The words of a reading, and the notes that came before them.
  *
- * The draft owns the write, so the numbers come back for the user to see and confirm first: the
- * same `parse-meal-description` job and the same ledger pass as `logMealFromReading`, but nothing
- * is pinned and nothing is inserted. A preview they walk away from leaves no food behind.
+ * The reading's last block of non-blank lines is the list the job is asked to end with — one
+ * food or drink a line, the amount first — and that is what is split, looked up and priced. The
+ * blocks before it are the eyes' notes for the person (what was anchored, what could not be told);
+ * they are shown and kept on the row, never looked up. A reading with no blank line is all list,
+ * which is also what a person's own typed lines are. With no reading at all (the read failed, the
+ * person chose to go on from their caption) the caption is the words.
+ */
+export function readingWords(reading: string, caption?: string): { words: string; notes: string } {
+  const blocks = plainReading(reading)
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  const list = blocks.at(-1) ?? '';
+  const lines = list
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, MAX_PARTS);
+  if (lines.length) return { words: lines.join('\n'), notes: blocks.slice(0, -1).join('\n\n') };
+  return { words: (caption ?? '').trim(), notes: '' };
+}
+
+/**
+ * Step 2 WITHOUT the row — the photo door's reading, read the way a typed meal is.
  *
- * This replaced sending the reading to `/meals/preview`, whose words path caps text at 500
- * characters: a photo reading runs well past that, so every photo added to an open meal came back
- * "meal preview failed: 400" (owner, on device, 2026-10-31).
+ * `reading` comes back from the CLIENT rather than being cached server-side, and that is the point
+ * of splitting here rather than streaming: the user may have corrected it ("that's oat milk", "it
+ * was the large one"), and a correction outranks anything the model saw. What they confirmed is
+ * what is read: the list's lines are the parts, and the same phrase memory, candidate book, one
+ * `food-check` call and store pricing apply (food-described-meal.ts) — so a photo of a latte and a
+ * banana produces the rows, the trace and the numbers that typing "a latte and a banana" does.
+ *
+ * Writes nothing. The confirm goes through the `parsed` path (nutrition.ts: `logMeal({ parsed })`
+ * with `photo_ref` and `photo_reading`; the draft's `appendParsed`) with each row's `food_id` and
+ * `said`, like any described meal. Until 2026-11-01 this ran `parse-meal-description` and the
+ * code-picked match: the model wrote the numbers and nobody saw what was found or rejected.
  */
 export async function previewMealFromReading(
   userId: string,
   input: { reading: string; caption?: string; meal?: MealKind },
-): Promise<ParsedMealResult & { raw_text: string }> {
+  deps: DescribedMealDeps = productionDeps(userId),
+): Promise<DescribedMealPreview> {
+  const { words, notes } = readingWords(input.reading, input.caption);
+  if (!words) throw new Error('a meal needs a reading or a caption');
   const hint = input.meal && isMeal(input.meal) ? input.meal : undefined;
-  const res = await runJobBySlug(userId, 'parse-meal-description', {
-    description: input.reading,
-    meal_text: input.caption ?? '',
-    meal_hint: input.meal ?? '',
-  });
-  const rawOut = res.formatted ?? res.raw ?? '';
-  const shaped = parseMealResult(rawOut, hint);
-  const date = new Date().toISOString().slice(0, 10);
-  const ledger = await priceParsedMeal(
-    userId,
-    { items: shaped.items, macros: shaped.macros, confidence: shaped.confidence },
-    { pin: false, slot: usageSlot(date, shaped.meal) },
-  );
-  void logAi(userId, {
-    kind: 'parse_meal_description',
-    input: { caption: input.caption ?? null, reading_words: input.reading.split(/\s+/).filter(Boolean).length },
-    output: { raw: rawOut.slice(0, 2000) },
-    meta: {
-      meal: shaped.meal,
-      items: shaped.items.length,
-      confidence: shaped.confidence,
-      preview: true,
-      two_stage: true,
-    },
-  });
-  const raw_text = [input.caption?.trim(), input.reading.trim()].filter(Boolean).join(' — ');
-  return { ...shaped, items: ledger.items, macros: ledger.macros, raw_text };
+  // The same `food_check` log row as the typed path, marked as the photo door's and carrying the
+  // notes the eyes wrote above the list, so a number can be explained later from what was read.
+  const log: DescribedMealDeps['log'] = (entry) =>
+    deps.log({
+      ...entry,
+      meta: { ...(entry.meta as Record<string, unknown>), photo: true, notes: notes.slice(0, 500) },
+    });
+  return previewDescribedMeal(userId, words, hint, { ...deps, log }, { maxChars: PHOTO_WORDS_MAX });
 }

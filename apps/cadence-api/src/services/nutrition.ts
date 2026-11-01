@@ -108,6 +108,9 @@ export interface ParsedMealInput {
   flags: NutritionLog['flags'];
   raw_text: string;
   date?: string;
+  /** Set by the photo door's confirm: the stored photo, and the reading they confirmed or corrected. */
+  photo_ref?: string;
+  photo_reading?: string;
 }
 
 export async function logMeal(
@@ -153,11 +156,14 @@ export async function logMeal(
       date,
       meal: p.meal,
       items: ledger.items,
-      input_method: 'text',
+      // A photo door's confirm keeps its picture and its reading (meal-photo-read.ts); every
+      // other card is words.
+      input_method: p.photo_ref ? 'photo' : 'text',
       ai_confidence: p.confidence,
       raw_text: p.raw_text || null,
       flags: { ...p.flags, ...enrichFlags(ledger.wants_research) },
-      photo_ref: null,
+      photo_ref: p.photo_ref ?? null,
+      photo_reading: p.photo_reading || null,
       macros: ledger.macros,
       provisional,
     });

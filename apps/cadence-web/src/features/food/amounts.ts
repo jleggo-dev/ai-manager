@@ -89,8 +89,9 @@ const PORTION_BY_FOOD: Array<{ test: RegExp; unit: string; grams: number }> = [
   { test: /\b(nuts|almonds|walnuts|cashews|seeds|crisps|chips|popcorn|raisins)\b/i, unit: 'handful', grams: 30 },
 ];
 
+/** "2 slices", "2 glasses", "2 dishes" — a unit ending in a hiss takes "es"; "glasss" was on the chips until 2026-11-01. */
 const pluralise = (unit: string, n: number): string =>
-  n === 1 || !unit ? unit : unit.endsWith('h') ? `${unit}es` : `${unit}s`;
+  n === 1 || !unit ? unit : /(?:s|x|z|ch|sh)$/.test(unit) ? `${unit}es` : `${unit}s`;
 
 const chip = (qty: number, unit: string): AmountChoice => ({
   label: [qty, pluralise(unit, qty)].filter(Boolean).join(' ').trim() || String(qty),

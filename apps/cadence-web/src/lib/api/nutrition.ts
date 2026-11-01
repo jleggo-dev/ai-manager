@@ -230,6 +230,12 @@ export interface MealPreview {
    * ran, one line per part, never canned copy.
    */
   coach?: { reached: boolean; calls: number; checked: string[] };
+  /**
+   * The photo door's (meal-photo-read.ts): the photo the read already stored, and the reading as
+   * the person confirmed or corrected it. Both ride back on the confirm so the row keeps them.
+   */
+  photo_ref?: string;
+  photo_reading?: string;
 }
 
 /**
@@ -483,31 +489,13 @@ export async function readMealPhoto(photo: string, caption?: string): Promise<Me
 }
 
 /**
- * Step 2 — the reading becomes numbers and a row.
- *
- * `reading` is sent BACK rather than held server-side because the user may have edited it, and a
- * correction outranks anything the model saw. An empty reading is valid: a failed step 1 still logs
- * the meal from the caption.
- */
-export async function logMealFromReading(input: {
-  photo_ref: string;
-  reading: string;
-  caption?: string;
-  meal?: MealKind;
-}): Promise<Meal> {
-  const res = await fetch(`${BASE}/nutrition/photo/log`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) throw Object.assign(new Error(`meal log failed: ${res.status}`), { status: res.status });
-  return res.json();
-}
-
-/**
- * Step 2 inside an open meal — the reading becomes priced rows to SHOW, not a row. The draft does
- * the write once the user has seen the numbers. Its own route because a photo reading runs past
- * the 500 characters `previewMeal`'s words path accepts.
+ * Step 2 — the reading, as the person confirmed or corrected it, read the way a typed meal is
+ * (FOOD-LOGGING-COACH-LED.md): the same rows, trace, assumptions and questions `previewMeal`
+ * returns, for the same card. Writes nothing; the card's confirm does (`logPreviewedMeal` with the
+ * photo on the preview, or the draft's add). `reading` is sent BACK rather than held server-side
+ * because a correction outranks anything the model saw; an empty reading is valid — a failed step
+ * 1 still reads the meal from the caption. Its own route because a reading runs well past the 500
+ * characters `previewMeal`'s words path accepts.
  */
 export async function previewMealFromReading(input: {
   reading: string;

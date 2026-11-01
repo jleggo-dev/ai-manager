@@ -12,7 +12,8 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
   readMealPhoto: vi.fn(async () => ({ photo_ref: 'r1', reading: 'a pack of peanuts', error: null })),
-  logMealFromReading: vi.fn(async () => ({ log_id: 'l1' })),
+  previewMealFromReading: vi.fn(),
+  logPreviewedMeal: vi.fn(),
   logMeal: vi.fn(),
 }));
 vi.mock('../../../lib/api.ts', () => api);

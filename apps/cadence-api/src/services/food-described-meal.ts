@@ -2,7 +2,8 @@
  * A described meal, coach-led: software splits and fetches, the food-check model decides once,
  * the store prices, the person confirms (docs/cadence/FOOD-LOGGING-COACH-LED.md, owner
  * 2026-10-29). This is what POST /nutrition/meals/preview runs — the typed and spoken doors on
- * the meal screen, and the coach's own preview_meal — in four steps:
+ * the meal screen, and the coach's own preview_meal — and what the photo door's confirmed reading
+ * goes through (POST /nutrition/photo/preview, meal-photo-read.ts), in four steps:
  *
  *   1. Words this person confirmed before are priced from memory (food-phrases.ts): the
  *      deterministic rung, no lookup and no call.
@@ -132,14 +133,22 @@ function totals(items: DescribedMealItem[]): ParsedMealResult['macros'] {
   return { ...sum, source: fromStore ? 'ledger' : 'ai' };
 }
 
-/** The preview behind the described-meal doors. Throws only when there are no words at all. */
+/** The most characters of a typed or spoken meal that are read — the words path's own cap (validation/body.ts). */
+export const DESCRIBED_WORDS_MAX = 500;
+
+/**
+ * The preview behind the described-meal doors. Throws only when there are no words at all.
+ * `maxChars` is the typed path's cap unless the caller has its own (the photo door's list of
+ * lines, meal-photo-read.ts); the split caps the parts at MAX_PARTS either way.
+ */
 export async function previewDescribedMeal(
   userId: string,
   text: string,
   mealHint?: MealKind,
   deps: DescribedMealDeps = productionDeps(userId),
+  opts: { maxChars?: number } = {},
 ): Promise<DescribedMealPreview> {
-  const trimmed = text.trim().slice(0, 500);
+  const trimmed = text.trim().slice(0, opts.maxChars ?? DESCRIBED_WORDS_MAX);
   if (!trimmed) throw new Error('a meal needs words');
   const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : 'other';
   const started = Date.now();
