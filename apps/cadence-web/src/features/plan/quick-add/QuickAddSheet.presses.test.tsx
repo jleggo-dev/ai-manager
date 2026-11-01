@@ -183,6 +183,17 @@ describe('QuickAddSheet — the weight row', () => {
     expect(await screen.findByText("That didn't save — check the number and try again.")).toBeTruthy();
     expect(screen.queryByText(/Noted/)).toBeNull();
   });
+
+  it('a weight the server refuses as implausible says so in its own words', async () => {
+    getUnits.mockResolvedValue(null);
+    recordWeighInToday.mockRejectedValueOnce(Object.assign(new Error('422'), { status: 422 }));
+    mount({ plan: basePlan([weighActivity]) });
+    openWeightRow();
+    await waitFor(() => expect(screen.getByText('kg ⇄')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Today's weight"), { target: { value: '5' } });
+    fireEvent.click(screen.getByText('Add it to the trend'));
+    expect(await screen.findByText(/doesn't look like a body weight/)).toBeTruthy();
+  });
 });
 
 describe('QuickAddSheet — the photo row', () => {

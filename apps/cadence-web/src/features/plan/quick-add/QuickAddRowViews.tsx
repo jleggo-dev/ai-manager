@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { displayWeightUnit } from '@cadence/shared';
 import { getUnits, logWater, recordWeighInToday } from '../../../lib/api.ts';
+import { isImplausibleWeight, IMPLAUSIBLE_WEIGHT_NOTE } from '../../../lib/api/occurrence.ts';
 import { useInvalidateNutritionDay, useUploadProgressPhoto } from '../../../lib/query/index.ts';
 import { GLYPH } from '../../today/glyphs.ts';
 import { GLASS_ML } from '../../nutrition/WaterRow.tsx';
@@ -101,8 +102,8 @@ export function WeightQuickRow({ open, onToggle }: { open: boolean; onToggle: ()
       await recordWeighInToday(w, unit);
       setWeight('');
       setNote("Noted — it feeds the trend, so today's number is only a part of it.");
-    } catch {
-      setNote("That didn't save — check the number and try again.");
+    } catch (e) {
+      setNote(isImplausibleWeight(e) ? IMPLAUSIBLE_WEIGHT_NOTE : "That didn't save — check the number and try again.");
     } finally {
       setBusy(false);
     }

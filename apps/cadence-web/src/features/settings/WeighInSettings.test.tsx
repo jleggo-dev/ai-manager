@@ -70,6 +70,19 @@ describe('WeighInSettings', () => {
     expect(await screen.findByText(/no weigh-in on your plan yet/)).toBeInTheDocument();
   });
 
+  /** 2026-11-01: a typo shared the 404 above, so someone with a weight goal was told to add one. */
+  it('says a typo is a typo — not "add a weight goal"', async () => {
+    api.getReview.mockResolvedValueOnce(review({ weigh_in_cadence: 'daily' }));
+    api.recordWeighInToday.mockRejectedValueOnce(Object.assign(new Error('422'), { status: 422 }));
+    await openPanel();
+
+    fireEvent.change(screen.getByLabelText("Today's weight"), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add it to the trend/ }));
+
+    expect(await screen.findByText(/doesn't look like a body weight/)).toBeInTheDocument();
+    expect(screen.queryByText(/add a weight goal/)).toBeNull();
+  });
+
   it('does not send a junk reading', async () => {
     api.getReview.mockResolvedValueOnce(review({ weigh_in_cadence: 'daily' }));
     await openPanel();

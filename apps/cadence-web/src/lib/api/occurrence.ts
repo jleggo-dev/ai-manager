@@ -52,6 +52,13 @@ export async function logOccurrence(id: string, text: string): Promise<{ log: Oc
   return res.json();
 }
 
+/**
+ * The words for a weight the route refused as not a body weight (422) — a typo like "5". It used to
+ * share a 404 with "no weigh-in on your plan", so the screen told them to add a weight goal.
+ */
+export const IMPLAUSIBLE_WEIGHT_NOTE = "That doesn't look like a body weight — check the number and the unit.";
+export const isImplausibleWeight = (err: unknown): boolean => (err as { status?: number })?.status === 422;
+
 /** Weigh-in capture (deterministic, no LLM) — stores the series point + updates baseline. */
 export async function recordWeighIn(id: string, weight: number, unit: 'kg' | 'lb'): Promise<{ weight_kg: number }> {
   const res = await fetch(`${BASE}/plan/occurrences/${id}/weigh-in`, {
@@ -65,7 +72,8 @@ export async function recordWeighIn(id: string, weight: number, unit: 'kg' | 'lb
 
 /**
  * Today's weight, on any day (A23 §2c) — the daily-cadence path. 404 means their plan has no
- * weigh-in to hang it off, which is a real answer rather than an error to swallow.
+ * weigh-in to hang it off, which is a real answer rather than an error to swallow; 422 means the
+ * number can't be a body weight.
  */
 export async function recordWeighInToday(weight: number, unit: 'kg' | 'lb'): Promise<{ weight_kg: number }> {
   const res = await fetch(`${BASE}/plan/weigh-in`, {

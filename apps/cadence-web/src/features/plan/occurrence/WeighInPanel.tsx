@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { recordWeighIn, type OccurrenceDetail } from '../../../lib/api.ts';
+import { isImplausibleWeight, IMPLAUSIBLE_WEIGHT_NOTE } from '../../../lib/api/occurrence.ts';
 import { useInvalidateNutritionDay } from '../../../lib/query/index.ts';
 
 /**
@@ -37,8 +38,10 @@ export function WeighInPanel({
       });
       await invalidateNutritionDay();
       onLogged?.();
-    } catch {
-      setLogErr("That didn't save — check the number and try again.");
+    } catch (e) {
+      setLogErr(
+        isImplausibleWeight(e) ? IMPLAUSIBLE_WEIGHT_NOTE : "That didn't save — check the number and try again.",
+      );
     } finally {
       setLogBusy(false);
     }

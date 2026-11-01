@@ -59,7 +59,7 @@ d('A23 §2c — a weight on any day (DB)', () => {
 
     const r = await recordWeighInToday(USER, 195, 'lb');
 
-    expect(r?.weight_kg).toBeCloseTo(88.5, 1);
+    expect(r.ok && r.weight_kg).toBeCloseTo(88.5, 1);
     const series = await listWeighInSeries(USER);
     expect(series).toHaveLength(1);
     expect(series[0]).toMatchObject({ date: today() });
@@ -95,7 +95,7 @@ d('A23 §2c — a weight on any day (DB)', () => {
   });
 
   it('says no rather than inventing a weigh-in the plan never had', async () => {
-    expect(await recordWeighInToday(USER, 195, 'lb')).toBeNull();
+    expect(await recordWeighInToday(USER, 195, 'lb')).toEqual({ ok: false, refused: 'no_weigh_in' });
     expect(await listWeighInSeries(USER)).toEqual([]);
   });
 
@@ -111,14 +111,21 @@ d('A23 §2c — a weight on any day (DB)', () => {
       insert into cadence.activities (plan_id, user_id, title, kind, category, schedule)
       values (${plan!.plan_id}, ${USER}, 'Weighted hill intervals (vest or sandbag) + grip finisher', 'system', 'measurement', '{}')`;
 
-    expect(await recordWeighInToday(USER, 195, 'lb')).toBeNull();
+    expect(await recordWeighInToday(USER, 195, 'lb')).toEqual({ ok: false, refused: 'no_weigh_in' });
     expect(await listWeighInSeries(USER)).toEqual([]);
   });
 
-  it('still refuses an implausible reading', async () => {
+  /**
+   * 2026-11-01: an implausible reading shared the "no weigh-in on your plan" refusal, and it was
+   * checked only after today's occurrence had been created — so a typo left an empty row behind.
+   */
+  it('still refuses an implausible reading, says why, and leaves no row for today', async () => {
     await seedWeighInActivity();
-    expect(await recordWeighInToday(USER, 5, 'kg')).toBeNull();
-    expect(await recordWeighInToday(USER, 900, 'kg')).toBeNull();
+    expect(await recordWeighInToday(USER, 5, 'kg')).toEqual({ ok: false, refused: 'implausible_weight' });
+    expect(await recordWeighInToday(USER, 900, 'kg')).toEqual({ ok: false, refused: 'implausible_weight' });
     expect(await listWeighInSeries(USER)).toEqual([]);
+    const [row] = await sql<{ n: number }[]>`
+      select count(*)::int as n from cadence.occurrences where user_id = ${USER}`;
+    expect(row?.n).toBe(0);
   });
 });
