@@ -338,10 +338,11 @@ never went round `round_rule` and `guard_notes`, and the engine's 10,000-charact
 variable fell on the whole prompt (tail first — `</book>` and the last parts' records) without
 anyone seeing it. Run 4 fixes both and measures the fixed job: the e2e job carries the shipped
 `promptTemplate` and `variables`, each call sends only the five variables, the engine fills them
-as it does live; the book fits itself to the variable cap (`BOOK_BUDGET_CHARS`, round-robin by
-part, the cut announced in the part's head — see "What was built", 3); the three pick steers are
-out of the prompt and `estimate.kcal` / `protein_g` are nullable. gpt-5.4-mini once over the 20
-meals, 21 calls; then the one new miss re-run twice.
+as it does live; the book fits itself to a budget (round-robin by part, the cut announced in the
+part's head — see "What was built", 3; for this run the budget was 9,900 characters, the engine's
+cap less a margin — it was then set to its own 12,000 once #454 raised the cap, see run 5); the
+three pick steers are out of the prompt and `estimate.kcal` / `protein_g` are nullable.
+gpt-5.4-mini once over the 20 meals, 21 calls; then the one new miss re-run twice.
 
 | Model            | Right | kcal ok | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) |
 | ---------------- | ----: | ------: | ----------: | ------------------: | ----: | ----------------------------------: |
@@ -367,6 +368,32 @@ Reading it:
   yoghurt" — a fraction followed by "a cup" is not peeled — which is why that part's records were
   mostly noise (a peanut-butter cup, a dessert topping).
 - **The guard round fired zero times** again; the extra-lookups round fired once over the 20.
+
+### Eval results — run 5, the book's own budget under the raised cap (2026-11-01)
+
+Same job and eval as run 4, after #454 (the engine's variable cap 40,000, a cut logged) was
+merged into the branch and `BOOK_BUDGET_CHARS` became the book's own 12,000 characters (sized
+from the token bar; the arithmetic is on the constant). gpt-5.4-mini once over the 20 meals,
+23 calls.
+
+| Model            | Right | kcal ok | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) | Largest call |
+| ---------------- | ----: | ------: | ----------: | ------------------: | ----: | ----------------------------------: | -----------: |
+| **gpt-5.4-mini** | 17/20 |   17/20 |       **0** |                  17 |   5.9 |                       5,072 · 4,630 |        7,629 |
+
+Reading it:
+
+- **The median call did not move** (4,630 against run 4's 4,642): a meal of one to three parts
+  never fills either budget. The average rose from 4,908 to 5,072 and the largest call from
+  ~6,400 to 7,629 — the long meals keep more rows a part now, and pay for them. Both are what the
+  constant's arithmetic said they would be.
+- **17/20 again**, the two fixed misses unchanged. The third is new in kind, not in cause:
+  `pair-almonds` ("a handful of almonds") picked the "1 almond" record and asked "About how many
+  almonds is a handful?" — a question row. In the app that row carries no number until the
+  amount is answered (review item 3); the eval's scorer still prices the pick at count 1 and
+  calls it 7 kcal, which is the scorer's shape, not the app's. The scorer could skip question
+  rows to match production; left as it is so runs stay comparable. The smoothie that missed in
+  run 4 was right.
+- **Three meals took the extra-lookups round** (one in run 4); the guard round fired zero times.
 
 ## When she can't be reached
 
@@ -439,14 +466,15 @@ The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.t
    the guards' notes, the fan-out's disagreements, and `incomplete` on a record with no usable
    calories (run 2's zero-kcal "Cafe Latte"). Ids are the meal's own (`c1`…); the same record seen
    twice keeps its first id; eight records shown per lookup. The FatSecret line in
-   `sources_checked` is replaced with what actually ran, so the trace stays true. **The book fits
-   the engine's variable cap** (review, 2026-11-01): `interpolateTemplate` cuts any job variable
-   past 10,000 characters and appends "... [truncated]", from the tail, silently — so `text()`
-   renders within `BOOK_BUDGET_CHARS` (the cap less a margin, the way compaction sizes its
-   transcript), dealing record lines round-robin across the parts so a long meal loses every
-   part's eighth row before any part loses its first; a part with rows held back says how many
-   in its head so the model can ask for a narrower lookup; `shown()` answers with the records the
-   last rendering held, and a pick of an id past the cut is refused as "not shown". **A record
+   `sources_checked` is replaced with what actually ran, so the trace stays true. **The book has a
+   budget of its own** (review, 2026-11-01): `text()` renders within `BOOK_BUDGET_CHARS` (12,000
+   characters, sized from the ~4,800-token bar — the arithmetic is on the constant), dealing
+   record lines round-robin across the parts so a long meal loses every part's last rows before
+   any part loses its first; a part with rows held back says how many in its head so the model
+   can ask for a narrower lookup; `shown()` answers with the records the last rendering held, and
+   a pick of an id past the cut is refused as "not shown". The engine's own cap on a job variable
+   (`MAX_VARIABLE_LENGTH`) was 10,000 and cut silently from the tail; #454 raised it to 40,000 and
+   made a cut log the variable's name, so the budget is a cost choice, not a guard. **A record
    kept per item** (every food the old parse-meal path pinned, "1 serving = 1") is printed per its
    own measure ("per 1 serving: 250 kcal … kept per item, not by weight"), never as per 100 g of a
    count (which read 25,000 kcal), and is left out of the fan-out's per-100 g disagreement

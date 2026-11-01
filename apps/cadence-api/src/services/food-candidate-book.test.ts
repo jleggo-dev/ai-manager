@@ -201,10 +201,10 @@ describe('CandidateBook — every record found, none dropped, ids stable', () =>
 });
 
 /**
- * The engine cuts any job variable past MAX_VARIABLE_LENGTH and appends "... [truncated]" — from
- * the tail, silently, which is the last parts' records. The book has to fit itself instead.
+ * The book has a budget of its own (from the token bar, BOOK_BUDGET_CHARS) and fits itself to
+ * it: a long meal loses every part's last rows before any part loses its first, and says so.
  */
-describe('CandidateBook — fits the engine’s variable cap, round-robin by part, the cut announced', () => {
+describe('CandidateBook — fits its budget, round-robin by part, the cut announced', () => {
   const notes = [
     'Micronutrients come from a printed label, so an absent one is unknown, not zero.',
     'Estimated (llm), not measured — prefer a lab-analysed source if one agrees.',
@@ -241,7 +241,8 @@ describe('CandidateBook — fits the engine’s variable cap, round-robin by par
     const text = book.text();
     expect(book.entries.size).toBe(MAX_PARTS * SHOW_PER_LOOKUP);
     expect(text.length).toBeLessThanOrEqual(BOOK_BUDGET_CHARS);
-    expect(text).not.toContain('[truncated]');
+    // Well inside the engine's own cap on a job variable (40,000 since #454), so nothing is cut there.
+    expect(text.length).toBeLessThan(40_000);
     const rows = book.sections.map((s) => s.lines.length - s.omitted);
     // Every part shows at least its first row, and no part shows two rows more than another.
     expect(Math.min(...rows)).toBeGreaterThanOrEqual(1);

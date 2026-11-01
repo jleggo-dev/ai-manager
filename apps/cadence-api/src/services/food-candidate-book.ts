@@ -15,17 +15,16 @@
  * record kept per item (a pinned estimate, "1 serving = 1") is printed per its own measure, not as
  * "per 100 g" of a count — that read 25,000 kcal and raised a false disagreement.
  *
- * What the book will not do is overrun the engine: `text()` fits itself to BOOK_BUDGET_CHARS
- * (round-robin by part, the cut announced in the part's head), and `shown()` answers only with
- * the records the last rendering held, so a pick of a record the model never saw is refused
- * rather than priced.
+ * What the book will not do is grow without limit: `text()` fits itself to BOOK_BUDGET_CHARS
+ * (its own budget, from the token bar — round-robin by part, the cut announced in the part's
+ * head), and `shown()` answers only with the records the last rendering held, so a pick of a
+ * record the model never saw is refused rather than priced.
  *
  * The split is deliberately plain. Comma, newline, "and", "with", "+", "&" separate parts; a
  * leading amount ("150ml", "2 tbsp", "a handful of") is peeled off into the lookup's measure.
  * Dictated prose with no separators stays one part: the model may ask for one more round of
  * lookups to repair that, and the second call is its last (food-check.ts).
  */
-import { MAX_VARIABLE_LENGTH } from '@ai-admin/core';
 import type { FanOutResult, SourceCheck } from './food-source-fanout.ts';
 import type { FoodSourceName, MeasureOption, SourceCandidate } from './food-source-report.ts';
 import type { NutritionTier } from './food-sources/completeness.ts';
@@ -35,15 +34,23 @@ export const MAX_PARTS = 10;
 /** Records shown per lookup. Past this the book costs more tokens than the extra rows earn. */
 export const SHOW_PER_LOOKUP = 8;
 /**
- * The most characters the rendered book may run to. The engine cuts ANY job variable past
- * `MAX_VARIABLE_LENGTH` and appends "... [truncated]" (job-execution-utils.ts) — silently, from
- * the tail, which is the last parts' records. Ten parts at eight records of 200–400 characters
- * is three times that, so the book fits itself here instead: every part keeps its first rows
- * (filled round-robin), and a part that had rows held back says so in its head, so the model can
- * ask for a narrower lookup rather than read a cut it cannot see. Same move as compaction's
- * transcript budget (session-compaction-plan.ts). The margin keeps the last line whole.
+ * The most characters the rendered book may run to — a budget of the book's own, sized from the
+ * cost target and not from the engine (whose cap on a job variable is 40,000 since #454, and a
+ * cut there is logged with the variable's name, never silent).
+ *
+ * The arithmetic. The bar is ~4,800 prompt tokens a call (FOOD-LOGGING-COACH-LED.md, run 2).
+ * Run 4 measured this prompt at ~3.7 characters a token on top of the ~2,600 tokens of gateway
+ * preamble every call carries: the five-part smoothie's call, a 9,700-character book plus the
+ * 3,100-character template, the words and the round rule (~14,000 characters), cost ~6,300
+ * tokens. Eight records are ~2,400 characters a part, so a meal of one to three parts never
+ * fills the budget and the MEDIAN call sits under the bar whatever it is set to; the budget
+ * decides what a long meal costs and how many of each part's rows it keeps. At 12,000 a filled
+ * call is ~7,000 tokens and a ten-part meal keeps three or four rows a part; at 9,900 (the
+ * engine's old cap, run 4) it was ~6,400 and two or three. Filled round-robin across the parts,
+ * the cut announced in the part's head, so the model can ask for a narrower lookup rather than
+ * read a cut it cannot see.
  */
-export const BOOK_BUDGET_CHARS = MAX_VARIABLE_LENGTH - 100;
+export const BOOK_BUDGET_CHARS = 12_000;
 /** Room kept per section for the "N more records not shown" note a cut adds to its head. */
 const CUT_NOTE_RESERVE = 110;
 
