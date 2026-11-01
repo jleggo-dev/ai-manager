@@ -169,6 +169,7 @@ export {
   previewMealFromReading,
   logMealFromFood,
   previewMeal,
+  previewMealAnswer,
   logPreviewedMeal,
   type MealPreview,
   logMealFromRecipe,

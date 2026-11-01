@@ -499,6 +499,37 @@ describe('PhotoReadPanel — draft mode', () => {
     expect(api.logPreviewedMeal).not.toHaveBeenCalled();
   });
 
+  it("a row waiting on the coach's question offers her answers as buttons on the photo card too", async () => {
+    api.previewMealFromReading.mockResolvedValueOnce({
+      ...DRAFT_PRICED,
+      items: [
+        {
+          name: 'milk',
+          question: 'Whole milk, 2% or skim?',
+          choices: ['Whole milk', '2%', 'Skim'],
+          asked_about: 'milk',
+          basis: 'none',
+        },
+        ...DRAFT_PRICED.items,
+      ],
+    });
+    const { user } = setupDraft();
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await user.click(await screen.findByRole('button', { name: /work out the nutrition/i }));
+
+    expect(await screen.findByRole('button', { name: 'Whole milk' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Something else' })).toBeTruthy();
+    expect(screen.getByText('Whole milk, 2% or skim?')).toBeTruthy();
+    // The same card as the typed door: a question an amount cannot answer gets no amount chips,
+    // counts nothing, and is named for what it is.
+    expect(screen.queryByRole('button', { name: '1 glass' })).toBeNull();
+    expect(screen.getByText('~560 kcal')).toBeTruthy();
+    expect(screen.getByText('1 QUESTION TO SETTLE')).toBeTruthy();
+    // Draft mode: the add would strip the question, so it waits until the question is answered.
+    expect(screen.getByRole('button', { name: 'One question to settle first' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Add to dinner' })).toBeNull();
+  });
+
   it('a failed read with no caption offers a retry, not a button that cannot work', async () => {
     api.readMealPhoto.mockRejectedValue(new Error('nope'));
     const { user } = setupDraft();

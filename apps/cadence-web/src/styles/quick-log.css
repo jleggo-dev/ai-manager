@@ -212,6 +212,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Her question's answers as buttons under a row (MealQuestionChoices, the confirm card's own). */
+.ms-ds-ask {
+  padding: 0 0 8px;
+}
 .ms-ds-row-m {
   margin-top: 3px;
   font-size: 8.5px;

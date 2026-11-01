@@ -1,6 +1,6 @@
 import { isCalendarDate, type MealKind } from '@cadence/shared';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
-import { macroLine, rowName, rowWords } from './food-described-render.ts';
+import { macroLine, questionWords, rowName, rowWords } from './food-described-render.ts';
 import type { DescribedMealItem } from './food-described-rows.ts';
 import { DescribedMealRejected, logDescribedMeal, type DescribedMealLog } from './food-log-described.ts';
 import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
@@ -15,7 +15,7 @@ const sentence = (s: string): string => (/[.!?]$/.test(s) ? s : `${s}.`);
 function openWords(row: DescribedMealItem): string {
   const who = `"${rowName(row)}"`;
   return row.question
-    ? `${who} waits on their answer: ${row.question}`
+    ? `${who} waits on their answer: ${questionWords(row)}`
     : `${who} could not be counted: ${row.problem ?? 'no record fits and no estimate was given'}`;
 }
 

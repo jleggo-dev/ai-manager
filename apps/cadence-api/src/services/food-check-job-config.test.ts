@@ -11,11 +11,13 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUESTION_CHOICES_MAX } from '@cadence/shared';
 import { FOOD_CHECK_JOB } from './food-check.ts';
 
 interface FieldDef {
   type?: string;
   nullable?: boolean;
+  maxItems?: number;
   allowedValues?: string[];
   fields?: Record<string, FieldDef>;
   items?: { type?: string; fields?: Record<string, FieldDef> };
@@ -79,6 +81,7 @@ describe('food-check job config', () => {
     expect(Object.keys(item).sort()).toEqual([
       'assumption',
       'brand',
+      'choices',
       'count',
       'estimate',
       'measure',
@@ -87,7 +90,7 @@ describe('food-check job config', () => {
       'question',
       'said',
     ]);
-    for (const k of ['name', 'brand', 'pick', 'measure', 'count', 'assumption', 'question', 'estimate'])
+    for (const k of ['name', 'brand', 'pick', 'measure', 'count', 'assumption', 'question', 'choices', 'estimate'])
       expect(item[k]?.nullable, k).toBe(true);
     expect(item.said?.nullable).toBeUndefined();
     expect(Object.keys(item.estimate?.fields ?? {}).sort()).toEqual(['kcal', 'protein_g']);
@@ -99,6 +102,19 @@ describe('food-check job config', () => {
       'items',
       'lookups',
     ]);
+  });
+
+  it('choices are a list of short answers, at most QUESTION_CHOICES_MAX, nullable — the buttons on a question row', () => {
+    const choices = (job?.config.expectedSchema?.fields?.items?.items?.fields ?? {}).choices;
+    expect(choices?.type).toBe('array');
+    expect(choices?.items?.type).toBe('string');
+    expect(choices?.maxItems).toBe(QUESTION_CHOICES_MAX);
+    // The prompt defines it as a fact, with the two ways it is null and that typing stays open.
+    expect(template).toContain('"choices": string[] | null');
+    expect(template).toContain('- choices: with a question, two to four short answers the person could tap');
+    expect(template).toContain('Null when the question has no short list of answers');
+    expect(template).toContain('null when question is null');
+    expect(template).toContain('The person may type their own answer instead');
   });
 
   it('closes every object, so it goes to the gateway strict', () => {

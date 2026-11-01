@@ -273,7 +273,13 @@ describe('a photographed latte and banana read like a typed one', () => {
       ],
     });
     const p = await previewMealFromReading(USER, { reading: READING, meal: 'breakfast' }, d);
-    expect(p.items[0]).toEqual({ name: 'venti Starbucks latte', basis: 'none', question: 'Whole milk or skim?' });
+    // No number, no link, no `said`; `asked_about` is the line the answer is re-read with (the buttons).
+    expect(p.items[0]).toEqual({
+      name: 'venti Starbucks latte',
+      basis: 'none',
+      question: 'Whole milk or skim?',
+      asked_about: '1 venti Starbucks latte',
+    });
     expect(p.macros?.kcal).toBeCloseTo(105, 0);
   });
 

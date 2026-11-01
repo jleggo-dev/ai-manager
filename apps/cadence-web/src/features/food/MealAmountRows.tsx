@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { amountChoices } from './amounts.ts';
+import { MealAskedRow } from './MealAskedRow.tsx';
+import type { AnswerResult } from './reReadAnswer.ts';
 import type { AmountRow } from './useMealAmounts.ts';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -38,11 +38,19 @@ function KeptRow({
     { k: 'carbs', v: scaled(row.est?.carbs_g) },
     { k: 'fat', v: scaled(row.est?.fat_g) },
   ];
-  // The amount, then what the coach assumed where the words left something open, then her
-  // question if the row still carries one — shown on the row, never hidden in a number
-  // (FOOD-LOGGING-COACH-LED.md). A question row normally has no amount and renders as AskedRow;
+  // The amount, then — for a row the automatic estimate priced because the coach could not be
+  // reached — its label, then what the coach assumed where the words left something open, then
+  // her question if the row still carries one — shown on the row, never hidden in a number
+  // (FOOD-LOGGING-COACH-LED.md). A question row normally has no amount and renders as MealAskedRow;
   // one that arrives with an amount anyway still shows the question rather than losing it.
-  const sub = [[qty, row.unit].filter(Boolean).join(' '), row.assumption, row.question].filter(Boolean).join(' · ');
+  const sub = [
+    [qty, row.unit].filter(Boolean).join(' '),
+    row.basis === 'fallback' ? row.source_label : '',
+    row.assumption,
+    row.question,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <div className="fa-row">
       <div className="fa-row-t">
@@ -96,74 +104,10 @@ function KeptRow({
   );
 }
 
-/** The one amount nobody has given — asked as chips, never as a keypad. */
-function AskedRow({
-  row,
-  index,
-  busy,
-  onQty,
-}: {
-  row: AmountRow;
-  index: number;
-  busy?: boolean;
-  onQty: (i: number, q: number, unit?: string) => void;
-}) {
-  const [own, setOwn] = useState('');
-  const [showOwn, setShowOwn] = useState(false);
-  const choices = amountChoices(row);
-  return (
-    <div className="fa-row fa-row-ask">
-      <div className="fa-row-t">
-        <span className="fa-row-n">
-          <b>{row.name}</b>
-        </span>
-        {/* Her one question, in her words, where there is one; the plain amount question otherwise. */}
-        <span className="fa-ask">{row.question ?? 'how much?'}</span>
-      </div>
-      <div className="fa-chips">
-        {choices.map((c) => (
-          <button
-            type="button"
-            key={c.label}
-            className={`fa-chip${row.qty === c.qty && row.unit === c.unit ? ' is-on' : ''}`}
-            disabled={busy}
-            onClick={() => onQty(index, c.qty, c.unit)}
-          >
-            {c.label}
-          </button>
-        ))}
-        <button type="button" className="fa-chip" disabled={busy} onClick={() => setShowOwn((v) => !v)}>
-          Another amount
-        </button>
-      </div>
-      {showOwn && (
-        <div className="fa-own">
-          <input
-            className="wiz-in"
-            inputMode="decimal"
-            value={own}
-            placeholder={`how many ${row.unit || 'of them'}?`}
-            aria-label={`Amount of ${row.name}`}
-            disabled={busy}
-            onChange={(e) => setOwn(e.target.value)}
-          />
-          <button
-            type="button"
-            className="fa-chip"
-            disabled={busy || !(Number(own) > 0)}
-            onClick={() => onQty(index, Number(own), row.unit)}
-          >
-            That&apos;s it
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /**
  * The rule, drawn (design 05c): an amount they said is kept, an amount they didn't is asked for.
- * One thing assumed, one thing asked — never both guessed.
+ * One thing assumed, one thing asked — never both guessed. A row waiting on her question offers
+ * her answers as buttons (MealAskedRow → MealQuestionChoices) when the host can re-read it.
  */
 export function MealAmountRows({
   rows,
@@ -171,6 +115,7 @@ export function MealAmountRows({
   onQty,
   onRemove,
   onEdit,
+  onAnswer,
 }: {
   rows: AmountRow[];
   busy?: boolean;
@@ -178,12 +123,14 @@ export function MealAmountRows({
   onRemove: (i: number) => void;
   /** Open the rename/merge editor for one row — brief 03's repairs, before the log. */
   onEdit: (i: number) => void;
+  /** Her question answered — a tapped choice or a typed line; the host re-reads the part and says what happened. */
+  onAnswer?: (i: number, answer: string, chosen: boolean) => Promise<AnswerResult>;
 }) {
   return (
     <div className="fa-rows">
       {rows.map((row, i) =>
         row.source === 'asked' && row.qty == null ? (
-          <AskedRow key={`${row.name}-${i}`} row={row} index={i} busy={busy} onQty={onQty} />
+          <MealAskedRow key={`${row.name}-${i}`} row={row} index={i} busy={busy} onQty={onQty} onAnswer={onAnswer} />
         ) : (
           <KeptRow
             key={`${row.name}-${i}`}

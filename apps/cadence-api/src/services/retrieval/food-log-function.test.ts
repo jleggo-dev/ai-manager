@@ -104,6 +104,30 @@ describe('preview_meal.render', () => {
     expect(out).not.toContain('Unresolved');
   });
 
+  it('the answers she offered ride beside the question, on the row and in the waiting list', () => {
+    const out = PREVIEW_MEAL.render({
+      meal: 'breakfast',
+      raw_text: 'milk',
+      macros: null,
+      items: [
+        {
+          name: 'milk',
+          question: 'Whole milk, 2% or skim?',
+          choices: ['Whole milk', '2%', 'Skim'],
+          asked_about: 'milk',
+          basis: 'none',
+        },
+      ],
+      coach: { reached: true, calls: 1, checked: [], not_read: [] },
+    } as never);
+    expect(out).toContain(
+      '- milk: not priced yet (not counted; waiting on their answer: Whole milk, 2% or skim? (choices: Whole milk / 2% / Skim))',
+    );
+    expect(out).toContain(
+      'Waiting on their answer:\n- milk: Whole milk, 2% or skim? (choices: Whole milk / 2% / Skim)',
+    );
+  });
+
   it("an estimate row reads as the coach's own estimate, apart from a record", () => {
     const out = PREVIEW_MEAL.render({
       meal: 'snack',

@@ -161,9 +161,39 @@ export async function previewDescribedMeal(
   if (!trimmed) throw new Error('a meal needs words');
   const named = readMealSlot(trimmed);
   const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : (named.slot ?? 'other');
-  const started = Date.now();
   // The slot phrase is not food: the parts are split from the words without it.
   const { lookups, not_read } = describedParts(named.rest);
+  return readParts(userId, { text: trimmed, meal, mealHint, lookups, not_read, notes: opts.notes }, deps);
+}
+
+/** What the read is given once the parts are known. */
+export interface PartsToRead {
+  /** The words as a whole: the card's `raw_text`, the flags, the log. */
+  text: string;
+  meal: MealKind;
+  /** The caller's hint, kept on the log. */
+  mealHint?: MealKind;
+  /** One lookup per part, in their order. */
+  lookups: MealPartLookup[];
+  not_read: string[];
+  /** Set when the read is the answer to a question row (food-described-answer.ts), for the log: the words asked about, the answer, and the merged words the read ran on. */
+  answered?: { asked_about: string; answer: string; words: string; chosen: boolean };
+  /** What the photo reader could and could not tell, for the food-check's `notes`; empty for words and for an answer. */
+  notes?: string;
+}
+
+/**
+ * Steps 1–4 over parts already split: the memory, the book, the call, the pricing. The doors
+ * come in through `previewDescribedMeal` (the split); an answer to a question row comes in
+ * through `previewAnsweredPart` with its one part — the same read, never a second one.
+ */
+export async function readParts(
+  userId: string,
+  parts: PartsToRead,
+  deps: DescribedMealDeps = productionDeps(userId),
+): Promise<DescribedMealPreview> {
+  const { text: trimmed, meal, mealHint, lookups, not_read } = parts;
+  const started = Date.now();
 
   const remembered = await rememberedRows(lookups, userId, deps);
   const pending = lookups.filter((_, i) => !remembered.has(i));
@@ -182,7 +212,7 @@ export async function previewDescribedMeal(
     await addLookups(book, pending, deps.lookup);
     try {
       outcome = await foodCheckRounds(
-        { meal, said: pendingWords, book, notes: opts.notes ?? '' },
+        { meal, said: pendingWords, book, notes: parts.notes ?? '' },
         { call: deps.call, lookup: deps.lookup },
       );
       failure = outcome.error;
@@ -195,7 +225,7 @@ export async function previewDescribedMeal(
   const checked = traceLines(book, rememberedLookups);
   const log = (reached: boolean, items: DescribedMealItem[]): void =>
     deps.log({
-      input: { text: trimmed, meal_hint: mealHint ?? null },
+      input: { text: trimmed, meal_hint: mealHint ?? null, ...(parts.answered ? { answered: parts.answered } : {}) },
       output: { items: outcome?.items ?? [], lookups: outcome?.lookups ?? [] },
       meta: {
         reached,
@@ -234,7 +264,10 @@ export async function previewDescribedMeal(
 
   // A row the model wrote for a remembered part anyway (the words are hers to read, the memory's
   // row is already on the card) is dropped by its phrase key, so no part appears twice.
-  const hers = (outcome ? await rowsFromOutcome(outcome, book, userId, deps) : []).filter(
+  // The items pair with the pending parts by position when the model answered one per part; a
+  // question row then carries the person's words for its part, not the model's echo.
+  const saidByIndex = outcome && outcome.items.length === pending.length ? pending.map((p) => p.said) : undefined;
+  const hers = (outcome ? await rowsFromOutcome(outcome, book, userId, deps, saidByIndex) : []).filter(
     (r) => !r.said || !rememberedKeys.has(phraseKey(r.said)),
   );
   const items = [...remembered.values(), ...hers];

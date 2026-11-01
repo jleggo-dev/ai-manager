@@ -18,6 +18,7 @@
  * Pure apart from its two deps: `call` runs the job with the template's variables (production:
  * runJobBySlug; the eval: the same variables through an e2e job), `lookup` answers a lookup.
  */
+import { QUESTION_CHOICES_MAX, QUESTION_CHOICE_MAX_CHARS } from '@cadence/shared';
 import {
   MAX_PARTS,
   SAID_MAX,
@@ -52,6 +53,13 @@ export interface FoodCheckItem {
   count: number | null;
   assumption: string | null;
   question: string | null;
+  /**
+   * With a question: the short answers the person could tap, in plain words ("Whole milk", "2%",
+   * "Skim"). Null when the question has no short list (an amount), and always null without a
+   * question. The card draws one button each and keeps typing open (FOOD-LOGGING-COACH-LED.md,
+   * "chips in her voice"; owner 2026-11-01).
+   */
+  choices: string[] | null;
   estimate: { kcal: number | null; protein_g: number | null } | null;
 }
 
@@ -112,6 +120,25 @@ export function firstJsonObject(raw: string): Record<string, unknown> | null {
   }
 }
 
+/**
+ * The answers offered with a question, as buttons: each trimmed to a button's worth, blanks and
+ * repeats (case apart) dropped, at most QUESTION_CHOICES_MAX kept. Null when nothing is left —
+ * the card then asks the amount, as it did before choices existed.
+ */
+export function readChoices(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of v) {
+    const t = str(c, QUESTION_CHOICE_MAX_CHARS);
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+    if (out.length === QUESTION_CHOICES_MAX) break;
+  }
+  return out.length ? out : null;
+}
+
 function readItem(v: unknown): FoodCheckItem | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
@@ -120,6 +147,7 @@ function readItem(v: unknown): FoodCheckItem | null {
     e && (num(e.kcal) !== null || num(e.protein_g) !== null)
       ? { kcal: num(e.kcal), protein_g: num(e.protein_g) }
       : null;
+  const question = str(o.question, 300);
   return {
     said: str(o.said, SAID_MAX) ?? '',
     name: str(o.name, 80),
@@ -128,7 +156,9 @@ function readItem(v: unknown): FoodCheckItem | null {
     measure: str(o.measure, 80),
     count: num(o.count),
     assumption: str(o.assumption, 300),
-    question: str(o.question, 300),
+    question,
+    // Choices answer a question; without one they answer nothing and are dropped.
+    choices: question ? readChoices(o.choices) : null,
     estimate,
   };
 }

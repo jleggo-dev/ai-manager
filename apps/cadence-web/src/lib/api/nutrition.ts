@@ -212,6 +212,10 @@ export interface MealPreviewItem {
    * question is what it waits for, and the row re-matches by name once an amount is given.
    */
   question?: string;
+  /** With a question: the answers offered as buttons, in her words. Typing stays open. */
+  choices?: string[];
+  /** With a question: their words for the part, amount included — what the answer is re-read with. */
+  asked_about?: string;
   /** Why the row could not be counted from a record, when it could not. */
   problem?: string;
 }
@@ -258,6 +262,27 @@ export async function previewMeal(text: string, meal?: MealKind): Promise<MealPr
     body: JSON.stringify({ text, ...(meal ? { meal } : {}) }),
   });
   if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
+  return res.json();
+}
+
+/**
+ * One question row answered — a tapped choice or a typed line. The part's words and the answer
+ * are re-read as one part through the same read, and the preview that comes back holds the
+ * row(s) for that part alone, priced; the card puts them where the asked row was. Writes nothing.
+ */
+export async function previewMealAnswer(input: {
+  asked_about: string;
+  answer: string;
+  /** True when the answer was one of the offered choices, false when typed. */
+  chosen: boolean;
+  meal?: MealKind;
+}): Promise<MealPreview> {
+  const res = await fetch(`${BASE}/nutrition/meals/preview/answer`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw Object.assign(new Error(`meal answer failed: ${res.status}`), { status: res.status });
   return res.json();
 }
 

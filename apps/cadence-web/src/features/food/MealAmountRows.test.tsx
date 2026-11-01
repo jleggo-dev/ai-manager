@@ -37,6 +37,21 @@ describe('MealAmountRows — the question is shown wherever the row lands', () =
     expect(screen.getByRole('button', { name: '1 glass' })).toBeInTheDocument();
   });
 
+  it('a row with her choices and a host to re-read offers the buttons and no amount chips', () => {
+    render(
+      <MealAmountRows
+        rows={[row({ question: 'Whole milk or 2%?', choices: ['Whole milk', '2%'], asked_about: 'milk' })]}
+        onQty={noop}
+        onRemove={noop}
+        onEdit={noop}
+        onAnswer={async () => 'replaced' as const}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Whole milk' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Something else' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '1 glass' })).not.toBeInTheDocument();
+  });
+
   it('near-miss: a row carrying a question WITH an amount is kept — no chips — and still shows the question', () => {
     draw([row({ qty: 1, unit: 'cup', source: 'given', est: { kcal: 122 }, question: 'Whole milk or 2%?' })]);
     expect(screen.queryByText('how much?')).not.toBeInTheDocument();

@@ -100,6 +100,19 @@ describe('stripAmount — the amount comes off, the food stays', () => {
     ['large eggs', 'eggs', 'large'],
     ['cereal', 'cereal', null],
     ['granola', 'granola', null],
+    // Near-misses: a food that starts like a number word keeps its first letter (2026-11-01:
+    // "avocado toast" was looked up as "vocado toast", "an apple" as "n apple").
+    ['avocado toast', 'avocado toast', null],
+    ['apple', 'apple', null],
+    ['almonds', 'almonds', null],
+    ['acai bowl', 'acai bowl', null],
+    ['onion rings', 'onion rings', null],
+    ['halfmoon cookie', 'halfmoon cookie', null],
+    ['an apple', 'apple', null],
+    ['an egg', 'egg', null],
+    // A longer number phrase is taken whole, not as "a" + the rest.
+    ['a few eggs', 'eggs', null],
+    ['a splash of milk', 'milk', null],
   ])('%j → q %j, measure %j', (part, q, measure) => {
     expect(stripAmount(part)).toEqual({ q, measure });
   });

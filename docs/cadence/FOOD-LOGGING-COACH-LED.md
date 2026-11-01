@@ -3,9 +3,9 @@
 _Status: build steps 2, 3 and 4 SHIPPED 2026-11-01 (step 2: the `food-check` job on its own
 profile, the candidate book as a service, the described-meal doors wired through it; step 3: the
 coach's `log_meal` runs the same read and logs through the card's confirm path; step 4: the photo
-door's confirmed reading goes through the same read, onto the same card — see "Suggested build
-order" and the three "What was built" sections at the end). Rulings 2, 3, 4 and 6 are still the
-owner's._
+door's confirmed reading goes through the same read, onto the same card), and the same day
+**a question row is answered with buttons in her words** — see "Suggested build order" and the
+four "What was built" sections at the end. Rulings 2, 3, 4 and 6 are still the owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -398,6 +398,35 @@ Reading it:
   run 4 was right.
 - **Three meals took the extra-lookups round** (one in run 4); the guard round fired zero times.
 
+### Eval results — run 6, the answers as buttons (2026-11-01)
+
+Same job and eval as run 5, after the strict schema gained `choices` on an item — with a
+question, two to four short answers the person can tap — and the prompt its definition (the
+"What was built (question rows answered with buttons)" section). gpt-5.4-mini once over the 20
+meals, 23 calls. The bar: 36/40 over two runs, 0 made-up ids, a median of about 4,600 prompt
+tokens a call.
+
+| Model            | Right | kcal ok | Made-up ids | Settled in one call | Avg s | Prompt tokens / call (avg · median) | Largest call |
+| ---------------- | ----: | ------: | ----------: | ------------------: | ----: | ----------------------------------: | -----------: |
+| **gpt-5.4-mini** | 19/20 |   19/20 |       **0** |                  17 |   6.4 |                       4,857 · 4,724 |        7,729 |
+
+Reading it:
+
+- **19/20 at n = 1, the bar's 18-a-run cleared** — a pointer, not a verdict, as every single run
+  here is. The one miss is `pair-coconut-canned`, the doubtful 110-kcal yardstick every run has
+  missed the same way (the model picks the same 142-kcal record each time).
+- **The median call cost about 100 tokens more** (4,724 against run 5's 4,630): the new field in
+  the schema line and its definition in the prompt, paid on every call. The largest call did not
+  move (7,729 against 7,629).
+- **Two question items, both with choices, and no choices without a question.** "150ml milk" →
+  "Whole milk or 1%?" with `["Whole milk", "1%"]`; "one cup of protein" → "Protein drink or protein
+  powder?" with `["Protein drink", "Protein powder"]`. Both are what the card would draw as two
+  buttons and "Something else"; both are answers the re-read can settle from a lookup. The second
+  is the "one cup of protein" lesson from run 1 as a question the person can now answer with a
+  tap instead of an amount chip that could not answer it.
+- **Three meals took the extra-lookups round**, as in run 5; no made-up id in 23 calls; USDA
+  answered 400 on a few lookups during the run and the fan-out moved on, as designed.
+
 ## When she can't be reached
 
 The model provider fails sometimes (2026-10-27 outage). A meal must never vanish because a model
@@ -440,7 +469,10 @@ on the card as an automatic estimate, not hers.
    Chat and Voice (`LogByChat`, the quick-log `DescribeSheet`, the plan sheet's capture) and Photo
    (`PhotoReadPanel`, inside an open meal) are on it, with the trace line, the
    assumption on the row, her question on an asked row, and the not-reached notice. _Still owed
-   from this step: per-row source labels are on the wire (`source_label`) and not yet drawn._
+   from this step: per-row source labels are on the wire (`source_label`) and not yet drawn._ **Her question's answers as buttons — built 2026-11-01**, see
+   "What was built (question rows answered with buttons)": a question row carries `choices`, the
+   card draws one button each plus "Something else", a tap re-reads that one part and the priced
+   row takes its place, on every door that shows the card.
 5. ~~Write-back of her verdicts (phrase → food) so repeats get faster~~ — built in step 2
    (`food_phrases`, migration 0064): the confirm teaches it, the next read of the same words is a
    deterministic hit and no call.
@@ -525,12 +557,10 @@ per read (calls, reached, parts, remembered, records, problems).
 
 Decided while building, for the owner to overrule:
 
-- **Question rows are asked as an amount, and carry nothing else.** The card's only question
-  mechanism is the amount chips; her question is shown on the row in her words, the row has no
-  number and no food link, and once an amount is chosen the confirm re-matches the row by name.
-  A question that is not about the amount ("whole or 2%?") still waits on the chips, and the
-  answer the chips give is an amount, not the identity — the model's lean is never logged on the
-  strength of it. Step 4 kept this: the photo door asks through the same chips.
+- ~~**Question rows are asked as an amount, and carry nothing else.**~~ _Step 4 kept this (the
+  photo door asks through the same chips); superseded the same day: a question row now carries
+  her `choices` and is answered with buttons (the last section). What stayed: no number, no food
+  link, no `said`, and the model's lean is never logged._
 - **A merged row is a new reading.** Folding two rows keeps the sum of their nutrients and drops
   the kept half's food link and words: the server would otherwise re-price the sum from one food
   alone and lose the other's nutrients. The merged row re-matches by name and teaches nothing.
@@ -732,3 +762,142 @@ Decided while building step 4, for the owner to overrule:
   reached the eyes and is folded into the reading. An empty reading reads the caption, and then
   the caption is the words.
 - **First photo wins on a meal; readings accumulate** (above, 5).
+
+## What was built (question rows answered with buttons, 2026-11-01)
+
+The owner's ruling, 2026-11-01: when the read cannot tell something ("whole or skim milk?"), the
+coach asks the person, and the card presents the answers as buttons so they do not have to type.
+Step 5 of "How a described meal works" called this "her question, if any, as chips in her voice".
+
+1. **The job offers the answers.** The `food-check` item gained `choices` (strict schema: a
+   nullable array of strings, at most `QUESTION_CHOICES_MAX` = 4, pinned by
+   `food-check-job-config.test.ts` and still strict in `strict-json-schema.test.ts`). The prompt
+   defines it as a fact — with a question, two to four short answers the person could tap, in
+   plain words, each one an answer that could then be settled from the records or a lookup; null
+   when the question has no short list (an amount, a place) and null without a question; the
+   person may type their own, so the list need not be complete. No steer about which to offer.
+   The parser (`food-check.ts` `readChoices`) trims each to a button's worth
+   (`QUESTION_CHOICE_MAX_CHARS` = 40), drops blanks and repeats, keeps at most four, and drops
+   choices that arrive without a question. **Not live until `sync-jobs.ts` runs.** Run 6 above
+   measured it: 19/20, 0 made-up ids, both question items came with choices.
+2. **The row carries them, and the words to answer with.** A question row (`food-described-rows.ts`)
+   still has no number, no food link and no `said` (nothing tentative is logged or taught). It
+   now carries `choices` and `asked_about` — their words for the part, amount included ("2 cups
+   milk"), kept apart from `said` on purpose so the memory's rule ("a question row teaches
+   nothing") needs no exception. The coach's tools say them too: `preview_meal` and `log_meal`
+   render the question as `Whole milk or 2%? (choices: Whole milk / 2% / Skim)`
+   (`food-described-render.ts` `questionWords`), so she can offer the same answers in conversation.
+3. **One part re-read with its answer — a route of its own.** `POST /nutrition/meals/preview/answer`
+   with `{ asked_about, answer, chosen, meal }` (`services/food-described-answer.ts`). The words
+   and the answer become one text by a table-tested rule — "milk" + "Whole milk" → "whole milk",
+   "a glass of milk" + "Skim" → "a glass of skim milk", "coffee" + "With milk" → "coffee with
+   milk", "a parfait" + "The small one" → "a small parfait" — and that ONE part goes through the
+   same read as a whole meal (`readParts`, split out of `previewDescribedMeal`: the phrase memory,
+   the fan-out, one food-check call, the store pricing). Why a route and not the existing preview
+   with the merged text: the merge rule lives once, on the server; the answer must stay one part
+   whatever its punctuation (a typed "oat milk, unsweetened" is not two parts); and the row's
+   `said` depends on how it was answered (next item). The `ai_log` `food_check` row notes
+   `answered: { asked_about, answer }`. The reply is a preview holding the row(s) for that part
+   alone — usually one, priced; a question row again when the model still cannot tell.
+4. **What the memory learns from an answered row — the combined words, never the bare ones**
+   (owner's ruling, 2026-11-02: "No, ask each time."). Tapped or typed, the priced row's `said` is
+   the words the read ran on ("whole milk", "lactose-free milk"), so the confirm teaches "whole
+   milk" → the record and the next "whole milk" is a hit with no call, while the next "milk" is
+   asked again. `chosen` rides to the `ai_log` row only, to tell taps from typing. Words the
+   memory already holds under the combined phrase ("whole milk" confirmed last week) are a hit
+   on the answered path with no call.
+5. **The card.** One component for every door, `MealQuestionChoices` (one button per choice in her
+   words, "Something else" opening a one-line field with "That's it"), inside `MealAskedRow` on the
+   confirm card (`MealParseCard` → the chat door, and the photo door through the same card) and
+   under the row on the quick-log sheet (`DescribeSheet`). The router is table-tested
+   (`MealAskedRow.test.tsx`): a question WITH choices → the buttons and never the amount chips (an
+   amount cannot answer "whole or skim?"); a question without, or a plain missing amount → the
+   amount chips as always; choices with no host to re-read → the amount chips, never a dead end.
+   A tap says "I'm checking that…" while the re-read runs, then the priced row takes the asked
+   row's place — amount, numbers, `food_id`, `said` — the total moves, and the confirm carries it
+   like any picked row (`useMealAmounts` `answerRow`, `reReadAnswer.ts`). A failed or empty
+   re-read says "I couldn't check that just now — try again, or type it." and keeps the buttons.
+   The card's open-row words follow the row: "1 QUESTION TO SETTLE" / "One question to settle
+   first" when any open row carries choices, "AMOUNT" when every one waits on an amount
+   (`settleWords.ts`, table-tested). A question row still counts nothing until answered, on the
+   card, on the sheet and in the coach's tools.
+
+Decided while building, for the owner to overrule:
+
+- ~~**A chosen answer teaches the memory the ORIGINAL words.**~~ _Ruled by the owner, 2026-11-02:
+  "No, ask each time."_ A chosen answer teaches the combined words, as a typed one does; "milk"
+  stays ambiguous and her question comes back each time it is said bare.
+- **`asked_about` is a field of its own, not `said`.** A question row carries no `said` by the
+  step-2 ruling (nothing tentative is taught); the words the answer is re-read with needed a home
+  that the memory never reads.
+- ~~**The quick-log sheet's "Looks right" does not wait on a question with choices.**~~ _Reversed
+  in review the same day:_ the add takes none of `question`/`choices`/`asked_about`
+  (`parsedItemSchema`), so an unanswered choice row reached the drawer as a bare "how much?" — the
+  very question an amount cannot answer. Now "Looks right" on the sheet and "Add to …" on the
+  draft-mode card (the photo door inside an open meal) wait while a row asks her question with
+  answers to tap ("One question to settle first"); an open AMOUNT still does not hold the add.
+- **The amount chips stay for a question without choices.** The prompt leaves `choices` null for
+  an amount question ("how much?"), so those rows keep the chips they always had.
+- **A question that keeps coming back stops asking after two re-asks** (`REASKS_MAX`): the row
+  says "I couldn't settle that one — give me an amount and I'll take it as written." and offers
+  the amount chips; the confirm then re-matches it by name, as before this build.
+
+### The review round (2026-11-01, after the merge of #457)
+
+What the review found and how each landed, every one with its table test:
+
+1. **An answer replaced a row by a stale index.** The re-read awaited, then replaced position `i`;
+   a row removed meanwhile, or a second answer landing first with two rows, put the priced milk
+   on the wrong row. Now the row is found by itself (`indexOf` of the row captured at the tap),
+   a row gone meanwhile takes nothing, and while any re-read runs every other row's controls,
+   the drops and the log wait (`useMealAmounts.answering`, the sheet's own count).
+   `useMealAmounts.test.tsx` covers a remove above it, the asked row removed, two overlapping
+   answers (the second landing first, as two rows) and a two-row answer on a middle row.
+2. **The draft door stripped an unanswered choice row's question** — the reversed decision above.
+3. **A typed answer over 120 characters failed forever as "try again".** The caps live once in
+   `@cadence/shared` (`ANSWER_MAX_CHARS` 120, `ASKED_ABOUT_MAX_CHARS` 200): the route's schema, the
+   field's `maxLength` and the send's cut read the same numbers, and a 400 is told as what it is —
+   "I couldn't take that answer as written — try fewer words, or tap one of the buttons." — apart
+   from a failure ("try again, or type it"). One field component (`OwnAnswerField`) serves both
+   "Something else" and "Another amount": focused when it opens, and Enter does not send while a
+   keyboard is still composing.
+4. **An answer the coach could not read looked coach-priced.** A re-read that fell back says so on
+   the card and on the sheet ("The coach couldn't be reached for that answer, so that row is an
+   automatic estimate.") and the row's own line carries "an automatic estimate". The line sits
+   on the card, not in the door's header above it: the header reads the original preview, and
+   the answer belongs to one row.
+5. **The answer's flags were dropped.** They now join the card's, so "a drink" answered as a gin
+   and tonic logs with the alcohol flag.
+6. **A question that came back looked like nothing happened.** The row now says "I still couldn't
+   settle that:" above the new question and its new choices; the open-row count counts each kind
+   ("2 QUESTIONS TO SETTLE" for one amount and one question).
+7. **The merge rule glued a different food onto the question's noun** ("a handful of almonds
+   nuts", "almond beverage milk", "a oat milk latte", "a a yogurt bowl parfait"). It now reads
+   what the answer is: one plural noun or several words naming a food REPLACE the question's food
+   ("a handful of almonds", "almond beverage", "a yogurt bowl"); a part or a cut leads with the
+   food ("chicken breast, no skin"); something that goes into a food joins it ("a latte with oat
+   milk"); a qualifier goes in front, with "a"/"an" fixed ("an iced latte"); filler and one
+   article are taken off once. The merged words ride on the `ai_log` row (`answered.words`), so a
+   misfire is visible.
+8. **`asked_about` was the model's echo**, which could drop the amount ("milk" for "2 cups milk").
+   It is now the split's own words for the part, paired by position when the model answered one
+   item per part; the echo only when the counts differ.
+9. **A re-ask carried the model's echo of the combined words.** A row that comes back as a
+   question now carries our own merge as its `asked_about` (the words the read ran on, "whole
+   milk"), never the echo, so the next answer builds on the first ("whole milk" + "Light" →
+   "light whole milk"); the re-asks stop at two (above). The review asked for the ORIGINAL words
+   here, so a later chosen answer would still teach "milk"; the owner's ruling took that reason
+   away (nothing teaches the bare words), and the original words would drop the first answer.
+10. **A chosen answer rewrote `said` on every priced row.** Moot after the owner's ruling: no row
+    is rewritten; every row keeps the combined words.
+11. **After the merge of #457** the answer path passes the food-check an empty `notes` (the photo
+    reader's notes belong to the whole reading and never reach the client), and the converter's
+    comment on `maxItems` names `choices` as its first shipped user.
+
+Found while testing item 7, and fixed here because the answer path stands on it: **the split ate
+the first letter of any part starting with "a"** — "avocado toast" was looked up as "vocado
+toast", "an apple" as "n apple", "almonds" as "lmonds" — because the number words in
+`food-candidate-book.ts`'s `AMOUNT` had no word boundary and "a" was tried before "an", "a few",
+"a bit of". The table in `food-candidate-book.test.ts` now carries those near-misses. A phrase the
+memory learned under a broken key ("vocado toast") misses once and is learned again on the next
+confirm; no migration.

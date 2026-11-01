@@ -383,6 +383,15 @@ describe('log_meal — a question row logs nothing and hands the question back',
     expect(logMeal).not.toHaveBeenCalled();
   });
 
+  it('the answers she offered come back beside the question, as a fact she can repeat', async () => {
+    fakes({ reply: [item({ ...asked, choices: ['Whole milk', '2%', 'Skim'] })] });
+    const out = await LOG_MEAL.run(USER, { text: 'milk', meal: 'breakfast' });
+    expect(out.split('\n')[0]).toBe(
+      'nothing changed: nothing was logged — "milk" waits on their answer: Whole milk or 2%? (choices: Whole milk / 2% / Skim).',
+    );
+    expect(logMeal).not.toHaveBeenCalled();
+  });
+
   it('beside a settled row: the settled row is logged, the question comes back as unchanged', async () => {
     fakes({ reply: [asked, bananaPick('c2')] });
     const out = await LOG_MEAL.run(USER, { text: 'milk and a banana', meal: 'breakfast' });

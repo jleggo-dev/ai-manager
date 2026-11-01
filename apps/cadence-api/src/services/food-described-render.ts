@@ -32,6 +32,15 @@ export function macroLine(est: Macros | null | undefined): string {
   return parts.length ? parts.join(' · ') : 'not priced yet';
 }
 
+/**
+ * The question a row waits on, with the answers offered beside it as a fact she can repeat:
+ * "Whole milk or 2%? (choices: Whole milk / 2% / Skim)". The question alone when none were.
+ */
+export function questionWords(item: Pick<DescribedMealItem, 'question' | 'choices'>): string {
+  const choices = item.choices?.length ? ` (choices: ${item.choices.join(' / ')})` : '';
+  return `${item.question ?? ''}${choices}`;
+}
+
 /** The row's name as the person would say it: the brand first, when there is one. */
 export const rowName = (item: Pick<DescribedMealItem, 'brand' | 'name'>): string =>
   [item.brand, item.name].filter(Boolean).join(' ');
@@ -74,7 +83,7 @@ export function rowWords(item: CoachRow): string {
   const tail = [
     basisWords(item),
     item.assumption ? `assumed: ${item.assumption}` : '',
-    item.question ? `waiting on their answer: ${item.question}` : '',
+    item.question ? `waiting on their answer: ${questionWords(item)}` : '',
     item.problem ? `why: ${item.problem}` : '',
   ].filter(Boolean);
   return `${qty}${rowName(item)}: ${macroLine(item.est)}${tail.length ? ` (${tail.join('; ')})` : ''}`;

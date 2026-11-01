@@ -14,7 +14,9 @@
  *   - A row with an open question carries NO number, NO food link and NO `said`. The question is
  *     what it waits for: the card asks it, nothing counts until it is answered, and on confirm the
  *     row re-matches by name like any row without a food — so a tentative pick is never logged,
- *     and with no words on the row the phrase memory has nothing to learn from it.
+ *     and with no words on the row the phrase memory has nothing to learn from it. It carries the
+ *     answers the model offered (`choices`, drawn as buttons) and their words for the part
+ *     (`asked_about`), so the answer can be re-read with those words (food-described-answer.ts).
  */
 import type { DescribedBasis, Food, MealItem, MealKind } from '@cadence/shared';
 import type { FoodPhraseRow } from '../repos/food-phrases.ts';
@@ -44,6 +46,13 @@ export interface DescribedMealItem extends MealItem {
   assumption?: string;
   /** The one question she would ask. A row with one carries no number and no link until answered. */
   question?: string;
+  /** With a question: the short answers offered, drawn as buttons in her words. Typing stays open. */
+  choices?: string[];
+  /**
+   * With a question: their words for this part, amount included ("a glass of milk"), so the
+   * answer is re-read with them. Not `said` — nothing is taught from a question row.
+   */
+  asked_about?: string;
   /** Why this row could not be counted from a record, when it could not. */
   problem?: string;
 }
@@ -154,12 +163,19 @@ export async function rememberedRows(
   return out;
 }
 
-/** Step 4: the model's items as rows, each priced by the store or labelled for what it is. */
+/**
+ * Step 4: the model's items as rows, each priced by the store or labelled for what it is.
+ * `saidByIndex` is the person's own words per part from the split, when the items pair with the
+ * parts by position (they are in the order said): a question row's `asked_about` is taken from
+ * there, because the model's echo can paraphrase and drop the amount ("milk" for "2 cups milk"),
+ * and a chosen answer would then teach the echo. Absent when the counts differ.
+ */
 export async function rowsFromOutcome(
   outcome: FoodCheckOutcome,
   book: CandidateBook,
   userId: string,
   deps: DescribedMealDeps,
+  saidByIndex?: string[],
 ): Promise<DescribedMealItem[]> {
   const picks = outcome.items.map((item, i) =>
     item.pick && !outcome.problems.has(i) && !item.question
@@ -176,11 +192,16 @@ export async function rowsFromOutcome(
     // from, their own words as the name (never the record the model leaned towards), so a chip
     // answers the amount and the confirm re-matches by name. Nothing tentative is logged or learned.
     if (item.question) {
+      const name = (item.name ?? stripAmount(said).q ?? said).slice(0, NAME_MAX) || 'something';
       return {
-        name: (item.name ?? stripAmount(said).q ?? said).slice(0, NAME_MAX) || 'something',
+        name,
         ...(item.brand ? { brand: item.brand } : {}),
         basis: 'none',
         question: item.question,
+        ...(item.choices?.length ? { choices: item.choices } : {}),
+        // The words the answer is re-read with: the person's own from the split when the items
+        // pair with the parts, else the model's echo, else the row's name — never empty.
+        asked_about: saidByIndex?.[i] || said || name,
         ...assumption,
       };
     }

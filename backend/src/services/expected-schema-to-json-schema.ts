@@ -45,7 +45,10 @@ export interface ExpectedSchemaFieldDef {
    * silently ignores it would otherwise leave an author believing they were bounded, which is the
    * one failure worse than being unbounded.
    *
-   * Opt-in: no shipped job sets it, so nothing changes until one does.
+   * Opt-in. The first shipped user is `food-check`'s `choices` (at most 4 answers to a question,
+   * FOOD-LOGGING-COACH-LED.md, 2026-11-01). Its eval run 6 on gpt-5.4-mini through Devs.ai never
+   * returned more than two, so the keyword has not been exercised at its bound yet; the description
+   * carries the ceiling as well, as above.
    */
   maxItems?: number;
 }
