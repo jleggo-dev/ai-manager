@@ -34,6 +34,12 @@ export const MAX_PARTS = 10;
 /** Records shown per lookup. Past this the book costs more tokens than the extra rows earn. */
 export const SHOW_PER_LOOKUP = 8;
 /**
+ * Their words for one part, at most — the confirm's own cap on `said` (validation/body.ts), so a
+ * row's words always ride back and the key the memory was asked with is the key the confirm
+ * teaches. A part longer than this is a sentence, not a food; the first 200 characters are read.
+ */
+export const SAID_MAX = 200;
+/**
  * The most characters the rendered book may run to — a budget of the book's own, sized from the
  * cost target and not from the engine (whose cap on a job variable is 40,000 since #454, and a
  * cut there is logged with the variable's name, never silent).
@@ -95,7 +101,8 @@ export interface MealPartLookup extends BookLookup {
 export function partsToLookups(text: string): MealPartLookup[] {
   const seen = new Set<string>();
   return splitMealParts(text)
-    .map((said) => {
+    .map((part) => {
+      const said = part.slice(0, SAID_MAX);
       const { q, measure } = stripAmount(said);
       return { said, q: q.slice(0, 80), measure, brand: null };
     })

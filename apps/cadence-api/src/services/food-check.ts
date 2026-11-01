@@ -20,6 +20,7 @@
  */
 import {
   MAX_PARTS,
+  SAID_MAX,
   addLookups,
   checkPick,
   type BookLookup,
@@ -113,7 +114,7 @@ function readItem(v: unknown): FoodCheckItem | null {
       ? { kcal: num(e.kcal), protein_g: num(e.protein_g) }
       : null;
   return {
-    said: str(o.said, 200) ?? '',
+    said: str(o.said, SAID_MAX) ?? '',
     name: str(o.name, 80),
     brand: str(o.brand, 120),
     pick: str(o.pick, 16),

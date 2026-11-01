@@ -55,6 +55,13 @@ export interface DescribedMealPreview extends Omit<ParsedMealResult, 'items'> {
     /** What actually ran, one line per part — the trace the card shows, never canned copy. */
     checked: string[];
   };
+  /**
+   * Lines of what they gave that were NOT looked up, in their words, for the card to show as
+   * "Not read: …" — never dropped quietly. The photo door fills it (meal-photo-read.ts: a line
+   * that does not read as a food, lines past MAX_PARTS or past its budget). Absent when nothing
+   * was left out.
+   */
+  not_read?: string[];
 }
 
 const today = (): string => new Date().toISOString().slice(0, 10);

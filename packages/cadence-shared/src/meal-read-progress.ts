@@ -52,8 +52,8 @@ export const READ_PHOTO_STEPS: ReadProgressStep[] = [
 export const NUTRITION_STEPS: ReadProgressStep[] = [
   { at: 0, text: 'Looking each line up in your foods and the food databases…' },
   { at: 4000, text: 'The coach is reading what the lookups found…' },
-  { at: 9000, text: 'Choosing the closest record for each line…' },
-  { at: 15000, text: 'Pricing the amounts from the records…' },
+  { at: 9000, text: 'Picking the closest match for each line…' },
+  { at: 15000, text: 'Working out the numbers for each amount…' },
   { at: 22000, text: 'Noting what was assumed and what to ask you…' },
 ];
 

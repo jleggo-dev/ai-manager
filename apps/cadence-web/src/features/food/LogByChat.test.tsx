@@ -11,7 +11,7 @@ const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../lib/api.ts', () => api);
 
 const { LogByChat } = await import('./LogByChat.tsx');
-const { NOT_REACHED, READING } = await import('./coachReadCopy.ts');
+const { NOT_REACHED_CARD, READING } = await import('./coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,
@@ -40,7 +40,7 @@ describe('LogByChat — the line above the card says who read it', () => {
     [
       'the coach could not be reached → the notice, with the card’s tap hint',
       { ...base, coach: { reached: false, calls: 1, checked: ['banana: your foods: 1 rows'] } },
-      `${NOT_REACHED} Tap a row to change anything.`,
+      NOT_REACHED_CARD,
     ],
     [
       'the coach read it → the normal line',

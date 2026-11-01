@@ -81,8 +81,8 @@ export function MealDoors({
         photo={door.photo}
         meal={kind}
         mode="draft"
-        appendDraft={async (items, rawText) => {
-          const m = await draft.appendParsed(items, 'assumed', rawText);
+        appendDraft={async (items, rawText, photo) => {
+          const m = await draft.appendParsed(items, 'assumed', rawText, photo);
           if (m) onClose();
           return !!m;
         }}

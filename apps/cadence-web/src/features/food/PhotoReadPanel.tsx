@@ -3,8 +3,16 @@ import type { Meal, MealKind, MealPreview } from '../../lib/api.ts';
 import { useMealPhotoRead } from './useMealPhotoRead.ts';
 import { MealParseCard } from './MealParseCard.tsx';
 import { CoachReadLine } from './CoachReadLine.tsx';
+import { HERE_IS, READ_FAILED } from './photoReadCopy.ts';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
+
+/** The photo door's add to the open meal: the rows, the words read, and the photo with its reading. */
+export type AppendDraft = (
+  items: MealPreview['items'],
+  rawText: string,
+  photo: { photo_ref?: string; photo_reading?: string },
+) => Promise<boolean>;
 
 /**
  * Photographing a meal, in three visible acts.
@@ -35,8 +43,14 @@ import { MicButton } from '../../components/MicButton.tsx';
  * assumed and what she would ask. The photo door shows them on the same card the chat door uses
  * (`MealParseCard` → `MealAmountRows`, `useMealAmounts`), so a photo of a latte and a banana
  * reads exactly as typing "a latte and a banana" does — a question row asks through the chips,
- * the not-reached notice is the same notice. In log mode the card's confirm writes the row with
- * the photo and the reading on it; in draft mode it adds the rows to the open meal.
+ * the not-reached notice is the same notice, a line that was not read is said so. Inside an open
+ * meal (the quick log's photo door, the one live host) the card's confirm adds the rows AND the
+ * photo with its reading to the meal; in log mode it writes the row with both on it.
+ *
+ * EVERY FAULT HAS A WAY FORWARD, IN PLAIN WORDS (review of #457). The eyes could not read the
+ * photo → the box opens empty with the caption still counting; the read could not be worked out →
+ * "Back to the reading" keeps every correction; a call past its bound is told so; and Back is
+ * never disabled — leaving aborts whatever is in flight.
  *
  * WHY THE BUTTONS LIVE BELOW THE SCROLLER. The photo, the caption and a long reading are taller
  * than a phone, and the door's host clips rather than grows — so the confirm sat under the bottom
@@ -58,11 +72,11 @@ export function PhotoReadPanel({
   meal: MealKind;
   /**
    * Draft mode (meal-logging rework, 1b): the photo appends into the open meal — the card's
-   * button reads "Add to {meal}" and `appendDraft` carries the rows to the draft; the caller owns
-   * closing the door, so `onLogged` never fires in this mode.
+   * button reads "Add to {meal}" and `appendDraft` carries the rows and the photo to the draft;
+   * the caller owns closing the door, so `onLogged` never fires in this mode.
    */
   mode?: 'log' | 'draft';
-  appendDraft?: (items: MealPreview['items'], rawText: string) => Promise<boolean>;
+  appendDraft?: AppendDraft;
   /** Log mode: the row the card wrote, so the host can settle what it was waiting on. */
   onLogged: (m: Meal) => void;
   onBack: () => void;
@@ -75,6 +89,7 @@ export function PhotoReadPanel({
   const r = useMealPhotoRead();
   const working = r.phase === 'reading' || r.phase === 'nutrition';
   const said = caption.trim();
+  const hasReading = !!r.reading.trim();
   // A failed read must not cost the meal: with a caption the coach can still read from the words.
   const fallbackLabel = said ? `Work it out from “${said}”` : null;
 
@@ -83,6 +98,11 @@ export function PhotoReadPanel({
   useEffect(() => {
     if (r.phase === 'priced') cardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [r.phase]);
+
+  const leave = () => {
+    r.cancel();
+    onBack();
+  };
 
   return (
     <div className="fl-photo">
@@ -119,10 +139,7 @@ export function PhotoReadPanel({
           an empty box is then a fair invitation to say what it was. */}
         {(r.phase === 'confirming' || r.phase === 'nutrition') && (
           <div className="fl-reading">
-            <p className="fl-note">
-              Here’s what I can see — fix anything I got wrong. Each line of the list at the end is looked up on its
-              own.
-            </p>
+            <p className="fl-note">{r.readFailed ? READ_FAILED : HERE_IS}</p>
             <textarea
               className="fl-reading-text"
               value={r.reading}
@@ -136,14 +153,22 @@ export function PhotoReadPanel({
 
         {r.phase === 'priced' && r.preview && (
           <div ref={cardRef}>
-            {/* Who read it, and her work as it happened — the chat door's own line. */}
-            <CoachReadLine coach={r.preview.coach} />
+            {/* Who read it, her work as it happened, and any line that was not read — the chat door's own line. */}
+            <CoachReadLine coach={r.preview.coach} notRead={r.preview.not_read} />
             <MealParseCard
               preview={r.preview}
               initialMeal={meal}
               mode={draft ? 'draft' : 'log'}
               mealLabel={meal}
-              onAppend={draft ? (p) => appendDraft!(p.items, p.raw_text) : undefined}
+              onAppend={
+                draft
+                  ? (p) =>
+                      appendDraft!(p.items, p.raw_text, {
+                        ...(p.photo_ref ? { photo_ref: p.photo_ref } : {}),
+                        ...(p.photo_reading ? { photo_reading: p.photo_reading } : {}),
+                      })
+                  : undefined
+              }
               onLogged={(logged) => {
                 if (!draft && logged) onLogged(logged);
               }}
@@ -152,13 +177,11 @@ export function PhotoReadPanel({
           </div>
         )}
 
-        {/* A failed read must not cost the meal — the 2026-08-20 rule. The photo is already stored,
-          so working from the caption alone is still open, and saying so is better than a retry
-          button that offers no way forward. */}
-        {r.phase === 'error' && <p className="fl-note">{r.error || 'That didn’t go through.'}</p>}
+        {/* Plain words, and a way forward, for every fault (photoReadCopy.ts). */}
+        {r.phase === 'error' && <p className="fl-note">{r.error}</p>}
       </div>
 
-      {/* The card carries its own buttons; every other phase keeps its one decision down here. */}
+      {/* The card carries its own buttons; every other phase keeps its decisions down here. */}
       {r.phase !== 'priced' && (
         <div className="fl-photo-foot">
           {r.phase === 'idle' && (
@@ -167,11 +190,30 @@ export function PhotoReadPanel({
             </button>
           )}
           {r.phase === 'confirming' && (
-            <button type="button" className="fa-log" onClick={() => void r.commit({ caption: said, meal })}>
-              Work out the nutrition
-            </button>
+            <>
+              {hasReading ? (
+                <button type="button" className="fa-log" onClick={() => void r.commit({ caption: said, meal })}>
+                  Work out the nutrition
+                </button>
+              ) : (
+                fallbackLabel && (
+                  <button
+                    type="button"
+                    className="fa-log"
+                    onClick={() => void r.commit({ caption: said, meal, reading: '' })}
+                  >
+                    {fallbackLabel}
+                  </button>
+                )
+              )}
+              {r.readFailed && (
+                <button type="button" className="lockbtn ghost" onClick={() => void r.read(photo, said)}>
+                  Try reading it again
+                </button>
+              )}
+            </>
           )}
-          {r.phase === 'error' && (
+          {r.phase === 'error' && r.failedAt === 'read' && (
             <>
               {fallbackLabel && (
                 <button
@@ -187,7 +229,25 @@ export function PhotoReadPanel({
               </button>
             </>
           )}
-          <button type="button" className="lockbtn ghost" disabled={working} onClick={onBack}>
+          {r.phase === 'error' && r.failedAt === 'nutrition' && (
+            <>
+              {/* Their corrections are kept: back to the box as they left it, not to a fresh read. */}
+              <button type="button" className="fa-log" onClick={r.unprice}>
+                Back to the reading
+              </button>
+              {!hasReading && fallbackLabel && (
+                <button
+                  type="button"
+                  className="lockbtn ghost"
+                  onClick={() => void r.commit({ caption: said, meal, reading: '' })}
+                >
+                  {fallbackLabel}
+                </button>
+              )}
+            </>
+          )}
+          {/* Never disabled: a hung request must not trap the person in the door. */}
+          <button type="button" className="lockbtn ghost" onClick={leave}>
             {backLabel}
           </button>
         </div>

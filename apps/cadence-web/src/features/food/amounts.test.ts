@@ -66,15 +66,23 @@ describe('amountChoices — chips, never a keypad', () => {
   });
 
   it.each([
-    // food or unit → the "two" chip; a unit ending in a hiss takes "es" ("2 glasss" was on the
-    // latte's chips until 2026-11-01, found by the photo door's question-row table)
+    // food or unit → the "two" chip. The rule (review of #457): an abbreviation is left alone; a
+    // hiss takes "es"; a consonant + y takes "ies"; a unit already plural is left alone; else "s".
+    // "2 glasss" and then "2 sliceses" were on the chips until 2026-11-01.
     [{ name: 'cashews' }, '2 handfuls'],
     [{ name: 'latte' }, '2 glasses'],
-    [{ name: 'sourdough toast' }, '2 slices'],
-    [{ name: 'rice' }, '2 cups'],
     [{ name: 'curry', unit: 'dish' }, '2 dishes'],
     [{ name: 'raisins', unit: 'box' }, '2 boxes'],
-    [{ name: 'salsa', unit: 'tbsp' }, '2 tbsps'],
+    [{ name: 'lunch', unit: 'sandwich' }, '2 sandwiches'],
+    [{ name: 'chicken', unit: 'piece' }, '2 pieces'],
+    [{ name: 'sourdough toast' }, '2 slices'],
+    [{ name: 'toast', unit: 'slices' }, '2 slices'],
+    [{ name: 'rice', unit: 'cups' }, '2 cups'],
+    [{ name: 'almonds', unit: 'oz' }, '2 oz'],
+    [{ name: 'almonds', unit: 'g' }, '2 g'],
+    [{ name: 'salsa', unit: 'tbsp' }, '2 tbsp'],
+    [{ name: 'fruit', unit: 'berry' }, '2 berries'],
+    [{ name: 'eggs', unit: 'tray' }, '2 trays'],
   ])('pluralises the unit: %j → %s', (item, label) => {
     expect(amountChoices(item)[1]?.label).toBe(label);
   });

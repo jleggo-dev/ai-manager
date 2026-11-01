@@ -129,6 +129,26 @@ describe('MealParseCard — the total it posts carries every nutrient', () => {
  * question is what it waits for. A chip gives it an amount; the question stays on the row, and
  * what is posted carries neither a link nor words for the memory to learn from.
  */
+describe('MealParseCard — a question row counts nothing, whatever number rides on it', () => {
+  it('near-miss: a question row that arrives WITH a qty is still left out of the total, as on the quick-log sheet', () => {
+    const preview = {
+      meal: 'breakfast' as const,
+      raw_text: 'milk and 2 eggs',
+      items: [
+        { name: 'milk', question: 'Whole milk or 2%?', qty: 1, unit: 'glass', est: { kcal: 122 } },
+        { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 144 }, food_id: 'f-eggs', said: '2 eggs' },
+      ],
+      macros: { kcal: 266 },
+      confidence: null,
+      flags: {},
+      coach: { reached: true, calls: 1, checked: [] },
+    };
+    render(<MealParseCard preview={preview} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('~144 kcal')).toBeInTheDocument();
+    expect(screen.queryByText('~266 kcal')).not.toBeInTheDocument();
+  });
+});
+
 describe('MealParseCard — a coach-led question row', () => {
   const coachLed = {
     meal: 'breakfast' as const,

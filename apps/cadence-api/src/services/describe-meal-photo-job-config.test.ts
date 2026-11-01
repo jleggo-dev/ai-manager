@@ -78,9 +78,20 @@ describe('describe-meal-photo job config', () => {
     expect(template).toContain('Put it on the line ("1 venti Starbucks latte")');
   });
 
-  it('gives facts, not picks (owner 2026-09-03): the doubt is flagged for the coach, never resolved for her', () => {
-    expect(template).toContain('the coach will state an assumption or ask the person exactly where you flag it');
+  it('promises only what the code does: the person corrects the list, and only the list is looked up', () => {
+    // The eyes' sentences go to the log row, not to the food-check call (review of #457); the
+    // prompt must not say the coach reads them.
+    expect(template).toContain('the person reads your sentences and corrects the list, and only the list is looked up');
+    expect(template).not.toContain('the coach will state an assumption or ask the person exactly where you flag it');
+    expect(template).toContain('the person confirms the list, so make an assumed amount plain enough to correct');
     expect(template).not.toMatch(/pick the (flattering|alarming)/i);
+  });
+
+  it('its description says what it is now — plain text ending in a list — not "format-flexible"', () => {
+    const description = (job as unknown as { description: string } | undefined)?.description ?? '';
+    expect(description).toContain('plain text');
+    expect(description).toContain('list of "amount food" lines');
+    expect(description).not.toMatch(/format-flexible|stage 2 does the schema/i);
   });
 
   it.each([/\bcaptured\b/i, /\bjourney\b/i, /\bunlock\b/i, /\bempower/i, /\btempo\b/i, /\bCadence\b/])(

@@ -26,9 +26,12 @@
  * THE READING'S SHAPE (the `describe-meal-photo` job, config/ai-admin/ai-admin.config.json): a few
  * plain sentences for the person — what it is, what the size was anchored to, what the eyes could
  * not tell — then a blank line, then the list: one line per food or drink, the amount first, in
- * the words a food list would use, nothing after it. `readingWords` takes that last block as the
- * meal's words, so "1 venti Starbucks latte / 1 medium banana" splits, looks up and prices exactly
- * as typing "a venti Starbucks latte and a banana" does (FOOD-LOGGING-COACH-LED.md, build step 4).
+ * the words a food list would use, nothing after it. `readingWords` reads the lines by SHAPE, not
+ * by trusting that order: from the bottom, a run of lines that start with an amount is the list
+ * and is split, looked up and priced exactly as typing "1 venti Starbucks latte, 1 medium banana"
+ * is (FOOD-LOGGING-COACH-LED.md, build step 4); a line in or after the list that does not read as
+ * a food, and any line past the caps, is handed back as `not_read` for the card to show — never
+ * dropped quietly. The sentences above the list are notes for the person, never looked up.
  *
  * NOTHING IS PERSISTED BY STEP 1 except the photo itself. A read that the user abandons leaves no
  * meal behind — which is why the row is inserted on the confirm and not before.
@@ -42,7 +45,8 @@ import { tickFoodLogOccurrence } from './nutrition.ts';
 import { priceParsedMeal } from './food-pricing.ts';
 import type { MealKind, Macros, NutritionLog } from '@cadence/shared';
 import { enrichFlags } from './meal-enrich.ts';
-import { MAX_PARTS } from './food-candidate-book.ts';
+import { MAX_PARTS, stripAmount } from './food-candidate-book.ts';
+import { assertOwnPhotoRef } from './photo-validate.ts';
 import {
   previewDescribedMeal,
   productionDeps,
@@ -77,15 +81,18 @@ export async function readMealPhoto(
   try {
     const images = [await signMealPhotoUrl(photo_ref)];
     const res = await runJobBySlug(userId, 'describe-meal-photo', { caption: input.caption ?? '' }, { images });
+    const raw = (res.formatted ?? res.raw ?? '').trim();
     // Plain text is what the job is asked for; a model that writes markdown anyway ("***", a bold
-    // heading) is tidied here so the box the person edits never shows it.
-    const reading = plainReading(res.formatted ?? res.raw ?? '');
+    // heading) is tidied here so the box the person edits never shows it. The RAW text is what is
+    // logged, with a flag when the two differ, so whether the synced prompt fixed the leak or this
+    // line is hiding it stays visible (the owner found the leak by looking, 2026-10-31).
+    const reading = plainReading(raw);
 
     void logAi(userId, {
       kind: 'describe_meal_photo',
       input: { caption: input.caption ?? null },
-      output: { raw: reading.slice(0, 2000) },
-      meta: { photo: true, words: reading.split(/\s+/).filter(Boolean).length },
+      output: { raw: raw.slice(0, 2000) },
+      meta: { photo: true, words: reading.split(/\s+/).filter(Boolean).length, markdown_stripped: raw !== reading },
     });
 
     return { photo_ref, reading, error: null };
@@ -129,6 +136,7 @@ export interface ReadingLogInput {
  * into an empty string.
  */
 export async function logMealFromReading(userId: string, input: ReadingLogInput): Promise<NutritionLog> {
+  assertOwnPhotoRef(userId, input.photo_ref);
   const date = input.date || new Date().toISOString().slice(0, 10);
   const hint = input.meal && isMeal(input.meal) ? input.meal : undefined;
 
@@ -209,56 +217,106 @@ export async function logMealFromReading(userId: string, input: ReadingLogInput)
 
 /**
  * The markdown a model leaves in a text reading, taken off: bold and italic marks, heading marks,
- * bullet and numbering marks at the start of a line, and lines that are only a rule ("***", "---").
- * The words stay as they were; only the marks go. Deterministic, so the table test is the contract.
+ * bullet and numbering marks at the start of a line, and lines that are only a rule ("***", "---",
+ * "* * *"). The words stay as they were; only the marks go. Deterministic, so the table test is
+ * the contract.
  */
 export function plainReading(text: string): string {
-  return text
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) =>
-      line
-        .replace(/^\s*#{1,6}\s+/, '')
-        .replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')
-        .replace(/(\*\*|__)(.+?)\1/g, '$2')
-        .replace(/(^|[\s(])[*_]([^*_\n]+?)[*_](?=$|[\s).,;:!?])/g, '$1$2')
-        .replace(/`([^`]*)`/g, '$1')
-        .trimEnd(),
-    )
-    .filter((line) => !/^\s*(?:[*\-_=]\s*){3,}$/.test(line))
-    .join('\n')
-    .trim();
+  return (
+    text
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      // A rule line goes first, judged as written: stripping its marks first turned "* * *" into
+      // an empty line, and an empty line splits the list in two.
+      .filter((line) => !/^\s*(?:[*\-_=]\s*){3,}$/.test(line))
+      .map((line) =>
+        line
+          .replace(/^\s*#{1,6}\s+/, '')
+          .replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')
+          .replace(/(\*\*|__)(.+?)\1/g, '$2')
+          .replace(/(^|[\s(])[*_]([^*_\n]+?)[*_](?=$|[\s).,;:!?])/g, '$1$2')
+          .replace(/`([^`]*)`/g, '$1')
+          .trimEnd(),
+      )
+      .join('\n')
+      .trim()
+  );
 }
 
 /**
  * The most characters of a photo reading's list that are read. Ten lines (MAX_PARTS) of "amount,
- * brand, food" run to about half this; the rest is room for the person's own corrections.
+ * brand, food" run to about half this; the rest is room for the person's own corrections. A line
+ * past it is handed back as not read, never cut mid-word.
  */
 export const PHOTO_WORDS_MAX = 1000;
 
+const NUMBER_WORD = /^(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|half|some|a few|a couple)\b/i;
+const SENTENCE_END = /[.!?:;]$/;
+/** More words than this is a sentence, whatever it starts with. */
+const LINE_WORDS_MAX = 12;
+
 /**
- * The words of a reading, and the notes that came before them.
- *
- * The reading's last block of non-blank lines is the list the job is asked to end with — one
- * food or drink a line, the amount first — and that is what is split, looked up and priced. The
- * blocks before it are the eyes' notes for the person (what was anchored, what could not be told);
- * they are shown and kept on the row, never looked up. A reading with no blank line is all list,
- * which is also what a person's own typed lines are. With no reading at all (the read failed, the
- * person chose to go on from their caption) the caption is the words.
+ * Does a line read as one line of the list — an amount, then a food — rather than a sentence?
+ * A line that starts with a measure the split can peel does ("1 venti Starbucks latte", "150 g
+ * chicken", "half a banana"); so does a short line that starts with a number word and does not end
+ * like a sentence ("a banana", "two eggs"). "A tall cup with a sleeve, a venti by its height, and
+ * a banana beside it." starts with a number word and is a sentence; "Compact Summary for Data
+ * Entry:" is a heading; "Let me know if you'd like changes." is a sign-off. None is looked up.
  */
-export function readingWords(reading: string, caption?: string): { words: string; notes: string } {
-  const blocks = plainReading(reading)
-    .split(/\n\s*\n/)
-    .map((b) => b.trim())
-    .filter(Boolean);
-  const list = blocks.at(-1) ?? '';
-  const lines = list
+export function isFoodLine(line: string): boolean {
+  const t = line.trim();
+  if (!t || t.split(/\s+/).length > LINE_WORDS_MAX) return false;
+  if (stripAmount(t).measure) return true;
+  return NUMBER_WORD.test(t) && !SENTENCE_END.test(t);
+}
+
+export interface ReadingWords {
+  /** The list's lines, one a line — what is split, looked up and priced. */
+  words: string;
+  /** The sentences above the list — for the person and the log, never looked up. */
+  notes: string;
+  /** Lines in or after the list that do not read as a food, and lines past the caps — in their words. */
+  not_read: string[];
+}
+
+/**
+ * The words of a reading, read by shape from the bottom up.
+ *
+ * Below the list: lines that do not read as a food (a closing sentence, a sign-off) are not read,
+ * and said so. The list: the run of lines up to the blank line above it; a line in that run that
+ * does not read as a food (a heading the old prompt wrote, a stray sentence) is not read either,
+ * and said so, while its neighbours still are. Above the blank: the eyes' notes. Then the caps,
+ * which also say what they left out: lines past MAX_PARTS, then lines from the end until the list
+ * fits PHOTO_WORDS_MAX. A reading with no blank line still reads: the prose the person left in is
+ * not a food line and is reported, the lines that are foods are read. With no food line at all
+ * (the read failed, prose only) the caption is the words, and every line is reported.
+ */
+export function readingWords(reading: string, caption?: string): ReadingWords {
+  const lines = plainReading(reading)
     .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .slice(0, MAX_PARTS);
-  if (lines.length) return { words: lines.join('\n'), notes: blocks.slice(0, -1).join('\n\n') };
-  return { words: (caption ?? '').trim(), notes: '' };
+    .map((l) => l.trim());
+  let i = lines.length - 1;
+  const tail: string[] = [];
+  while (i >= 0 && !isFoodLine(lines[i]!)) {
+    if (lines[i]) tail.push(lines[i]!);
+    i -= 1;
+  }
+  const list: string[] = [];
+  const inList: string[] = [];
+  while (i >= 0 && lines[i]) {
+    (isFoodLine(lines[i]!) ? list : inList).unshift(lines[i]!);
+    i -= 1;
+  }
+  const notes = lines
+    .slice(0, Math.max(i, 0))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const over = list.splice(MAX_PARTS);
+  while (list.length > 1 && list.join('\n').length > PHOTO_WORDS_MAX) over.unshift(list.pop()!);
+  const not_read = [...inList, ...tail.reverse(), ...over];
+  if (list.length) return { words: list.join('\n'), notes, not_read };
+  return { words: (caption ?? '').trim(), notes, not_read };
 }
 
 /**
@@ -270,26 +328,36 @@ export function readingWords(reading: string, caption?: string): { words: string
  * what is read: the list's lines are the parts, and the same phrase memory, candidate book, one
  * `food-check` call and store pricing apply (food-described-meal.ts) — so a photo of a latte and a
  * banana produces the rows, the trace and the numbers that typing "a latte and a banana" does.
+ * Lines that were not read come back on `not_read`, for the card to show.
  *
- * Writes nothing. The confirm goes through the `parsed` path (nutrition.ts: `logMeal({ parsed })`
- * with `photo_ref` and `photo_reading`; the draft's `appendParsed`) with each row's `food_id` and
- * `said`, like any described meal. Until 2026-11-01 this ran `parse-meal-description` and the
- * code-picked match: the model wrote the numbers and nobody saw what was found or rejected.
+ * Writes nothing. The confirm goes through the `parsed` path (the draft's `appendParsed` with
+ * `photo_ref` and `photo_reading`; nutrition.ts `logMeal({ parsed })` likewise) with each row's
+ * `food_id` and `said`, like any described meal. Until 2026-11-01 this ran `parse-meal-description`
+ * and the code-picked match: the model wrote the numbers and nobody saw what was found or rejected.
  */
 export async function previewMealFromReading(
   userId: string,
   input: { reading: string; caption?: string; meal?: MealKind },
   deps: DescribedMealDeps = productionDeps(userId),
 ): Promise<DescribedMealPreview> {
-  const { words, notes } = readingWords(input.reading, input.caption);
-  if (!words) throw new Error('a meal needs a reading or a caption');
+  const { words, notes, not_read } = readingWords(input.reading, input.caption);
+  if (!words) {
+    // Both match the route's "a meal needs" → 400; the second says what shape would have read.
+    throw new Error(
+      not_read.length
+        ? 'a meal needs a line that reads as a food — the amount first, then the food'
+        : 'a meal needs a reading or a caption',
+    );
+  }
   const hint = input.meal && isMeal(input.meal) ? input.meal : undefined;
   // The same `food_check` log row as the typed path, marked as the photo door's and carrying the
-  // notes the eyes wrote above the list, so a number can be explained later from what was read.
+  // notes the eyes wrote above the list and the lines not read, so a number can be explained
+  // later from what was and was not read.
   const log: DescribedMealDeps['log'] = (entry) =>
     deps.log({
       ...entry,
-      meta: { ...(entry.meta as Record<string, unknown>), photo: true, notes: notes.slice(0, 500) },
+      meta: { ...(entry.meta as Record<string, unknown>), photo: true, notes: notes.slice(0, 500), not_read },
     });
-  return previewDescribedMeal(userId, words, hint, { ...deps, log }, { maxChars: PHOTO_WORDS_MAX });
+  const preview = await previewDescribedMeal(userId, words, hint, { ...deps, log }, { maxChars: PHOTO_WORDS_MAX });
+  return not_read.length ? { ...preview, not_read } : preview;
 }

@@ -554,12 +554,20 @@ The photo door reads the way the typed one does (`services/meal-photo-read.ts`, 
    through the split. The read also takes off any markdown a model writes anyway
    (`plainReading`), so the box never shows it. **The prompt is not live until
    `scripts/sync-jobs.ts` runs.**
-2. **The last block is the words.** `readingWords` takes the reading's last block of non-blank
-   lines as the meal's words (at most MAX_PARTS lines and PHOTO_WORDS_MAX characters — the photo
-   door's own cap, since a reading runs past the typed path's 500); the blocks above it are the
-   eyes' notes, shown in the box and kept on the row as `photo_reading`, never looked up. An empty
-   reading reads the caption (the read failed, the person went on from their words); nothing at
-   all is a 400, never an empty card.
+2. **The list is read by shape, from the bottom.** `readingWords` does not trust the order the
+   prompt asks for: a line reads as a food when it starts with an amount the split can peel
+   ("1 venti…", "150 g…", "half a…") or is a short line starting with a number word that does not
+   end like a sentence ("a banana", "two eggs"); from the bottom, lines that are not foods (a
+   closing sentence, a sign-off) are skipped, the run of lines up to the blank above is the list,
+   and a non-food line inside that run (the old prompt's "Compact Summary" heading, prose left in
+   when the blank line is deleted) is skipped too. The sentences above the blank are the eyes'
+   notes, shown in the box and kept on the row as `photo_reading`, never looked up. **Nothing is
+   dropped quietly**: every skipped line, and every line past MAX_PARTS or past PHOTO_WORDS_MAX
+   (the door's own cap — a reading runs past the typed path's 500; whole lines, never a cut
+   mid-word), comes back on the preview as `not_read` and the card says "Not read: …". An empty
+   reading reads the caption (the read failed, the person went on from their words); no food line
+   and no caption is a 400 that says the shape, never an empty card. The raw model output is what
+   the log keeps (`markdown_stripped` flags a tidy), so the leak stays visible.
 3. **The same read.** `previewMealFromReading` hands the words to `previewDescribedMeal`: the
    phrase memory, the book, one `food-check` call, the store's pricing, the labelled fallback — so
    a photo of a latte and a banana gives the rows, the trace and the numbers that typing "1 venti
@@ -568,17 +576,43 @@ The photo door reads the way the typed one does (`services/meal-photo-read.ts`, 
    and carries the notes.
 4. **The same card.** `PhotoReadPanel` renders the chat door's own line (`CoachReadLine`: she
    could not be reached → the notice with the tap hint; she read it → "Here's what I found"; no
-   coach block → the same line), her trace, and `MealParseCard` (→ `MealAmountRows`,
-   `useMealAmounts`) in both modes — inside an open meal the card's button adds the rows to the
-   draft; from the plan it logs. A question row asks through the chips in her words and counts
-   nothing until answered. Log mode used to write a row straight from `parse-meal-description`
-   with no card and no trace; now nothing is written before the confirm in either mode. The
-   stage-2 progress copy (`NUTRITION_STEPS`) narrates the read, not a write.
-5. **The confirm keeps the photo.** `POST /nutrition/meals` `parsed` takes `photo_ref` and
-   `photo_reading` (validation/body.ts, `raw_text` up to the photo list's 1,000); the row lands as
-   `input_method: 'photo'` with its picture and its reading, and each row's `food_id` and `said`
-   teach the phrase memory as on the typed door.
+   coach block → the same line), her trace, the lines not read, and `MealParseCard` (→
+   `MealAmountRows`, `useMealAmounts`). **The one live door is the quick log's, inside an open
+   meal** (`meal/MealDoors.tsx`, draft mode): the card's button adds the rows AND the photo with
+   its reading to the meal. A question row asks through the chips in her words and counts nothing
+   until answered — whatever number rides on it, on the card as on the quick-log sheet. Every
+   fault is told in plain words with a way forward (`photoReadCopy.ts`): the eyes could not read
+   the photo → the box opens empty with the caption still counting; the read could not be worked
+   out → "Back to the reading" keeps every correction; a call past its bound (90 s for the eyes,
+   120 s for the read) is told so; Back is never disabled and leaving aborts what is in flight.
+   The stage-2 progress copy (`NUTRITION_STEPS`) narrates the read, not a write.
+5. **The confirm keeps the photo.** The draft's add (`POST /nutrition/meals/:id/items`, `parsed`
+   - `photo_ref` + `photo_reading`) puts the picture and the reading on the open meal: the meal's
+     FIRST photo stays (the day's thumbnail must not change under the person as they add) and every
+     reading is appended after a blank line. `POST /nutrition/meals` `parsed` takes the same two
+     fields for a log-mode host (none is mounted today); that row lands as `input_method: 'photo'`.
+     A `photo_ref` that is not `${userId}/…` is refused before anything is priced or written, on
+     every door including the old `/photo/log`. Each row's `food_id` and `said` teach the phrase
+     memory as on the typed door; `said` is capped at 200 where the split makes it, so the key the
+     memory was asked with is the key the confirm teaches.
 6. **Left as it was, to go with the next phone rebuild:** `POST /nutrition/photo/log` and
    `logMealFromReading` (the old one-call write) stay for clients built before this change;
-   `parse-meal-description` is referenced only there. `MealCapturePhoto` (the plan's photo host)
-   has no caller in the web today.
+   `parse-meal-description` is referenced there and by `scripts/eval-food-vision.ts`. The plan's
+   photo host (`MealCapturePhoto`) had no caller and was deleted with its test; log mode on
+   `PhotoReadPanel` stays for a future host and is tested.
+
+Decided while building step 4, for the owner to overrule:
+
+- **The list-line rule.** A reading's foods are the lines that start with an amount (or a short
+  number-word line); everything else in or after the list is reported, not looked up. A line
+  typed by hand as "banana" is reported until it says "1 banana" — visible on the card, one edit
+  away — rather than guessed at.
+- **The eyes' sentences do not reach the coach.** They are for the person (and the log row);
+  only the list is looked up. Passing them to the food-check call so she can state the doubt as
+  an assumption or a question is a design change for the owner.
+- **`/photo/log` is kept** for clients built before this change; it runs the old write and goes
+  with the next rebuild.
+- **The caption is no longer stored as `raw_text`.** The words read (the list) are; the caption
+  reached the eyes and is folded into the reading. An empty reading reads the caption, and then
+  the caption is the words.
+- **First photo wins on a meal; readings accumulate** (above, 5).

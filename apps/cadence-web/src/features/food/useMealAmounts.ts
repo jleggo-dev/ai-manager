@@ -52,9 +52,15 @@ const SUMMED_KEYS = [
   'vitamin_b12_ug',
 ] as const satisfies ReadonlyArray<keyof MealMacros>;
 
+/**
+ * The card's total. A row waiting on the coach's question counts NOTHING, whatever number rides
+ * on it — the quick-log sheet's rule (DescribeSheet), now the card's too, so the two surfaces
+ * cannot disagree on the same preview (review of #457).
+ */
 function sum(rows: AmountRow[]): MealMacros {
   const total: MealMacros = {};
   for (const r of rows) {
+    if (r.question) continue;
     const scaled = scaleMacros(r.est, r.qty == null ? 0 : r.qty / r.baseQty);
     for (const k of SUMMED_KEYS) {
       const v = scaled?.[k];

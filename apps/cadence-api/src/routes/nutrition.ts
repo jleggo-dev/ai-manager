@@ -117,6 +117,8 @@ router.post('/photo/log', async (req: Request, res: Response) => {
     );
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    const msg = err instanceof Error ? err.message : '';
+    if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
     console.error('[POST /nutrition/photo/log]', err);
     res.status(500).json({ error: 'failed to log the meal' });
   }

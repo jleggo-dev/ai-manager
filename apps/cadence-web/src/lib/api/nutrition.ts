@@ -236,6 +236,11 @@ export interface MealPreview {
    */
   photo_ref?: string;
   photo_reading?: string;
+  /**
+   * Lines of what they gave that were NOT looked up, in their words (the photo door: a sentence
+   * after the list, a heading, lines past the caps) — the card says so, never drops them quietly.
+   */
+  not_read?: string[];
 }
 
 /**
@@ -478,11 +483,16 @@ export interface MealPhotoReading {
  * can correct what it says before any number is computed from it. Nothing is written to the food
  * log by this call, so abandoning here leaves no meal behind.
  */
-export async function readMealPhoto(photo: string, caption?: string): Promise<MealPhotoReading> {
+export async function readMealPhoto(
+  photo: string,
+  caption?: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<MealPhotoReading> {
   const res = await fetch(`${BASE}/nutrition/photo/read`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({ photo, ...(caption ? { caption } : {}) }),
+    ...(opts.signal ? { signal: opts.signal } : {}),
   });
   if (!res.ok) throw Object.assign(new Error(`photo read failed: ${res.status}`), { status: res.status });
   return res.json();
@@ -497,15 +507,15 @@ export async function readMealPhoto(photo: string, caption?: string): Promise<Me
  * 1 still reads the meal from the caption. Its own route because a reading runs well past the 500
  * characters `previewMeal`'s words path accepts.
  */
-export async function previewMealFromReading(input: {
-  reading: string;
-  caption?: string;
-  meal?: MealKind;
-}): Promise<MealPreview> {
+export async function previewMealFromReading(
+  input: { reading: string; caption?: string; meal?: MealKind },
+  opts: { signal?: AbortSignal } = {},
+): Promise<MealPreview> {
   const res = await fetch(`${BASE}/nutrition/photo/preview`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(input),
+    ...(opts.signal ? { signal: opts.signal } : {}),
   });
   if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
   return res.json();

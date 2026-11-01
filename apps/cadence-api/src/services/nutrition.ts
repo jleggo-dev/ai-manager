@@ -33,6 +33,7 @@ import {
   listDoneUserOccurrencesForDay,
 } from '../repos/occurrences.ts';
 import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos.ts';
+import { assertOwnPhotoRef } from './photo-validate.ts';
 import { estimateBurnKcal } from './burn.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
@@ -133,6 +134,9 @@ export async function logMeal(
   if (input.parsed) {
     const p = input.parsed;
     const date = p.date ?? input.date ?? today();
+    // The photo door's confirm names the photo its read stored; a ref from anywhere else is
+    // refused before anything is priced or written.
+    if (p.photo_ref) assertOwnPhotoRef(userId, p.photo_ref);
     // The wire shape is client-supplied, so every number passes the same sanitizer the AI path
     // uses — a confirm must not be a door around the caps.
     const macros = sanitizeMacros(p.macros);

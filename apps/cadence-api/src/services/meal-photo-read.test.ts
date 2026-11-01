@@ -8,7 +8,13 @@
  *   - a question row carries no number and no link, exactly as on the typed door;
  *   - when she cannot be reached the fallback prices the list, labelled, and the card is told;
  *   - an empty reading reads the caption; nothing at all is a loud error, not an empty card;
- *   - the markdown a model leaves ("***", "**bold**", bullets) comes off and the words stay.
+ *   - the list is read by SHAPE from the bottom (review of #457): a closing sentence after it, a
+ *     heading inside it, prose left in when the blank line is deleted, the old prompt's shape —
+ *     each is reported as not read, never silently looked up or silently dropped; so are the
+ *     lines the caps leave out;
+ *   - the markdown a model leaves ("***", "**bold**", bullets) comes off and the words stay, and
+ *     the RAW text is what the log keeps;
+ *   - a photo_ref that is not this person's is refused; `said` is capped where the key is made.
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { Food } from '@cadence/shared';
@@ -28,9 +34,23 @@ vi.mock('./food-pricing.ts', async (orig) => {
 
 import type { FanOutResult } from './food-source-fanout.ts';
 import type { SourceCandidate } from './food-source-report.ts';
-import { partsToLookups } from './food-candidate-book.ts';
+import { runJobBySlug } from '../ai/aim.ts';
+import { logAi } from './ai-log.ts';
+import { partsToLookups, SAID_MAX } from './food-candidate-book.ts';
 import { previewDescribedMeal, type DescribedMealDeps } from './food-described-meal.ts';
-import { PHOTO_WORDS_MAX, plainReading, previewMealFromReading, readingWords } from './meal-photo-read.ts';
+import { rememberedRows } from './food-described-rows.ts';
+import { phraseKey } from './food-phrases.ts';
+import {
+  PHOTO_WORDS_MAX,
+  isFoodLine,
+  logMealFromReading,
+  plainReading,
+  previewMealFromReading,
+  readMealPhoto,
+  readingWords,
+} from './meal-photo-read.ts';
+import { putMealPhoto, signMealPhotoUrl } from './meal-photos.ts';
+import { assertOwnPhotoRef } from './photo-validate.ts';
 
 const USER = '00000000-0000-4000-a000-00000000d004';
 
@@ -274,46 +294,206 @@ describe('a photographed latte and banana read like a typed one', () => {
 
   it("the list is read past the typed path's 500 characters, up to its own cap", async () => {
     const lines = Array.from({ length: 10 }, (_, i) => `1 medium banana ${'x'.repeat(50)} ${i}`);
-    const { words } = readingWords(lines.join('\n'));
+    const { words, not_read } = readingWords(lines.join('\n'));
     expect(words.length).toBeGreaterThan(500);
     expect(words.length).toBeLessThan(PHOTO_WORDS_MAX);
     expect(partsToLookups(words)).toHaveLength(10);
+    expect(not_read).toEqual([]);
+  });
+
+  it('lines that were not read ride on the preview for the card, and on the log row', async () => {
+    const { d, calls, logs } = deps({ reply: TWO_PICKS });
+    const reading = `${READING}\n\nLet me know if you'd like any changes.`;
+    const p = await previewMealFromReading(USER, { reading, meal: 'breakfast' }, d);
+    expect(p.items).toHaveLength(2);
+    expect(p.not_read).toEqual(["Let me know if you'd like any changes."]);
+    expect(calls[0]?.said).toBe('1 venti Starbucks latte, 1 medium banana');
+    expect(logs[0]?.meta).toMatchObject({ not_read: ["Let me know if you'd like any changes."] });
+    // Near-miss: nothing left out → no field at all, so an older card has nothing to draw.
+    const clean = await previewMealFromReading(
+      USER,
+      { reading: READING, meal: 'breakfast' },
+      deps({ reply: TWO_PICKS }).d,
+    );
+    expect(clean).not.toHaveProperty('not_read');
+  });
+
+  it('prose with no line that reads as a food, and no caption, is a loud error that says the shape', async () => {
+    await expect(
+      previewMealFromReading(USER, { reading: 'A plate of something. I cannot tell what.' }, deps().d),
+    ).rejects.toThrow(/a meal needs a line that reads as a food/);
   });
 });
 
-describe('readingWords — the last block is the list, the rest is for the person', () => {
+describe("the words ride back within the confirm's cap", () => {
+  it('a part longer than SAID_MAX is read as its first 200 characters, and the memory key matches', async () => {
+    // No separator word in it, so the split keeps it as one part (a sentence, not a food).
+    const long = `1 medium banana ${'from the market stall near work '.repeat(8)}`.trim();
+    expect(long.length).toBeGreaterThan(SAID_MAX);
+    const lookups = partsToLookups(long);
+    expect(lookups[0]?.said).toHaveLength(SAID_MAX);
+    // The memory is asked with the key of the capped words — the same key the confirm teaches.
+    const asked: string[][] = [];
+    const { d } = deps({
+      recall: async (keys) => {
+        asked.push(keys);
+        return new Map([
+          [phraseKey(long.slice(0, SAID_MAX)), { phrase: 'p', food_id: 'f-banana', qty: 1, unit: 'medium', uses: 1 }],
+        ]);
+      },
+    });
+    const rows = await rememberedRows(lookups, USER, d);
+    expect(asked[0]).toEqual([phraseKey(long.slice(0, SAID_MAX))]);
+    expect(rows.get(0)?.said).toHaveLength(SAID_MAX);
+  });
+});
+
+describe("assertOwnPhotoRef — a photo_ref is this person's own or it is refused", () => {
   it.each([
-    ['sentences, a blank line, the list', READING, '1 venti Starbucks latte\n1 medium banana', /paper cup/],
+    [`${USER}/2026-11-01/p.jpg`, true],
+    [`${USER}/gym/p.jpg`, true],
+    ['00000000-0000-4000-a000-00000000d999/2026-11-01/p.jpg', false],
+    [`coach-attachments/${USER}/p.jpg`, false],
+    ['p.jpg', false],
+    [`${USER}`, false],
+  ])('%s → %s', (ref, ok) => {
+    if (ok) expect(() => assertOwnPhotoRef(USER, ref)).not.toThrow();
+    else expect(() => assertOwnPhotoRef(USER, ref)).toThrow(/invalid photo/);
+  });
+
+  it('the old one-call write refuses it before anything is parsed or written', async () => {
+    vi.mocked(runJobBySlug).mockClear();
+    await expect(
+      logMealFromReading(USER, { photo_ref: 'someone-else/2026-11-01/p.jpg', reading: '1 banana' }),
+    ).rejects.toThrow(/invalid photo/);
+    expect(runJobBySlug).not.toHaveBeenCalled();
+  });
+});
+
+describe('readMealPhoto — the log keeps the raw text, the box gets it plain', () => {
+  it('a reading with markdown is logged as written, flagged, and returned stripped', async () => {
+    vi.mocked(putMealPhoto).mockResolvedValue(`${USER}/2026-11-01/p.jpg`);
+    vi.mocked(signMealPhotoUrl).mockResolvedValue('https://signed');
+    const raw = 'A plate.\n\n**Compact Summary for Data Entry:**\n* 2 fried eggs\n* 1 slice toast';
+    vi.mocked(runJobBySlug).mockResolvedValue({ formatted: raw } as never);
+    const out = await readMealPhoto(USER, { photo: 'data:image/jpeg;base64,xxx' });
+    expect(out.reading).toBe('A plate.\n\nCompact Summary for Data Entry:\n2 fried eggs\n1 slice toast');
+    const entry = vi.mocked(logAi).mock.calls.at(-1)?.[1] as {
+      output: { raw: string };
+      meta: { markdown_stripped: boolean };
+    };
+    expect(entry.output.raw).toBe(raw);
+    expect(entry.meta.markdown_stripped).toBe(true);
+  });
+
+  it('near-miss: plain text is logged unflagged', async () => {
+    vi.mocked(putMealPhoto).mockResolvedValue(`${USER}/2026-11-01/p.jpg`);
+    vi.mocked(signMealPhotoUrl).mockResolvedValue('https://signed');
+    vi.mocked(runJobBySlug).mockResolvedValue({ formatted: READING } as never);
+    const out = await readMealPhoto(USER, { photo: 'data:image/jpeg;base64,xxx' });
+    expect(out.reading).toBe(READING);
+    const entry = vi.mocked(logAi).mock.calls.at(-1)?.[1] as { meta: { markdown_stripped: boolean } };
+    expect(entry.meta.markdown_stripped).toBe(false);
+  });
+});
+
+describe('isFoodLine — a line of the list, or a sentence', () => {
+  it.each([
+    ['1 venti Starbucks latte', true],
+    ['150 g chicken breast', true],
+    ['half a banana', true],
+    ['a banana', true],
+    ['two eggs', true],
+    ['some bread', true],
+    ['1 medium banana.', true],
+    ['A tall cup with a Starbucks sleeve, a venti by its height, and a banana beside it.', false],
+    ['I cannot tell whether the milk is whole or skim.', false],
+    ['Compact Summary for Data Entry:', false],
+    ["Let me know if you'd like changes.", false],
+    ['What I see', false],
+    ['banana', false],
+    ['', false],
+  ])('%j → %s', (line, want) => {
+    expect(isFoodLine(line)).toBe(want);
+  });
+});
+
+describe('readingWords — the list by shape, from the bottom; what is not read is said', () => {
+  const LIST = '1 venti Starbucks latte\n1 medium banana';
+  it.each([
+    ['sentences, a blank line, the list', READING, LIST, /paper cup/, []],
+    ['a list alone is all list', LIST, LIST, /^$/, []],
+    ['one line is one part', 'a banana', 'a banana', /^$/, []],
     [
-      'a list alone (no blank line) is all list',
-      '1 venti Starbucks latte\n1 medium banana',
-      '1 venti Starbucks latte\n1 medium banana',
-      /^$/,
+      'a closing sentence after the list is not read, and said so — the list stays the list',
+      `${READING}\n\nLet me know if you'd like changes.`,
+      LIST,
+      /paper cup/,
+      ["Let me know if you'd like changes."],
     ],
-    ['one line is one part', 'a banana', 'a banana', /^$/],
+    [
+      'the blank line deleted by hand: the prose left in is reported, the foods are still read',
+      'A tall cup and a banana beside it.\n1 venti Starbucks latte\n1 medium banana',
+      LIST,
+      /^$/,
+      ['A tall cup and a banana beside it.'],
+    ],
+    [
+      "the old prompt's shape: prose, a heading, bullets — the heading is reported, the foods read",
+      'A plate of eggs.\n\n**Compact Summary for Data Entry:**\n* 2 fried eggs\n* 1 slice toast',
+      '2 fried eggs\n1 slice toast',
+      /^A plate of eggs\.$/,
+      ['Compact Summary for Data Entry:'],
+    ],
+    [
+      "the old prompt's shape with a food line that carries no amount: that line is reported, not guessed",
+      'A pizza.\n\n**Compact Summary for Data Entry:**\n* Mozzarella cheese, full-fat, baked (~40-50g)\n* 2 slices crust',
+      '2 slices crust',
+      /^A pizza\.$/,
+      ['Compact Summary for Data Entry:', 'Mozzarella cheese, full-fat, baked (~40-50g)'],
+    ],
+    [
+      'prose only: nothing reads as a food, every line is reported, no notes',
+      'A plate of something.\nI cannot tell what.',
+      '',
+      /^$/,
+      ['A plate of something.', 'I cannot tell what.'],
+    ],
     [
       'several note paragraphs keep their order',
       'What I see.\n\nWhat I cannot tell.\n\n2 fried eggs',
       '2 fried eggs',
       /^What I see\.\n\nWhat I cannot tell\.$/,
+      [],
     ],
-    ['blank lines with spaces still separate blocks', 'Notes.\n   \n1 banana', '1 banana', /^Notes\.$/],
-    ['Windows line ends read the same', 'Notes.\r\n\r\n1 banana\r\n2 eggs', '1 banana\n2 eggs', /^Notes\.$/],
-  ])('%s', (_, reading, words, notes) => {
+    ['blank lines with spaces still separate blocks', 'Notes.\n   \n1 banana', '1 banana', /^Notes\.$/, []],
+    ['Windows line ends read the same', 'Notes.\r\n\r\n1 banana\r\n2 eggs', '1 banana\n2 eggs', /^Notes\.$/, []],
+  ])('%s', (_, reading, words, notes, notRead) => {
     const out = readingWords(reading);
     expect(out.words).toBe(words);
     expect(out.notes).toMatch(notes);
+    expect(out.not_read).toEqual(notRead);
   });
 
-  it("caps the list at the split's own MAX_PARTS, never more", () => {
+  it('the caps say what they left out: lines past MAX_PARTS, then lines past the budget, from the end', () => {
     const lines = Array.from({ length: 14 }, (_, i) => `${i + 1} g food${i}`);
-    expect(readingWords(lines.join('\n')).words.split('\n')).toHaveLength(10);
+    const many = readingWords(lines.join('\n'));
+    expect(many.words.split('\n')).toHaveLength(10);
+    expect(many.not_read).toEqual(lines.slice(10));
+
+    const wide = Array.from({ length: 8 }, (_, i) => `1 cup ${'x'.repeat(140)} ${i}`);
+    const budget = readingWords(wide.join('\n'));
+    expect(budget.words.length).toBeLessThanOrEqual(PHOTO_WORDS_MAX);
+    expect(budget.words.split('\n')).toHaveLength(6);
+    expect(budget.not_read).toEqual(wide.slice(6));
+    // Never cut mid-word: every line read is a whole line.
+    expect(budget.words.split('\n').every((l) => wide.includes(l))).toBe(true);
   });
 
   it('with no reading the caption is the words; with neither there are none', () => {
-    expect(readingWords('', ' a small latte ')).toEqual({ words: 'a small latte', notes: '' });
-    expect(readingWords('', '')).toEqual({ words: '', notes: '' });
-    expect(readingWords('   \n\n  ')).toEqual({ words: '', notes: '' });
+    expect(readingWords('', ' a small latte ')).toEqual({ words: 'a small latte', notes: '', not_read: [] });
+    expect(readingWords('', '')).toEqual({ words: '', notes: '', not_read: [] });
+    expect(readingWords('   \n\n  ')).toEqual({ words: '', notes: '', not_read: [] });
   });
 });
 
@@ -322,6 +502,7 @@ describe('plainReading — the marks come off, the words stay', () => {
     ['bold heading', '**Compact Summary for Data Entry:**', 'Compact Summary for Data Entry:'],
     ['a rule line goes', 'Notes.\n***\n1 banana', 'Notes.\n1 banana'],
     ['a dashed rule goes', 'Notes.\n---\n1 banana', 'Notes.\n1 banana'],
+    ['a spaced rule goes too, and does not split the list', '1 banana\n* * *\n2 eggs', '1 banana\n2 eggs'],
     [
       'bullets',
       '* Mozzarella cheese, full-fat (~40 g)\n- 2 eggs\n• 1 slice bread',
