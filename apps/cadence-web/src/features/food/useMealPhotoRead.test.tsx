@@ -255,6 +255,45 @@ describe('useMealPhotoRead — faults, by stage, in plain words', () => {
     expect(result.current.reading).toBe(READING);
   });
 
+  it('a second read supersedes the first: the first’s abort changes nothing, and its timer cannot fire later', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const seen: AbortSignal[] = [];
+    api.readMealPhoto
+      .mockImplementationOnce((_p: unknown, _c: unknown, opts: { signal: AbortSignal }) => {
+        seen.push(opts.signal);
+        return new Promise((_, reject) => opts.signal.addEventListener('abort', () => reject(opts.signal.reason)));
+      })
+      .mockResolvedValueOnce({ photo_ref: 'ref/2.jpg', reading: READING, error: null });
+    const { result } = renderHook(() => useMealPhotoRead());
+    act(() => void result.current.read('data:image/jpeg;base64,one'));
+    await act(async () => {
+      await result.current.read('data:image/jpeg;base64,two');
+    });
+    // The second call is what the screen shows; the first was aborted and said nothing.
+    expect(seen[0]?.aborted).toBe(true);
+    expect(result.current.phase).toBe('confirming');
+    expect(result.current.error).toBeNull();
+    expect(result.current.photoRef).toBe('ref/2.jpg');
+    // The first call's bound passing cannot turn the settled read into "too long".
+    await act(async () => {
+      vi.advanceTimersByTime(READ_BOUND_MS + 1);
+    });
+    expect(result.current.phase).toBe('confirming');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('cancel, then a fresh read, works as if nothing had been in flight', async () => {
+    api.readMealPhoto.mockImplementationOnce(hangsRead());
+    const { result } = renderHook(() => useMealPhotoRead());
+    act(() => void result.current.read('data:image/jpeg;base64,one'));
+    act(() => result.current.cancel());
+    await act(async () => {
+      await result.current.read('data:image/jpeg;base64,two');
+    });
+    expect(result.current.phase).toBe('confirming');
+    expect(result.current.error).toBeNull();
+  });
+
   it('leaving aborts the call in flight and shows nothing for it', async () => {
     api.readMealPhoto.mockImplementation(hangsRead());
     const { result } = renderHook(() => useMealPhotoRead());

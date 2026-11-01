@@ -438,7 +438,7 @@ on the card as an automatic estimate, not hers.
 4. ~~Route the meal screen's Chat / Voice / Photo doors to it; the trace UI, the assumption line,
    question rows that do not count~~ — **built 2026-11-01**, see "What was built (step 4)" below.
    Chat and Voice (`LogByChat`, the quick-log `DescribeSheet`, the plan sheet's capture) and Photo
-   (`PhotoReadPanel`, inside an open meal and from the plan) are on it, with the trace line, the
+   (`PhotoReadPanel`, inside an open meal) are on it, with the trace line, the
    assumption on the row, her question on an asked row, and the not-reached notice. _Still owed
    from this step: per-row source labels are on the wire (`source_label`) and not yet drawn._
 5. ~~Write-back of her verdicts (phrase → food) so repeats get faster~~ — built in step 2
@@ -578,8 +578,8 @@ and the meal screen's doors, and logs through the same confirm path the card use
    row's name and the question, or the name and why — never logged, never the pick she leaned
    towards. (A question row's name is the model's plain name for the part when it gave one, else
    the person's words with the amount stripped — `rowsFromOutcome`; it carries no `said`.)
-   On its own: `nothing changed: nothing was logged — "milk" waits on their answer: Whole milk or
-2%?`. Beside settled rows: those are logged (`changed:` lines), and the open row is an
+   On its own: `nothing changed: nothing was logged — "milk" waits on their answer: …`. Beside
+   settled rows: those are logged (`changed:` lines), and the open row is an
    `unchanged:` line, with "the rest of the meal is already on their file" — a person who said
    "milk and a banana" has eaten the banana whatever the milk turns out to be. She asks in
    conversation and calls `log_meal` again with that part's words plus the answer, which lands as
@@ -700,15 +700,16 @@ The photo door reads the way the typed one does (`services/meal-photo-read.ts`, 
    out → "Back to the reading" keeps every correction; a call past its bound (90 s for the eyes,
    120 s for the read) is told so; Back is never disabled and leaving aborts what is in flight.
    The stage-2 progress copy (`NUTRITION_STEPS`) narrates the read, not a write.
-5. **The confirm keeps the photo.** The draft's add (`POST /nutrition/meals/:id/items`, `parsed`
-   - `photo_ref` + `photo_reading`) puts the picture and the reading on the open meal: the meal's
-     FIRST photo stays (the day's thumbnail must not change under the person as they add) and every
-     reading is appended after a blank line. `POST /nutrition/meals` `parsed` takes the same two
-     fields for a log-mode host (none is mounted today); that row lands as `input_method: 'photo'`.
-     A `photo_ref` that is not `${userId}/…` is refused before anything is priced or written, on
-     every door including the old `/photo/log`. Each row's `food_id` and `said` teach the phrase
-     memory as on the typed door; `said` is capped at 200 where the split makes it, so the key the
-     memory was asked with is the key the confirm teaches.
+5. **The confirm keeps the photo.** The draft's add (`POST /nutrition/meals/:id/items`: `parsed`
+   with `photo_ref` and `photo_reading`) puts the picture and the reading on the open meal in the
+   same statement as the rows, so neither lands without the other: the meal's FIRST photo stays
+   (the day's thumbnail must not change under the person as they add) and every reading is
+   appended after a blank line. `POST /nutrition/meals` `parsed` takes the same two fields for a
+   log-mode host (none is mounted today); that row lands as `input_method: 'photo'`. A `photo_ref`
+   that is not `${userId}/…` is refused before anything is priced or written, on every door
+   including the old `/photo/log`. Each row's `food_id` and `said` teach the phrase memory as on
+   the typed door; `said` is capped at 200 where the split makes it, so the key the memory was
+   asked with is the key the confirm teaches.
 6. **Left as it was, to go with the next phone rebuild:** `POST /nutrition/photo/log` and
    `logMealFromReading` (the old one-call write) stay for clients built before this change;
    `parse-meal-description` is referenced there and by `scripts/eval-food-vision.ts`. The plan's

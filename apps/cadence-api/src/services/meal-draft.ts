@@ -210,14 +210,26 @@ async function learnPostLogAdds(userId: string, meal: NutritionLog, appended: Nu
 }
 
 /** Write items(+parts) and the recomputed running total. `{}` macros = an honest empty draft. */
+/**
+ * One statement for everything an add changes — the rows, the parts, the total and, from the
+ * photo door, the picture and its reading — so a failure leaves the meal as it was: never rows
+ * on the meal with the add reported failed and a retry doubling them (review of #457, round 2).
+ */
 async function writeItems(
   userId: string,
   logId: string,
   items: NutritionLog['items'],
   parts: NutritionLog['parts'],
+  photo: DraftPhoto = {},
 ): Promise<NutritionLog> {
   const macros: Macros = sumItemNutrients(items) ?? {};
-  const row = await updateNutritionLog(userId, logId, { items, parts: parts ?? [], macros });
+  const row = await updateNutritionLog(userId, logId, {
+    items,
+    parts: parts ?? [],
+    macros,
+    ...(photo.photo_ref ? { photo_ref: photo.photo_ref } : {}),
+    ...(photo.photo_reading ? { photo_reading: photo.photo_reading } : {}),
+  });
   if (!row) throw new Error('meal not found');
   return row;
 }
@@ -337,14 +349,9 @@ export async function appendParsed(
       ...(i.food_id ? { food_id: i.food_id } : {}),
     };
   });
-  const written = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts);
-  const row =
-    photo.photo_ref || photo.photo_reading
-      ? ((await updateNutritionLog(userId, meal.log_id, {
-          photo_ref: photo.photo_ref ?? null,
-          photo_reading: photo.photo_reading ?? null,
-        })) ?? written)
-      : written;
+  // The rows and the photo land in the same statement (writeItems), so neither can be on the
+  // meal without the other.
+  const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts, photo);
   await learnPostLogAdds(userId, meal, appended);
   // Logged, and learned (FOOD-LOGGING-COACH-LED.md): the words a linked row was said in now
   // price without a call next time — from the rows as written (sanitised, amount kept only when

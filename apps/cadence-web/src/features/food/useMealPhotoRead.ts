@@ -70,8 +70,13 @@ export function useMealPhotoRead() {
   /** The eyes answered but could not read the photo: the box is open and empty, the caption still counts. */
   const [readFailed, setReadFailed] = useState(false);
   const startedAt = useRef(0);
-  const inFlight = useRef<{ ctrl: AbortController; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const left = useRef(false);
+  /**
+   * Each call holds its own token; only the CURRENT call may set phase or error or clear the timer.
+   * Without it a superseded call's abort landed as TOO_LONG over the new call's phase, and its
+   * `finally` cleared the new call's timer (review of #457, round 2).
+   */
+  const seq = useRef(0);
+  const inFlight = useRef<{ token: number; ctrl: AbortController; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   /** One interval for the life of a stage; `phase` decides which script it is reading from. */
   useEffect(() => {
@@ -83,31 +88,45 @@ export function useMealPhotoRead() {
     return () => clearInterval(id);
   }, [phase]);
 
-  /** A bounded call: its signal aborts at the bound, or when the person leaves. */
-  const begin = useCallback((bound: number): AbortSignal => {
-    inFlight.current?.ctrl.abort();
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(new DOMException('took too long', 'TimeoutError')), bound);
-    inFlight.current = { ctrl, timer };
-    return ctrl.signal;
+  /** Drop whatever is in flight: its abort is its own business, nothing it does reaches the screen. */
+  const dropInFlight = useCallback((reason: string) => {
+    const prior = inFlight.current;
+    if (!prior) return;
+    inFlight.current = null;
+    clearTimeout(prior.timer);
+    prior.ctrl.abort(new DOMException(reason, 'AbortError'));
   }, []);
-  const end = useCallback(() => {
-    if (inFlight.current) clearTimeout(inFlight.current.timer);
+
+  /** A bounded call with its own token: its signal aborts at the bound, or when it is superseded or left. */
+  const begin = useCallback(
+    (bound: number): { signal: AbortSignal; token: number } => {
+      dropInFlight('superseded');
+      const token = ++seq.current;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(new DOMException('took too long', 'TimeoutError')), bound);
+      inFlight.current = { token, ctrl, timer };
+      return { signal: ctrl.signal, token };
+    },
+    [dropInFlight],
+  );
+  /** True while this call is still the one the screen is waiting on. */
+  const current = (token: number): boolean => token === seq.current;
+  const end = useCallback((token: number) => {
+    if (inFlight.current?.token !== token) return;
+    clearTimeout(inFlight.current.timer);
     inFlight.current = null;
   }, []);
 
   /** Leaving the door: whatever is in flight is abandoned, and nothing it returns is shown. */
   const cancel = useCallback(() => {
-    left.current = true;
-    inFlight.current?.ctrl.abort(new DOMException('left', 'AbortError'));
-    end();
-  }, [end]);
+    seq.current += 1;
+    dropInFlight('left');
+  }, [dropInFlight]);
   useEffect(() => () => cancel(), [cancel]);
 
   /** Step 1. Resolves to the reading so a caller can chain without waiting on a re-render. */
   const read = useCallback(
     async (photo: string, caption?: string): Promise<string> => {
-      left.current = false;
       setError(null);
       setFailedAt(null);
       setReadFailed(false);
@@ -115,10 +134,10 @@ export function useMealPhotoRead() {
       setReading('');
       startedAt.current = Date.now();
       setPhase('reading');
-      const signal = begin(READ_BOUND_MS);
+      const { signal, token } = begin(READ_BOUND_MS);
       try {
         const out = await readMealPhoto(photo, caption, { signal });
-        if (left.current) return '';
+        if (!current(token)) return '';
         setPhotoRef(out.photo_ref);
         setReading(out.reading);
         // The photo is up but the eyes could not read it (a 200 with `error`): the box stays open
@@ -127,13 +146,13 @@ export function useMealPhotoRead() {
         setPhase('confirming');
         return out.reading;
       } catch (e) {
-        if (left.current) return '';
+        if (!current(token)) return '';
         setError(faultCopy('read', e));
         setFailedAt('read');
         setPhase('error');
         return '';
       } finally {
-        end();
+        end(token);
       }
     },
     [begin, end],
@@ -147,15 +166,14 @@ export function useMealPhotoRead() {
   const commit = useCallback(
     async (opts: { caption?: string; meal?: MealKind; reading?: string } = {}): Promise<MealPreview | null> => {
       const said = opts.reading ?? reading;
-      left.current = false;
       setError(null);
       setFailedAt(null);
       startedAt.current = Date.now();
       setPhase('nutrition');
-      const signal = begin(NUTRITION_BOUND_MS);
+      const { signal, token } = begin(NUTRITION_BOUND_MS);
       try {
         const p = await previewMealFromReading({ reading: said, caption: opts.caption, meal: opts.meal }, { signal });
-        if (left.current) return null;
+        if (!current(token)) return null;
         if (!p.items.length) throw Object.assign(new Error('no foods'), { status: 400 });
         const priced: MealPreview = {
           ...p,
@@ -166,13 +184,13 @@ export function useMealPhotoRead() {
         setPhase('priced');
         return priced;
       } catch (e) {
-        if (left.current) return null;
+        if (!current(token)) return null;
         setError(faultCopy('nutrition', e));
         setFailedAt('nutrition');
         setPhase('error');
         return null;
       } finally {
-        end();
+        end(token);
       }
     },
     [begin, end, photoRef, reading],
@@ -180,7 +198,6 @@ export function useMealPhotoRead() {
 
   const reset = useCallback(() => {
     cancel();
-    left.current = false;
     setPhase('idle');
     setProgress('');
     setReading('');

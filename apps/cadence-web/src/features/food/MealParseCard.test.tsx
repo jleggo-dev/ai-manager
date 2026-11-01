@@ -129,23 +129,43 @@ describe('MealParseCard — the total it posts carries every nutrient', () => {
  * question is what it waits for. A chip gives it an amount; the question stays on the row, and
  * what is posted carries neither a link nor words for the memory to learn from.
  */
-describe('MealParseCard — a question row counts nothing, whatever number rides on it', () => {
-  it('near-miss: a question row that arrives WITH a qty is still left out of the total, as on the quick-log sheet', () => {
+describe('MealParseCard — a question row counts nothing until it is answered', () => {
+  const eggs = { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 144 }, food_id: 'f-eggs', said: '2 eggs' };
+  const base = { meal: 'breakfast' as const, raw_text: 'milk and 2 eggs', confidence: null, flags: {} };
+
+  it('near-miss: a question row WITH a number is out of the total until a chip answers it, then in — the total says what is posted', async () => {
     const preview = {
-      meal: 'breakfast' as const,
-      raw_text: 'milk and 2 eggs',
-      items: [
-        { name: 'milk', question: 'Whole milk or 2%?', qty: 1, unit: 'glass', est: { kcal: 122 } },
-        { name: 'eggs', qty: 2, unit: 'large', est: { kcal: 144 }, food_id: 'f-eggs', said: '2 eggs' },
-      ],
+      ...base,
+      items: [{ name: 'milk', question: 'Whole milk or 2%?', est: { kcal: 122 } }, eggs],
       macros: { kcal: 266 },
-      confidence: null,
-      flags: {},
+      coach: { reached: true, calls: 1, checked: [] },
+    };
+    render(<MealParseCard preview={preview} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('~144 kcal')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '1 glass' }));
+    expect(screen.getByText('~266 kcal')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Log to breakfast' }));
+    await waitFor(() => expect(api.logPreviewedMeal).toHaveBeenCalled());
+    const [sent] = api.logPreviewedMeal.mock.calls[0] as unknown as [
+      { items: Array<{ est?: { kcal?: number } }>; macros: { kcal: number } },
+    ];
+    expect(sent.items[0]?.est?.kcal).toBe(122);
+    expect(sent.macros.kcal).toBeCloseTo(266, 0);
+  });
+
+  it('near-miss: a question row that ARRIVES with a qty is left out until touched, as on the quick-log sheet', () => {
+    const preview = {
+      ...base,
+      items: [{ name: 'milk', question: 'Whole milk or 2%?', qty: 1, unit: 'glass', est: { kcal: 122 } }, eggs],
+      macros: { kcal: 266 },
       coach: { reached: true, calls: 1, checked: [] },
     };
     render(<MealParseCard preview={preview} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
     expect(screen.getByText('~144 kcal')).toBeInTheDocument();
     expect(screen.queryByText('~266 kcal')).not.toBeInTheDocument();
+    // The stepper is the card's answer for a row that already carries an amount.
+    fireEvent.click(screen.getByRole('button', { name: 'More milk' }));
+    expect(screen.getByText(/~29\d kcal/)).toBeInTheDocument();
   });
 });
 

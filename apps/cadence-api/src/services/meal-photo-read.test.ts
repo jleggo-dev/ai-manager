@@ -432,6 +432,9 @@ describe('isFoodLine — a line of the list, or a sentence', () => {
     ['two eggs', true],
     ['some bread', true],
     ['1 medium banana.', true],
+    ['a cup of yogurt', true],
+    ['A cup.', false],
+    ['1 cup', false],
     ['A tall cup with a Starbucks sleeve, a venti by its height, and a banana beside it.', false],
     ['I cannot tell whether the milk is whole or skim.', false],
     ['Compact Summary for Data Entry:', false],
@@ -492,6 +495,27 @@ describe('readingWords — the list by shape, from the bottom; what is not read 
       /^What I see\.\n\nWhat I cannot tell\.$/,
       [],
     ],
+    [
+      'a blank line between two food lines does not end the list: both are read',
+      'Notes.\n\n1 venti Starbucks latte\n\n1 medium banana',
+      LIST,
+      /^Notes\.$/,
+      [],
+    ],
+    [
+      'a non-food line between two food lines, in the same block, is reported and both foods are read',
+      'Notes.\n\n1 venti Starbucks latte\nabout the size of a mug\n1 medium banana',
+      LIST,
+      /^Notes\.$/,
+      ['about the size of a mug'],
+    ],
+    [
+      'a non-food block above a food line that a blank separates is notes, not a stray',
+      'A cup.\nA banana beside it.\n\n1 venti Starbucks latte\n1 medium banana',
+      LIST,
+      /^A cup\.\nA banana beside it\.$/,
+      [],
+    ],
     ['blank lines with spaces still separate blocks', 'Notes.\n   \n1 banana', '1 banana', /^Notes\.$/, []],
     ['Windows line ends read the same', 'Notes.\r\n\r\n1 banana\r\n2 eggs', '1 banana\n2 eggs', /^Notes\.$/, []],
   ])('%s', (_, reading, words, notes, notRead) => {
@@ -514,6 +538,15 @@ describe('readingWords — the list by shape, from the bottom; what is not read 
     expect(budget.not_read).toEqual(wide.slice(6));
     // Never cut mid-word: every line read is a whole line.
     expect(budget.words.split('\n').every((l) => wide.includes(l))).toBe(true);
+  });
+
+  it('a lone list line longer than the budget is reported, never cut mid-word downstream', () => {
+    const long = `1 cup ${'x'.repeat(PHOTO_WORDS_MAX)}`;
+    expect(readingWords(long, 'a banana')).toEqual({ words: 'a banana', notes: '', not_read: [long] });
+    // Near-miss: a long line beside a short one — the long one goes, the short one is read.
+    const two = readingWords(`${long}\n1 medium banana`);
+    expect(two.words).toBe('1 medium banana');
+    expect(two.not_read).toEqual([long]);
   });
 
   it('with no reading the caption is the words; with neither there are none', () => {

@@ -306,16 +306,19 @@ describe('PhotoReadPanel — the line above the card says who read it (the chat 
     expect(sent.items[1]).toMatchObject({ food_id: 'f-banana', said: '1 medium banana' });
   });
 
-  it('near-miss: a question row that arrives WITH a number is still left out of the total', async () => {
+  it('near-miss: a question row WITH a number is out of the total until a chip answers it, then in', async () => {
     api.previewMealFromReading.mockResolvedValue({
       ...PRICED,
-      items: [{ name: 'milk', question: 'Whole milk or skim?', qty: 1, unit: 'glass', est: { kcal: 122 } }, BANANA],
+      items: [{ name: 'milk', question: 'Whole milk or skim?', est: { kcal: 122 } }, BANANA],
       macros: { kcal: 227 },
     });
     const { user } = setup();
     await toCard(user);
     expect(screen.getByText('~105 kcal')).toBeTruthy();
     expect(screen.queryByText('~227 kcal')).toBeNull();
+    await user.click(screen.getByRole('button', { name: '1 glass' }));
+    // Answered: the row's number is what the confirm posts, so the total says so too.
+    expect(screen.getByText('~227 kcal')).toBeTruthy();
   });
 });
 

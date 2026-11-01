@@ -22,6 +22,12 @@ export interface AmountRow {
   said?: string;
   assumption?: string;
   question?: string;
+  /**
+   * Set once the person answers a question row's amount on the card. Until then the row counts
+   * nothing (the quick-log sheet's rule, which has no chips to answer with); after it, what the
+   * row carries is what the confirm posts, so the total says the same.
+   */
+  answered?: boolean;
   source_label?: string;
 }
 
@@ -55,12 +61,14 @@ const SUMMED_KEYS = [
 /**
  * The card's total. A row waiting on the coach's question counts NOTHING, whatever number rides
  * on it — the quick-log sheet's rule (DescribeSheet), now the card's too, so the two surfaces
- * cannot disagree on the same preview (review of #457).
+ * cannot disagree on the same preview (review of #457). Once the person answers it on the card
+ * the row counts: the confirm posts it with its numbers, and a total that left it out would
+ * under-report what was posted.
  */
 function sum(rows: AmountRow[]): MealMacros {
   const total: MealMacros = {};
   for (const r of rows) {
-    if (r.question) continue;
+    if (r.question && !r.answered) continue;
     const scaled = scaleMacros(r.est, r.qty == null ? 0 : r.qty / r.baseQty);
     for (const k of SUMMED_KEYS) {
       const v = scaled?.[k];
@@ -96,8 +104,20 @@ export function useMealAmounts(preview: MealPreview) {
     })),
   );
 
+  /** An amount given on the card; on a question row it is the answer, so the row counts from here. */
   const setQty = (i: number, qty: number | null, unit?: string) =>
-    setRows((prev) => prev.map((r, j) => (j === i ? { ...r, qty, ...(unit !== undefined ? { unit } : {}) } : r)));
+    setRows((prev) =>
+      prev.map((r, j) =>
+        j === i
+          ? {
+              ...r,
+              qty,
+              ...(unit !== undefined ? { unit } : {}),
+              ...(r.question && qty != null ? { answered: true } : {}),
+            }
+          : r,
+      ),
+    );
 
   const setBrand = (i: number, brand: string) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, brand: brand.trim() || undefined } : r)));

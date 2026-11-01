@@ -275,7 +275,9 @@ const LINE_WORDS_MAX = 12;
 export function isFoodLine(line: string): boolean {
   const t = line.trim();
   if (!t || t.split(/\s+/).length > LINE_WORDS_MAX) return false;
-  if (stripAmount(t).measure) return true;
+  const { q, measure } = stripAmount(t);
+  // A measure with a food after it ("1 cup yogurt"); a measure alone ("A cup.") names no food.
+  if (measure && /[a-z]/i.test(q)) return true;
   return NUMBER_WORD.test(t) && !SENTENCE_END.test(t);
 }
 
@@ -292,13 +294,16 @@ export interface ReadingWords {
  * The words of a reading, read by shape from the bottom up.
  *
  * Below the list: lines that do not read as a food (a closing sentence, a sign-off) are not read,
- * and said so. The list: the run of lines up to the blank line above it; a line in that run that
- * does not read as a food (a heading the old prompt wrote, a stray sentence) is not read either,
- * and said so, while its neighbours still are. Above the blank: the eyes' notes. Then the caps,
- * which also say what they left out: lines past MAX_PARTS, then lines from the end until the list
- * fits PHOTO_WORDS_MAX. A reading with no blank line still reads: the prose the person left in is
- * not a food line and is reported, the lines that are foods are read. With no food line at all
- * (the read failed, prose only) the caption is the words, and every line is reported.
+ * and said so. The list: walking up, food lines are read and a blank line does not end the list
+ * (a model that leaves a blank between two foods still has both read). A line that is not a food
+ * ends the list ONLY when its block — the run of non-blank lines around it — holds no food line:
+ * that block is the eyes' notes. A non-food line inside a block that does hold foods (the old
+ * prompt's "Compact Summary" heading over its bullets, prose left in when the blank line was
+ * deleted) is not read, and said so, while its neighbours still are. Then the caps, which also say
+ * what they left out: lines past MAX_PARTS, lines from the end until the list fits
+ * PHOTO_WORDS_MAX, and a lone line longer than that (not a food — never cut mid-word downstream).
+ * With no food line at all (the read failed, prose only) the caption is the words, and every line
+ * is reported.
  */
 export function readingWords(reading: string, caption?: string): ReadingWords {
   const lines = plainReading(reading)
@@ -312,18 +317,37 @@ export function readingWords(reading: string, caption?: string): ReadingWords {
   }
   const list: string[] = [];
   const inList: string[] = [];
-  while (i >= 0 && lines[i]) {
-    (isFoodLine(lines[i]!) ? list : inList).unshift(lines[i]!);
-    i -= 1;
+  while (i >= 0) {
+    const line = lines[i]!;
+    if (!line) {
+      i -= 1;
+      continue;
+    }
+    if (isFoodLine(line)) {
+      list.unshift(line);
+      i -= 1;
+      continue;
+    }
+    // A non-food line: the top of the notes, or a stray inside the list's block?
+    let top = i;
+    while (top > 0 && lines[top - 1]) top -= 1;
+    const joinsFoodBelow = i + 1 < lines.length && !!lines[i + 1];
+    if (!joinsFoodBelow && !lines.slice(top, i + 1).some(isFoodLine)) break;
+    for (let k = i; k >= top; k -= 1) (isFoodLine(lines[k]!) ? list : inList).unshift(lines[k]!);
+    i = top - 1;
   }
   const notes = lines
-    .slice(0, Math.max(i, 0))
+    .slice(0, i + 1)
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   const over = list.splice(MAX_PARTS);
+  // A single line longer than the whole budget is not a food, whatever it starts with: it goes
+  // first, so a short neighbour is not the one the budget drops.
+  const tooLong = list.filter((l) => l.length > PHOTO_WORDS_MAX);
+  for (const l of tooLong) list.splice(list.indexOf(l), 1);
   while (list.length > 1 && list.join('\n').length > PHOTO_WORDS_MAX) over.unshift(list.pop()!);
-  const not_read = [...inList, ...tail.reverse(), ...over];
+  const not_read = [...inList, ...tail.reverse(), ...tooLong, ...over];
   if (list.length) return { words: list.join('\n'), notes, not_read };
   return { words: (caption ?? '').trim(), notes, not_read };
 }

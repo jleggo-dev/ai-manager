@@ -55,10 +55,12 @@ describe('readProgressLine', () => {
    * day until the card is confirmed, so no line may claim it did, and the role is "the coach",
    * never the product (owner, 2026-09-06).
    */
-  it('stage 2 narrates the read, not a write, and names the role', () => {
+  it('stage 2 narrates the read, not a write, in plain words, and names the role', () => {
     for (const s of NUTRITION_STEPS) {
       expect(s.text, s.text).not.toMatch(/adding it to your day|logged|saved/i);
       expect(s.text, s.text).not.toMatch(/\bCadence\b/);
+      // Engine words were the fix (review of #457): "pricing" and "record" stay out of what is said.
+      expect(s.text, s.text).not.toMatch(/\b(pricing|priced|record|records)\b/i);
     }
     expect(NUTRITION_STEPS.some((s) => /the coach/i.test(s.text))).toBe(true);
   });
