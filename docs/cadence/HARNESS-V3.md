@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: SPEC; P1 (#431), P2 (#433), P3 (#435) and the fold fix (#437) shipped; P7 in review.** Written 2026-10-31. R1 ruled the same
+**Status: P1 (#431), P2 (#433), P3 (#435), the fold fix (#437), P7 (#439), P6 (#440), P5 (#442) and P8 shipped; P9 (#441) in review; P1b/P3b (the audit fixes) in flight.** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds, the fold does not
 (see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -429,6 +429,11 @@ disagreements. The fix is already designed and ruled: the `food-check` job and c
   tool's shape. She gets the result, never the pile. A tool that cannot meet the 7,400-char bound
   without truncating is the sign.
 
+**Built (P8).** The rule is in TOOL-HARNESS.md checklist step 4 ("Write what it hands back"), not
+step 5 as written above — step 4 is where the bound and the fault/empty rules already live, and
+the reading rule is the same question (what reaches her) asked earlier. CLAUDE.md's "what a tool
+hands back is not gated yet" line is replaced: P5 gated it.
+
 ### C7. Stale and contradicting facts: find them, ask, never overwrite
 
 **The principle.** Agent teams run background passes that find docs which have drifted from
@@ -469,10 +474,10 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 | P2 | C2: drop app rows at compaction, `pinned` blocks (closes MP33) | P1 | engine + `coach-block-refresh.ts`, `@cadence/shared` pattern | `set-coach-persona.ts` re-run |
 | P3 | C5.4 compaction eval — BUILT + first reading above | P1, P2 | `scripts/eval-compaction*.ts`, `coach-compaction-policy.ts` | — |
 | P4 | ~~R1 threshold~~ folded into P1 by the ruling; P3 checks it | — | — | — |
-| P5 | C4: bound actions, `mutates` field, `toolChangeText` | — | `coach-tools.ts`, action files, audit test | — |
-| P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint | — | `scripts/` | — |
-| P7 | C3: follow-ups store, two tools, pack section — BUILT, in review | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
-| P8 | C6: TOOL-HARNESS rule (doc); food-check continues on its own plan | — | docs | — |
+| P5 | C4: bound actions, `mutates` field, `toolChangeText` — MERGED #442 | — | `coach-tools.ts`, action files, audit test | — |
+| P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint — MERGED #440 | — | `scripts/` | — |
+| P7 | C3: follow-ups store, two tools, pack section — MERGED #439, 0061 applied | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
+| P8 | C6: TOOL-HARNESS rule (doc) — DONE (checklist step 4); food-check continues on its own plan | — | docs | — |
 | P9 | C7: `fact-review` job, hooked to check-in close | P7 | new job + service | `sync-jobs` |
 
 P1, P5, P6 and P7 touch disjoint files and can run in parallel. P2→P3→P4 and P7→P9 are chains.

@@ -143,6 +143,13 @@ file that returns a hand-built string, so paths the walk does not run are held t
   The cut lands on a line boundary so a row is never half-shown and misread as data.
 - **Tell her what to do next**, scoped to this result — not durable routing rules, which belong in
   the description.
+- **Heavy reading happens outside her context** (HARNESS-V3 C6). If answering needs reading more
+  than about 2k tokens of raw material — a pile of candidate rows, a document, a long log — the
+  reading happens in a separate job that returns facts in the tool's own shape, and she gets the
+  result, never the pile. A tool that cannot meet the 7,400-char bound without truncating is the
+  sign that it is handing her the pile. `check_food_sources` passing up to six candidates with their
+  disagreements is the one place this still happens today; the `food-check` job in
+  FOOD-LOGGING-COACH-LED.md is the fix, on that doc's own plan.
 
 ### 5. Make it complete in one call
 
