@@ -157,7 +157,10 @@ export async function maybeCompactSession(
     unchanged = { ...unchanged, estimatedTokens: plan.estimatedTokens };
     if (plan.transcript === undefined) {
       if (plan.skipped) {
-        (plan.loud ? console.warn : console.info)('[session-compaction] skipped:', plan.skipped, { sessionId, threshold });
+        (plan.loud ? console.warn : console.info)('[session-compaction] skipped:', plan.skipped, {
+          sessionId,
+          threshold,
+        });
       }
       return unchanged;
     }
