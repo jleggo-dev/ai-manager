@@ -21,7 +21,8 @@ describe('build_week_ahead', () => {
     const out = await BUILD_WEEK_AHEAD.run('u1', {});
     expect(buildWeekAhead).toHaveBeenCalledWith('u1');
     expect(out).toContain('2026-09-20');
-    expect(out).toContain('check-in stays on its day');
+    expect(out).toMatch(/^changed: next week is written through 2026-09-20/);
+    expect(out).toContain('their check-in — it stays on its day');
     expect(out).toContain('do not put up a build card');
     expect(out).not.toMatch(/Say ONE short line/i);
   });

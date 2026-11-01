@@ -2,6 +2,7 @@ import { getUser } from '../repos/users.ts';
 import { readPlanRun } from './plan-run.ts';
 import { startReplanRun } from './replan-start.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `start_replan` — the coach's door onto the full background week-rebuild (Phase 2,
@@ -41,7 +42,9 @@ export const START_REPLAN: CoachActionTool = defineAction({
   async run(userId, params) {
     const steer = String(params.steer ?? '').trim();
     if (!steer) {
-      return 'No words were given to rebuild around, so nothing was started. Ask what they want the week to become, then pass exactly that.';
+      return toolNothingChangedText('no words were given to rebuild around, so nothing was started.', [
+        'Ask what they want the week to become, then pass exactly that.',
+      ]);
     }
 
     const outcome = await startReplanRun(userId, steer);
@@ -55,15 +58,20 @@ export const START_REPLAN: CoachActionTool = defineAction({
        */
       const run = readPlanRun(await getUser(userId).catch(() => null));
       const ago = run?.status === 'running' ? ` (${startedAgo(run.startedAt)})` : '';
-      return [
-        `A rebuild of their week is ALREADY being drawn up${ago} — no second one was started, and the words from this call were NOT used.`,
-        'Tell them one is already in the works: the card with the reworked week will appear on their plan when it finishes, and a notification will reach them. If they asked for something different from what that rebuild is doing, they can look at the card first and ask again after.',
-      ].join('\n');
+      return toolNothingChangedText(
+        `a rebuild of their week is ALREADY being drawn up${ago} — no second one was started, and the words from this call were NOT used.`,
+        [
+          'Tell them one is already in the works: the card with the reworked week will appear on their plan when it finishes, and a notification will reach them. If they asked for something different from what that rebuild is doing, they can look at the card first and ask again after.',
+        ],
+      );
     }
 
-    return [
-      `Started — their week is being rebuilt around "${steer}" in the background. It takes a few minutes.`,
-      'The rework is underway, a card with the reworked week will appear on their plan, and a notification will reach them when it is ready — they do not have to wait in this chat. Do NOT promise an exact time, do NOT describe the new week (it does not exist yet), and do NOT claim anything changed — nothing does until they apply the card.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [`Started — their week is being rebuilt around "${steer}" in the background. It takes a few minutes.`],
+      unchanged: ['their plan — nothing in it changes until they apply the card this rebuild ends in.'],
+      next: [
+        'The rework is underway, a card with the reworked week will appear on their plan, and a notification will reach them when it is ready — they do not have to wait in this chat. Do NOT promise an exact time, do NOT describe the new week (it does not exist yet), and do NOT claim anything changed — nothing does until they apply the card.',
+      ],
+    });
   },
 });

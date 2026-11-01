@@ -13,6 +13,7 @@ import {
 import { normTitle } from './goal-identity.ts';
 import { matchActivity } from './plan-edit.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 import { qualifierMeta, type RepertoireStatus } from '@cadence/shared';
 
 /**
@@ -186,7 +187,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
         seen.add(key);
         return true;
       });
-    if (!wanted.length) return 'No items were named, so nothing was recorded. Ask what they know or are working on.';
+    if (!wanted.length)
+      return toolNothingChangedText('no items were named, so nothing was recorded.', [
+        'Ask what they know or are working on.',
+      ]);
 
     // Goal link is best-effort: a fuzzy miss records the items unlinked rather than dropping them.
     let goalId: string | null = null;
@@ -197,7 +201,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
       const live = goals.filter((g) => !['completed', 'abandoned'].includes(g.status));
       const goal = matchActivity(live, goalQuery);
       if (goal) goalId = goal.goal_id;
-      else goalNote = ` (no goal matched "${goalQuery}" — recorded without a goal link)`;
+      else goalNote = `a goal link — no goal matched "${goalQuery}", so these were recorded without one.`;
     }
 
     const batch = wanted.slice(0, MAX_ITEMS_PER_CALL);
@@ -216,7 +220,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
       return null;
     });
     if (onFile === null) {
-      return 'I could not read what is already on file just now, so I did not write anything — a fault on our side, not an empty record. Try again in a moment.';
+      return toolNothingChangedText(
+        'I could not read what is already on file just now, so I did not write anything — a fault on our side, not an empty record.',
+        ['Try again in a moment.'],
+      );
     }
 
     // The collections she named, resolved to rows once for the whole batch (migration 0056). A
@@ -228,7 +235,10 @@ export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
       return null;
     });
     if (collections === null) {
-      return 'I could not file those into their collection just now, so I did not write anything — a fault on our side. Try again in a moment.';
+      return toolNothingChangedText(
+        'I could not file those into their collection just now, so I did not write anything — a fault on our side.',
+        ['Try again in a moment.'],
+      );
     }
     const collectionIdFor = (item: { collection: string }): string | null =>
       item.collection ? (collections.get(collectionKey(item.collection)) ?? null) : null;
@@ -295,9 +305,7 @@ export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
     for (const i of now) counts[i.status] += 1;
     const overflow = wanted.length - batch.length;
     const eventFailures = written.filter((w) => w.eventFailed).length;
-    return [
-      `Recorded${goalNote}:`,
-      ...written.map((w) => `- ${w.line}`),
+    const notes = [
       ...(rejected.length ? ['Not recorded:', ...rejected.map((r) => `- ${r}`)] : []),
       ...(overflow > 0
         ? [
@@ -313,7 +321,13 @@ export const UPDATE_REPERTOIRE: CoachActionTool = defineAction({
       // directly re-usable in her next call — a count labelled "keeping up" would have her
       // writing "keeping up" as a standing and getting it rejected.
       `On file now: ${counts.queued} queued, ${counts.working} working, ${counts.known} known, ${counts.retired} retired.`,
-      'Say in one line what you noted down.',
-    ].join('\n');
+    ];
+    // Every item refused or cut is a call that changed nothing, and says so rather than "Recorded:".
+    if (!written.length) return toolNothingChangedText('none of those items were recorded.', notes);
+    return toolChangeText({
+      changed: written.map((w) => `recorded ${w.line}`) as [string, ...string[]],
+      unchanged: goalNote ? [goalNote] : [],
+      next: [...notes, 'Say in one line what you noted down.'],
+    });
   },
 });

@@ -2,6 +2,7 @@ import { listGoals } from '../repos/goals.ts';
 import { setPendingRepertoireReview } from '../repos/users.ts';
 import { matchActivity } from './plan-edit.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `offer_repertoire_review` — she shows them everything in a collection; they mark what they know.
@@ -85,7 +86,9 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = defineAction({
   async run(userId, params) {
     const collection = text(params.collection, MAX_COLLECTION);
     if (!collection) {
-      return 'No collection was named, so nothing was put up. Ask them which book, syllabus, grade or list it is — by its name — and call this again with it.';
+      return toolNothingChangedText('no collection was named, so nothing was put up.', [
+        'Ask them which book, syllabus, grade or list it is — by its name — and call this again with it.',
+      ]);
     }
     const whereYouAre = text(params.where_you_are, MAX_WHERE) || null;
 
@@ -118,11 +121,14 @@ export const OFFER_REPERTOIRE_REVIEW: CoachActionTool = defineAction({
       ? `The pieces before "${whereYouAre}" start marked as ones they keep up, and "${whereYouAre}" as the one they are learning.`
       : 'Nothing is marked yet — they tap the piece they are on and the screen works the rest out.';
 
-    return [
-      `Done — the user now has "${collection}" up on their screen as a list they can tick.${goalNote}`,
-      split,
-      'NOTHING is on their file: no piece is stored until they confirm on that screen, and you have not read the book — the screen has. Do not say anything is recorded, on their list, or done.',
-      'It is up for them to check. Do not list the pieces and do not count them. Wait for them to look.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [`the user now has "${collection}" up on their screen as a list they can tick.${goalNote}`],
+      unchanged: ['NOTHING is on their file: no piece is stored until they confirm on that screen.'],
+      next: [
+        split,
+        'You have not read the book — the screen has. Do not say anything is recorded, on their list, or done.',
+        'It is up for them to check. Do not list the pieces and do not count them. Wait for them to look.',
+      ],
+    });
   },
 });

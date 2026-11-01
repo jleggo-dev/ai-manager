@@ -1,6 +1,7 @@
 import { getActivePlan } from '../repos/plans.ts';
 import { getUser, setPendingWeekReview } from '../repos/users.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 import { localDayIso } from './plan-day.ts';
 import { computeWeekState } from './plan-view.ts';
 
@@ -34,7 +35,9 @@ export const OPEN_WEEK_REVIEW: CoachActionTool = defineAction({
   async run(userId) {
     const plan = await getActivePlan(userId);
     if (!plan) {
-      return 'They have no active plan yet, so there is no week to review — say so plainly and offer to build one (the build card) instead.';
+      return toolNothingChangedText(
+        'they have no active plan yet, so there is no week to review — say so plainly and offer to build one (the build card) instead.',
+      );
     }
 
     // The plan week: the week CLOCK (week-clock.ts, 0058 — `week_started_at`, which an ordinary
@@ -51,9 +54,14 @@ export const OPEN_WEEK_REVIEW: CoachActionTool = defineAction({
 
     await setPendingWeekReview(userId, { from, to, built_at: new Date().toISOString() });
 
-    return [
-      `Done — the user now has a "Week review" card on their screen covering ${from} to ${to}, drawn from what they actually logged.`,
-      'Their week is up for them to look at. Do not describe any of the numbers — you have not seen them, the app has, and reciting a guess would contradict what they are about to read. Wait for them to look and tell you what stood out, then talk it through from there.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [
+        `the user now has a "Week review" card on their screen covering ${from} to ${to}, drawn from what they actually logged.`,
+      ],
+      unchanged: ['their plan and their log — the card only shows them.'],
+      next: [
+        'Their week is up for them to look at. Do not describe any of the numbers — you have not seen them, the app has, and reciting a guess would contradict what they are about to read. Wait for them to look and tell you what stood out, then talk it through from there.',
+      ],
+    });
   },
 });

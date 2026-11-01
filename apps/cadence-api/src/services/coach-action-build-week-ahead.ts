@@ -1,5 +1,6 @@
 import { buildWeekAhead } from './week-build.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `build_week_ahead` — "build next week" before the check-in (owner, 2026-09-09: "the coach can
@@ -26,17 +27,29 @@ export const BUILD_WEEK_AHEAD: CoachActionTool = defineAction({
     const result = await buildWeekAhead(userId);
 
     if (result.status === 'no_plan') {
-      return 'They have no active plan, so there is no rhythm to write next week from — nothing was built. Offer to build them a first week (the build card) instead.';
+      return toolNothingChangedText(
+        'they have no active plan, so there is no rhythm to write next week from — nothing was built.',
+        ['Offer to build them a first week (the build card) instead.'],
+      );
     }
     if (result.status === 'due') {
-      return 'Their week is already over, so this is not a build-ahead — nothing changed. build_next_week rolls the finished week forward unchanged (the skipped check-in), or open_week_review runs the check-in first.';
+      return toolNothingChangedText(
+        'their week is already over, so this is not a build-ahead. build_next_week rolls the finished week forward unchanged (the skipped check-in), or open_week_review runs the check-in first.',
+      );
     }
     if (result.status === 'already_built') {
-      return `Next week was already built, through ${result.builtThrough} — nothing changed. Those days are already open on their trail.`;
+      return toolNothingChangedText(
+        `next week was already built, through ${result.builtThrough}. Those days are already open on their trail.`,
+      );
     }
-    return [
-      `Done — next week is written through ${result.builtThrough}, on the same rhythm, nothing changed. Those days are open on their trail now, and their check-in stays on its day.`,
-      'Say that next week is there to look at. Do not recite what is in it, and do not put up a build card — it is already built.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [
+        `next week is written through ${result.builtThrough}, on the same rhythm. Those days are open on their trail now.`,
+      ],
+      unchanged: ['their commitments, and their check-in — it stays on its day.'],
+      next: [
+        'Say that next week is there to look at. Do not recite what is in it, and do not put up a build card — it is already built.',
+      ],
+    });
   },
 });

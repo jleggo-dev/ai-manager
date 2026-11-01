@@ -1,5 +1,6 @@
 import { extendHorizon, MAX_HORIZON_DAYS } from './plan-horizon.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `extend_horizon` — the answer to "can we plan two weeks ahead?" (owner, 2026-08-31).
@@ -31,23 +32,36 @@ export const EXTEND_HORIZON: CoachActionTool = defineAction({
   async run(userId, params) {
     const days = Math.trunc(Number(params.days));
     if (!Number.isFinite(days) || days < 1) {
-      return 'No usable length was given, so nothing changed. Pass the total days the week should run — {"days": 14} for two weeks.';
+      return toolNothingChangedText('no usable length was given.', [
+        'Pass the total days the week should run — {"days": 14} for two weeks.',
+      ]);
     }
     if (days > MAX_HORIZON_DAYS) {
-      return `${days} days is past the ${MAX_HORIZON_DAYS}-day most this can stretch a single week — nothing changed. That far ahead is a re-plan conversation, not a longer week.`;
+      return toolNothingChangedText(
+        `${days} days is past the ${MAX_HORIZON_DAYS}-day most this can stretch a single week. That far ahead is a re-plan conversation, not a longer week.`,
+      );
     }
 
     const result = await extendHorizon(userId, days);
 
     if (result.status === 'no_plan') {
-      return 'They have no active plan, so there is no week to extend — nothing changed. Offer to build them a first week instead.';
+      return toolNothingChangedText('they have no active plan, so there is no week to extend.', [
+        'Offer to build them a first week instead.',
+      ]);
     }
     if (result.status === 'unchanged') {
-      return `Their week already runs ${result.horizonDays} days (through ${result.endsOn}) — nothing changed. This tool only extends; if they want the week shorter or different, that is a check-in or propose_plan_change conversation.`;
+      return toolNothingChangedText(
+        `their week already runs ${result.horizonDays} days (through ${result.endsOn}). This tool only extends; if they want the week shorter or different, that is a check-in or propose_plan_change conversation.`,
+      );
     }
-    return [
-      `Done — their week now runs ${result.horizonDays} days, through ${result.endsOn}. The added days follow the same rhythm they already committed to, and their weekly check-in moved to the new end date.`,
-      'The week now runs further ahead and when the check-in lands. This applies to the CURRENT week only — the next week they build returns to seven days unless they ask again.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [
+        `their week now runs ${result.horizonDays} days, through ${result.endsOn}, and their weekly check-in moved to the new end date.`,
+      ],
+      unchanged: ['their rhythm — the added days follow the same one they already committed to.'],
+      next: [
+        'This applies to the CURRENT week only — the next week they build returns to seven days unless they ask again.',
+      ],
+    });
   },
 });

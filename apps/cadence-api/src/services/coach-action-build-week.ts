@@ -1,5 +1,6 @@
 import { buildNextWeek } from './week-build.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `build_next_week` — the trust path gets a verb of its own.
@@ -29,14 +30,25 @@ export const BUILD_NEXT_WEEK: CoachActionTool = defineAction({
     const result = await buildNextWeek(userId);
 
     if (result.status === 'no_plan') {
-      return 'They have no active plan, so there is no rhythm to roll forward — nothing was built. Offer to build them a first week (the build card) instead.';
+      return toolNothingChangedText(
+        'they have no active plan, so there is no rhythm to roll forward — nothing was built.',
+        ['Offer to build them a first week (the build card) instead.'],
+      );
     }
     if (result.status === 'not_due') {
-      return 'Their current week is still running, so nothing was rolled — this tool only ends a finished week. Its days are already written on the calendar (a week is always written through the one after it), so nothing needs building or "restarting"; if they just confirmed their check-in, that confirm is what started this week. If something should change, propose_plan_change is the right size; otherwise their week simply continues.';
+      return toolNothingChangedText(
+        'their current week is still running, so nothing was rolled — this tool only ends a finished week. Its days are already written on the calendar (a week is always written through the one after it), so nothing needs building or "restarting"; if they just confirmed their check-in, that confirm is what started this week.',
+        ['If something should change, propose_plan_change is the right size; otherwise their week simply continues.'],
+      );
     }
-    return [
-      `Done — week ${result.version} is being built from the same rhythm, nothing changed. The sessions are being written in the background and the app will notify them when it is ready.`,
-      'Next week is being built. Do not promise how long it will take, do not recite what is in it, and do not put up a build card — the build is already happening.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [
+        `week ${result.version} is being built from the same rhythm. The sessions are being written in the background and the app will notify them when it is ready.`,
+      ],
+      unchanged: ['their commitments — recommitted exactly as they were.'],
+      next: [
+        'Next week is being built. Do not promise how long it will take, do not recite what is in it, and do not put up a build card — the build is already happening.',
+      ],
+    });
   },
 });

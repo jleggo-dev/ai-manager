@@ -19,7 +19,7 @@ beforeEach(() => {
 describe('log_meal — bad calls never reach the service', () => {
   it('refuses blank text without calling logMeal', async () => {
     const out = await LOG_MEAL.run('u1', { text: '   ' });
-    expect(out).toContain('No food was named');
+    expect(out).toMatch(/^nothing changed: no food was named/);
     expect(logMeal).not.toHaveBeenCalled();
   });
 

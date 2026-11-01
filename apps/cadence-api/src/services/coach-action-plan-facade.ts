@@ -1,4 +1,5 @@
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolNothingChangedText } from './tool-response.ts';
 import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { BUILD_WEEK_AHEAD } from './coach-action-build-week-ahead.ts';
 import { PAUSE_WEEK } from './coach-action-pause-week.ts';
@@ -34,9 +35,6 @@ import { START_REPLAN } from './coach-action-start-replan.ts';
  * and tests are untouched; a facade only decides which of them runs. `edit_calendar` stays a
  * tool of its own: one dated session is the calendar layer, not the week's shape.
  */
-
-/** A refusal names what did NOT happen and the choices, and stops (the pause_week wording). */
-const refusedWeek = (reason: string): string => `Nothing was changed to their week: ${reason}`;
 
 const WEEK_ACTIONS = {
   extend: EXTEND_HORIZON,
@@ -75,7 +73,8 @@ export const SHAPE_WEEK: CoachActionTool = defineAction({
   async run(userId, params) {
     const action = params.action;
     if (!isWeekAction(action)) {
-      return refusedWeek(
+      // A refusal names what did NOT happen and the choices, and stops.
+      return toolNothingChangedText(
         `"${String(action ?? '')}" is not one of ${Object.keys(WEEK_ACTIONS).join(', ')}. Their plan is unchanged.`,
       );
     }
@@ -118,7 +117,9 @@ export const REBUILD: CoachActionTool = defineAction({
   async run(userId, params) {
     const scope = params.scope;
     if (!isScope(scope)) {
-      return `Nothing was rebuilt: "${String(scope ?? '')}" is not one of ${Object.keys(REBUILD_SCOPES).join(', ')}. Their plan is unchanged.`;
+      return toolNothingChangedText(
+        `"${String(scope ?? '')}" is not one of ${Object.keys(REBUILD_SCOPES).join(', ')}, so nothing was rebuilt. Their plan is unchanged.`,
+      );
     }
     return REBUILD_SCOPES[scope].run(userId, params);
   },

@@ -72,11 +72,14 @@ const FAULT_MARK = 'this is a fault on our side';
 /**
  * Said when an ACTION broke — it threw, or a write it depends on failed in a way the tool could not
  * check. Nothing is claimed either way about what landed, because a throw partway through can leave
- * part of a change behind. `verb` names the act ("logged", "composed"); `next` is what she should
- * do about it.
+ * part of a change behind. `what` says what could not be done ("That could not be logged"); `next`
+ * is what she should do about it.
  */
-export function toolActionFaultText(verb = 'done', next = 'tell the user plainly and offer to try again.'): string {
-  return `That could not be ${verb} just now — ${FAULT_MARK}; ${next}`;
+export function toolActionFaultText(
+  what = 'That could not be done',
+  next = 'tell the user plainly and offer to try again.',
+): string {
+  return `${what} just now — ${FAULT_MARK}; ${next}`;
 }
 
 /** What an action that changed something hands back. */

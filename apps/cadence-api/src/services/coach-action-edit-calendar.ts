@@ -3,6 +3,7 @@ import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 import { duplicateOccurrence, moveOccurrence, removeOccurrence, type OccurrenceEditResult } from './occurrence-edit.ts';
 import { titlesFor } from './retrieval/calendar-function.ts';
 
@@ -30,7 +31,7 @@ type Action = (typeof ACTIONS)[number];
 const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
 function refused(reason: string): string {
-  return `Nothing was changed on their calendar: ${reason}`;
+  return toolNothingChangedText(reason);
 }
 
 /** The session on `date` the title names — exact first, then a title that starts with or
@@ -50,10 +51,21 @@ function said(action: Action, title: string, date: string, to: string | undefine
   switch (r.status) {
     case 'ok':
       if (action === 'move')
-        return `Done — "${title}" moved from ${date} to ${to}. Their plan screen shows it there now; say so in one line.`;
+        return toolChangeText({
+          changed: [`"${title}" moved from ${date} to ${to}. Their plan screen shows it there now.`],
+          next: ['Say so in one line.'],
+        });
       if (action === 'copy')
-        return `Done — a copy of "${title}" now sits on ${to}, still to do; the ${date} one stays. Say so in one line.`;
-      return `Done — "${title}" is off ${date}. The commitment itself is unchanged and still repeats as planned; say so in one line.`;
+        return toolChangeText({
+          changed: [`a copy of "${title}" now sits on ${to}, still to do.`],
+          unchanged: [`the ${date} one stays.`],
+          next: ['Say so in one line.'],
+        });
+      return toolChangeText({
+        changed: [`"${title}" is off ${date}.`],
+        unchanged: ['the commitment itself — it still repeats as planned.'],
+        next: ['Say so in one line.'],
+      });
     case 'out_of_range':
       return refused(
         `${to} is outside this week (${r.from} to ${r.to}), and a session can only be moved or copied within it. A change past this week is a plan change — propose_plan_change.`,

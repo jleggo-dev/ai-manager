@@ -46,7 +46,7 @@ beforeEach(() => {
 describe('set_home_location', () => {
   it('rejects plainly and writes nothing when no place is given', async () => {
     const out = await SET_HOME_LOCATION.run('u1', { place: '  ' });
-    expect(out).toContain('No place was given');
+    expect(out).toBe('nothing changed: no place was given.');
     expect(geocodeCity).not.toHaveBeenCalled();
     expect(store.setHomeLocation).not.toHaveBeenCalled();
   });
@@ -56,7 +56,7 @@ describe('set_home_location', () => {
 
     const out = await SET_HOME_LOCATION.run('u1', { place: 'Nowhereville' });
 
-    expect(out).toBe('"Nowhereville" could not be found; nothing was changed.');
+    expect(out).toBe('nothing changed: "Nowhereville" could not be found.');
     expect(store.setHomeLocation).not.toHaveBeenCalled();
   });
 

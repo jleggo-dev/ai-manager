@@ -1,7 +1,6 @@
-import { retitleForTarget } from './goal-retitle.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
-import { listGoals, listGoalsByStatus, updateGoal, setGoalStatus, retireGoal, restoreGoal } from '../repos/goals.ts';
+import { listGoalsByStatus } from '../repos/goals.ts';
 import { insertGoalEvent } from '../repos/goal-events.ts';
 import {
   correctOccurrenceLog,
@@ -13,6 +12,8 @@ import { logOccurrence } from './session-log.ts';
 import { getUser, setMacroTargets, setPendingPlan } from '../repos/users.ts';
 import { sanitizeTargets } from './nutrition-day.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
+import { UPDATE_GOAL } from './coach-action-goal.ts';
 import { UPDATE_CONSTRAINT } from './coach-action-constraint.ts';
 import { UPDATE_EQUIPMENT } from './coach-action-equipment.ts';
 import { OPEN_WEEK_REVIEW } from './coach-action-week-review.ts';
@@ -144,7 +145,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       const startOver = params.start_over === true;
       const { edits, unknown } = asEdits(params.edits);
       const unknownNote = unknown.length
-        ? `\nNOT DONE — this build has no "${unknown.join('", "')}" action. The actions are: ${PLAN_EDIT_ACTIONS.join(', ')}. To rename a commitment use rework with a title. Do NOT tell them those parts happened.`
+        ? `NOT DONE — this build has no "${unknown.join('", "')}" action. The actions are: ${PLAN_EDIT_ACTIONS.join(', ')}. To rename a commitment use rework with a title. Do NOT tell them those parts happened.`
         : '';
       if (!edits.length) {
         /**
@@ -156,15 +157,30 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           const hadCard = !!(await getUser(userId))?.pending_plan;
           await setPendingPlan(userId, null);
           return hadCard
-            ? `Cleared — the proposal card is gone and no card is up now; their plan itself is untouched. Tell them it is scrapped, and propose the corrected change whenever they name it.${unknownNote}`
-            : `There was no proposal card up, so there was nothing to clear. Their plan is untouched.${unknownNote}`;
+            ? toolChangeText({
+                changed: ['Cleared — the proposal card is gone and no card is up now.'],
+                unchanged: ['their plan itself is untouched.'],
+                next: [
+                  'Tell them it is scrapped, and propose the corrected change whenever they name it.',
+                  unknownNote,
+                ],
+              })
+            : toolNothingChangedText(
+                'there was no proposal card up, so there was nothing to clear. Their plan is untouched.',
+                [unknownNote],
+              );
         }
-        return `No usable changes were given, so nothing was proposed. Ask what they want changed.${unknownNote}`;
+        return toolNothingChangedText('no usable changes were given, so nothing was proposed.', [
+          'Ask what they want changed.',
+          unknownNote,
+        ]);
       }
 
       const plan = await getActivePlan(userId);
       if (!plan) {
-        return 'They have no active plan yet, so there is nothing to change — offer to build one (the build card) instead.';
+        return toolNothingChangedText('they have no active plan yet, so there is nothing to change.', [
+          'Offer to build one (the build card) instead.',
+        ]);
       }
       /**
        * The plan moved after she read it.
@@ -178,7 +194,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       const declared = Number(params.plan_version);
       const moved = Number.isFinite(declared) && declared !== plan.version;
       if (moved && edits.some((e) => !e.activities?.length)) {
-        return `Their plan is v${plan.version} now, not v${declared}, and at least one of those edits names a commitment by title rather than by handle — against a plan that has moved, that could change the wrong thing. NOTHING was changed. Call get_active_plan again and re-propose using the handles it prints.`;
+        return toolNothingChangedText(
+          `their plan is v${plan.version} now, not v${declared}, and at least one of those edits names a commitment by title rather than by handle — against a plan that has moved, that could change the wrong thing.`,
+          ['Call get_active_plan again and re-propose using the handles it prints.'],
+        );
       }
       const [activities, goals, me] = await Promise.all([
         listActivities(plan.plan_id),
@@ -247,34 +266,29 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
       if (!fresh.length) {
         const standing = priorChanges.length
           ? [`The card already up is unchanged and still shows: ${priorChanges.join('; ')}.`]
-          : startOver && hadCard
-            ? [
-                'The old card WAS cleared (start_over), so no card is up at all now — say so, and re-propose once you have the right change.',
-              ]
-            : [];
-        if (noops.length && !rejected.length) {
-          return [
-            'Nothing was proposed, because the plan already says all of this:',
-            ...noops.map((n) => `- ${n}`),
-            ...standing,
-            ...ignoredLines,
-            'Tell them plainly it is already set that way. Do NOT put up a card and do NOT claim you changed anything.',
-            unknownNote,
-          ]
-            .filter(Boolean)
-            .join('\n');
-        }
-        return [
-          'Nothing could be changed:',
-          ...rejected.map((r) => `- ${r}`),
-          ...noops.map((n) => `- ${n}`),
+          : [];
+        const allNoops = noops.length > 0 && !rejected.length;
+        const facts = allNoops
+          ? ['the plan already says all of this, so nothing was proposed:', ...noops.map((n) => `- ${n}`)]
+          : ['none of those edits could be made:', ...rejected.map((r) => `- ${r}`), ...noops.map((n) => `- ${n}`)];
+        const rest = [
           ...standing,
           ...ignoredLines,
-          'Tell the user plainly what you could not find, and ask them which commitment they meant.',
+          allNoops
+            ? 'Tell them plainly it is already set that way. Do NOT put up a card and do NOT claim you changed anything.'
+            : 'Tell the user plainly what you could not find, and ask them which commitment they meant.',
           unknownNote,
-        ]
-          .filter(Boolean)
-          .join('\n');
+        ];
+        // start_over already dropped the old card: that IS a change, even though nothing new went up.
+        if (startOver && hadCard) {
+          return toolChangeText({
+            changed: [
+              'The old card WAS cleared (start_over), so no card is up at all now — say so, and re-propose once you have the right change.',
+            ],
+            next: [...facts, ...rest],
+          });
+        }
+        return toolNothingChangedText(facts[0]!, [...facts.slice(1), ...rest]);
       }
       if (!next.length) {
         /**
@@ -283,9 +297,13 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
          * The old line told her an empty week is not a rhythm and to suggest keeping one thing —
          * advice, and a dead end. Someone asking for a clear week ("nothing on my plate this
          * week") has a real request the product already serves: `pause_week` shelves the stretch
-         * without deleting anything, and the plan resumes on its own. Keep this text exact.
+         * without deleting anything, and the plan resumes on its own. Keep these words exact (since
+         * HARNESS-V3 P5 they sit behind the `nothing changed:` line, unchanged).
          */
-        return 'That edit would leave the plan with no commitments, so no change was proposed and their plan is unchanged. shape_week with action "pause" clears a stretch of the week without deleting anything.';
+        return toolNothingChangedText(
+          'that edit would leave the plan with no commitments, so no change was proposed and their plan is unchanged.',
+          ['shape_week with action "pause" clears a stretch of the week without deleting anything.'],
+        );
       }
 
       await setPendingPlan(userId, {
@@ -296,12 +314,12 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         created_at: new Date().toISOString(),
       });
 
-      return [
-        priorChanges.length
-          ? 'Added to the card already up — it now shows ALL of this, with one Apply button:'
-          : startOver && hadCard
-            ? 'Redone — the old card is gone; the user now has a card showing ONLY this, with an Apply button:'
-            : 'Proposed — the user now has a card showing exactly this, with an Apply button:',
+      const headline = priorChanges.length
+        ? 'Added to the card already up — it now shows ALL of this, with one Apply button:'
+        : startOver && hadCard
+          ? 'Redone — the old card is gone; the user now has a card showing ONLY this, with an Apply button:'
+          : 'Proposed — the user now has a card showing exactly this, with an Apply button:';
+      const lines = [
         ...changes.map((c) => `- ${c}`),
         // Say it moved, so she describes the week that exists rather than the one she read.
         ...(moved
@@ -322,127 +340,12 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         ...planEditEvidence(next, me?.baseline?.constraints),
         'What you have put up is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
         unknownNote,
-      ]
-        .filter(Boolean)
-        .join('\n');
+      ];
+      return toolChangeText({ changed: [headline], next: lines });
     },
   }),
 
-  update_goal: defineAction({
-    name: 'update_goal',
-    mutates: 'immediate',
-    description:
-      'Change one of the user\'s goals: lower or raise the number they are aiming at, move the date, mark it finished, stop working on it, set it aside, or bring one back. Use when they have plainly decided one of those in words — never on your own read that a goal looks too hard, and never to tidy up. {gate}: a goal is one fact you can say out loud, so your sentence confirming it is the confirmation, and every change is written to the goal\'s own history. Name the goal exactly as get_objectives lists it — a set-aside goal will not be listed there; use the name they just said. Pass {"goal": "Read 100 books", "action": "retarget", "target": 50, "unit": "books"}, {"goal": "Run a 10k", "action": "redate", "date": "2026-11-01"}, or {"goal": "Obstacle race", "action": "retire"}.',
-    parameters: {
-      properties: {
-        goal: { type: 'string', description: 'Which goal, by its title exactly as get_objectives lists it.' },
-        action: {
-          type: 'string',
-          enum: ['retarget', 'redate', 'complete', 'stop', 'retire', 'restore'],
-          description:
-            'retarget = change the number they are aiming at; redate = change the date they are aiming for; complete = they finished it; stop = they are no longer working on it; retire = set it aside so it stops shaping the plan; restore = bring a set-aside goal back into the plan.',
-        },
-        target: { type: 'number', description: 'The new number. Required for retarget.' },
-        unit: {
-          type: 'string',
-          description: 'The unit (books, km, kg). Optional for retarget; omit to keep the current one.',
-        },
-        date: { type: 'string', description: 'The new date to aim for, as YYYY-MM-DD. Required for redate.' },
-      },
-      required: ['goal', 'action'],
-    },
-    async run(userId, params) {
-      const query = String(params.goal ?? '').trim();
-      const action = String(params.action ?? '');
-      if (!query) return 'No goal was named, so nothing changed. Ask which goal they mean.';
-
-      const goals = await listGoals(userId);
-      const live = goals.filter((g) => !['completed', 'abandoned'].includes(g.status));
-      const goal = matchActivity(live, query);
-      if (!goal) {
-        const names = live.map((g) => g.title).join(', ') || 'none';
-        return `Nothing clearly matches "${query}", so nothing changed. Their goals are: ${names}. Ask which one they mean.`;
-      }
-
-      if (action === 'complete' || action === 'stop') {
-        const status = action === 'complete' ? 'completed' : 'abandoned';
-        await setGoalStatus(userId, goal.goal_id, status);
-        await insertGoalEvent(userId, {
-          goal_id: goal.goal_id,
-          kind: action === 'complete' ? 'completion' : 'note',
-          label: action === 'complete' ? `Finished: ${goal.title}` : `Stopped working on: ${goal.title}`,
-        }).catch(() => null);
-        return action === 'complete'
-          ? `Marked "${goal.title}" finished.`
-          : `Stopped "${goal.title}". Say it plainly and without any suggestion they failed. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`;
-      }
-
-      if (action === 'retire' || action === 'restore') {
-        if (action === 'retire' && goal.status === 'parked') {
-          return `"${goal.title}" is already set aside. Say so plainly — nothing changed.`;
-        }
-        if (action === 'restore' && goal.status !== 'parked') {
-          return `"${goal.title}" is not set aside, so there is nothing to bring back.`;
-        }
-        const updated =
-          action === 'retire' ? await retireGoal(userId, goal.goal_id) : await restoreGoal(userId, goal.goal_id);
-        if (!updated) return `Could not ${action} "${goal.title}" — try again.`;
-        await insertGoalEvent(userId, {
-          goal_id: goal.goal_id,
-          kind: 'note',
-          label: action === 'retire' ? `Set aside: ${goal.title}` : `Brought back: ${goal.title}`,
-        }).catch(() => null);
-        return action === 'retire'
-          ? `"${goal.title}" is set aside. Say it plainly and without any suggestion they failed — it will not shape next week's plan, but everything it already built stays in Progress. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`
-          : `"${goal.title}" is back. It will shape the plan again from the next build. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`;
-      }
-
-      if (action === 'retarget') {
-        const target = Number(params.target);
-        if (!Number.isFinite(target))
-          return 'No new target number was given, so nothing changed. Ask what it should be.';
-        const unit = typeof params.unit === 'string' && params.unit.trim() ? params.unit.trim() : goal.measure?.unit;
-        const was = goal.measure?.target;
-        /**
-         * Carry the number in the TITLE with it.
-         *
-         * Retarget wrote `measure.target` and left the title alone, so "Read 100 books this year"
-         * kept saying 100 while the goal aimed at 50 — and the title is what every list, card and
-         * prompt shows. The outcome eval's judge caught it on 2026-08-22 while the deterministic
-         * assert passed, because the assert only checked the number it had just written.
-         *
-         * Rewritten ONLY where the old target appears as a standalone number, so "Read 100 books
-         * this year" becomes "Read 50 books this year" and a title carrying no number, or a
-         * different one, is left exactly as the user wrote it. Their words are theirs; the stale
-         * digit is ours.
-         */
-        const retitled = retitleForTarget(goal.title, was, target);
-        await updateGoal(userId, goal.goal_id, {
-          measure: { ...goal.measure, target, ...(unit ? { unit } : {}) },
-          ...(retitled ? { title: retitled } : {}),
-        });
-        await insertGoalEvent(userId, {
-          goal_id: goal.goal_id,
-          kind: 'note',
-          label: `Target changed: ${String(was ?? '?')} → ${target}${unit ? ` ${unit}` : ''}`,
-        }).catch(() => null);
-        return `"${retitled ?? goal.title}" now aims at ${target}${unit ? ` ${unit}` : ''} (was ${String(was ?? 'unset')}). Say what changed. Their current week was built before this change and still holds the sessions it produced. rebuild (scope "week") rebuilds it.`;
-      }
-
-      const date = String(params.date ?? '').trim();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return 'No usable date was given, so nothing changed. Ask what date they are aiming for.';
-      }
-      const wasDate = goal.timeframe?.end;
-      await updateGoal(userId, goal.goal_id, { timeframe: { ...goal.timeframe, end: date } });
-      await insertGoalEvent(userId, {
-        goal_id: goal.goal_id,
-        kind: 'note',
-        label: `Date moved: ${wasDate ?? 'unset'} → ${date}`,
-      }).catch(() => null);
-      return `"${goal.title}" now aims at ${date} (was ${wasDate ?? 'no date'}). Say what changed. Their plan still holds the sessions built for the old date. get_active_plan shows them; rebuild (scope "week") rebuilds the week.`;
-    },
-  }),
+  update_goal: UPDATE_GOAL,
 
   correct_log: defineAction({
     name: 'correct_log',
@@ -470,7 +373,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
     },
     async run(userId, params) {
       const query = String(params.activity ?? '').trim();
-      if (!query) return 'No session was named, so nothing changed. Ask which one they mean.';
+      if (!query) return toolNothingChangedText('no session was named.', ['Ask which one they mean.']);
       const date = String(params.date ?? '').trim();
 
       const rows = await listLoggedForCorrection(userId);
@@ -481,7 +384,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           .slice(0, 5)
           .map((r) => `${r.date} ${r.title}`)
           .join('; ');
-        return `No recorded session clearly matches "${query}"${date ? ` on ${date}` : ''}, so nothing changed. Recent ones: ${recent || 'none'}. Ask which they mean.`;
+        return toolNothingChangedText(
+          `no recorded session clearly matches "${query}"${date ? ` on ${date}` : ''}. Recent ones: ${recent || 'none'}.`,
+          ['Ask which they mean.'],
+        );
       }
 
       if (params.not_done === true) {
@@ -493,10 +399,19 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           !!found.recurrence && expandRecurrence(found.recurrence, found.date, found.date).length > 0;
         if (wasScheduled) {
           await correctOccurrenceLog(userId, found.occurrence_id, { status: 'skipped' });
-          return `Corrected: ${found.title} on ${found.date} is no longer counted as done — it was on the plan that day, so it now reads as not done.`;
+          return toolChangeText({
+            changed: [
+              `Corrected: ${found.title} on ${found.date} is no longer counted as done — it was on the plan that day, so it now reads as not done.`,
+            ],
+          });
         }
         await deleteOccurrence(userId, found.occurrence_id);
-        return `Removed: ${found.title} on ${found.date} is gone entirely — nothing was scheduled that day, so that entry only existed because it was logged. Confirm it without apologising at length.`;
+        return toolChangeText({
+          changed: [
+            `Removed: ${found.title} on ${found.date} is gone entirely — nothing was scheduled that day, so that entry only existed because it was logged.`,
+          ],
+          next: ['Confirm it without apologising at length.'],
+        });
       }
 
       const raw = (params.metrics ?? {}) as Record<string, unknown>;
@@ -506,7 +421,9 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         if (Number.isFinite(n) && Object.keys(named).length < 12) named[k.slice(0, 40)] = n;
       }
       if (!Object.keys(named).length) {
-        return 'No corrected numbers were given and it was not marked as missed, so nothing changed. Ask what the right numbers were.';
+        return toolNothingChangedText('no corrected numbers were given and it was not marked as missed.', [
+          'Ask what the right numbers were.',
+        ]);
       }
       /**
        * A correction NAMES fields, and the fields it does not name survive — constraint-merge
@@ -525,7 +442,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         value,
         ...(found.log ? { log: { ...found.log, summary } } : {}),
       });
-      return `Corrected: ${found.title} on ${found.date} now reads ${summary}. Confirm it back.`;
+      return toolChangeText({
+        changed: [`Corrected: ${found.title} on ${found.date} now reads ${summary}.`],
+        next: ['Confirm it back.'],
+      });
     },
   }),
 
@@ -598,8 +518,12 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
     async run(userId, params) {
       const query = String(params.session ?? '').trim();
       const report = String(params.report ?? '').trim();
-      if (!query) return 'No session was named, so nothing was written down. Ask which one they mean.';
-      if (!report) return 'There was nothing to write down. Ask how it actually went, then log that.';
+      if (!query)
+        return toolNothingChangedText('no session was named, so nothing was written down.', [
+          'Ask which one they mean.',
+        ]);
+      if (!report)
+        return toolNothingChangedText('there was nothing to write down.', ['Ask how it actually went, then log that.']);
       const date = String(params.date ?? '').trim();
 
       const rows = await listRecentForLogging(userId);
@@ -610,15 +534,21 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
           .slice(0, 5)
           .map((r) => `${r.date} ${r.title}`)
           .join('; ');
-        return `No session clearly matches "${query}"${date ? ` on ${date}` : ''}, so nothing was written down. Recent ones: ${recent || 'none'}. Ask which they mean.`;
+        return toolNothingChangedText(
+          `no session clearly matches "${query}"${date ? ` on ${date}` : ''}, so nothing was written down. Recent ones: ${recent || 'none'}.`,
+          ['Ask which they mean.'],
+        );
       }
 
       const logged = await logOccurrence(userId, found.occurrence_id, report);
-      if (!logged) return 'That could not be written down just now — tell them plainly and offer to try again.';
-      return [
-        `Logged against ${found.title} (${found.date})${found.logged ? ', replacing what was there' : ' and marked done'}: ${logged.summary}`,
-        'It is on their file.',
-      ].join('\n');
+      if (!logged)
+        return toolActionFaultText('That could not be written down', 'tell them plainly and offer to try again.');
+      return toolChangeText({
+        changed: [
+          `Logged against ${found.title} (${found.date})${found.logged ? ', replacing what was there' : ' and marked done'}: ${logged.summary}`,
+        ],
+        next: ['It is on their file.'],
+      });
     },
   }),
 
@@ -644,7 +574,9 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
     async run(userId, params) {
       const why = String(params.why ?? '').trim();
       if (!why)
-        return 'No reason was given. A target nobody can explain later is a number they will not keep — say why, then set it.';
+        return toolNothingChangedText(
+          'no reason was given. A target nobody can explain later is a number they will not keep — say why, then set it.',
+        );
 
       const user = await getUser(userId);
       const current = user?.macro_targets ?? {};
@@ -657,7 +589,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         fat_g: params.fat_g ?? current.fat_g,
       });
       if (!clean?.kcal) {
-        return 'Those numbers did not survive the safety check (calories must be a realistic daily figure). Nothing changed — work out something you would defend, then set it.';
+        return toolNothingChangedText(
+          'those numbers did not survive the safety check (calories must be a realistic daily figure).',
+          ['Work out something you would defend, then set it.'],
+        );
       }
 
       const wasKcal = current.kcal;
@@ -671,10 +606,14 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
         .filter((k) => typeof (clean as Record<string, unknown>)[k] === 'number')
         .map((k) => `${k.replace('_g', '')} ${String((clean as Record<string, unknown>)[k])}`)
         .join(', ');
-      return [
-        `Targets are now ${said}${wasKcal ? ` (was ${String(wasKcal)} kcal)` : ''}, and today's numbers already count against them.`,
-        'Tell them what changed and why — this is the adjustment they are paying you for, so it should sound like a decision you made, not a setting that moved.',
-      ].join('\n');
+      return toolChangeText({
+        changed: [
+          `Targets are now ${said}${wasKcal ? ` (was ${String(wasKcal)} kcal)` : ''}, and today's numbers already count against them.`,
+        ],
+        next: [
+          'Tell them what changed and why — this is the adjustment they are paying you for, so it should sound like a decision you made, not a setting that moved.',
+        ],
+      });
     },
   }),
 };

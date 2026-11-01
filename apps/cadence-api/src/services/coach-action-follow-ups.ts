@@ -1,5 +1,6 @@
 import { closeFollowUp, noteFollowUp, FOLLOW_UP_ID_PREFIX } from '../repos/follow-ups.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `note_follow_up` and `close_follow_up` — the write half of follow-ups (HARNESS-V3 C3).
@@ -38,15 +39,19 @@ export const NOTE_FOLLOW_UP: CoachActionTool = defineAction({
   },
   async run(userId, params) {
     const text = String(params.text ?? '').trim();
-    if (!text) return 'No text was given, so nothing was noted.';
+    if (!text) return toolNothingChangedText('no text was given, so nothing was noted.');
     if (text.length > MAX_TEXT)
-      return `That is ${text.length} characters; keep it under ${MAX_TEXT}. Nothing was noted.`;
+      return toolNothingChangedText(`that is ${text.length} characters; keep it under ${MAX_TEXT}. Nothing was noted.`);
     const dueRaw = params.due_on == null ? '' : String(params.due_on).trim();
-    if (dueRaw && !ISO_DATE.test(dueRaw)) return `"due_on" must be YYYY-MM-DD (got "${dueRaw}"). Nothing was noted.`;
+    if (dueRaw && !ISO_DATE.test(dueRaw))
+      return toolNothingChangedText(`"due_on" must be YYYY-MM-DD (got "${dueRaw}"). Nothing was noted.`);
 
     const row = await noteFollowUp(userId, { text, due_on: dueRaw || null });
     const id = row.follow_up_id.slice(0, FOLLOW_UP_ID_PREFIX);
-    return `Noted [${id}]: ${row.text}${row.due_on ? ` (due ${row.due_on})` : ''}. It stays in your context every turn until you close it with close_follow_up.`;
+    return toolChangeText({
+      changed: [`Noted [${id}]: ${row.text}${row.due_on ? ` (due ${row.due_on})` : ''}.`],
+      next: ['It stays in your context every turn until you close it with close_follow_up.'],
+    });
   },
 });
 
@@ -70,12 +75,19 @@ export const CLOSE_FOLLOW_UP: CoachActionTool = defineAction({
   },
   async run(userId, params) {
     const id = String(params.id ?? '').trim();
-    if (!id) return 'No id was given, so nothing was closed.';
+    if (!id) return toolNothingChangedText('no id was given, so nothing was closed.');
     const outcome = params.outcome == null ? null : String(params.outcome).trim() || null;
 
     const row = await closeFollowUp(userId, id, 'coach', outcome);
     if (!row)
-      return `No open follow-up matches "${id}" — check the bracketed code in your context. Nothing was closed.`;
-    return `Closed [${row.follow_up_id.slice(0, FOLLOW_UP_ID_PREFIX)}]: ${row.text}${outcome ? ` — ${outcome}` : ''}. It will not appear in your context again.`;
+      return toolNothingChangedText(
+        `no open follow-up matches "${id}" — check the bracketed code in your context. Nothing was closed.`,
+      );
+    return toolChangeText({
+      changed: [
+        `Closed [${row.follow_up_id.slice(0, FOLLOW_UP_ID_PREFIX)}]: ${row.text}${outcome ? ` — ${outcome}` : ''}.`,
+      ],
+      next: ['It will not appear in your context again.'],
+    });
   },
 });

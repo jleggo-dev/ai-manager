@@ -181,7 +181,9 @@ describe('an action says what changed, what did not, or that it broke', () => {
 
   it('an action fault is a fault — and shares the read fault its marker', () => {
     expect(toolOutputShape(toolActionFaultText())).toBe('fault');
-    expect(toolOutputShape(toolActionFaultText('logged', 'point them at the Food screen.'))).toBe('fault');
+    expect(toolOutputShape(toolActionFaultText('That could not be logged', 'point them at the Food screen.'))).toBe(
+      'fault',
+    );
     expect(toolOutputShape(toolFaultText('get_workout_history'))).toBe('fault');
     expect(toolActionFaultText()).not.toMatch(/nothing on file|nothing changed/i);
   });

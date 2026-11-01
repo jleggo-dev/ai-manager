@@ -112,7 +112,7 @@ describe('update_equipment', () => {
   it('a miss reports what IS on file instead of pretending', async () => {
     seed('piano');
     const out = await UPDATE_EQUIPMENT.run('u1', { item: 'treadmill', action: 'remove' });
-    expect(out).toContain('Nothing on file matches');
+    expect(out).toContain('nothing changed: nothing on file matches');
     expect(out).toContain('piano');
   });
 

@@ -54,7 +54,7 @@ describe('shape_week — the week’s edges', () => {
     ['an old tool name as the action', { action: 'extend_horizon', days: 14 }],
   ])('%s runs nothing and names the three choices', async (_label, params) => {
     const out = await SHAPE_WEEK.run('u1', params);
-    expect(out).toMatch(/^Nothing was changed to their week:/);
+    expect(out).toMatch(/^nothing changed: /);
     expect(out).toContain('extend, build_ahead, pause');
     for (const r of Object.values(runs)) expect(r).not.toHaveBeenCalled();
   });
@@ -76,7 +76,7 @@ describe('rebuild — one session, or the whole week', () => {
     ['an old tool name as the scope', { scope: 'start_replan', steer: 'more recovery' }],
   ])('%s runs nothing and names the two choices', async (_label, params) => {
     const out = await REBUILD.run('u1', params);
-    expect(out).toMatch(/^Nothing was rebuilt:/);
+    expect(out).toMatch(/^nothing changed: .*so nothing was rebuilt/);
     expect(out).toContain('session, week');
     for (const r of Object.values(runs)) expect(r).not.toHaveBeenCalled();
   });

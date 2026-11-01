@@ -13,6 +13,7 @@ import {
 } from '@cadence/shared';
 import { setPendingQuestionnaire } from '../repos/users.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `send_questionnaire` — a short set of questions on their screen, answers back as their words.
@@ -183,7 +184,7 @@ export const SEND_QUESTIONNAIRE: CoachActionTool = defineAction({
     if ('fault' in read) {
       // The fault and nothing else. What to do about it — call again with a fixed set, or drop the
       // card and keep talking — is hers (owner red line 2026-09-03: facts, not picks).
-      return `Nothing is on their screen: ${read.fault}.`;
+      return toolNothingChangedText(`${read.fault}. Nothing is on their screen.`);
     }
 
     try {
@@ -191,11 +192,18 @@ export const SEND_QUESTIONNAIRE: CoachActionTool = defineAction({
     } catch (e) {
       console.error('[send_questionnaire] write failed:', e);
       // An honesty guard, which the red line allows, and no instruction about what to do instead.
-      return 'The questionnaire did NOT go up — saving it failed. Nothing is on their screen; do not say there is.';
+      return toolNothingChangedText(
+        'the questionnaire did NOT go up — saving it failed. Nothing is on their screen; do not say there is.',
+      );
     }
 
     // Facts only (owner red line 2026-09-03): what happened, what is now true, and the honesty
     // guard. Nothing about what to say next, how long to speak, or what to offer.
-    return `A questionnaire with ${read.questions.length} questions is on their screen. Their answers arrive as their own message when they send it; nothing is recorded until then.`;
+    return toolChangeText({
+      changed: [`A questionnaire with ${read.questions.length} questions is on their screen.`],
+      unchanged: [
+        'their file — their answers arrive as their own message when they send it; nothing is recorded until then.',
+      ],
+    });
   },
 });

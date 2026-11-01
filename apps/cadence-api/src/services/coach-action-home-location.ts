@@ -1,6 +1,7 @@
 import { getUser, setHomeLocation } from '../repos/users.ts';
 import { geocodeCity } from './weather/weather.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `set_home_location` — the coach's own write path for a fact that, until now, only Settings and
@@ -43,10 +44,10 @@ export const SET_HOME_LOCATION: CoachActionTool = defineAction({
   },
   async run(userId, params) {
     const place = String(params.place ?? '').trim();
-    if (!place) return 'No place was given, so nothing changed.';
+    if (!place) return toolNothingChangedText('no place was given.');
 
     const geo = await geocodeCity(place);
-    if (!geo) return `"${place}" could not be found; nothing was changed.`;
+    if (!geo) return toolNothingChangedText(`"${place}" could not be found.`);
 
     const user = await getUser(userId);
     // A place named in conversation is a typed city, as far as the clients are concerned: it may
@@ -63,9 +64,13 @@ export const SET_HOME_LOCATION: CoachActionTool = defineAction({
       after?.home_location?.lon === geo.lon &&
       after?.home_location?.label === geo.label;
     if (!landed) {
-      return `Home location did NOT get set — the write did not take. Do not say it is done.`;
+      return toolNothingChangedText('home location did NOT get set — the write did not take. Do not say it is done.');
     }
 
-    return `Home location set to ${geo.label} (${geo.lat}, ${geo.lon}). Weather and daylight for outdoor sessions are read from here from now on.`;
+    return toolChangeText({
+      changed: [
+        `Home location set to ${geo.label} (${geo.lat}, ${geo.lon}). Weather and daylight for outdoor sessions are read from here from now on.`,
+      ],
+    });
   },
 });

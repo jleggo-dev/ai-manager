@@ -1,5 +1,6 @@
 import { composeProgressLayout } from './progress-layout-compose.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolActionFaultText, toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `propose_progress_layout` — the progress talk's one write (docs/cadence/PROGRESS-ENGINE.md "The
@@ -38,25 +39,31 @@ export const PROPOSE_PROGRESS_LAYOUT: CoachActionTool = defineAction({
   async run(userId, params) {
     const whatTheyWant = String(params.what_they_want ?? '').trim();
     if (!whatTheyWant) {
-      return 'No description of what they want was given, so nothing was proposed. Ask them what progress looks like to them, in their own words, then call this again.';
+      return toolNothingChangedText('no description of what they want was given, so nothing was proposed.', [
+        'Ask them what progress looks like to them, in their own words, then call this again.',
+      ]);
     }
 
     const result = await composeProgressLayout(userId, whatTheyWant).catch(() => null);
     if (!result) {
-      return 'That could not be composed just now — tell them plainly and offer to try again in a moment.';
+      return toolActionFaultText('That could not be composed', 'tell them plainly and offer to try again in a moment.');
     }
 
     if (!result.ok) {
-      return [
-        'NOT proposed — the composition did not pass its own checks:',
+      return toolNothingChangedText('NOT proposed — the composition did not pass its own checks:', [
         ...result.reasons.map((r) => `- ${r}`),
         'Tell them plainly, in your own words, that it did not come together this time (never read the list above aloud) and offer to try again — maybe with a bit more of what they meant.',
-      ].join('\n');
+      ]);
     }
 
-    return [
-      'Done — the user now has a "Progress page" proposal card on their screen, built from what they just told you.',
-      'It is up for them to look at. Do not describe any of the sections — you have not seen the card, they are about to. Wait for them to look and tell you what stood out, then talk it through from there. Their current page has not changed and will not until they accept it.',
-    ].join('\n');
+    return toolChangeText({
+      changed: [
+        'the user now has a "Progress page" proposal card on their screen, built from what they just told you.',
+      ],
+      unchanged: ['their current Progress page — it stays as it is until they accept the card.'],
+      next: [
+        'It is up for them to look at. Do not describe any of the sections — you have not seen the card, they are about to. Wait for them to look and tell you what stood out, then talk it through from there.',
+      ],
+    });
   },
 });

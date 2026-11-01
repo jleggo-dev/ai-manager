@@ -2,6 +2,7 @@ import { getActiveEpisode } from '../repos/episodes.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { enterEpisode } from './episode.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
  * `pause_week` — clear a stretch of the plan instead of refusing to.
@@ -48,7 +49,7 @@ function daysInclusive(a: string, b: string): number {
  * hers (owner red line, "facts, not picks").
  */
 function refused(reason: string): string {
-  return `Nothing was paused: ${reason} Their plan is unchanged.`;
+  return toolNothingChangedText(`${reason} Nothing was paused, and their plan is unchanged.`);
 }
 
 /** What is already running, in the words that distinguish the two things it can be. */
@@ -132,6 +133,11 @@ export const PAUSE_WEEK: CoachActionTool = defineAction({
     // The dates come off the STORED episode, not off the arguments: enterEpisode reads a past
     // start as today, and she should describe the stretch that exists.
     const { start: from, end: to } = entered.episode;
-    return `Paused from ${from} to ${to}: their scheduled sessions in that window are paused, nothing is deleted, and the rhythm resumes on ${addDaysIso(to, 1)}. Their plan is otherwise unchanged.`;
+    return toolChangeText({
+      changed: [
+        `Paused from ${from} to ${to}: their scheduled sessions in that window are paused, and the rhythm resumes on ${addDaysIso(to, 1)}.`,
+      ],
+      unchanged: ['nothing is deleted, and their plan is otherwise unchanged.'],
+    });
   },
 });
