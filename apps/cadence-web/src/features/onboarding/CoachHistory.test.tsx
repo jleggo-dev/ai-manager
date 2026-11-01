@@ -32,7 +32,7 @@ vi.mock('../../lib/api.ts', () => ({
   // pre-existing-gap reasoning as getPendingWeekReview just below.
   getPendingChangeDetail: vi.fn().mockResolvedValue({ plan_version: null, items: [] }),
   dismissPendingChange: vi.fn().mockResolvedValue(true),
-  lockPlan: vi.fn().mockResolvedValue({ status: 200, body: {} }),
+  lockPlan: vi.fn().mockResolvedValue({ ok: true }),
   // The week-review card mounts on every finished last turn (same as getPendingChange above) —
   // it must exist even here, where nobody exercises it, or OnboardingChat's real render throws
   // reaching into a mock that never defined it. Pre-existing gap from the check-in rebuild's

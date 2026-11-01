@@ -190,19 +190,12 @@ export function useBuildPlan({
     (async () => {
       try {
         setPhase('building');
-        const { status, body } = await lockPlan();
-        // 202 is the normal answer now: the run is CLAIMED, not finished. A refusal still comes
-        // back synchronously, because the guardrail gate runs before any model call.
-        if (status === 409 || (body as { status?: string }).status === 'needs_focus') {
-          setError("That's a lot to carry at once — want to pick the few that matter most right now?");
-          setPhase('failed');
-          return;
-        }
-        if (status >= 400) {
+        const claim = await lockPlan();
+        // The ordinary answer is "claimed": the build runs in the background and the poll below
+        // reports how it ends, refusals included (the goal-count gate runs inside the run).
+        if (!claim.ok) {
           if (await recoverIfAlreadyCommitted(onDone)) return;
-          setError(
-            (body.violations as string[] | undefined)?.join('; ') || "I couldn't set it yet — give me another go?",
-          );
+          setError(claim.message || "I couldn't set it yet — give me another go?");
           setPhase('failed');
           return;
         }
