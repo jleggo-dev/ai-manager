@@ -379,8 +379,9 @@ schema-validated. An assertion that the job holds no write path to fact tables.
   fails is not retried; the next check-in runs.
 - **Cadence (R4, unruled):** weekly at the check-in close, as proposed. It lives in one place,
   `maybeRunFactReview` in `fact-review-trigger.ts`; `FACT_REVIEW_MIN_DAYS_BETWEEN = 28` makes it
-  monthly. It runs after the confirm's response is sent, awaited like ambient capture, and never
-  throws.
+  monthly. The confirm route hands it to `runInBackground` after the response is sent: its
+  `waitUntil` keeps the invocation alive until the review settles, where a bare `await` after the
+  response is frozen by Vercel and never runs (`services/background.ts`). It never throws.
 - **Profile:** capture-extract's pinned gpt-class profile (live on gpt-5.1 / gpt-4.1-mini since
   2026-10-28), so the strict json_schema is native. The cost: repointing that profile for capture's
   sake moves this job too.
