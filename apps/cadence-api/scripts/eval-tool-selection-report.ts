@@ -67,8 +67,19 @@ export function line(o: Outcome): void {
 
 const rate = (n: number, d: number): string => (d === 0 ? '—' : `${((n / d) * 100).toFixed(0)}% (${n}/${d})`);
 
+/** The run's selection numbers. Rates are fractions (0–1); `--floor` compares `f1 * 100`. */
+export interface SelectionScore {
+  tp: number;
+  fp: number;
+  fn: number;
+  byBroker: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}
+
 /** Micro-averaged over SELECTIONS, not cases — a turn that needed two tools counts twice. */
-function selection(outcomes: Outcome[], serial: boolean): void {
+export function selectionScore(outcomes: Outcome[]): SelectionScore {
   const byCall = outcomes.reduce((n, o) => n + o.c.expect.filter((t) => o.called.includes(t)).length, 0);
   const byBroker = outcomes.reduce((n, o) => n + o.viaPrefetch.length, 0);
   const tp = byCall + byBroker;
@@ -77,6 +88,12 @@ function selection(outcomes: Outcome[], serial: boolean): void {
   const precision = tp + fp === 0 ? 1 : tp / (tp + fp);
   const recall = tp + fn === 0 ? 1 : tp / (tp + fn);
   const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
+  return { tp, fp, fn, byBroker, precision, recall, f1 };
+}
+
+function selection(outcomes: Outcome[], serial: boolean): SelectionScore {
+  const score = selectionScore(outcomes);
+  const { tp, fp, fn, byBroker, precision, recall, f1 } = score;
 
   console.log('\n══ SELECTION ══');
   console.log(`  precision  ${(precision * 100).toFixed(1)}%   (${tp} right, ${fp} unasked-for)`);
@@ -90,6 +107,7 @@ function selection(outcomes: Outcome[], serial: boolean): void {
   if (!serial) {
     console.log('\n  ⚠ ran at concurrency >1, so no prefetch attribution — every read miss here is unexplained.');
   }
+  return score;
 }
 
 function failureModes(outcomes: Outcome[]): void {
@@ -143,10 +161,11 @@ function cost(outcomes: Outcome[], wallMs: number, concurrency: number): void {
   );
 }
 
-export function summarize(outcomes: Outcome[], wallMs: number, concurrency: number): void {
-  selection(outcomes, concurrency === 1);
+export function summarize(outcomes: Outcome[], wallMs: number, concurrency: number): SelectionScore {
+  const score = selection(outcomes, concurrency === 1);
   failureModes(outcomes);
   cost(outcomes, wallMs, concurrency);
+  return score;
 }
 
 /**

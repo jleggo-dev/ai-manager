@@ -18,6 +18,7 @@
     "probe:office": "node --import tsx scripts/probe-devs-ai-office.ts",
     "probe:v1-file": "node --import tsx scripts/probe-devs-ai-v1-file.ts",
     "eval:tools": "node --import tsx scripts/eval-tool-selection.ts",
+    "eval:tools:smoke": "node --import tsx scripts/eval-tool-selection.ts --smoke",
     "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts",
     "eval:compaction": "node --import tsx scripts/eval-compaction.ts",
     "metrics:food-ledger": "node --import tsx scripts/food-variance-baseline.ts",
