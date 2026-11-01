@@ -97,7 +97,8 @@ export { extractFunctionCallsFromOutput } from '../../../backend/src/services/v2
 export { submitV2ToolOutputs } from '../../../backend/src/ai-manager/chat-messaging.ts';
 export { updateV2ProviderMetadata } from '../../../backend/src/ai-manager/v2-metadata.ts';
 // The engine's own template fill, so an eval running a prompt via promptOverride interpolates identically.
-export { interpolateTemplate } from '../../../backend/src/ai-manager/job-execution-utils.ts';
+// MAX_VARIABLE_LENGTH: the cap it puts on one variable; anything longer is cut.
+export { interpolateTemplate, MAX_VARIABLE_LENGTH } from '../../../backend/src/ai-manager/job-execution-utils.ts';
 // Compaction after the reply is on file (HARNESS-V3 C1) — the caller decides when, so nobody waits.
 export {
   compactSessionAfterReply,
@@ -105,8 +106,14 @@ export {
   planCompaction,
   getSummarizerConfig,
   buildCompactedHistory,
+  // The most dialogue one round hands the summarizer (the job-variable cap, less a margin).
+  TRANSCRIPT_BUDGET_CHARS,
   type CompactionPlan,
+  type NoCompaction,
+  type SummarizerConfig,
 } from '../../../backend/src/services/session-compaction.ts';
+// Policy backfills (scripts/backfill-session-summarizer.ts): page the sessions, set only `config`.
+export { listChatSessions, updateChatSessionConfig } from '../../../backend/src/models/chat-sessions.ts';
 
 /* ── Processing jobs (create/update + id lookup for provisioning) ── */
 export {

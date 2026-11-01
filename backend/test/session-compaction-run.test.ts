@@ -17,10 +17,14 @@ const executeJob = vi.hoisted(() => vi.fn());
 vi.mock('../src/models/chat-sessions.ts', () => ({
   listChatMessages: vi.fn(async () => db.rows),
   getChatSession: vi.fn(async () => db.session),
-  updateChatSession: vi.fn(async (_id: string, updates: Partial<ChatSessionRow>) => {
-    db.session = { ...(db.session as ChatSessionRow), ...updates };
-    return db.session;
-  }),
+  // The real one is `update … where summary_through_at is not distinct from expectedMark`.
+  updateChatSessionIfMarkUnchanged: vi.fn(
+    async (_id: string, updates: Partial<ChatSessionRow>, expectedMark: string | null) => {
+      if ((db.session?.summary_through_at ?? null) !== expectedMark) return null;
+      db.session = { ...(db.session as ChatSessionRow), ...updates };
+      return db.session;
+    },
+  ),
 }));
 vi.mock('../src/models/processing-jobs.ts', () => ({
   getProcessingJobBySlug: vi.fn(async (slug: string) => ({ id: 'job', slug })),
@@ -34,6 +38,7 @@ const {
   getSummarizerConfig,
   compactSessionAfterReply,
 } = await import('../src/services/session-compaction.ts');
+const { buildResponsesRequest } = await import('../src/integrations/openai-responses/request-builder.ts');
 
 const APP = '^\\s*<(context|note)\\b';
 let clock = Date.parse('2026-10-31T10:00:00Z');
@@ -200,7 +205,13 @@ describe('dropping app rows, keeping pinned ones', () => {
     expect(contextRows).toHaveLength(2);
   });
 
-  it('a pinned block survives two compactions, ahead of the summary', async () => {
+  /**
+   * In the stored-history order a pinned block sits before the summary, but that is not the
+   * order the model reads (P1b, finding H): the Responses dialect lifts EVERY system row into
+   * `instructions`, and the summary is a system row, so on the wire it rides with the persona,
+   * ahead of the pinned block, which is the first input item. Both orders are pinned here.
+   */
+  it('a pinned block survives two compactions; on the wire the summary rides in instructions ahead of it', async () => {
     db.rows.push(manifest());
     for (let i = 0; i < 6; i++) db.rows.push(...exchange(i));
     await maybeCompactSession(session(), 'test');
@@ -214,6 +225,16 @@ describe('dropping app rows, keeping pinned ones', () => {
     for (const call of executeJob.mock.calls) {
       expect((call[1].variables as { transcript: string }).transcript).not.toContain('DO THESE');
     }
+
+    const wire = buildResponsesRequest(
+      'model',
+      sent.map((m) => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content })),
+    );
+    expect(wire.instructions?.indexOf('persona')).toBe(0);
+    expect(wire.instructions).toContain('[Conversation summary]');
+    const input = wire.input as Array<{ content: unknown }>;
+    expect(String(input[0]?.content)).toContain('DO THESE');
+    expect(JSON.stringify(input)).not.toContain('[Conversation summary]');
   });
 
   it('near-miss: a turn-context block is not pinned', async () => {
