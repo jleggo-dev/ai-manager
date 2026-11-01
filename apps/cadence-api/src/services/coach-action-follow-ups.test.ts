@@ -56,6 +56,9 @@ describe('note_follow_up', () => {
   it.each([
     ['empty text', { text: '   ' }, 'nothing was noted'],
     ['a date in the wrong shape', { text: 'x', due_on: 'next friday' }, 'YYYY-MM-DD'],
+    // The shape passes and the day does not exist: before P7b this reached the insert, the ::date
+    // cast threw, and she was told "fault" with no reason she could fix.
+    ['a day that does not exist', { text: 'x', due_on: '2026-02-30' }, 'a real day'],
     ['text past the limit', { text: 'x'.repeat(301) }, 'under 300'],
   ])('refuses %s and writes nothing', async (_label, params, phrase) => {
     const out = await NOTE_FOLLOW_UP.run(USER, params);
@@ -83,6 +86,25 @@ describe('close_follow_up', () => {
     const out = await CLOSE_FOLLOW_UP.run(USER, { id: 'deadbeef' });
     expect(out).toContain('Nothing was closed');
     expect(out).not.toMatch(/^Closed/);
+  });
+
+  it.each([
+    ['in brackets, as her context prints it', '[3f9a2c1d]', '3f9a2c1d'],
+    ['with a label in front', 'id: 3f9a2c1d', '3f9a2c1d'],
+    ['upper case', '3F9A2C1D', '3f9a2c1d'],
+  ])('passes the repo the bare id when she sends it %s', async (_label, sent, reached) => {
+    await CLOSE_FOLLOW_UP.run(USER, { id: sent });
+    expect(store.closed).toEqual([{ id: reached, outcome: null }]);
+  });
+
+  it.each([
+    ['eight underscores', '________'],
+    ['two ids', '3f9a2c1d 7b2e0f11'],
+    ['too short', '[3f9a]'],
+  ])('refuses %s before the repo is asked, and says why', async (_label, sent) => {
+    const out = await CLOSE_FOLLOW_UP.run(USER, { id: sent });
+    expect(store.closed).toEqual([]);
+    expect(out).toMatch(/^nothing changed: .*not one id/);
   });
 
   it('an empty id is refused before the repo is asked', async () => {
