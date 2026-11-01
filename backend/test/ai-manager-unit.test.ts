@@ -86,8 +86,15 @@ vi.mock('../src/services/formatting-rules.ts', () => ({
   applyFormattingRules: vi.fn((raw: string) => ({ formatted: raw, steps: [] })),
 }));
 
+const diagSessions = vi.hoisted(() => [] as Array<{ args: unknown[]; addMetadata: ReturnType<typeof vi.fn> }>);
+
 vi.mock('../src/services/ai-diagnostics.ts', () => {
   class FakeDiagnosticSession {
+    args: unknown[];
+    constructor(...args: unknown[]) {
+      this.args = args;
+      diagSessions.push(this);
+    }
     complete = vi.fn().mockResolvedValue(null);
     logRequestPayload = vi.fn();
     startSupabaseTimer = vi.fn();
@@ -219,6 +226,23 @@ describe('executeJobById', () => {
     const [modelArg, messagesArg] = mockClient.chatCompletion.mock.calls[0] as [string, Array<{ content: unknown }>];
     expect(modelArg).toBe('model-a');
     expect(messagesArg[0]?.content).toBe('Hello <user_input name="name">World</user_input>');
+  });
+
+  /** HARNESS-V3 P1b, finding F: a caller's facts reach the run's diagnostic row. */
+  it("carries the caller's chat session id and metadata onto the diagnostic row", async () => {
+    vi.mocked(getProcessingJob).mockResolvedValue(asProcessingJobRow());
+    vi.mocked(createLlmClientForProvider).mockReturnValue({
+      chatCompletion: vi.fn().mockResolvedValue({ model: 'model-a', choices: [{ message: { content: 'ok' } }] }),
+    } as unknown as ReturnType<typeof createLlmClientForProvider>);
+    diagSessions.length = 0;
+
+    await executeJobById('job-1', {
+      variables: { name: 'x' },
+      diagnostics: { chatSessionId: 'sess-9', metadata: { compaction: { summarizedRows: 4, budgetCut: true } } },
+    });
+
+    expect(diagSessions[0]?.args[4]).toBe('sess-9');
+    expect(diagSessions[0]?.addMetadata).toHaveBeenCalledWith('compaction', { summarizedRows: 4, budgetCut: true });
   });
 
   it('falls back to the failover provider when the primary model errors', async () => {
