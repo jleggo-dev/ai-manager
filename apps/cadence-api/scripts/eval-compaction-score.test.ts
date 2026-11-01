@@ -8,6 +8,7 @@ import {
   buildFixtureRows,
   compactedFacts,
   leaks,
+  plantSpan,
   replayCompaction,
   scoreFact,
   type Summarize,
@@ -47,6 +48,17 @@ describe.each(COMPACTION_FIXTURES)('fixture $id under the live policy', (fixture
       expect(r.transcript).not.toContain('<context');
       expect(r.transcript).not.toContain('WHAT YOU CAN DO');
       expect(r.droppedAppRows).toBeGreaterThan(0);
+    }
+  });
+
+  it("finds every compacted fact's exchange in the transcript of the round that summarized it", async () => {
+    const built = buildFixtureRows(fixture, persona);
+    const { rounds } = await replayCompaction(built, COACH_SUMMARIZER, fakeSummarize);
+    for (const f of compactedFacts(fixture, built, rounds)) {
+      const span = plantSpan(f, rounds);
+      expect(span, f.id).not.toBeNull();
+      expect(span!.end).toBeGreaterThan(span!.start);
+      expect(span!.transcriptChars).toBe(rounds[f.round - 1]!.transcript.length);
     }
   });
 });

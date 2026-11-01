@@ -159,6 +159,26 @@ export function scoreFact(summary: string, fact: PlantedFact & { round: number }
   return { id: fact.id, kind: fact.kind, probe: fact.probe, kept: missing.length === 0, missing, round: fact.round };
 }
 
+/** Where a fact's planted exchange sits in the transcript of the round that first summarized it. */
+export interface PlantSpan {
+  /** Offset of "user: <their message>". */
+  start: number;
+  /** Offset just past her reply. */
+  end: number;
+  transcriptChars: number;
+}
+
+export function plantSpan(fact: PlantedFact & { round: number }, rounds: CompactionRound[]): PlantSpan | null {
+  const transcript = rounds[fact.round - 1]?.transcript;
+  if (!transcript) return null;
+  const start = transcript.indexOf(`user: ${fact.plant.user}`);
+  if (start < 0) return null;
+  const reply = `assistant: ${fact.plant.coach}`;
+  const at = transcript.indexOf(reply, start);
+  const end = at < 0 ? start + fact.plant.user.length + 6 : at + reply.length;
+  return { start, end, transcriptChars: transcript.length };
+}
+
 /** Text that should never reach a summary now that injected rows are dropped (HARNESS-V3 C2). */
 export function leaks(summary: string): string[] {
   return ['<context', '[ctx:', 'source="', 'injected detail'].filter((s) => summary.includes(s));
