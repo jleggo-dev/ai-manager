@@ -8,7 +8,8 @@ const COACH = 'coach-uuid-1111';
 const BROKER = 'broker-uuid-2222';
 const RESEARCH = 'research-profile-uuid';
 const EVOLVE = 'evolve-profile-uuid';
-const ids = { coachId: COACH, brokerId: BROKER, researchId: RESEARCH, evolveId: EVOLVE };
+const FOOD_CHECK = 'food-check-profile-uuid';
+const ids = { coachId: COACH, brokerId: BROKER, researchId: RESEARCH, evolveId: EVOLVE, foodCheckId: FOOD_CHECK };
 
 /** The real shipped config — these tests are the contract between it and the sync scripts. */
 const CONFIG = JSON.parse(
@@ -69,6 +70,16 @@ describe('job profile resolution', () => {
     expect(resolveProfileToken('<CADENCE_BROKER_PROFILE_UUID>', ids)).toBe(BROKER);
   });
 
+  // The food-check's own profile (FOOD-LOGGING-COACH-LED.md step 2): its token resolves only once
+  // the profile exists, and a sync before that fails loudly rather than routing the job elsewhere.
+  it('resolves the food-check token to its own profile, and refuses without one', () => {
+    expect(resolveProfileToken('<CADENCE_FOOD_CHECK_PROFILE_UUID>', ids)).toBe(FOOD_CHECK);
+    expect(() => resolveProfileToken('<CADENCE_FOOD_CHECK_PROFILE_UUID>', { ...ids, foodCheckId: null })).toThrow(
+      /provision-food-check-profile/,
+    );
+    expect(CONFIG.jobs.find((j) => j.slug === 'food-check')?.ai_profile_id).toBe('<CADENCE_FOOD_CHECK_PROFILE_UUID>');
+  });
+
   describe('against the real ai-admin.config.json', () => {
     // This is the guard that the old hardcoded slug-set approach lacked: it silently disagreed
     // with the config and synced nutrition-baseline (declared COACH) to the Broker model.
@@ -89,7 +100,9 @@ describe('job profile resolution', () => {
             ? RESEARCH
             : token.includes('EVOLVE')
               ? EVOLVE
-              : BROKER;
+              : token.includes('FOOD_CHECK')
+                ? FOOD_CHECK
+                : BROKER;
         expect(job.ai_profile_id, `${job.slug} declared ${token} but resolved elsewhere`).toBe(expected);
       }
     });

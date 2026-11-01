@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildSinglePrompt, partsToLookups, splitMealParts, stripAmount } from './eval-food-check-single.ts';
+import {
+  buildSinglePrompt,
+  fillTemplate,
+  partsToLookups,
+  splitMealParts,
+  stripAmount,
+} from './eval-food-check-single.ts';
 import type { FoodCheckCase } from './eval-food-check-cases.ts';
 
 describe('splitMealParts — separators a person actually types', () => {
@@ -45,8 +51,8 @@ describe('stripAmount — the amount comes off, the food stays', () => {
 describe('partsToLookups', () => {
   it('one lookup per distinct part, amount as the measure', () => {
     expect(partsToLookups('1.5 c milk\n2 shots espresso')).toEqual([
-      { q: 'milk', measure: '1.5 c', brand: null },
-      { q: 'espresso', measure: '2 shots', brand: null },
+      { said: '1.5 c milk', q: 'milk', measure: '1.5 c', brand: null },
+      { said: '2 shots espresso', q: 'espresso', measure: '2 shots', brand: null },
     ]);
   });
   it('the same food twice is looked up once', () => {
@@ -61,5 +67,11 @@ describe('buildSinglePrompt — the last call cannot ask for more', () => {
     const last = buildSinglePrompt(c, [], true);
     expect(last).not.toContain('"lookups"');
     expect(last).toContain('last reply');
+  });
+});
+
+describe("fillTemplate — the engine's interpolation, for running the shipped prompt off a laptop", () => {
+  it('fills every placeholder it knows and leaves the rest as written', () => {
+    expect(fillTemplate('a {{x}} b {{ y }} c {{z}}', { x: '1', y: '2' })).toBe('a 1 b 2 c {{z}}');
   });
 });

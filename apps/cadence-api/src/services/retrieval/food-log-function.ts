@@ -29,7 +29,7 @@ type MealKindParam = (typeof MEAL_KINDS)[number];
 const isMealKindParam = (v: unknown): v is MealKindParam => (MEAL_KINDS as readonly string[]).includes(String(v));
 
 type PreviewMealResult = Awaited<ReturnType<typeof previewMealParse>>;
-type PreviewItem = NutritionLog['items'][number];
+type PreviewItem = NutritionLog['items'][number] & { assumption?: string; question?: string; source_label?: string };
 
 /**
  * An item counts as PRICED exactly when `priceParsedMeal` decided it did — `est` carries at least
@@ -52,7 +52,14 @@ function macroLine(est: Macros | null | undefined): string {
 function itemLine(item: PreviewItem): string {
   const qty = item.qty ? `${item.qty}${item.unit ? ` ${item.unit}` : ''} ` : '';
   const name = [item.brand, item.name].filter(Boolean).join(' ');
-  return `- ${qty}${name}: ${macroLine(item.est)}`;
+  // The coach-led read says where each number came from, what it assumed, and what it would ask
+  // (FOOD-LOGGING-COACH-LED.md) — facts for her, never hidden in the number.
+  const tail = [
+    item.source_label ? `from ${item.source_label}` : '',
+    item.assumption ? `assumed: ${item.assumption}` : '',
+    item.question ? `open question: ${item.question}` : '',
+  ].filter(Boolean);
+  return `- ${qty}${name}: ${macroLine(item.est)}${tail.length ? ` (${tail.join('; ')})` : ''}`;
 }
 
 /** For an unresolved item, what she should do about it — named per item, never a generic hint. */
@@ -96,6 +103,10 @@ export const PREVIEW_MEAL: RetrievalFunction = {
     const head = fullyPriced
       ? `Fully priced (${r.meal}): every item has numbers, total ${total}.`
       : `Partly priced (${r.meal}): ${r.items.length - unpriced.length}/${r.items.length} items have numbers, total so far ${total}.`;
+    const reached =
+      r.coach?.reached === false
+        ? 'The food-check model could not be reached, so these are the old automatic estimates, not a checked read.'
+        : '';
 
     const tail = fullyPriced
       ? 'Everything here is settled — log_meal with this same text prices it the same way.'
@@ -105,7 +116,7 @@ export const PREVIEW_MEAL: RetrievalFunction = {
           'Do not log_meal this and call it done while items are unresolved — say what is missing, or log once you have enough to price it.',
         ].join('\n');
 
-    return [head, ...r.items.map(itemLine), tail].join('\n');
+    return [head, reached, ...r.items.map(itemLine), tail].filter(Boolean).join('\n');
   },
 
   rows(result) {

@@ -14,6 +14,7 @@ vi.mock('./food-resolver.ts', () => ({
   rankedFoodsFor: vi.fn(),
 }));
 vi.mock('../repos/foods.ts', () => ({
+  getFoodsByIds: vi.fn(async () => []),
   insertFood: vi.fn(),
   searchFoods: vi.fn(async () => []),
   touchFoodUsage: vi.fn(async () => undefined),

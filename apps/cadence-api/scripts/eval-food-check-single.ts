@@ -9,12 +9,23 @@
  * is hers. Compared with eval-food-check-protocol.ts, the model's first call ("what should I look
  * up?") is gone, because the split and the fan-out are deterministic work.
  *
- * The split here is deliberately plain. Comma, newline, "and", "with", "+", "&" separate parts;
- * a leading amount ("150ml", "2 tbsp", "a handful of") is peeled off into `measure`. Dictated prose
- * with no separators stays one part — the eval counts how often that forces the second round.
+ * The split is deliberately plain (food-candidate-book.ts): comma, newline, "and", "with", "+", "&"
+ * separate parts; a leading amount ("150ml", "2 tbsp", "a handful of") is peeled off into
+ * `measure`. Dictated prose with no separators stays one part — the eval counts how often that
+ * forces the second round.
+ *
+ * Two runners: `runMealSingle` is run 2's own prompt (buildSinglePrompt, kept so its numbers stay
+ * reproducible); `runMealConfig` is the SHIPPED job — the config's promptTemplate filled with the
+ * same variables production sends, through the same round loop (services/food-check.ts).
  */
 import type { FanOutResult } from '../src/services/food-source-fanout.ts';
-import type { SourceCandidate } from '../src/services/food-source-report.ts';
+import {
+  CandidateBook as ServiceBook,
+  addLookups,
+  partsToLookups,
+  type BookLookupFn,
+} from '../src/services/food-candidate-book.ts';
+import { foodCheckRounds, type FoodCheckVars } from '../src/services/food-check.ts';
 import type { FoodCheckCase } from './eval-food-check-cases.ts';
 import {
   CandidateBook,
@@ -24,49 +35,17 @@ import {
   type Lookup,
   type MealDeps,
   type MealRun,
+  type RoundRun,
 } from './eval-food-check-protocol.ts';
 
 export const SINGLE_MAX_ROUNDS = 2;
-const MAX_PARTS = 10;
 
-const SEPARATORS = /\s*(?:,|;|\n|\+|&|\band\b|\bwith\b|\bplus\b)\s*/i;
-const AMOUNT =
-  /^(?:(?:\d+(?:[./]\d+)?|\d*\.\d+|a|an|one|two|three|four|half|quarter|a few|some|a bit of|a splash of)\s*)?(?:(?:ml|l|g|kg|grams?|oz|ounces?|lbs?|cups?|c|tbsp|tablespoons?|tsp|teaspoons?|slices?|shots?|scoops?|cans?|pieces?|handful|small|medium|large)\b\s*)?(?:of\s+)?/i;
-
-/** The parts of a meal, in order, as the person wrote them. Never empty for non-blank text. */
-export function splitMealParts(text: string): string[] {
-  const parts = text
-    .split(SEPARATORS)
-    .map((p) => p.replace(/^[\s.]+|[\s.]+$/g, ''))
-    .filter(Boolean)
-    .slice(0, MAX_PARTS);
-  return parts.length ? parts : [text.trim()].filter(Boolean);
-}
-
-/** "150ml 2% milk" → { q: "2% milk", measure: "150ml" }; "a banana" → { q: "banana", measure: null }. */
-export function stripAmount(part: string): { q: string; measure: string | null } {
-  const m = AMOUNT.exec(part);
-  const prefix = m?.[0] ?? '';
-  const q = part.slice(prefix.length).trim();
-  if (!q) return { q: part.trim(), measure: null };
-  const measure = prefix.replace(/\bof\s*$/i, '').trim();
-  return { q, measure: measure && /\d|cup|tbsp|tsp|oz|ml|g\b|slice|shot|scoop|handful|small|medium|large|half|quarter/i.test(measure) ? measure : null };
-}
-
-export function partsToLookups(text: string): Lookup[] {
-  const seen = new Set<string>();
-  return splitMealParts(text)
-    .map((p) => {
-      const { q, measure } = stripAmount(p);
-      return { q: q.slice(0, 80), measure, brand: null };
-    })
-    .filter((l) => {
-      const k = l.q.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-}
+/**
+ * The split, the amount peel and the FatSecret merge moved into the service on 2026-11-01
+ * (food-candidate-book.ts) when the shape shipped; re-exported so the run-2 eval keeps reading
+ * the same way, from the one copy production runs.
+ */
+export { partsToLookups, splitMealParts, stripAmount, withFatSecretRows } from '../src/services/food-candidate-book.ts';
 
 export function buildSinglePrompt(c: FoodCheckCase, results: string[], lastRound: boolean): string {
   return [
@@ -81,7 +60,10 @@ export function buildSinglePrompt(c: FoodCheckCase, results: string[], lastRound
     '{"said":"their words for this part","pick":"c3","measure":"1 cup","count":1.5,"assumption":null,"question":null,"estimate":null}',
     '',
     ...(lastRound
-      ? ['This is your last reply. Answer with final now, from the records below. A part with no fitting record gets pick null and an estimate.', '']
+      ? [
+          'This is your last reply. Answer with final now, from the records below. A part with no fitting record gets pick null and an estimate.',
+          '',
+        ]
       : [
           'Only if a part of the meal has no fitting record below — the words were split wrongly, a typo, a part missed — you may reply',
           '{"lookups":[{"q":"food name","measure":"1 cup","brand":null}]} once, with at most 8 lookups. Put the plain food name in q. Put a brand only if they named one.',
@@ -149,9 +131,46 @@ export async function runMealSingle(c: FoodCheckCase, deps: SingleDeps): Promise
   return out;
 }
 
-/** Appends FatSecret's top rows to a fan-out result, so she sees every latte and not the first. */
-export function withFatSecretRows(base: FanOutResult, rows: SourceCandidate[]): FanOutResult {
-  const have = new Set(base.candidates.map((c) => `${c.source}|${c.food_id ?? c.name}`));
-  const fresh = rows.filter((r) => !have.has(`${r.source}|${r.food_id ?? r.name}`));
-  return { ...base, candidates: [...base.candidates, ...fresh] };
+/** `{{name}}` → value, the way the engine fills a template. Unknown placeholders stay as written. */
+export function fillTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, name: string) => (name in vars ? vars[name]! : m));
+}
+
+export interface ConfigDeps {
+  run: (prompt: string) => Promise<RoundRun>;
+  /** The production lookup: the fan-out plus FatSecret's top rows (food-candidate-sources.ts). */
+  lookup: BookLookupFn;
+  /** The `food-check` job's promptTemplate, as the config ships it. */
+  template: string;
+}
+
+/**
+ * One meal through the SHIPPED shape: the service's split and book, the config's prompt, the
+ * service's round loop — the eval of what production runs, not of a prompt beside it.
+ */
+export async function runMealConfig(c: FoodCheckCase, deps: ConfigDeps): Promise<MealRun> {
+  const book = new ServiceBook();
+  const rounds: RoundRun[] = [];
+  const lookups = partsToLookups(c.text);
+  const out: MealRun = { rounds, lookups: [...lookups], final: null, shown: book.entries, error: null };
+  await addLookups(book, lookups, deps.lookup);
+  try {
+    const outcome = await foodCheckRounds(
+      { meal: c.meal, said: c.text, book },
+      {
+        call: async (vars: FoodCheckVars) => {
+          const r = await deps.run(fillTemplate(deps.template, { ...vars }));
+          rounds.push(r);
+          return r.raw;
+        },
+        lookup: deps.lookup,
+      },
+    );
+    out.lookups.push(...outcome.lookups);
+    if (outcome.error) out.error = outcome.error;
+    else out.final = outcome.items;
+  } catch (e) {
+    out.error = `failed: ${String(e).slice(0, 200)}`;
+  }
+  return out;
 }

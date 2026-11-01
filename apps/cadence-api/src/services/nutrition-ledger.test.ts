@@ -42,6 +42,14 @@ vi.mock('./food-sources/fatsecret-enrich.ts', () => ({
   isFatSecretRowFresh: vi.fn(() => true),
 }));
 
+// The coach-led read (food-candidate-sources.ts) asks FatSecret's search directly, so that layer
+// is mocked too — no third party in a determinism test.
+vi.mock('./food-sources/fatsecret.ts', () => ({
+  isFatSecretConfigured: vi.fn(() => false),
+  searchFatSecretFoods: vi.fn(async () => []),
+  fetchFatSecretFood: vi.fn(async () => null),
+}));
+
 vi.mock('./food-sources/usda-enrich.ts', () => ({
   enrichFoodsWithUsda: vi.fn(async (_u: string, _q: string, local: Food[]) => local),
   searchFoodsWithUsda: vi.fn(async () => []),
@@ -86,6 +94,50 @@ function parse(
       confidence: opts.confidence ?? 0.8,
       est_macros: est,
     }),
+  };
+}
+
+/**
+ * One food-check reply (the coach-led read, FOOD-LOGGING-COACH-LED.md), answered from the book the
+ * job is shown: `pick` takes the first record's first measure; `estimate` answers with the model's
+ * own numbers when nothing on file fits. The mock reads the variables the real job would.
+ */
+function check(opts: {
+  said: string;
+  pick?: boolean;
+  count?: number;
+  name?: string;
+  brand?: string;
+  estimate?: Macros;
+}) {
+  return async (_user: string, slug: string, vars: Record<string, unknown>) => {
+    if (slug !== 'food-check') throw new Error(`expected the food-check job, got ${slug}`);
+    const book = String(vars.book ?? '');
+    const first = /^\s*c1 · .*? · measures: (.+?) = [\d.]+ g/m.exec(book);
+    const item = opts.pick
+      ? {
+          said: opts.said,
+          name: null,
+          brand: null,
+          pick: 'c1',
+          measure: first?.[1] ?? 'g',
+          count: opts.count ?? 1,
+          assumption: null,
+          question: null,
+          estimate: null,
+        }
+      : {
+          said: opts.said,
+          name: opts.name ?? null,
+          brand: opts.brand ?? null,
+          pick: null,
+          measure: null,
+          count: null,
+          assumption: null,
+          question: null,
+          estimate: { kcal: opts.estimate?.kcal ?? null, protein_g: opts.estimate?.protein_g ?? null },
+        };
+    return { formatted: JSON.stringify({ items: [item], lookups: [] }) };
   };
 }
 
@@ -211,11 +263,16 @@ d('A23 — the food ledger keeps a price (DB)', () => {
    * from must leave nothing behind — the same rule the two-stage photo read follows.
    */
   it('previewMealParse prices without pinning anything', async () => {
-    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
-    const preview = await previewMealParse(USER, 'a venti latte');
+    // Nothing on file fits, so the food-check answers with its own labelled estimate.
+    runJobBySlug.mockImplementationOnce(
+      check({ said: `a ${LATTE}`, name: LATTE, estimate: { kcal: 190, protein_g: 12 } }),
+    );
+    const preview = await previewMealParse(USER, `a ${LATTE}`);
 
     expect(preview.macros?.kcal).toBe(190);
     expect(preview.items[0]?.food_id).toBeUndefined();
+    expect(preview.items[0]?.basis).toBe('estimate');
+    expect(preview.coach?.reached).toBe(true);
     expect(await ownFoodCount()).toBe(0);
   });
 
@@ -223,12 +280,31 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
     await logMeal(USER, { text: 'a venti latte', date: today() });
 
-    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 260 }, { qty: 1, unit: 'latte' }));
-    const preview = await previewMealParse(USER, 'a venti latte');
+    // The pinned row is in the book now; the food-check picks it and the store prices it.
+    runJobBySlug.mockImplementationOnce(check({ said: `a ${LATTE}`, pick: true }));
+    const preview = await previewMealParse(USER, `a ${LATTE}`);
 
     expect(preview.items[0]?.food_id).toBeTruthy();
-    expect(preview.macros?.kcal).toBeCloseTo(190, 0); // the card shows the ledger, not the new guess
+    expect(preview.items[0]?.basis).toBe('record');
+    expect(preview.macros?.kcal).toBeCloseTo(190, 0); // the card shows the ledger, not a new guess
     expect(await ownFoodCount()).toBe(1); // and still no second row
+  });
+
+  /**
+   * She could not be reached: the old waterfall prices the card instead, every row labelled as an
+   * automatic estimate, and the card is told — a meal never vanishes because a model did.
+   */
+  it('previewMealParse falls back to the old parse when the food-check fails, and says so', async () => {
+    runJobBySlug.mockRejectedValueOnce(new Error('503 from the provider'));
+    runJobBySlug.mockResolvedValueOnce(parse(LATTE, { kcal: 190 }, { qty: 1, unit: 'latte' }));
+    const preview = await previewMealParse(USER, `a ${LATTE}`);
+
+    expect(preview.coach?.reached).toBe(false);
+    expect(preview.coach?.checked.at(-1)).toBe('the coach could not be reached');
+    expect(preview.items[0]?.basis).toBe('fallback');
+    expect(preview.macros?.kcal).toBe(190);
+    expect(runJobBySlug.mock.calls.map((c) => c[1])).toEqual(['food-check', 'parse-meal']);
+    expect(await ownFoodCount()).toBe(0);
   });
 
   /**
@@ -236,15 +312,22 @@ d('A23 — the food ledger keeps a price (DB)', () => {
    * must still be what the card showed — deterministic pricing is what makes both true at once.
    */
   it('confirming a preview lands the card’s numbers and links the food', async () => {
-    runJobBySlug.mockResolvedValueOnce(parse('yogurt parfait', { kcal: 380, protein_g: 14 }, { qty: 1 }));
+    runJobBySlug.mockImplementationOnce(
+      check({
+        said: 'a yogurt parfait from materia prima',
+        name: 'yogurt parfait',
+        brand: 'Materia Prima',
+        estimate: { kcal: 380, protein_g: 14 },
+      }),
+    );
     const preview = await previewMealParse(USER, 'a yogurt parfait from materia prima');
     expect(await ownFoodCount()).toBe(0);
 
-    // Exactly what the browser posts back: no food_id survives the round trip.
+    // What an older app posts back: no food_id survives the round trip, and the vendor rides as brand.
     const row = await logMeal(USER, {
       parsed: {
         meal: preview.meal,
-        items: preview.items.map(({ name, qty, unit, est }) => ({ name, qty, unit, est })),
+        items: preview.items.map(({ name, brand, qty, unit, est }) => ({ name, brand, qty, unit, est })),
         macros: preview.macros,
         confidence: preview.confidence,
         flags: preview.flags,
@@ -344,6 +427,9 @@ d('A23 — the food ledger keeps a price (DB)', () => {
   });
 
   it('carries them through the confirm path too, even from a four-key client total', async () => {
+    // Through the fallback (the food-check call fails first), so the parse's own per-item micros
+    // are what the card carries.
+    runJobBySlug.mockRejectedValueOnce(new Error('provider down'));
     runJobBySlug.mockResolvedValueOnce({
       formatted: JSON.stringify({
         meal: 'breakfast',

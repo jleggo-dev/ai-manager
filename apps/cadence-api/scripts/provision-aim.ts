@@ -83,6 +83,8 @@ async function main() {
   const coachId = await idBySlug('/api/ai-profiles', 'cadence-coach');
   const brokerId = await idBySlug('/api/ai-profiles', 'cadence-broker');
   const researchId = await idBySlug('/api/ai-profiles', 'cadence-research');
+  const evolveId = await idBySlug('/api/ai-profiles', 'cadence-evolve');
+  const foodCheckId = await idBySlug('/api/ai-profiles', 'cadence-food-check');
   console.log(`coach=${coachId} broker=${brokerId}`);
   // The sync above creates both, so a missing id means that sync did not take. Stopping here beats
   // resolving every placeholder job to `null` and syncing them onto no profile at all (the same
@@ -101,7 +103,9 @@ async function main() {
         slot: { type: 'profile', profileId: id },
         callingApplication: CALLING_APP,
       });
-      console.log(`run-slot ${name}: status=${r.status} raw=${JSON.stringify(r.raw ?? r.formatted ?? '').slice(0, 80)}`);
+      console.log(
+        `run-slot ${name}: status=${r.status} raw=${JSON.stringify(r.raw ?? r.formatted ?? '').slice(0, 80)}`,
+      );
     } catch (e) {
       console.log(`run-slot ${name} FAILED: ${(e as Error).message}`);
     }
@@ -112,10 +116,19 @@ async function main() {
   // with scripts/sync-jobs.ts so the two can no longer drift: the previous hardcoded slug set had
   // to be kept "in lockstep" by hand and silently mis-tiered whatever was forgotten — first
   // assess-goal, then nutrition-baseline.
-  resolveJobProfileIds(cfg.jobs, { coachId, brokerId, researchId });
+  resolveJobProfileIds(cfg.jobs, { coachId, brokerId, researchId, evolveId, foodCheckId });
   console.log('sync jobs →', JSON.stringify(await api('POST', '/api/sync', { jobs: cfg.jobs })));
   const jobIds: Record<string, string | null> = {};
-  for (const slug of ['capture-extract', 'plan-vet', 'situation-assess', 'context-select', 'synthesize-plan', 'weekly-readout', 'surface-insights', 'disrupted-plan']) {
+  for (const slug of [
+    'capture-extract',
+    'plan-vet',
+    'situation-assess',
+    'context-select',
+    'synthesize-plan',
+    'weekly-readout',
+    'surface-insights',
+    'disrupted-plan',
+  ]) {
     jobIds[slug] = await idBySlug('/api/processing-jobs', slug);
   }
   console.log('jobs:', jobIds);

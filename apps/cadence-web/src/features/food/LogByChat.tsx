@@ -5,11 +5,16 @@ import { MealParseCard } from './MealParseCard.tsx';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 
 /**
- * What she says back while the card is being read — plain, and about what is actually happening.
+ * What is said while the card is being read — plain, and about what is actually happening.
  * It said "Reading that…", which named nothing (owner, 2026-09-07: "I don't know what reading
- * that means, it should clearly say what it's doing").
+ * that means, it should clearly say what it's doing"). Since 2026-11-01 the reading is the
+ * coach's (FOOD-LOGGING-COACH-LED.md): the software checks every source, she decides once.
  */
-export const READING = 'Looking up the nutrition for that…';
+export const READING = 'The coach is checking your foods and the food databases…';
+
+/** The card when she could not be reached: the old automatic estimate priced it, and it says so. */
+export const NOT_REACHED =
+  "The coach couldn't be reached just now, so these are automatic estimates — tap a row to change anything.";
 
 /** Lines before the composer stops growing and scrolls — a whole meal, dictated, fits. */
 const COMPOSER_MAX_ROWS = 10;
@@ -100,7 +105,11 @@ export function LogByChat({
         )}
         {preview && !busy && (
           <div className="fc-heard">
-            Here&apos;s my read — an amount you gave I&apos;ve kept; anything you didn&apos;t, I&apos;ll ask.
+            {preview.coach?.reached === false
+              ? NOT_REACHED
+              : "Here's what I found — an amount you gave I've kept; anything you didn't, I'll ask."}
+            {/* Her work, shown as it happened: the trace renders from what actually ran. */}
+            {preview.coach?.checked?.length ? <small> Checked {preview.coach.checked.join('; ')}.</small> : null}
           </div>
         )}
         {preview && (

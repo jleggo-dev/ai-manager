@@ -33,7 +33,10 @@ export type AiLogKind =
   | 'generate_recipe'
   | 'generate_meal_plan'
   | 'discover_recipe'
-  | 'progress_layout_compose';
+  | 'progress_layout_compose'
+  // The described-meal check (FOOD-LOGGING-COACH-LED.md, 2026-11-01): the food-check job's
+  // calls per meal, whether she was reached, and what the lookups found.
+  | 'food_check';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging

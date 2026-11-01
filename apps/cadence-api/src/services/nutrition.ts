@@ -36,14 +36,7 @@ import { putMealPhoto, signMealPhotoUrl, signMealPhotoUrls } from './meal-photos
 import { estimateBurnKcal } from './burn.ts';
 import { summarizeNutrition } from './nutrition-summarize.ts';
 import { sanitizeMacros, sanitizeTargets, sumDay, computeLeft, type DayTotals } from './nutrition-day.ts';
-import {
-  isMeal,
-  parseMealResult,
-  usageSlot,
-  wantsTargets,
-  PROVISIONAL_BELOW,
-  type ParsedMealResult,
-} from './nutrition-parse.ts';
+import { isMeal, parseMealResult, usageSlot, wantsTargets, PROVISIONAL_BELOW } from './nutrition-parse.ts';
 import { logAi } from './ai-log.ts';
 import { logMealFromFood, logMealFromItems, logMealFromRecipe } from './nutrition-log-saved.ts';
 import type { PlateItemInput } from './plate-compose.ts';
@@ -57,6 +50,8 @@ import { priceParsedMeal } from './food-pricing.ts';
 import { totalsFromItems } from './meal-corrections.ts';
 import { enrichFlags } from './meal-enrich.ts';
 import { expireOverdueMeals } from './meal-draft.ts';
+import { previewDescribedMeal, type DescribedMealPreview } from './food-described-meal.ts';
+import { learnDescribedMeal } from './food-phrases.ts';
 
 export { parseMealResult, wantsTargets, PROVISIONAL_BELOW, isMeal } from './nutrition-parse.ts';
 export type { ParsedMealResult } from './nutrition-parse.ts';
@@ -87,55 +82,27 @@ export async function tickFoodLogOccurrence(userId: string, date: string, meal?:
  * "Food log" occurrence done.
  */
 /**
- * Run the parse-meal job over the user's words and shape the result — persisting NOTHING.
+ * The read half of confirm-first food logging, persisting NOTHING: the Food surfaces call this
+ * to show an itemized preview, and only the user's confirm writes a row — via `logMeal({ parsed })`.
  *
- * The read half of confirm-first food logging: the Food surfaces call this to show an itemized
- * preview (each ingredient with its quantity and estimate), and only the user's confirm writes a
- * row — via `logMeal({ parsed })`, which stores exactly what was previewed. Before this existed
- * the only itemizing path logged immediately, so the Food tab funnelled multi-ingredient meals
- * into the single-food resolver instead — and someone who typed five exact quantities was asked
- * to "select the serving size" (owner, 2026-08-15).
+ * Since 2026-11-01 the reading is coach-led (docs/cadence/FOOD-LOGGING-COACH-LED.md): software
+ * splits the words and looks every part up, the food-check model picks once, the store prices.
+ * The old `parse-meal` + code-picked match stays behind it as the labelled fallback for when she
+ * cannot be reached. Both live in food-described-meal.ts.
  */
 export async function previewMealParse(
   userId: string,
   text: string,
   mealHint?: MealKind,
-): Promise<ParsedMealResult & { raw_text: string }> {
-  const trimmed = text.trim().slice(0, 500);
-  if (!trimmed) throw new Error('a meal needs words');
-  const res = await runJobBySlug(userId, 'parse-meal', {
-    meal_text: trimmed,
-    meal_hint: mealHint ?? '',
-  });
-  const rawOut = res.formatted ?? res.raw ?? '';
-  const shaped = parseMealResult(rawOut, mealHint && isMeal(mealHint) ? mealHint : undefined);
-  // Price the card the user is about to see (A23 §1a) — but PIN NOTHING. A preview they walk away
-  // from must leave no food behind, the same rule the photo read follows. The confirm does the
-  // pinning, and pricing is deterministic, so what lands is what the card showed.
-  const ledger = await priceParsedMeal(
-    userId,
-    { items: shaped.items, macros: shaped.macros, confidence: shaped.confidence },
-    { pin: false, slot: usageSlot(today(), shaped.meal) },
-  );
-  void logAi(userId, {
-    kind: 'parse_meal',
-    input: { text: trimmed, meal_hint: mealHint ?? null, preview: true },
-    output: { raw: rawOut.slice(0, 2000) },
-    meta: {
-      meal: shaped.meal,
-      items: shaped.items.length,
-      confidence: shaped.confidence,
-      preview: true,
-      ledger_priced: ledger.fully_priced,
-    },
-  });
-  return { ...shaped, items: ledger.items, macros: ledger.macros, raw_text: trimmed };
+): Promise<DescribedMealPreview> {
+  return previewDescribedMeal(userId, text, mealHint);
 }
 
 /** A previewed parse, confirmed by the user — logged verbatim, no second AI pass. */
 export interface ParsedMealInput {
   meal: MealKind;
-  items: NutritionLog['items'];
+  /** The card's rows. `said` and `food_id` ride back from a coach-led preview; the confirm learns from them. */
+  items: Array<NutritionLog['items'][number] & { said?: string }>;
   macros: Macros | null;
   confidence: number | null;
   flags: NutritionLog['flags'];
@@ -194,6 +161,8 @@ export async function logMeal(
       provisional,
     });
     await tickFoodLogOccurrence(userId, date, p.meal);
+    // Logged, and learned: the words each linked row was said in now price without a call.
+    await learnDescribedMeal(userId, p.items);
     return row;
   }
   if (input.items?.length) {

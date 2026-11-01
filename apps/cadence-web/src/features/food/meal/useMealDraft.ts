@@ -50,6 +50,8 @@ export interface ParsedAppendItem {
   unit?: string;
   est?: Macros;
   food_id?: string;
+  /** Their words for the row, from a coach-led read — the server learns from it on the add. */
+  said?: string;
 }
 
 /** A logged meal counts as it changes — the day is refreshed after any mutation on one. */

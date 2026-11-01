@@ -178,19 +178,47 @@ export async function clearMacroTargets(): Promise<boolean> {
   return res.ok;
 }
 
+export interface MealPreviewItem {
+  name: string;
+  /**
+   * `brand` is the vendor the read heard (or the user answered), and `food_id` says the item was
+   * matched to a food already on file — the card uses the absence of both to decide whether asking
+   * where it came from is worth a line (A23 §1b). Both ride back on the confirm: the server prices
+   * a linked row from its food and never re-matches it.
+   */
+  brand?: string;
+  qty?: number;
+  unit?: string;
+  est?: MealMacros;
+  food_id?: string;
+  /** Their own words for this part. Rides back on the confirm so the same words next time need no call. */
+  said?: string;
+  /** Where the number came from: a record the coach picked, the memory of a past pick, her labelled estimate, the automatic fallback, or nothing yet. */
+  basis?: 'record' | 'remembered' | 'estimate' | 'fallback' | 'none';
+  /** "your saved food", "USDA", "the coach's estimate" — so an estimate never looks like a lookup. */
+  source_label?: string;
+  /** What the coach assumed where the words left something open ("Took this as 2% milk"). */
+  assumption?: string;
+  /** The one question she would ask. A row with one does not count until it is answered. */
+  question?: string;
+  /** Why the row could not be counted from a record, when it could not. */
+  problem?: string;
+}
+
 /** An itemized read of a described meal — previewed, not logged. Confirm posts it verbatim. */
 export interface MealPreview {
   meal: MealKind;
-  /**
-   * `brand` is the vendor the parse heard (or the user answered), and `food_id` says the item was
-   * matched to a food already on file — the card uses the absence of both to decide whether asking
-   * where it came from is worth a line (A23 §1b).
-   */
-  items: { name: string; brand?: string; qty?: number; unit?: string; est?: MealMacros; food_id?: string }[];
+  items: MealPreviewItem[];
   macros: MealMacros | null;
   confidence: number | null;
   flags: { alcohol?: boolean; caffeine?: boolean };
   raw_text: string;
+  /**
+   * Who did the reading (FOOD-LOGGING-COACH-LED.md): `reached` false means the coach could not
+   * be reached and the old automatic estimate priced the card; `checked` is the true trace of what
+   * ran, one line per part, never canned copy.
+   */
+  coach?: { reached: boolean; calls: number; checked: string[] };
 }
 
 /**

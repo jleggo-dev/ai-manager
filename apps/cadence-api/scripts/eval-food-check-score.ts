@@ -22,7 +22,8 @@ export interface FinalItem {
   pick?: string | null;
   measure?: string | null;
   count?: number | null;
-  estimate?: { kcal?: number; protein_g?: number } | null;
+  /** Null numbers are what the strict schema's "did not estimate this" looks like; neither counts. */
+  estimate?: { kcal?: number | null; protein_g?: number | null } | null;
   assumption?: string | null;
   question?: string | null;
 }

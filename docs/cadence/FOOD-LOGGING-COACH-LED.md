@@ -1,7 +1,8 @@
 # Food logging, coach-led — design draft
 
-_Status: DRAFT for owner rulings (2026-10-29). The eval is built and run; nothing in the app is
-changed yet._
+_Status: build step 2 SHIPPED 2026-11-01 (the `food-check` job on its own profile, the candidate
+book as a service, the described-meal doors wired through it — see "Suggested build order" and
+"What was built" at the end). Rulings 2, 3, 4 and 6 are still the owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -312,12 +313,87 @@ on the card as an automatic estimate, not hers.
 
 1. ~~The food-check eval~~ — built and run in both shapes (`apps/cadence-api/scripts/eval-food-check*.ts`);
    results above. Owner rules on the model.
-2. The `food-check` job + profile (single-call shape), and the candidate book as a service:
-   `splitMealParts` + fan-out per part + FatSecret top rows (ruling 6), with the answer-format
-   checks from the eval's scorer (`priceItem`: shown ids only, offered measures only).
+2. ~~The `food-check` job + profile (single-call shape), and the candidate book as a service~~ —
+   **built 2026-11-01**, see "What was built" below. The split, the fan-out per part with
+   FatSecret's top rows, the book, the one-call-plus-one shape, the answer-format checks, the
+   pricing through `priceFood`, the phrase memory, the labelled fallback, and the typed/spoken
+   doors on it. Ruling 6 is built as the eval ran it (top 5 rows fetched in full) and stays open.
 3. Change `log_meal` / `preview_meal` to take her rows; keep the waterfall behind them only for
-   the outage case, labelled.
+   the outage case, labelled. _Partly done by step 2: `preview_meal` (the coach's tool) runs the
+   coach-led read because it wraps the same service; a confirmed row that names its food is priced
+   from that food and never re-matched (`food-pricing.ts`). `log_meal` (the coach's one-call
+   write) still runs the old waterfall._
 4. Route the meal screen's Chat / Voice / Photo doors to it; the trace UI, per-row source labels,
-   the assumption line, question rows that do not count.
-5. Write-back of her verdicts (phrase → food) so repeats get faster.
-6. Retire `acceptMatch` and the code-decided research trigger from the logging path.
+   the assumption line, question rows that do not count. _Chat and Voice (`LogByChat`, the
+   quick-log `DescribeSheet`, the plan sheet's capture) are on it, with the trace line, the
+   assumption on the row, her question on an asked row, and the not-reached notice. Photo is
+   not: `parse-meal-description` still prices the reading. Per-row source labels are on the wire
+   (`source_label`) and not yet drawn._
+5. ~~Write-back of her verdicts (phrase → food) so repeats get faster~~ — built in step 2
+   (`food_phrases`, migration 0063): the confirm teaches it, the next read of the same words is a
+   deterministic hit and no call.
+6. Retire `acceptMatch` and the code-decided research trigger from the logging path. _Still in
+   place behind the fallback and behind `log_meal`._
+
+## What was built (step 2, 2026-11-01)
+
+The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.ts`):
+
+1. **The split** (`food-candidate-book.ts`): comma, newline, "and", "with", "+", "&" separate
+   parts; a leading amount is peeled into the lookup's measure; a menu size ("venti") stays in the
+   food's words. Table-tested with the Venti latte as the pinned case (#426).
+2. **The memory first** (`food-phrases.ts`, `repos/food-phrases.ts`, migration `0063`): a part
+   whose words this person confirmed before is priced from the remembered food and amount by
+   `priceFood`, no lookup and no call. The amount they say this time wins over the remembered one
+   when the store can read it. Written only on a confirm (`logMeal({parsed})` and the draft's
+   `appendParsed`), never on a preview walked away from. Until 0063 is applied a recall finds
+   nothing and a remember logs a warning: a miss costs one call, never the meal.
+3. **The book** (`food-candidate-sources.ts` → `fanOutFoodSources` + FatSecret's top 5 rows
+   fetched in full): every record found, per-100 g numbers, the measures each offers with grams,
+   the guards' notes, the fan-out's disagreements, and `incomplete` on a record with no usable
+   calories (run 2's zero-kcal "Cafe Latte"). Ids are the meal's own (`c1`…); the same record seen
+   twice keeps its first id; eight records shown per lookup. The FatSecret line in
+   `sources_checked` is replaced with what actually ran, so the trace stays true.
+4. **One call, at most two** (`food-check.ts`, the `food-check` job): the words, the slot, the
+   book, a `round_rule` variable (lookups offered on the first call only) and `guard_notes`
+   (empty, or the previous reply's problems). The first call may ask for up to 8 more lookups;
+   the second is the last and any lookups it asks for are not made. A pick not in the book, or a
+   measure the record does not offer, goes back once as evidence; after the last call it becomes
+   the model's estimate if it gave one, or an open row that counts nothing.
+5. **The store prices** (`food-pick-portion.ts` → `priceFood`): the pick's measure times the
+   count, as grams for a per-gram food or the serving for a per-item one. The row's `qty`/`unit`
+   are chosen so the confirm re-prices to the same numbers (the measure's own word when it reads
+   back, grams otherwise). An estimate is labelled (`basis: estimate`, "the coach's estimate") and
+   carries the plain name and the brand the person named, so the confirm pins a food and not a
+   sentence. A row with an open question has no amount, so it counts nothing until answered.
+6. **When she cannot be reached** (a provider failure, a reply that is not JSON): the old
+   `parse-meal` + code-picked match prices the pending parts, every row `basis: fallback`
+   ("an automatic estimate"), and the card is told (`coach.reached: false`). The remembered rows
+   stay.
+7. **On the wire**: each row carries `said`, `basis`, `source_label`, `assumption`, `question`,
+   `problem`; the preview carries `coach: { reached, calls, checked[] }` with one trace line per
+   part built from `sources_checked`. The confirm (`parsed` on `POST /nutrition/meals`, and
+   `parsed` on the draft's `/items`) takes `food_id` and `said` back; a row that names its food is
+   priced from it and never re-matched.
+8. **The profile**: `cadence-food-check`, gpt-5.4-mini primary, claude-sonnet-5-5 failover,
+   temperature 0.1 (ruling 1). Created by `scripts/provision-food-check-profile.ts` alone, which
+   proves the primary with a live call after the sync; `sync-jobs.ts` then binds the job to it
+   (the `<CADENCE_FOOD_CHECK_PROFILE_UUID>` token).
+
+What stays as it was: `log_meal` (the coach's one-call write) and the photo door run the old
+pipeline; `acceptMatch` and the research trigger stay behind them and behind the fallback;
+`ai_log` gets a `food_check` row per read (calls, reached, parts, remembered, records, problems).
+
+Decided while building, for the owner to overrule:
+
+- **Question rows are asked as an amount.** The card's only question mechanism is the amount
+  chips; her question is shown on the row in her words, and the row counts nothing until an
+  amount is chosen. A question that is not about the amount ("whole or 2%?") still waits on the
+  chips. Step 4's chips in her voice would replace this.
+- **The confirm trusts a link, not a number.** A row with `food_id` is re-priced from that food;
+  only when the store cannot read the row's portion back does the card's own number stand, and
+  that number came from the same food on the preview.
+- **A renamed row keeps its food.** "Fix the name, keep the numbers" (brief 03) applies to the
+  link too: renaming on the card does not re-match.
+- **FatSecret is always asked on this path** (five rows per part, billed unless already fresh in
+  the ledger). Ruling 6 decides whether that stays.

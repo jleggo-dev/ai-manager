@@ -68,6 +68,7 @@ const parsedItemSchema = z.object({
   unit: z.string().trim().min(1).max(24).optional(),
   est: z.record(z.string(), z.unknown()).optional(),
   food_id: z.string().uuid().optional(),
+  said: z.string().trim().max(200).optional(),
 });
 
 /** POST /:id/items carries exactly one of: a food, a recipe, or already-parsed rows. */

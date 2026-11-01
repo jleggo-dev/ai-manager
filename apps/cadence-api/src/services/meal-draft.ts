@@ -38,6 +38,7 @@ import { isMeal, usageSlot } from './nutrition-parse.ts';
 import { sanitizeMacros } from './nutrition-day.ts';
 import { scaleMacros } from './recipe-macros.ts';
 import { dissolveThinParts, newPartKey } from './meal-parts.ts';
+import { learnDescribedMeal } from './food-phrases.ts';
 
 /** How long a meal accepts adds — visible on-surface as "adds until HH:MM", never a silent rule. */
 export const DRAFT_WINDOW_MS = 3 * 60 * 60 * 1000;
@@ -296,6 +297,8 @@ export interface ParsedDraftItem {
   unit?: string;
   est?: object;
   food_id?: string;
+  /** Their words for the row, from a coach-led preview — what the phrase memory learns from. */
+  said?: string;
 }
 
 /**
@@ -322,6 +325,9 @@ export async function appendParsed(userId: string, logId: string, parsed: Parsed
     });
   const row = await writeItems(userId, meal.log_id, [...(meal.items ?? []), ...appended], meal.parts);
   await learnPostLogAdds(userId, meal, appended);
+  // Logged, and learned (FOOD-LOGGING-COACH-LED.md): the words a linked row was said in now
+  // price without a call next time.
+  await learnDescribedMeal(userId, parsed);
   return row;
 }
 

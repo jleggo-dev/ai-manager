@@ -3,8 +3,8 @@
  * "Cadence Quick Log" 1a, 2026-10-29). A sheet over the drawer, not a screen of its own: the
  * shelves and the cart stay underneath, and closing it lands back on them.
  *
- * The words go to the same parse-and-price lookup the chat door used (`previewMeal` → the
- * `parse-meal` job, through AI Admin). What comes back is listed, one row a food — name, P/C/F,
+ * The words go to the same coach-led read the chat door uses (`previewMeal` → the software
+ * looks every part up, the `food-check` job picks once, the store prices — FOOD-LOGGING-COACH-LED.md). What comes back is listed, one row a food — name, P/C/F,
  * the amount, kcal, × to drop a row — and nothing enters the meal until "Looks right". An amount
  * nobody said is shown as a question, and it waits as a chip on the drawer the way it always has
  * (draft mode: one unsettled amount holds the log, never the add).
@@ -15,7 +15,7 @@ import { CoachFace } from '../../../components/CoachFace.tsx';
 import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
 import { fmtKcal } from '../bracket/copy.ts';
-import { READING } from '../LogByChat.tsx';
+import { NOT_REACHED, READING } from '../LogByChat.tsx';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
 
@@ -39,12 +39,13 @@ export function DescribeSheet({
   onClose: () => void;
 }) {
   const [text, setText] = useState(seed);
-  const [read, setRead] = useState<{ for: string; rows: Row[] } | null>(null);
+  const [read, setRead] = useState<{ for: string; rows: Row[]; coach?: MealPreview['coach'] } | null>(null);
   const [looking, setLooking] = useState(false);
   const [err, setErr] = useState('');
 
   const words = text.trim();
   const fresh = read && read.for === words ? read.rows : null;
+  const coach = read && read.for === words ? read.coach : undefined;
   const kcal = (fresh ?? []).reduce((s, r) => s + (r.est?.kcal ?? 0), 0);
 
   async function lookUp() {
@@ -54,7 +55,7 @@ export function DescribeSheet({
     try {
       const p = await previewMeal(words, meal);
       if (!p.items.length) setErr("I couldn't pick anything out of that — try naming the foods.");
-      setRead({ for: words, rows: p.items });
+      setRead({ for: words, rows: p.items, coach: p.coach });
     } catch {
       setErr("Couldn't look that up just now — try again in a moment.");
     } finally {
@@ -97,13 +98,19 @@ export function DescribeSheet({
           <div className="ms-ds-found">
             <div className="ms-ds-found-h">
               <CoachFace size={22} />
-              <span>Here&apos;s what I found</span>
+              <span>{coach?.reached === false ? NOT_REACHED : "Here's what I found"}</span>
             </div>
+            {/* Her work as it happened — the true trace, one line per part, never canned copy. */}
+            {coach?.checked?.length ? <div className="ms-ds-row-m">Checked {coach.checked.join('; ')}.</div> : null}
             {fresh.map((r, i) => (
               <div className="ms-ds-row" key={`${r.name}-${i}`}>
                 <div className="ms-ds-row-w">
                   <div className="ms-ds-row-n">{r.brand ? `${r.brand} ${r.name}` : r.name}</div>
-                  {macroLine(r.est) && <div className="ms-ds-row-m">{macroLine(r.est)}</div>}
+                  {(macroLine(r.est) || r.assumption || r.question) && (
+                    <div className="ms-ds-row-m">
+                      {[macroLine(r.est), r.assumption, r.question].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
                 </div>
                 <span className={`ms-ds-amt${r.qty == null ? ' is-ask' : ''}`}>{amountWords(r)}</span>
                 <span className="ms-ds-k">

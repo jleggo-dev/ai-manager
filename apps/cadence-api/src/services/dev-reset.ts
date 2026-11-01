@@ -40,6 +40,7 @@ export const DEV_CHILD_TABLES = [
   'device_tokens',
   'episodes',
   'equipment',
+  'food_phrases',
   'food_portions',
   'food_usage',
   'food_usage_ctx',
