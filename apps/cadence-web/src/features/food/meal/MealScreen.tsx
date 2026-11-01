@@ -175,14 +175,7 @@ export function MealScreen({
   const mealTitle = kind[0]!.toUpperCase() + kind.slice(1);
 
   return (
-    <div
-      className="ms ms-quick"
-      aria-busy={draft.loading || undefined}
-      style={{
-        transform: drag.dy ? `translateY(${drag.dy}px)` : undefined,
-        transition: drag.dragging ? 'none' : 'transform 0.3s cubic-bezier(.2,.8,.2,1)',
-      }}
-    >
+    <div ref={drag.ref} className="ms ms-quick" aria-busy={draft.loading || undefined}>
       {/* The drag zone: handle, title, the day. The shelf below keeps its own gestures. */}
       <div className="ms-drag" {...drag.handlers}>
         <div className="ms-grab" aria-hidden="true" />

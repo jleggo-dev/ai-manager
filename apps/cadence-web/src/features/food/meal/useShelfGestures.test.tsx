@@ -7,7 +7,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { DRAG_CLOSE_PX, useDrawerDrag } from './useDrawerDrag.ts';
+import { DRAG_CLOSE_PX, DRAG_LEAVE_MS, useDrawerDrag } from './useDrawerDrag.ts';
 import { HOLD_MS, SWIPE_CHANGE_PX, useHoldTap, useSwipe } from './useShelfGestures.ts';
 import { HOLD_SELECTION_SETTLE_MS } from '../../../lib/holdSelection.ts';
 
@@ -118,7 +118,11 @@ describe('useDrawerDrag', () => {
     act(() => vi.advanceTimersByTime(ms));
     act(() => result.current.handlers.onPointerMove(ev(50, 20 + dy)));
     act(() => result.current.handlers.onPointerUp(ev(50, 20 + dy)));
-    expect(onClose).toHaveBeenCalledTimes(closes ? 1 : 0);
     expect(result.current.dy).toBe(0);
+    expect(result.current.leaving).toBe(closes);
+    // The sheet slides off first; the close lands once it is gone.
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(DRAG_LEAVE_MS));
+    expect(onClose).toHaveBeenCalledTimes(closes ? 1 : 0);
   });
 });
