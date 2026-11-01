@@ -63,14 +63,17 @@ function KeptRow({
           {row.source === 'assumed' && <span className="fa-tag">ASSUMED</span>}
         </span>
         <span className="fa-row-s">{sub}</span>
-      </div>
-      <div className="fa-row-macros">
-        {macros.map((m) => (
-          <span key={m.k} className="fa-row-m">
-            <i>{m.k}</i>
-            {m.v}
-          </span>
-        ))}
+        {/* Under the name, not beside it: as a sibling in the row the strip took the middle and
+            squeezed the name, amount and her note into a one-word column (2026-11-01, photo read
+            of a spanakopita — the long assumption made it visible). */}
+        <div className="fa-row-macros">
+          {macros.map((m) => (
+            <span key={m.k} className="fa-row-m">
+              <i>{m.k}</i>
+              {m.v}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="fa-step">
         <button
