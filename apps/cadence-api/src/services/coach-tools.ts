@@ -138,7 +138,8 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
       meal: {
         type: 'string',
         enum: ['breakfast', 'lunch', 'dinner', 'snack', 'drink', 'other'],
-        description: 'Which meal, when they said one. Omit and the parse guesses from context.',
+        description:
+          'Which meal, when they said one. Omit and it takes the slot the words name ("for lunch"), else other.',
       },
     },
     required: ['text'],

@@ -17,9 +17,11 @@
  *
  * WHAT THIS DOES NOT DO: log anything. `previewMealParse`'s own contract is to pin nothing, so a
  * preview she walks away from — or calls three times while narrowing down the words — leaves no
- * trace and costs nothing beyond the parse itself.
+ * trace and costs nothing beyond the read itself. `log_meal` runs this same read and logs what it
+ * shows (food-log-described.ts, FOOD-LOGGING-COACH-LED.md step 3), so the two never disagree.
  */
-import type { DescribedBasis, Macros, NutritionLog } from '@cadence/shared';
+import { macroLine, rowName, rowWords } from '../food-described-render.ts';
+import type { DescribedMealItem } from '../food-described-rows.ts';
 import { previewMealParse } from '../nutrition.ts';
 import { toolFaultText } from '../tool-response.ts';
 import type { RetrievalFunction } from './types.ts';
@@ -29,22 +31,7 @@ type MealKindParam = (typeof MEAL_KINDS)[number];
 const isMealKindParam = (v: unknown): v is MealKindParam => (MEAL_KINDS as readonly string[]).includes(String(v));
 
 type PreviewMealResult = Awaited<ReturnType<typeof previewMealParse>>;
-type PreviewItem = NutritionLog['items'][number] & {
-  assumption?: string;
-  question?: string;
-  source_label?: string;
-  basis?: DescribedBasis;
-  problem?: string;
-};
-
-/** Where a row's numbers came from, in words she can repeat (FOOD-LOGGING-COACH-LED.md). */
-const BASIS_WORDS: Record<DescribedBasis, string> = {
-  record: 'a record the coach picked',
-  remembered: 'what they picked last time',
-  estimate: "the coach's own estimate",
-  fallback: 'an automatic estimate, the coach not reached',
-  none: 'not counted',
-};
+type PreviewItem = DescribedMealItem;
 
 /**
  * An item counts as PRICED exactly when `priceParsedMeal` decided it did — `est` carries at least
@@ -54,34 +41,16 @@ const BASIS_WORDS: Record<DescribedBasis, string> = {
  */
 const isPriced = (item: PreviewItem): boolean => !!item.est && Object.keys(item.est).length > 0;
 
-function macroLine(est: Macros | null | undefined): string {
-  if (!est) return 'not priced yet';
-  const parts: string[] = [];
-  if (typeof est.kcal === 'number') parts.push(`${Math.round(est.kcal)} kcal`);
-  if (typeof est.protein_g === 'number') parts.push(`${Math.round(est.protein_g)}g protein`);
-  if (typeof est.carbs_g === 'number') parts.push(`${Math.round(est.carbs_g)}g carbs`);
-  if (typeof est.fat_g === 'number') parts.push(`${Math.round(est.fat_g)}g fat`);
-  return parts.length ? parts.join(' · ') : 'not priced yet';
-}
-
-function itemLine(item: PreviewItem): string {
-  const qty = item.qty ? `${item.qty}${item.unit ? ` ${item.unit}` : ''} ` : '';
-  const name = [item.brand, item.name].filter(Boolean).join(' ');
-  // The coach-led read says where each number came from, what it assumed, what it would ask, and
-  // why a row has no number (FOOD-LOGGING-COACH-LED.md) — facts for her, never hidden in the number.
-  const tail = [
-    item.basis ? BASIS_WORDS[item.basis] : '',
-    item.source_label ? `from ${item.source_label}` : '',
-    item.assumption ? `assumed: ${item.assumption}` : '',
-    item.question ? `waiting on their answer: ${item.question}` : '',
-    item.problem ? `why: ${item.problem}` : '',
-  ].filter(Boolean);
-  return `- ${qty}${name}: ${macroLine(item.est)}${tail.length ? ` (${tail.join('; ')})` : ''}`;
-}
+/**
+ * The coach-led read says where each number came from, what it assumed, what it would ask, and
+ * why a row has no number (FOOD-LOGGING-COACH-LED.md) — facts for her, never hidden in the number.
+ * The same words `log_meal` uses for a row (food-described-render.ts), so both tools read alike.
+ */
+const itemLine = (item: PreviewItem): string => `- ${rowWords(item)}`;
 
 /** For an unresolved item, what she should do about it — named per item, never a generic hint. */
 function unresolvedLine(item: PreviewItem): string {
-  const named = [item.brand, item.name].filter(Boolean).join(' ');
+  const named = rowName(item);
   if (item.brand) {
     return (
       `- ${named}: named a brand nothing on file matched. research_food can look it up — pass ` +
@@ -95,7 +64,7 @@ export const PREVIEW_MEAL: RetrievalFunction = {
   name: 'preview_meal',
   mutates: 'none',
   description:
-    'Reads food someone described into an itemised meal WITHOUT logging it — the parse-and-price the Food screen runs before a confirm. Use when unsure the words alone will price cleanly, or to answer a "how many calories" question about food not yet eaten; for the plain case ("had a banana") call log_meal instead, no preview needed. Pass {"text": "two eggs, toast and coffee"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when known — omit and it guesses. Writes nothing; call it as often as you like.',
+    'Reads described food into an itemised meal WITHOUT logging it — the read the Food screen runs before a confirm. Use when unsure the words alone will price cleanly, or to answer a "how many calories" question about food not yet eaten; for the plain case ("had a banana") call log_meal instead. Pass {"text": "two eggs, toast and coffee"}; add {"meal": "breakfast"} (or lunch/dinner/snack/drink/other) when known — omit and it takes the slot the words name, else other. Writes nothing; call it as often as you like.',
   domains: ['nutrition', 'foods'],
 
   async run(userId, params) {
@@ -131,27 +100,26 @@ export const PREVIEW_MEAL: RetrievalFunction = {
         ? 'The food-check model could not be reached, so these are the old automatic estimates, not a checked read.'
         : '';
 
-    // What is true about logging it: log_meal does NOT run this read (it runs the older automatic
-    // match, which can price the same words differently); the Food screen's confirm logs these rows.
+    // What is true about logging it (since 2026-11-01): log_meal runs this same read and logs the
+    // rows it shows; a row waiting on their answer, or one that could not be counted, is handed
+    // back, not logged — log_meal holds those back itself, so no steer about it belongs here.
     const logging =
-      "Note: log_meal does not run this read — it uses the older automatic match and can price the same words differently. The Food screen's confirm logs exactly what is shown here.";
+      "Note: log_meal runs this same read and logs what it shows — a row waiting on their answer, or one that could not be counted, is handed back, not logged. The Food screen's confirm logs exactly what is shown here.";
+    // Parts the split did not read, said as facts: a dropped part must never read as a meal that
+    // never had it (tool-response.ts rule 2).
+    const notRead = r.coach?.not_read?.length ? ['Not read:', ...r.coach.not_read.map((l) => `- ${l}`)] : [];
     const waiting = asked.length
       ? [
           'Waiting on their answer:',
-          ...asked.map((i) => `- ${[i.brand, i.name].filter(Boolean).join(' ')}: ${i.question}`),
+          ...asked.map((i) => `- ${rowName(i)}: ${i.question}`),
           'Ask them, then preview again with the answer in the text.',
         ]
       : [];
     const tail = fullyPriced
       ? [`Everything here is settled. ${logging}`]
-      : [
-          ...waiting,
-          ...(unpriced.length ? ['Unresolved, by name:', ...unpriced.map(unresolvedLine)] : []),
-          'Do not log_meal this and call it done while items are unresolved — say what is missing, or log once you have enough to price it.',
-          logging,
-        ];
+      : [...waiting, ...(unpriced.length ? ['Unresolved, by name:', ...unpriced.map(unresolvedLine)] : []), logging];
 
-    return [head, reached, ...r.items.map(itemLine), ...tail].filter(Boolean).join('\n');
+    return [head, reached, ...r.items.map(itemLine), ...notRead, ...tail].filter(Boolean).join('\n');
   },
 
   rows(result) {
