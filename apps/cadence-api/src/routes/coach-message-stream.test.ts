@@ -25,6 +25,16 @@ const ensureDateStamped = vi.fn();
 const logAi = vi.fn();
 const recordCoachReply = vi.fn();
 const anchorCoachThread = vi.fn();
+const compactCoachSessionAfterReply = vi.fn();
+
+/** What the route handed to `runInBackground`, and whether its response had ended by then. */
+const background: Array<{ label: string; responseEnded: boolean; work: Promise<unknown> }> = [];
+let currentRes: { writableEnded: boolean } | null = null;
+vi.mock('../services/background.ts', () => ({
+  runInBackground: (label: string, work: Promise<unknown>) => {
+    background.push({ label, responseEnded: Boolean(currentRes?.writableEnded), work: work.catch(() => {}) });
+  },
+}));
 
 vi.mock('../ai/aim.ts', () => ({
   AimError: {
@@ -36,6 +46,7 @@ vi.mock('../ai/aim.ts', () => ({
   submitCoachToolOutputs: vi.fn(),
   recordCoachReply: (...a: unknown[]) => recordCoachReply(...a),
   anchorCoachThread: (...a: unknown[]) => anchorCoachThread(...a),
+  compactCoachSessionAfterReply: (...a: unknown[]) => compactCoachSessionAfterReply(...a),
   getCoachPersona: vi.fn(),
   cancelCoachTurn: vi.fn(),
 }));
@@ -87,9 +98,14 @@ vi.mock('../auth/middleware.ts', () => ({
 }));
 
 const { default: coachRoutes } = await import('./coach.ts');
+const { runCaptureExtract } = await import('../services/capture.ts');
 
 const app = express();
 app.use(express.json());
+app.use((_req, res, next) => {
+  currentRes = res;
+  next();
+});
 app.use('/coach', coachRoutes);
 
 const STAGE_FRAME = 'data: {"cadence":"stage","name":"reading"}\n\n';
@@ -126,6 +142,8 @@ async function send(message = 'hi') {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  background.length = 0;
+  compactCoachSessionAfterReply.mockResolvedValue(undefined);
   ensureDateStamped.mockResolvedValue(undefined);
   assembleTurn.mockResolvedValue('assembled message');
   anchorCoachThread.mockResolvedValue(undefined);
@@ -204,5 +222,23 @@ describe('turn metrics', () => {
     const coachLog = await waitForCoachLog();
     const meta = (coachLog[1] as { meta: Record<string, unknown> }).meta;
     expect(meta.toolRounds).toBe(0);
+  });
+});
+
+/**
+ * HARNESS-V3 P1b, finding D: capture and compaction run AFTER the response has ended, and on
+ * Vercel the instance can be frozen the moment it does — awaiting them in the handler was not
+ * enough (background.ts has the measured case). Both must go through `runInBackground`
+ * (`waitUntil`), one label each.
+ */
+describe('after the reply', () => {
+  it('hands capture and compaction to the background, once the response has ended', async () => {
+    await send();
+    await vi.waitFor(() => expect(background.map((b) => b.label)).toEqual(['coach-capture', 'coach-compaction']));
+    expect(background.every((b) => b.responseEnded)).toBe(true);
+
+    await Promise.all(background.map((b) => b.work));
+    expect(compactCoachSessionAfterReply).toHaveBeenCalledWith('u1', 'sess-1');
+    expect(runCaptureExtract).toHaveBeenCalledTimes(1);
   });
 });
