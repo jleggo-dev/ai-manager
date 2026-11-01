@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { DRAG_CLOSE_PX, useDrawerDrag } from './useDrawerDrag.ts';
 import { HOLD_MS, SWIPE_CHANGE_PX, useHoldTap, useSwipe } from './useShelfGestures.ts';
+import { HOLD_SELECTION_SETTLE_MS } from '../../../lib/holdSelection.ts';
 
 const ev = (x: number, y: number, extra: Record<string, unknown> = {}) =>
   ({
@@ -22,7 +23,12 @@ const ev = (x: number, y: number, extra: Record<string, unknown> = {}) =>
   }) as unknown as ReactPointerEvent<HTMLElement>;
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  // A hold leaves the page's selection guard up until the finger lifts — end it between tests.
+  window.dispatchEvent(new Event('pointerup'));
+  vi.advanceTimersByTime(HOLD_SELECTION_SETTLE_MS);
+  vi.useRealTimers();
+});
 
 describe('useHoldTap', () => {
   it.each([
@@ -41,6 +47,21 @@ describe('useHoldTap', () => {
     act(() => result.current.onClick());
     expect(onTap).toHaveBeenCalledTimes(outcome === 'tap' ? 1 : 0);
     expect(onHold).toHaveBeenCalledTimes(outcome === 'hold' ? 1 : 0);
+  });
+
+  it('a hold clears any selection — iOS selects under the sheet the hold opens otherwise', () => {
+    const { result } = renderHook(() => useHoldTap(vi.fn(), vi.fn()));
+    const words = document.body.appendChild(document.createElement('p'));
+    words.textContent = 'Greek yogurt';
+    document.getSelection()!.selectAllChildren(words);
+    expect(document.getSelection()!.toString()).toBe('Greek yogurt');
+    act(() => result.current.onPointerDown(ev(10, 10)));
+    act(() => vi.advanceTimersByTime(HOLD_MS + 10));
+    expect(document.getSelection()!.toString()).toBe('');
+    const e = new Event('selectstart', { bubbles: true, cancelable: true });
+    document.body.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    words.remove();
   });
 
   it('a bare click (keyboard) is a tap; a tile without onHold never holds', () => {

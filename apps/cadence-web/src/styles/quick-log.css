@@ -3,11 +3,11 @@
    on its drawer (.ms-quick), grab handle (.ms-grab) and tile grid; the round doors themselves are
    in food-capture.css. Values are the canvas's own. */
 
-/* ── The doors: type it leads and wears ink ─────────────────────────────────── */
+/* ── The doors: type it leads, drawn like the others ──────────────────────────── */
+/* White like every other door, with its own tint (owner, 2026-11-01: the dark filled pencil read
+   as pressed/selected — "it should look the same as the other buttons"). */
 .fm-tiles-icons .fm-tile-chat {
-  background: oklch(28% 0.03 150);
-  border-color: oklch(28% 0.03 150);
-  color: #fff;
+  color: oklch(28% 0.03 150);
 }
 .ms-doors-row {
   padding: 0 14px;

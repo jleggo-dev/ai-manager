@@ -74,6 +74,12 @@ describe('TaskHoldMenu — the first screen', () => {
     }
   });
 
+  it('the sheet wears the class that keeps iOS from selecting it under a held finger', () => {
+    // The CSS side is pinned in holdSelect.contract.test.ts; this pins that the menu uses it.
+    mount(occ(), '2026-09-08');
+    expect(screen.getByRole('dialog').classList.contains('hm-hold')).toBe(true);
+  });
+
   it('a done task loses "do it now" and keeps the rest', () => {
     mount(occ({ status: 'done' }), '2026-09-08');
     expect(screen.queryByText('Do it now')).toBeNull();

@@ -569,12 +569,16 @@ html[data-native] .sheet-body {
   background: linear-gradient(to top, var(--ink) 60%, transparent);
   pointer-events: none;
 }
+/* Two rows: the field on top across the whole box, the buttons on a row of their own beneath it.
+   Side by side, every button took its width from the words — once the camera joined the
+   paperclip, mic and send, the text wrapped at half the box on the phone (owner, 2026-11-01). */
 .composer {
   position: relative;
   pointer-events: auto;
   display: flex;
-  align-items: flex-end;
-  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   background: rgba(255, 255, 255, 0.88);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
@@ -584,7 +588,9 @@ html[data-native] .sheet-body {
   box-shadow: 0 12px 34px -14px rgba(44, 40, 32, 0.32);
 }
 .composer .field {
-  flex: 1;
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
   background: transparent;
   border: none;
   border-radius: 20px;
@@ -599,6 +605,12 @@ html[data-native] .sheet-body {
   overflow-y: hidden; /* JS grows to ~5 rows, then flips to scroll */
   scrollbar-width: thin;
   scrollbar-color: var(--surface-3) transparent;
+}
+.composer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 .composer .field::placeholder {
   color: var(--text-mute);
@@ -2276,6 +2288,23 @@ html[data-native] .sheet-body {
 .adjust-pill:hover {
   background: rgba(44, 85, 69, 0.12);
 }
+/* The plan's "tell me what to change" box: the words across the full width, the mic and camera
+   on a row beneath — beside the field they squeezed what you were typing. */
+.steer-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.steer-box .steer-in {
+  margin-bottom: 0;
+}
+.steer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .steer-row {
   display: flex;
   align-items: flex-end;
@@ -2759,11 +2788,17 @@ html[data-native] .sheet-body {
 .occ-open:hover .occ-title {
   color: var(--forest);
 }
+/* The scrim has no words, so nothing on it is ever selectable. A hold opens its sheet with the
+   finger still down, and iOS's own long press lands a moment later on whatever is under it now —
+   this scrim. Selectable, it selected the whole page under the hold menu (2026-11-01). */
 .sheet-scrim {
   position: absolute;
   inset: 0;
   background: rgba(44, 47, 51, 0.32);
   z-index: 50;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .sheet {
   position: absolute;

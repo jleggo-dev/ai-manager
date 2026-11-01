@@ -1,4 +1,5 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { guardSelectionThroughHold } from '../../lib/holdSelection.ts';
 
 /** How long a finger rests before a press becomes a hold — the same beat the food bracket uses. */
 export const LONG_PRESS_MS = 450;
@@ -17,6 +18,10 @@ export const HOLD_SLOP_PX = 8;
  * release is swallowed (`onClickCapture`), or the menu would open and the task's own sheet would
  * open on top of it. The context menu is suppressed for the same reason: a long press on iOS
  * otherwise brings up the callout, and on desktop the right-click menu.
+ *
+ * And iOS runs its own text-selection long press on the same finger just after ours fires — onto
+ * the sheet the hold just opened. So the hold also refuses any selection until the finger is up
+ * (lib/holdSelection.ts); without it the whole Plan page went blue under the menu (2026-11-01).
  *
  * With no `onHold` the handlers are inert, so a node that has nothing to offer on a hold still
  * taps exactly as before.
@@ -45,6 +50,7 @@ export function useLongPress(onHold: (() => void) | undefined) {
       timer.current = window.setTimeout(() => {
         timer.current = null;
         fired.current = true;
+        guardSelectionThroughHold();
         onHold();
       }, LONG_PRESS_MS);
     },

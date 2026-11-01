@@ -93,18 +93,22 @@ export function ChatComposer({
           }}
           placeholder={streaming ? 'The coach is replying — tap stop to interrupt' : placeholder}
         />
-        {streaming ? (
-          // A live Stop, not a dead arrow. Someone who has just realised they mistyped should not
-          // have to sit and watch an answer to the wrong question arrive before they can fix it.
-          <button className="send send-stop" onClick={onStop} aria-label="Stop" disabled={!onStop}>
-            <StopIcon />
-          </button>
-        ) : (
-          <>
-            {/* The camera for photos (take one or pick one); the paperclip for documents. */}
-            {tray && <PhotoButton multiple onPick={(files) => void tray.add(files)} />}
-            {tray && <AttachButton tray={tray} />}
-            {/* The mic is ALWAYS here — mounted and visible — and both of those are bugs paid for.
+        {/* The buttons ride on their own row under the field, never beside it: the field keeps the
+            box's whole width for typing. Side by side, each new button took its width from the
+            words — with the camera added the text wrapped at half the box on the phone. */}
+        <div className="composer-tools">
+          {streaming ? (
+            // A live Stop, not a dead arrow. Someone who has just realised they mistyped should not
+            // have to sit and watch an answer to the wrong question arrive before they can fix it.
+            <button className="send send-stop" onClick={onStop} aria-label="Stop" disabled={!onStop}>
+              <StopIcon />
+            </button>
+          ) : (
+            <>
+              {/* The camera for photos (take one or pick one); the paperclip for documents. */}
+              {tray && <PhotoButton multiple onPick={(files) => void tray.add(files)} />}
+              {tray && <AttachButton tray={tray} />}
+              {/* The mic is ALWAYS here — mounted and visible — and both of those are bugs paid for.
                 It was once the `else` branch of the send button, so the first dictated word made
                 the field non-empty, React unmounted MicButton, and its cleanup called abort(),
                 discarding the pending final: dictation killed itself after one word. Mounting it
@@ -114,21 +118,22 @@ export function ChatComposer({
                 a sentence first and it was never there. In an app whose whole promise is that you
                 can just talk to it, the mic disappearing the moment you have said anything is
                 close to the worst possible moment for it to go. It costs 34px to keep. */}
-            <span className="mic-slot">
-              <MicButton value={value} onChange={onChange} disabled={false} />
-            </span>
-            {canSend && (
-              <button
-                className={`send${uploading ? ' is-waiting' : ''}`}
-                onClick={onSend}
-                aria-label={uploading ? 'Sending your files first' : 'Send'}
-                disabled={uploading}
-              >
-                <SendIcon />
-              </button>
-            )}
-          </>
-        )}
+              <span className="mic-slot">
+                <MicButton value={value} onChange={onChange} disabled={false} />
+              </span>
+              {canSend && (
+                <button
+                  className={`send${uploading ? ' is-waiting' : ''}`}
+                  onClick={onSend}
+                  aria-label={uploading ? 'Sending your files first' : 'Send'}
+                  disabled={uploading}
+                >
+                  <SendIcon />
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
       {showDisclaimer && (
         <div className="chat-disclaimer">
