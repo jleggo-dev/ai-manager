@@ -12,7 +12,8 @@
  *
  * A probe matches when EVERY group in `expect` has at least one of its terms in the summary
  * (case-insensitive). Groups stay loose on wording — a summary is allowed to paraphrase — and
- * strict on the thing that would be wrong to lose: the day, the number, the word they used.
+ * strict on the thing that would be wrong to lose: the day, the number, the word they used. A
+ * correction also lists the value it replaced (`mustNotContain`); see `scoreFact` for the rule.
  */
 import { practicePool } from './eval-compaction-pool-practice.ts';
 import { foodPool } from './eval-compaction-pool-food.ts';
@@ -37,6 +38,11 @@ export interface PlantedFact {
   /** What a later turn would need to know, in words. Shown in the report. */
   probe: string;
   expect: string[][];
+  /**
+   * Corrections only: the value the correction replaced. A summary that still states it on its
+   * own fails the fact (`scoreFact`).
+   */
+  mustNotContain?: string[];
 }
 
 /** One thing people talk to the coach about, with enough wording that it can come back unrepeated. */
@@ -99,7 +105,8 @@ const running: CompactionFixture = {
         coach: 'Got it: November 2nd. That buys us three extra weeks, so the build can be gentler.',
       },
       probe: 'When is the race?',
-      expect: [['november 2', 'nov 2', '2 november', 'november 2nd']],
+      expect: [['november 2', 'nov 2', 'nov. 2', '2 november', 'november 2nd']],
+      mustNotContain: ['october 12', 'oct 12', 'oct. 12', '12 october', '12th october', '12th of october'],
     },
     {
       id: 'run-constraint',
@@ -182,6 +189,7 @@ const nourishment: CompactionFixture = {
       },
       probe: 'What do they eat now?',
       expect: [['pescatarian', 'eats fish', 'eating fish', 'fish again']],
+      mustNotContain: ['vegetarian'],
     },
     {
       id: 'food-constraint',
@@ -267,6 +275,7 @@ const practice: CompactionFixture = {
       },
       probe: 'Which piece are they learning now?',
       expect: [['satie', 'gymnop']],
+      mustNotContain: ['chopin', 'nocturne'],
     },
     {
       id: 'mind-constraint',

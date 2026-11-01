@@ -9,8 +9,8 @@ import { COMPACTION_FIXTURES, type PlantedFact } from './eval-compaction-fixture
 import { composeConversation, poolStrings, PRODUCTION_SIZES } from './eval-compaction-filler.ts';
 import { buildFixtureRows, JOB_VARIABLE_CAP } from './eval-compaction-score.ts';
 
-/** Every term the scorer looks for on a fact's behalf. */
-const termsOf = (f: PlantedFact) => f.expect.flat().map((t) => t.toLowerCase());
+/** Every term the scorer looks for on a fact's behalf, kept or forbidden. */
+const termsOf = (f: PlantedFact) => [...f.expect.flat(), ...(f.mustNotContain ?? [])].map((t) => t.toLowerCase());
 const textOf = (e: { user: string; coach: string }) => `${e.user}\n${e.coach}`.toLowerCase();
 /** [term, text] for every term of `facts` found in `texts` — empty is the pass. */
 const hits = (facts: PlantedFact[], texts: string[]) =>
@@ -54,6 +54,19 @@ describe.each(COMPACTION_FIXTURES)('fixture $id', (fixture) => {
         f.expect.filter((g) => !g.some((t) => text.includes(t.toLowerCase()))),
         f.id,
       ).toEqual([]);
+    }
+  });
+
+  it('every correction names the value it replaced, as it was said, and only corrections do', () => {
+    for (const f of fixture.facts) {
+      expect(Boolean(f.mustNotContain?.length), f.id).toBe(f.kind === 'correction');
+      expect(Boolean(f.before), f.id).toBe(f.kind === 'correction');
+      if (f.kind !== 'correction') continue;
+      const said = textOf(f.before!);
+      expect(
+        f.mustNotContain!.some((t) => said.includes(t.toLowerCase())),
+        f.id,
+      ).toBe(true);
     }
   });
 

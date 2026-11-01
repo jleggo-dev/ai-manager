@@ -133,6 +133,8 @@ export interface FactResult {
   kept: boolean;
   /** The `expect` groups with no term present. */
   missing: string[][];
+  /** Corrections: sentences that state the replaced value without the new one (see `scoreFact`). */
+  stale: string[];
   /** Which round first summarized it. */
   round: number;
 }
@@ -152,11 +154,53 @@ export function compactedFacts(
   return out;
 }
 
-/** Does every `expect` group have one of its terms in the summary? */
+/**
+ * Where a summary's sentences end: after . ! or ? (and any closing quote or bracket) followed by a
+ * space and a capital letter or an opening quote or bracket, and at every line break. Never before
+ * a digit or a lower-case letter, so "Oct. 12", "Gymnopédie No. 1" and "6 a.m. and" stay whole.
+ */
+export const SENTENCE_BREAK = /(?<=[.!?]["'”’)]?)\s+(?=[\p{Lu}"'“‘(])|\n+/u;
+export const sentences = (text: string): string[] =>
+  text
+    .split(SENTENCE_BREAK)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+const hasAny = (text: string, terms: readonly string[]) => terms.some((t) => text.includes(t.toLowerCase()));
+
+/**
+ * Is the fact kept? Every `expect` group needs one of its terms somewhere in the summary
+ * (case-insensitive) — and a correction must not still state the value it replaced.
+ *
+ * THE CORRECTION RULE (P3b, 2026-10-31). A correction fails when a sentence of the summary names
+ * the replaced value (`mustNotContain`) WITHOUT the new one (a term from every `expect` group). The
+ * replaced value is allowed only in a sentence that also holds the new value: "the race moved from
+ * October 12 to November 2" records the change, which is honest and worth keeping. A sentence that
+ * names only the old value reads as current — "Race day is October 12th." — and she would believe
+ * it. Strict on purpose: "They learn Satie now. They dropped the Chopin." fails, because its second
+ * sentence names the old piece alone. "Allowed wherever the new value also appears in the summary"
+ * would never fail anything — a kept correction always holds the new value — so the scope is the
+ * sentence. The report quotes the offending sentence, so a reader can overrule the call.
+ */
 export function scoreFact(summary: string, fact: PlantedFact & { round: number }): FactResult {
   const text = summary.toLowerCase();
-  const missing = fact.expect.filter((group) => !group.some((term) => text.includes(term.toLowerCase())));
-  return { id: fact.id, kind: fact.kind, probe: fact.probe, kept: missing.length === 0, missing, round: fact.round };
+  const missing = fact.expect.filter((group) => !hasAny(text, group));
+  const old = fact.mustNotContain ?? [];
+  const stale = old.length
+    ? sentences(summary).filter((s) => {
+        const lower = s.toLowerCase();
+        return hasAny(lower, old) && !fact.expect.every((group) => hasAny(lower, group));
+      })
+    : [];
+  return {
+    id: fact.id,
+    kind: fact.kind,
+    probe: fact.probe,
+    kept: missing.length === 0 && stale.length === 0,
+    missing,
+    stale,
+    round: fact.round,
+  };
 }
 
 /** Where a fact's planted exchange sits in the transcript of the round that first summarized it. */

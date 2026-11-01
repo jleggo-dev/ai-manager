@@ -137,6 +137,7 @@ function capLine(transcript: string): string {
 const pastCap = (f: ScoredFact) => (f.span ? f.span.end > JOB_VARIABLE_CAP : false);
 function factLine(f: ScoredFact): string {
   const miss = f.missing.length ? ` — missing ${f.missing.map((g) => g.join('/')).join(' + ')}` : '';
+  const stale = f.stale.length ? ` — still states the old value: ${f.stale.map((s) => `"${s}"`).join(' ')}` : '';
   let cap = '';
   if (f.span && pastCap(f)) {
     const where = `planted at char ${chars(f.span.start)} of ${chars(f.span.transcriptChars)}`;
@@ -145,7 +146,7 @@ function factLine(f: ScoredFact): string {
         ? ` — ${where}: past the cap, the summarizer never saw it`
         : ` — ${where}: the cap cut it partway`;
   }
-  return `- ${f.kept ? '✓' : '✗'} [${f.kind}, round ${f.round}] ${f.probe}${miss}${cap}`;
+  return `- ${f.kept ? '✓' : '✗'} [${f.kind}, round ${f.round}] ${f.probe}${miss}${stale}${cap}`;
 }
 
 function report(results: RunResult[]): string {
