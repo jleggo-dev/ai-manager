@@ -354,6 +354,53 @@ silence… Removal is an explicit act, and it belongs to Settings"; `capture-goa
 dumbbell pairs, which are both true), stale-by-detour, duplicate-by-spelling. The job output is
 schema-validated. An assertion that the job holds no write path to fact tables.
 
+**Built (P9, 2026-10-31) — what the code settled that the design above left open:**
+- **What it reads.** The same repos capture and `dedup-captured-facts.ts` read; no new query.
+  Constraints and what they do now (`users.baseline`), equipment they own, live goals (captured,
+  confirmed, committed), and detours over the past year and the next three months
+  (`listEpisodeRanges`: type and dates, which is all a detour row holds). Left out on purpose:
+  allergies and dietary choices (never read: a weekly "are you still allergic?" is one step from
+  clearing a flag only the person may clear), a coach's recommendation (`owned: false`), a retired
+  shoe, and parked, completed or abandoned goals.
+- **Ids are local to one run** (`c1`, `n1`, `e1`, `g1`, `d1`), because a model quotes a short id
+  reliably and a uuid not. The stored `evidence` resolves them back into the facts' own words, so a
+  row never depends on them.
+- **Evidence must cite one of the finding's own ids**, as a whole word. Without that it is dropped
+  and counted, with the other drops (an id not in the list, a bad shape, a repeated question).
+- **Two ceilings.** At most 3 written per run, and at most 3 of its questions open at once. Her
+  follow-up list shows 8, newest first; without the second ceiling, three unanswered weeks would push
+  her own promises off it. At the ceiling the job is not called at all.
+- **Asked once.** The open fact-review questions go to the job as `<already_asked>`, and an exact
+  repeat (case, spacing and closing mark ignored) is skipped before writing.
+- **The run guard is the recap week:** `recaps.fact_reviewed_at`, claimed in one UPDATE right after
+  the recap is written. A re-confirm or a double tap finds the week claimed; a second week confirmed
+  within 5 days (catching up two in one sitting) is not reviewed again. On the recap rather than the
+  user row, so the guard never writes to the row that holds the facts. A claimed week whose run
+  fails is not retried; the next check-in runs.
+- **Cadence (R4, unruled):** weekly at the check-in close, as proposed. It lives in one place,
+  `maybeRunFactReview` in `fact-review-trigger.ts`; `FACT_REVIEW_MIN_DAYS_BETWEEN = 28` makes it
+  monthly. It runs after the confirm's response is sent, awaited like ambient capture, and never
+  throws.
+- **Profile:** capture-extract's pinned gpt-class profile (live on gpt-5.1 / gpt-4.1-mini since
+  2026-10-28), so the strict json_schema is native. The cost: repointing that profile for capture's
+  sake moves this job too.
+- **Safe in either order.** Migration `0062_follow_ups_source.sql` adds `follow_ups.source`
+  (`'coach'` default, or `'fact-review'`), `follow_ups.evidence` and `recaps.fact_reviewed_at`. The
+  coach's own `note_follow_up` and every follow-up read work before it is applied (the source is
+  read through `to_jsonb`), so a deploy that lands first breaks nothing; the review fails its claim,
+  logs, and waits for the migration.
+- **Not changed:** the follow-ups section render. A finding shows as its question under "THINGS YOU
+  SAID YOU'D COME BACK TO", which reads as something to come back to. Marking where a line came from
+  belongs to `retrieval/follow-ups-function.ts`, if the owner wants it.
+- **Tests:** a static test that reads every `fact-review*.ts` import and fails on any write but
+  `noteFollowUp` and the claim (the write-verb pattern table-tested with near-misses); the service
+  with the job mocked (evidence drops, both ceilings, the already-open skip, allergies never sent);
+  the trigger (bad week, claimed week, thrown job, missing column); the route (runs after the recap
+  write, answers first, a rejection still answers 200); the job config pinned. Eval:
+  `npm run eval:fact-review` — six fixture files (the four above, a clean file, and a knee
+  constraint beside a knee brace), each expecting one kind or nothing. The owner runs it after
+  `sync-jobs`; `--dry` prints the cases free.
+
 ---
 
 ## Order of work
@@ -370,7 +417,7 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 | P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint | — | `scripts/` | — |
 | P7 | C3: follow-ups store, two tools, pack section — BUILT, in review | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
 | P8 | C6: TOOL-HARNESS rule (doc); food-check continues on its own plan | — | docs | — |
-| P9 | C7: `fact-review` job, hooked to check-in close | P7 | new job + service | `sync-jobs` |
+| P9 | C7: `fact-review` job, hooked to check-in close — BUILT, in review | P7 | new job + service, `follow-ups.ts`, `recaps.ts`, `week-review.ts` | Cadence migration 0062 (owner go), then `sync-jobs` |
 
 P1, P5, P6 and P7 touch disjoint files and can run in parallel. P2→P3→P4 and P7→P9 are chains.
 
