@@ -156,7 +156,9 @@ export async function maybeCompactSession(
     const plan = planCompaction(session, messages, summarizer, threshold);
     unchanged = { ...unchanged, estimatedTokens: plan.estimatedTokens };
     if (plan.transcript === undefined) {
-      if (plan.skipped) console.info('[session-compaction] skipped:', plan.skipped, { sessionId, threshold });
+      if (plan.skipped) {
+        (plan.loud ? console.warn : console.info)('[session-compaction] skipped:', plan.skipped, { sessionId, threshold });
+      }
       return unchanged;
     }
     return (await foldOnce(session, summarizer, plan, callingApplication, threshold)) ?? unchanged;

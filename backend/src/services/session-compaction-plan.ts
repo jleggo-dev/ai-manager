@@ -27,6 +27,16 @@ import {
  */
 export const TRANSCRIPT_BUDGET_CHARS = MAX_VARIABLE_LENGTH - 100;
 
+/**
+ * The most summary the job can read back. `existingSummary` is a job variable like `transcript`,
+ * and `interpolateTemplate` cuts every variable at `MAX_VARIABLE_LENGTH`. The structured summary
+ * keeps its headings in a fixed order, so a cut drops the LAST ones (where things stand, what did
+ * not work) without a word. Past this the planner refuses to fold and says so (see `NoCompaction`).
+ * At ~130 words a round that is roughly the eighth fold; the fix for a session that long is a fold
+ * of the summary onto itself, not a bigger cap — logged in HARNESS-V3 C5.4.
+ */
+export const SUMMARY_BUDGET_CHARS = MAX_VARIABLE_LENGTH;
+
 /** Appended when one row alone is longer than the budget and has to be shortened to fit. */
 const CUT_MARK = ' … [cut to fit the summarizer]';
 
@@ -168,6 +178,8 @@ export interface NoCompaction {
   estimatedTokens: number;
   transcript?: undefined;
   skipped?: string;
+  /** The skip is a fault to look at, not a quiet day: the caller logs it as a warning. */
+  loud?: true;
 }
 
 /**
@@ -195,6 +207,16 @@ export function planCompaction(
   const estimatedTokens = estimateSessionTokens(session, sent);
   const limit = threshold === 'ceiling' ? summarizer.ceilingTokens : summarizer.triggerTokens;
   if (estimatedTokens < limit) return { estimatedTokens };
+
+  // A summary the job could only read in part is never folded on: the cut would be silent.
+  const summaryChars = (session.session_summary ?? '').length;
+  if (summaryChars > SUMMARY_BUDGET_CHARS) {
+    return {
+      estimatedTokens,
+      loud: true,
+      skipped: `the summary is ${summaryChars} chars, over the ${SUMMARY_BUDGET_CHARS} the job can read; a fold would cut its last headings`,
+    };
+  }
 
   // Instructions, pinned rows and the summary row are held out: buildCompactedHistory re-attaches them.
   const isPinned = rowMatcher(summarizer.pinnedRowPattern);
