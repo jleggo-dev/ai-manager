@@ -1,5 +1,5 @@
 /**
- * Which of the 29 schema jobs can go to the gateway strict, pinned by name.
+ * Which of the schema jobs (29 at the evaluation, 30 with fact-review) can go to the gateway strict, pinned by name.
  *
  * OpenAI strict mode rejects any object without `additionalProperties: false` (measured
  * 2026-10-29: `'additionalProperties' is required to be supplied and to be false`). The job
@@ -78,8 +78,8 @@ function everyObjectClosed(node: unknown, path = ''): string[] {
 }
 
 describe('closeSchemaForStrictMode over every schema job in ai-admin.config.json', () => {
-  it('sees the 29 jobs the evaluation counted', () => {
-    expect(schemaJobs).toHaveLength(29);
+  it('sees the 30 schema jobs on file (the 29 the evaluation counted, plus fact-review from HARNESS-V3 P9)', () => {
+    expect(schemaJobs).toHaveLength(30);
   });
 
   it('sends exactly these jobs non-strict (a bare object somewhere in their schema)', () => {
