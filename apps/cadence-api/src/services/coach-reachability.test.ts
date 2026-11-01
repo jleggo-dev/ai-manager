@@ -141,4 +141,9 @@ describe('the onboarding facts survive a compacted session', () => {
   it('objectives ride every turn — a coach does not ask what you are working toward twice', () => {
     expect(TURN_FLOOR_FUNCTIONS as readonly string[]).toContain('get_objectives');
   });
+
+  /** P7b: the pack no longer carries follow-ups (context-pack.test.ts), so the floor is their only route. */
+  it('follow-ups ride every turn — the floor is their only copy', () => {
+    expect(TURN_FLOOR_FUNCTIONS as readonly string[]).toContain('get_follow_ups');
+  });
 });

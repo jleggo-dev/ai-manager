@@ -69,8 +69,10 @@ export const TURN_FLOOR_FUNCTIONS = [
   // have to go looking for, and a coach who forgets it is the brand promise inverted. One short
   // line per goal.
   'get_objectives',
-  // Added 2026-10-31 (HARNESS-V3 C3): what she said she would come back to. Renders '' when
-  // nothing is open, so a person with no follow-ups pays nothing for it.
+  // Added 2026-10-31 (HARNESS-V3 C3): what she said she would come back to. The ONLY copy since
+  // P7b — the pinned pack no longer carries it, because she opens and closes these mid-session.
+  // Renders '' for someone who never had one (they pay nothing), and "none open right now" once
+  // they have, so a list from an earlier turn never stands as the current one.
   'get_follow_ups',
 ] as const;
 

@@ -82,9 +82,12 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
  * that morning ("all of my equipment has disappeared from her memory"). A handful of owned items
  * renders in ~30 tokens.
  */
-// Follow-ups joined 2026-10-31 (HARNESS-V3 C3): what she said she would come back to belongs in
-// every conversation's opening pack, whatever its intent, and renders '' when nothing is open.
-const MANDATORY = ['get_identity', 'get_constraints', 'get_weight', 'get_equipment', 'get_follow_ups'];
+// Follow-ups are NOT here, on purpose (HARNESS-V3 P7b). They joined 2026-10-31, and the pack is
+// built once and pinned for the session's life — so an item she closed mid-session stayed in it as
+// open, and when she closed the last one the per-turn floor went quiet and the pinned copy was the
+// only list she could see. Her open follow-ups change during a conversation, because she changes
+// them; the per-turn floor (TURN_FLOOR_FUNCTIONS) re-reads them every turn and is their only copy.
+const MANDATORY = ['get_identity', 'get_constraints', 'get_weight', 'get_equipment'];
 
 const TTL_DAYS: Partial<Record<CoachIntent, number>> = { onboarding: 1 };
 

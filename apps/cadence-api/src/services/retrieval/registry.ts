@@ -616,7 +616,7 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // The calendar as written, further than the 7 days get_active_plan carries (owner 2026-09-15).
   // Tail category `plan`.
   [GET_CALENDAR.name]: GET_CALENDAR,
-  // The things she said she would come back to (HARNESS-V3 C3). Dossier: in the pack's MANDATORY
-  // list and the per-turn floor, never a tail tool — the writes are note_/close_follow_up.
+  // The things she said she would come back to (HARNESS-V3 C3). Dossier: in the per-turn floor
+  // only (not the pinned pack — P7b), never a tail tool — the writes are note_/close_follow_up.
   [GET_FOLLOW_UPS.name]: GET_FOLLOW_UPS,
 };
