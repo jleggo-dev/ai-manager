@@ -239,9 +239,10 @@ notice.
 ### C5. Evals built from real failures, and run on every model change
 
 **What exists.**
-- `eval:tools`: 64 cases (header says 33, doc says 66; fix both), first turns only, run against
-  deployed prod, manual, no pass threshold, ~1.6M input tokens per run, ±3 F1 between runs of the
-  same code.
+- `eval:tools`: 68 cases after P7 (66 at the last full run, 2026-09-15; the case-file header said 58
+  and the runner's 33 — neither header states a number now, the runner prints it), first turns
+  only, run against deployed prod, manual, no pass threshold, ~1.6M input tokens per run, ±3 F1
+  between runs of the same code.
 - `eval:outcomes`: 11 multi-turn scenarios asserting database state.
 - `eval-conversation-replay.ts`: one conversation.
 - `diagnostic_logs` already stores `llm_request`, `llm_response` and `chat_session_id` for every
@@ -307,6 +308,56 @@ notice.
      dialogue once injected rows are dropped), so there is room, but a chattier user would hit it
      silently: the tail of the round would be "... [truncated]" and gone. Not fixed here; the right
      answer is probably a per-job override of the cap, or compaction splitting a round in two.
+
+**Built (P6, 2026-10-31): C5.1–C5.3.**
+- **`npm run eval:mine`** (`scripts/mine-eval-candidates.ts`; patterns in `eval-mine-patterns.ts`,
+  table-tested with near-misses). A coach turn is a `diagnostic_logs` row whose `processing_job_id`
+  is the `cadence-coach-chat` job and whose `chat_session_id` is set; `calling_application` is
+  `platform:cadence` on Broker jobs too, so it does not tell them apart. `llm_request.promptContent`
+  is the person's message and `llm_response.rawContent` her reply. **The diagnostic row holds no
+  tool calls**: those come from Cadence `ai_log` `coach_tool` rows, which name the person but not
+  the conversation, so they are joined by person and time. Turns from deleted or `@cadence.test`
+  accounts are skipped; they are the eval's own throwaway users (685 of 873 rows in 90 days). Writes
+  a gitignored markdown file (`apps/cadence-api/eval-candidates-<date>.md`) with an empty
+  "promote as:" line each; `--dry` prints counts only. First reading, 2026-10-31: 30 days held 9
+  turns and no candidates (little coach traffic since mid-September); 90 days held 188 real turns
+  in 20 conversations and **16 candidates: 7 promised a change with no action, 5 corrected in the
+  next message, 4 over 120 s, 0 tool faults.** None reviewed or promoted yet.
+- **`npm run eval:tools:smoke`**: 13 cases named, each with its reason, in
+  `scripts/eval-tool-selection-smoke.ts`. `--dry` estimates ~325K prompt tokens against ~1.7M for
+  all 68 (19%). `--floor <F1>` exits non-zero under it and prints the gap, on any selection;
+  `--smoke` defaults the floor from `scripts/eval-tool-selection.baseline.json`: the last recorded
+  full run, **82.9** (2026-09-15, TOOL-HARNESS.md), minus 5 = **77.9**. `--json` writes the result.
+- **`repoint-profile.ts --verify`**: runs the smoke on the new coach primary and, on a miss (F1
+  under the floor, no tool call seen, another model answered, or no result), writes back the
+  pointers read before the write and exits non-zero. `--force "<reason>"` keeps the pointer through
+  a miss. Every verified repoint appends a line to `config/ai-admin/repoint-log.jsonl`. Refused
+  before any write: a failover-only change, a profile the coach chat does not use, no floor,
+  `--force` without a reason.
+
+**Where it differs from the design above:**
+1. **`--verify` writes first, then reverts; "before" is not achievable today.** A coach chat turn
+   reads the model from the profile row on every send, and neither `openChatSession` nor
+   `sendChatMessage` takes a model override. `modelOverride` exists only on one-shot job execution,
+   which runs no tools, so it cannot run this eval. For the ~10 minutes of the smoke run the new
+   model answers every coach turn, real users included; the script says so first and prints the
+   restore command, and Ctrl-C restores. Testing before the write needs an engine change (a
+   per-session model override, and a way for the eval to ask the deployed API for it). Owner's call.
+2. **`--verify` proves a primary only.** The coach chat has no failover path at all; only job
+   execution fails over. A failover still needs a live call.
+3. **The smoke leaves out cases the model on file already missed** in the last full run (A13, A16,
+   A20–A23, A27–A29): a case today's model fails cannot tell a worse model from this one, and it
+   would drag the smoke F1 under the full-run number it is compared with.
+4. **The floor compares a smoke F1 with a full-run F1** until a smoke baseline exists. The baseline
+   file has a `smokeF1` slot (null); once the owner records a smoke run on a trusted pointer, the
+   floor becomes `smokeF1 − 5`. The 82.9 itself is from `claude-sonnet-5` (no longer served) on 66
+   cases; the coach is on `claude-sonnet-5-5` now. The first smoke run should be recorded.
+5. **Action tools' faults are not detected.** The miner reads `toolFaultText`'s wording from the
+   function. Action tools fail with a separate sentence in `coach-tools.ts` that is not exported;
+   it can be added once P5 gives action faults a shared text.
+
+**R5 is still open.** The gate is built as proposed (a miss reverts), with `--force "<reason>"` as
+the way through. "Report only" would be a one-line change: log the miss and keep the pointer.
 
 **Cost.** Mining is read-only SQL, essentially free. Smoke ≈ 300K tokens per run. The
 compaction eval ≈ 3 conversations × ~30 turns: owner-gated, like `eval:tools` is today.

@@ -1,0 +1,10 @@
+{
+  "fullRunF1": 82.9,
+  "measuredAt": "2026-09-15",
+  "commit": "81bf20a8",
+  "cases": 66,
+  "model": "claude-sonnet-5",
+  "source": "docs/cadence/TOOL-HARNESS.md, the 2026-09-15 row (recorded in #420)",
+  "smokeF1": null,
+  "smokeMeasuredAt": null
+}

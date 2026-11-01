@@ -52,3 +52,6 @@ frontend/dist/
 
 # Husky's own auto-generated internal shims (not actual hooks - see .husky/pre-commit)
 .husky/_
+
+# Mined eval candidates (npm run eval:mine) — real people's words from the coach logs; never commit
+apps/cadence-api/eval-candidates-*.md
