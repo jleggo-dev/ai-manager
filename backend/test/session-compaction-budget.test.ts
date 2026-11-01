@@ -122,9 +122,9 @@ describe('A: a round never hands the summarizer more than it can read', () => {
     expectNothingFallsBetween();
   });
 
-  it('the budget is derived from the variable cap, never hand-copied', () => {
-    expect(TRANSCRIPT_BUDGET_CHARS).toBeLessThan(MAX_VARIABLE_LENGTH);
-    expect(TRANSCRIPT_BUDGET_CHARS).toBeGreaterThan(MAX_VARIABLE_LENGTH - 500);
+  it('the fold is the measured 9,900 and never more than the engine reads', () => {
+    expect(TRANSCRIPT_BUDGET_CHARS).toBe(9_900);
+    expect(TRANSCRIPT_BUDGET_CHARS).toBeLessThanOrEqual(MAX_VARIABLE_LENGTH - 100);
   });
 
   it(`after a reply, a backlog catches up ${AFTER_REPLY_MAX_ROUNDS} rounds at a time`, async () => {
