@@ -697,21 +697,32 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
      * Capacitor shows foreground banners by default, so "notify always" would banner over an
      * active chat; these two gates are what make "always" mean "always when you actually left".
      *
-     * Awaited, like everything else after the stream: a promise left running past the handler is
-     * a promise this platform may never finish (#195).
+     * Handed to `runInBackground`, like everything else below (HARNESS-V3 P7b). It was awaited, on
+     * the reasoning that a promise left running past the handler may never finish (#195) — true,
+     * and an await after `res.end()` is no better: the response has ended, so the instance can be
+     * frozen mid-await. Over 60 days, 121 coach turns left 40 `coach` log rows. `waitUntil` keeps
+     * the invocation alive until the work settles; an await does not.
      */
-    await notifyIfTheyLeft({ userId, armed, clientAlive, content, sessionIdParam, responseId });
+    runInBackground(
+      'coach-notify',
+      notifyIfTheyLeft({ userId, armed, clientAlive, content, sessionIdParam, responseId }),
+    );
 
-    await recordCoachTurn(userId, req.params.id as string, message, content, {
-      model,
-      promptTokens,
-      cachedPromptTokens,
-      completionTokens,
-      responseId,
-      clientDropped,
-      ms: turnMs,
-      toolRounds,
-    });
+    // The turn's X-ray trace and its `coach` log row. Independent of the push above — neither
+    // reads what the other writes — so each settles on its own.
+    runInBackground(
+      'coach-record',
+      recordCoachTurn(userId, req.params.id as string, message, content, {
+        model,
+        promptTokens,
+        cachedPromptTokens,
+        completionTokens,
+        responseId,
+        clientDropped,
+        ms: turnMs,
+        toolRounds,
+      }),
+    );
 
     // Ambient capture (what it does: see runAmbientCapture above) and compaction (see
     // compactCoachSessionAfterReply). The response has ENDED by now, and on Vercel the instance
