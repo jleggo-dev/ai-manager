@@ -1,4 +1,4 @@
-import { FOLLOW_UP_ID_PREFIX, readFollowUpList, type FollowUp, type FollowUpList } from '../../repos/follow-ups.ts';
+import { FOLLOW_UP_ID_PREFIX, getFollowUpList, type FollowUp, type FollowUpList } from '../../repos/follow-ups.ts';
 import type { RetrievalFunction } from './types.ts';
 
 /**
@@ -74,7 +74,7 @@ export const GET_FOLLOW_UPS: RetrievalFunction = {
     'The things you told the user you would come back to, or they asked you to remember — noted with note_follow_up, still open. Soonest due first, then newest, with the date you gave and how long each has been open. In your context every turn; nothing to fetch.',
   domains: ['follow_ups'],
   async run(userId) {
-    return readFollowUpList(userId);
+    return getFollowUpList(userId);
   },
   render(r) {
     return renderFollowUps(r as FollowUpList);

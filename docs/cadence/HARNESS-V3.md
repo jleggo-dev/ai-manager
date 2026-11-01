@@ -282,7 +282,7 @@ No migration; stacks on P9 (#441) for the `source` column.
 - **Expiry counts from the due date.** `greatest(created_at, due_on)`: a follow-up noted in
   November and due in March is not expired in February. The list orders soonest due first, then
   undated newest first (it was newest first, which put tomorrow's date below eight newer notes).
-- **The cap says what it hides.** `readFollowUpList` carries the open total; past 8 the section adds
+- **The cap says what it hides.** `getFollowUpList` carries the open total; past 8 the section adds
   "And N more open, not shown here: older ones with no date" (or "ones due later, or with no date"
   when the last shown is dated) — read from the order, never a pick.
 - **The floor is the only copy.** `get_follow_ups` left the pack's MANDATORY list: the pack is

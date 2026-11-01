@@ -184,7 +184,7 @@ d('follow-ups repo (DB)', () => {
 
   it('finding 2: the list says how many are open in all, past the cap', async () => {
     for (let i = 0; i < repo.FOLLOW_UPS_SHOWN + 2; i++) await repo.noteFollowUp(USER, { text: `zzq item ${i}` });
-    const list = await repo.readFollowUpList(USER);
+    const list = await repo.getFollowUpList(USER);
     expect(list.items).toHaveLength(repo.FOLLOW_UPS_SHOWN);
     expect(list.open).toBe(repo.FOLLOW_UPS_SHOWN + 2);
     expect(list.everHad).toBe(true);
@@ -193,17 +193,17 @@ d('follow-ups repo (DB)', () => {
   });
 
   it('finding 3: never had one → nothing; had one and closed it → none open; open → the list', async () => {
-    expect(await repo.readFollowUpList(USER)).toEqual({ items: [], open: 0, everHad: false });
+    expect(await repo.getFollowUpList(USER)).toEqual({ items: [], open: 0, everHad: false });
 
     const f = await repo.noteFollowUp(USER, { text: 'zzq see how the knee is' });
-    const open = await repo.readFollowUpList(USER);
+    const open = await repo.getFollowUpList(USER);
     expect(open.items.map((i) => i.follow_up_id)).toEqual([f.follow_up_id]);
     expect(open.open).toBe(1);
 
     await repo.closeFollowUp(USER, f.follow_up_id, 'coach');
-    expect(await repo.readFollowUpList(USER)).toEqual({ items: [], open: 0, everHad: true });
+    expect(await repo.getFollowUpList(USER)).toEqual({ items: [], open: 0, everHad: true });
     // Another person's rows never count as theirs.
-    expect((await repo.readFollowUpList(OTHER)).everHad).toBe(false);
+    expect((await repo.getFollowUpList(OTHER)).everHad).toBe(false);
   });
 
   it.each([
@@ -221,13 +221,13 @@ d('follow-ups repo (DB)', () => {
     const { NOTE_FOLLOW_UP, CLOSE_FOLLOW_UP } = await import('../services/coach-action-follow-ups.ts');
     const refused = await NOTE_FOLLOW_UP.run(USER, { text: 'zzq race entry', due_on: '2026-02-30' });
     expect(refused).toMatch(/^nothing changed: .*a real day/);
-    expect(await repo.readFollowUpList(USER)).toEqual({ items: [], open: 0, everHad: false });
+    expect(await repo.getFollowUpList(USER)).toEqual({ items: [], open: 0, everHad: false });
 
     const noted = await NOTE_FOLLOW_UP.run(USER, { text: 'zzq race entry', due_on: '2026-11-07' });
     const id = /\[([0-9a-f]{8})\]/.exec(noted)?.[1];
     expect(id).toBeDefined();
     const closed = await CLOSE_FOLLOW_UP.run(USER, { id: `[${id}]`, outcome: 'zzq entry confirmed' });
     expect(closed).toMatch(/^changed: Closed \[/);
-    expect((await repo.readFollowUpList(USER)).open).toBe(0);
+    expect((await repo.getFollowUpList(USER)).open).toBe(0);
   });
 });

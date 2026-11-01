@@ -122,7 +122,7 @@ export interface FollowUpList {
   everHad: boolean;
 }
 
-export async function readFollowUpList(userId: string, limit = FOLLOW_UPS_SHOWN): Promise<FollowUpList> {
+export async function getFollowUpList(userId: string, limit = FOLLOW_UPS_SHOWN): Promise<FollowUpList> {
   const rows = await selectOpen(userId, limit);
   const open = rows[0]?.open_total ?? 0;
   if (open > 0) return { items: rows.map(withoutTotal), open, everHad: true };
