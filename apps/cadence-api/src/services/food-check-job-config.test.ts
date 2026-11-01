@@ -91,6 +91,9 @@ describe('food-check job config', () => {
       expect(item[k]?.nullable, k).toBe(true);
     expect(item.said?.nullable).toBeUndefined();
     expect(Object.keys(item.estimate?.fields ?? {}).sort()).toEqual(['kcal', 'protein_g']);
+    // Strict mode makes every declared field required, so "did not estimate this" has to be a
+    // legal null on each number — the parser (food-check.ts) and the scorer both read it that way.
+    for (const k of ['kcal', 'protein_g']) expect(item.estimate?.fields?.[k]?.nullable, `estimate.${k}`).toBe(true);
     expect(Object.keys(fields.lookups?.items?.fields ?? {}).sort()).toEqual(['brand', 'measure', 'q']);
     expect(job?.config.formattingRules?.find((r) => r.type === 'require-keys')?.options?.keys).toEqual([
       'items',
@@ -104,7 +107,10 @@ describe('food-check job config', () => {
   });
 
   it('declares every placeholder the prompt uses; the words, the book and the round rule are required', () => {
-    const used = [...new Set([...template.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)].map((m) => m[1]))].sort();
+    // The engine's own pattern (job-execution-utils.ts): `{{name}}` with no spaces. A placeholder
+    // written `{{ name }}` would be left unfilled in production, so none is tolerated here either.
+    const used = [...new Set([...template.matchAll(/\{\{([\w.-]+)\}\}/g)].map((m) => m[1]))].sort();
+    expect(template).not.toMatch(/\{\{\s|\s\}\}/);
     const declared = (job?.config.variables ?? []).map((v) => v.name).sort();
     expect(used).toEqual(declared);
     for (const name of ['said', 'book', 'round_rule', 'meal']) {
@@ -126,6 +132,20 @@ describe('food-check job config', () => {
     expect(template).toContain('The app shows it to the person as your estimate');
     expect(template).toContain('the app does not count it until the question is answered');
     expect(template).toContain('A record marked incomplete has no usable calories');
+  });
+
+  it('gives facts, not picks (owner 2026-09-03): the steers are gone, the boundaries stay', () => {
+    expect(template).not.toContain('Do not pick it when another record fits');
+    expect(template).not.toMatch(/choose the one that matches what they said/);
+    expect(template).not.toContain('usual measure');
+    expect(template).toContain('say in assumption which record you took');
+    expect(template).toContain('say in assumption what you took as the amount');
+  });
+
+  it('defines the book the way it is rendered: per 100 g by weight, per its measure per item, a cut announced', () => {
+    expect(template).toContain('per one of its measure for a food kept per item');
+    expect(template).toContain('not shown for room');
+    expect(template).toContain('"kcal": number | null, "protein_g": number | null');
   });
 
   it('names the near-miss that started this: a plain latte is not a matcha latte', () => {

@@ -46,7 +46,8 @@ export function DescribeSheet({
   const words = text.trim();
   const fresh = read && read.for === words ? read.rows : null;
   const coach = read && read.for === words ? read.coach : undefined;
-  const kcal = (fresh ?? []).reduce((s, r) => s + (r.est?.kcal ?? 0), 0);
+  // A row waiting on her question carries no number; it is not in the total until answered.
+  const kcal = (fresh ?? []).filter((r) => !r.question).reduce((s, r) => s + (r.est?.kcal ?? 0), 0);
 
   async function lookUp() {
     if (!words || looking) return;

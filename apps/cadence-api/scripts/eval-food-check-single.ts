@@ -15,8 +15,11 @@
  * forces the second round.
  *
  * Two runners: `runMealSingle` is run 2's own prompt (buildSinglePrompt, kept so its numbers stay
- * reproducible); `runMealConfig` is the SHIPPED job — the config's promptTemplate filled with the
- * same variables production sends, through the same round loop (services/food-check.ts).
+ * reproducible); `runMealConfig` is the SHIPPED job — the service's split, book and round loop
+ * (services/food-check.ts) sending the template's VARIABLES, so the engine fills the config's own
+ * promptTemplate exactly as production: each variable wrapped in `<user_input name="…">`, each cut
+ * at MAX_VARIABLE_LENGTH. The eval never builds the prompt itself (run 3 did, as one `{{prompt}}`
+ * variable, and so never saw the wrapper or the cut).
  */
 import type { FanOutResult } from '../src/services/food-source-fanout.ts';
 import {
@@ -131,17 +134,11 @@ export async function runMealSingle(c: FoodCheckCase, deps: SingleDeps): Promise
   return out;
 }
 
-/** `{{name}}` → value, the way the engine fills a template. Unknown placeholders stay as written. */
-export function fillTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, name: string) => (name in vars ? vars[name]! : m));
-}
-
 export interface ConfigDeps {
-  run: (prompt: string) => Promise<RoundRun>;
+  /** One call of a job that carries the shipped promptTemplate and variables; the engine fills it. */
+  run: (vars: FoodCheckVars) => Promise<RoundRun>;
   /** The production lookup: the fan-out plus FatSecret's top rows (food-candidate-sources.ts). */
   lookup: BookLookupFn;
-  /** The `food-check` job's promptTemplate, as the config ships it. */
-  template: string;
 }
 
 /**
@@ -159,7 +156,7 @@ export async function runMealConfig(c: FoodCheckCase, deps: ConfigDeps): Promise
       { meal: c.meal, said: c.text, book },
       {
         call: async (vars: FoodCheckVars) => {
-          const r = await deps.run(fillTemplate(deps.template, { ...vars }));
+          const r = await deps.run(vars);
           rounds.push(r);
           return r.raw;
         },
@@ -172,5 +169,8 @@ export async function runMealConfig(c: FoodCheckCase, deps: ConfigDeps): Promise
   } catch (e) {
     out.error = `failed: ${String(e).slice(0, 200)}`;
   }
+  // What the model could pick from: the records the budgeted book actually rendered, not every
+  // record found — an id past the cut is one it never saw.
+  out.shown = book.shown();
   return out;
 }

@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FanOutResult } from './food-source-fanout.ts';
 import type { SourceCandidate } from './food-source-report.ts';
-import { CandidateBook } from './food-candidate-book.ts';
+import { CandidateBook, MAX_PARTS } from './food-candidate-book.ts';
 import {
   FOOD_CHECK_MAX_CALLS,
   ROUND_RULE_LAST,
@@ -98,6 +98,10 @@ describe('parseFoodCheckReply', () => {
   });
   it.each(['', 'no json here', '{"meal":"x"}', '[1,2]'])('%j is not a reply', (raw) => {
     expect(parseFoodCheckReply(raw)).toBeNull();
+  });
+  it('caps the items at the parts a meal can have — the confirm takes at most twelve rows', () => {
+    const items = Array.from({ length: 14 }, (_, i) => item({ said: `part ${i}` }));
+    expect(parseFoodCheckReply(JSON.stringify({ items, lookups: [] }))?.items).toHaveLength(MAX_PARTS);
   });
 });
 

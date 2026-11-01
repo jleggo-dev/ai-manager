@@ -19,6 +19,10 @@
  * primary is not callable and the pointer must not be left as it is. The failover is not
  * exercised by this call — prove it with a live call too before relying on it.
  *
+ * IT CREATES, IT DOES NOT RE-POINT. `/api/sync` upserts by slug, so a second run would write the
+ * config's pointers over a live repoint (scripts/repoint-profile.ts is how a pointer moves). When
+ * the profile already exists this stops and says so; `--force` overwrites it on purpose.
+ *
  * Run:  npx tsx apps/cadence-api/scripts/provision-food-check-profile.ts
  * Then: npx tsx apps/cadence-api/scripts/sync-jobs.ts   (binds food-check to the new profile)
  */
@@ -81,7 +85,17 @@ const cfg = JSON.parse(readFileSync(path.join(root, 'config/ai-admin/ai-admin.co
 const profile = cfg.profiles.find((p) => p.slug === SLUG);
 if (!profile) throw new Error(`${SLUG} profile missing from ai-admin.config.json`);
 
-const broker = (await liveProfiles()).find((p) => p.slug === 'cadence-broker');
+const FORCE = process.argv.includes('--force');
+const live = await liveProfiles();
+const existing = live.find((p) => p.slug === SLUG);
+if (existing && !FORCE) {
+  console.log(
+    `${SLUG} already exists → ${existing.id} (${existing.external_ai_id}, failover ${existing.failover_external_ai_id}). ` +
+      'Nothing written: a re-run would overwrite a live repoint. Pass --force to overwrite on purpose.',
+  );
+  process.exit(0);
+}
+const broker = live.find((p) => p.slug === 'cadence-broker');
 if (!broker?.provider_id) throw new Error('live cadence-broker profile not found — provision-aim has never run?');
 
 profile.provider_id = broker.provider_id;

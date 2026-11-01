@@ -110,6 +110,19 @@ export interface ParsedMealInput {
   date?: string;
 }
 
+/**
+ * The priced rows paired with the words each was said in. The ledger keeps the rows in order and
+ * drops none (every confirmed row has a name), so the pairing is by position; when the counts
+ * differ anyway nothing is paired, and nothing is learned from a guess.
+ */
+export function learnableRows(
+  priced: NutritionLog['items'],
+  sent: Array<{ said?: string }>,
+): Array<NutritionLog['items'][number] & { said?: string }> {
+  if (priced.length !== sent.length) return [];
+  return priced.map((row, i) => ({ ...row, ...(sent[i]?.said ? { said: sent[i]!.said } : {}) }));
+}
+
 export async function logMeal(
   userId: string,
   input: {
@@ -137,10 +150,11 @@ export async function logMeal(
       const est = sanitizeMacros(i.est);
       return { ...i, ...(est ? { est } : { est: undefined }) };
     });
-    // Re-priced server-side rather than trusted: the preview's wire shape drops `food_id`, so this
-    // is where the confirmed meal earns its ledger link and pins whatever was new. Deterministic,
-    // so the numbers match the card the user tapped — this fills the ledger, it does not overrule
-    // them (a correction still lands through correct_log, as `source: 'user'`).
+    // Re-priced server-side rather than trusted: a row that names its food (a coach-led preview's
+    // `food_id`) is priced from that food, every other row earns its ledger link here and pins
+    // whatever was new. Deterministic, so the numbers match the card the user tapped — this fills
+    // the ledger, it does not overrule them (a correction still lands through correct_log, as
+    // `source: 'user'`).
     const ledger = await priceParsedMeal(
       userId,
       { items, macros, confidence: p.confidence },
@@ -161,8 +175,10 @@ export async function logMeal(
       provisional,
     });
     await tickFoodLogOccurrence(userId, date, p.meal);
-    // Logged, and learned: the words each linked row was said in now price without a call.
-    await learnDescribedMeal(userId, p.items);
+    // Logged, and learned: the words each linked row was said in now price without a call. From
+    // the rows the ledger priced and wrote, not the client's — a link the store could not see is
+    // not a link, and a row without an amount teaches nothing.
+    await learnDescribedMeal(userId, learnableRows(ledger.items, p.items));
     return row;
   }
   if (input.items?.length) {

@@ -19,7 +19,7 @@
  * preview she walks away from — or calls three times while narrowing down the words — leaves no
  * trace and costs nothing beyond the parse itself.
  */
-import type { Macros, NutritionLog } from '@cadence/shared';
+import type { DescribedBasis, Macros, NutritionLog } from '@cadence/shared';
 import { previewMealParse } from '../nutrition.ts';
 import { toolFaultText } from '../tool-response.ts';
 import type { RetrievalFunction } from './types.ts';
@@ -29,7 +29,22 @@ type MealKindParam = (typeof MEAL_KINDS)[number];
 const isMealKindParam = (v: unknown): v is MealKindParam => (MEAL_KINDS as readonly string[]).includes(String(v));
 
 type PreviewMealResult = Awaited<ReturnType<typeof previewMealParse>>;
-type PreviewItem = NutritionLog['items'][number] & { assumption?: string; question?: string; source_label?: string };
+type PreviewItem = NutritionLog['items'][number] & {
+  assumption?: string;
+  question?: string;
+  source_label?: string;
+  basis?: DescribedBasis;
+  problem?: string;
+};
+
+/** Where a row's numbers came from, in words she can repeat (FOOD-LOGGING-COACH-LED.md). */
+const BASIS_WORDS: Record<DescribedBasis, string> = {
+  record: 'a record the coach picked',
+  remembered: 'what they picked last time',
+  estimate: "the coach's own estimate",
+  fallback: 'an automatic estimate, the coach not reached',
+  none: 'not counted',
+};
 
 /**
  * An item counts as PRICED exactly when `priceParsedMeal` decided it did — `est` carries at least
@@ -52,12 +67,14 @@ function macroLine(est: Macros | null | undefined): string {
 function itemLine(item: PreviewItem): string {
   const qty = item.qty ? `${item.qty}${item.unit ? ` ${item.unit}` : ''} ` : '';
   const name = [item.brand, item.name].filter(Boolean).join(' ');
-  // The coach-led read says where each number came from, what it assumed, and what it would ask
-  // (FOOD-LOGGING-COACH-LED.md) — facts for her, never hidden in the number.
+  // The coach-led read says where each number came from, what it assumed, what it would ask, and
+  // why a row has no number (FOOD-LOGGING-COACH-LED.md) — facts for her, never hidden in the number.
   const tail = [
+    item.basis ? BASIS_WORDS[item.basis] : '',
     item.source_label ? `from ${item.source_label}` : '',
     item.assumption ? `assumed: ${item.assumption}` : '',
-    item.question ? `open question: ${item.question}` : '',
+    item.question ? `waiting on their answer: ${item.question}` : '',
+    item.problem ? `why: ${item.problem}` : '',
   ].filter(Boolean);
   return `- ${qty}${name}: ${macroLine(item.est)}${tail.length ? ` (${tail.join('; ')})` : ''}`;
 }
@@ -96,27 +113,45 @@ export const PREVIEW_MEAL: RetrievalFunction = {
       return `Nothing readable as food in "${r.raw_text}". Ask what they actually had, or the amount, before logging anything.`;
     }
 
-    const unpriced = r.items.filter((i) => !isPriced(i));
-    const fullyPriced = unpriced.length === 0;
+    // A row with an open question carries no number on purpose: the question is the answer it
+    // waits for, and it is counted only once the person gives it.
+    const asked = r.items.filter((i) => !!i.question);
+    const unpriced = r.items.filter((i) => !isPriced(i) && !i.question);
+    const fullyPriced = unpriced.length === 0 && asked.length === 0;
+    const priced = r.items.length - unpriced.length - asked.length;
     const total = macroLine(r.macros);
 
     const head = fullyPriced
       ? `Fully priced (${r.meal}): every item has numbers, total ${total}.`
-      : `Partly priced (${r.meal}): ${r.items.length - unpriced.length}/${r.items.length} items have numbers, total so far ${total}.`;
+      : `Partly priced (${r.meal}): ${priced}/${r.items.length} items have numbers` +
+        (asked.length ? `, ${asked.length} waiting on their answer` : '') +
+        `, total so far ${total}.`;
     const reached =
       r.coach?.reached === false
         ? 'The food-check model could not be reached, so these are the old automatic estimates, not a checked read.'
         : '';
 
+    // What is true about logging it: log_meal does NOT run this read (it runs the older automatic
+    // match, which can price the same words differently); the Food screen's confirm logs these rows.
+    const logging =
+      "Note: log_meal does not run this read — it uses the older automatic match and can price the same words differently. The Food screen's confirm logs exactly what is shown here.";
+    const waiting = asked.length
+      ? [
+          'Waiting on their answer:',
+          ...asked.map((i) => `- ${[i.brand, i.name].filter(Boolean).join(' ')}: ${i.question}`),
+          'Ask them, then preview again with the answer in the text.',
+        ]
+      : [];
     const tail = fullyPriced
-      ? 'Everything here is settled — log_meal with this same text prices it the same way.'
+      ? [`Everything here is settled. ${logging}`]
       : [
-          'Unresolved, by name:',
-          ...unpriced.map(unresolvedLine),
+          ...waiting,
+          ...(unpriced.length ? ['Unresolved, by name:', ...unpriced.map(unresolvedLine)] : []),
           'Do not log_meal this and call it done while items are unresolved — say what is missing, or log once you have enough to price it.',
-        ].join('\n');
+          logging,
+        ];
 
-    return [head, reached, ...r.items.map(itemLine), tail].filter(Boolean).join('\n');
+    return [head, reached, ...r.items.map(itemLine), ...tail].filter(Boolean).join('\n');
   },
 
   rows(result) {

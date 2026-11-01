@@ -219,10 +219,19 @@ async function priceOne(
    * (FOOD-LOGGING-COACH-LED.md, 2026-11-01) — is priced from THAT food and never re-matched. The
    * choosing was the model's and the person's; a lexical re-match here is exactly the
    * code-picks-the-winner step that path exists to retire. A portion the store cannot read back
-   * (food-pick-portion.ts says which) keeps the card's own numbers, which came from the same food.
+   * (food-pick-portion.ts says which) keeps the card's own numbers, which came from the same food
+   * — but only when the row carries an amount at all. A row with none is an open question
+   * (FOOD-LOGGING-COACH-LED.md): nothing is counted for it, whatever number rode along.
    */
   const named = item.food_id ? linked.get(item.food_id) : undefined;
   if (named) {
+    const hasAmount = typeof item.qty === 'number' && item.qty > 0;
+    if (!hasAmount) {
+      // No amount, no number: the link is kept for the card, nothing is counted — not the
+      // card's own figure, and not one default serving the store would otherwise assume.
+      const { est: _unknown, ...noNumber } = bare;
+      return { item: { ...noNumber, food_id: named.food_id }, priced: false, food_id: named.food_id };
+    }
     const est = priceFood(named, portion);
     const counted = Object.keys(est).length ? est : item.est;
     return {

@@ -113,7 +113,9 @@ function check(opts: {
   return async (_user: string, slug: string, vars: Record<string, unknown>) => {
     if (slug !== 'food-check') throw new Error(`expected the food-check job, got ${slug}`);
     const book = String(vars.book ?? '');
-    const first = /^\s*c1 · .*? · measures: (.+?) = [\d.]+ g/m.exec(book);
+    // The first record's first measure, as the book prints it: "1 venti = 591.0 g; …" for a food
+    // kept by weight, "1 latte · kept per item" for one kept per item (no grams to print).
+    const first = /^\s*c1 · .*? · measures: (.+?)(?: = [\d.]+ g)?(?:;| ·)/m.exec(book);
     const item = opts.pick
       ? {
           said: opts.said,
@@ -300,7 +302,8 @@ d('A23 — the food ledger keeps a price (DB)', () => {
     const preview = await previewMealParse(USER, `a ${LATTE}`);
 
     expect(preview.coach?.reached).toBe(false);
-    expect(preview.coach?.checked.at(-1)).toBe('the coach could not be reached');
+    // The notice says she could not be reached; the trace does not say it a second time.
+    expect(preview.coach?.checked.join(' ')).not.toContain('could not be reached');
     expect(preview.items[0]?.basis).toBe('fallback');
     expect(preview.macros?.kcal).toBe(190);
     expect(runJobBySlug.mock.calls.map((c) => c[1])).toEqual(['food-check', 'parse-meal']);

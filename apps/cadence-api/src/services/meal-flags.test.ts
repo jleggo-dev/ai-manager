@@ -12,7 +12,11 @@ describe('mealFlags — named drinks only, nothing inferred', () => {
     ['2 eggs on toast', {}],
     ['decaf', {}],
     ['ginger tea', {}],
-    ['wine gums', { alcohol: true }],
+    // Near-misses: a drink word inside another food's name is not a drink.
+    ['wine gums', {}],
+    ['ginger beer', {}],
+    ['gingerbread', {}],
+    ['a beer and a gingerbread', { alcohol: true }],
     ['a banana', {}],
   ])('%j → %j', (text, flags) => {
     expect(mealFlags(text)).toEqual(flags);

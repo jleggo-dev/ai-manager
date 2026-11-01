@@ -1,4 +1,12 @@
-import type { Macros, MealKind, MealPart, MealPlanItem, MicronutrientKey, MicroTargetOverride } from '@cadence/shared';
+import type {
+  DescribedBasis,
+  Macros,
+  MealKind,
+  MealPart,
+  MealPlanItem,
+  MicronutrientKey,
+  MicroTargetOverride,
+} from '@cadence/shared';
 import { BASE, headers } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
@@ -193,13 +201,16 @@ export interface MealPreviewItem {
   food_id?: string;
   /** Their own words for this part. Rides back on the confirm so the same words next time need no call. */
   said?: string;
-  /** Where the number came from: a record the coach picked, the memory of a past pick, her labelled estimate, the automatic fallback, or nothing yet. */
-  basis?: 'record' | 'remembered' | 'estimate' | 'fallback' | 'none';
+  /** Where the number came from (DESCRIBED_BASES in @cadence/shared — one array, both readers). */
+  basis?: DescribedBasis;
   /** "your saved food", "USDA", "the coach's estimate" — so an estimate never looks like a lookup. */
   source_label?: string;
   /** What the coach assumed where the words left something open ("Took this as 2% milk"). */
   assumption?: string;
-  /** The one question she would ask. A row with one does not count until it is answered. */
+  /**
+   * The one question she would ask. A row with one carries no number and no food link: the
+   * question is what it waits for, and the row re-matches by name once an amount is given.
+   */
   question?: string;
   /** Why the row could not be counted from a record, when it could not. */
   problem?: string;

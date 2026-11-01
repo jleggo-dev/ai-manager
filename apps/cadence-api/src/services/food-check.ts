@@ -19,6 +19,7 @@
  * runJobBySlug; the eval: the same variables through an e2e job), `lookup` answers a lookup.
  */
 import {
+  MAX_PARTS,
   addLookups,
   checkPick,
   type BookLookup,
@@ -131,7 +132,11 @@ function readLookup(v: unknown): BookLookup | null {
   return q ? { q, measure: str(o.measure, 40), brand: str(o.brand, 60) } : null;
 }
 
-/** Shape a reply. Null when there is no JSON object, or neither list is present. */
+/**
+ * Shape a reply. Null when there is no JSON object, or neither list is present. Items are capped
+ * at MAX_PARTS: the split never makes more parts than that, and the confirm takes at most twelve
+ * rows (validation/body.ts), so a longer list is the model adding parts nobody said.
+ */
 export function parseFoodCheckReply(raw: string): FoodCheckReply | null {
   const o = firstJsonObject(raw);
   if (!o) return null;
@@ -139,7 +144,10 @@ export function parseFoodCheckReply(raw: string): FoodCheckReply | null {
   const lookupsIn = Array.isArray(o.lookups) ? o.lookups : null;
   if (!itemsIn && !lookupsIn) return null;
   return {
-    items: (itemsIn ?? []).map(readItem).filter((i): i is FoodCheckItem => i !== null),
+    items: (itemsIn ?? [])
+      .map(readItem)
+      .filter((i): i is FoodCheckItem => i !== null)
+      .slice(0, MAX_PARTS),
     lookups: (lookupsIn ?? [])
       .map(readLookup)
       .filter((l): l is BookLookup => l !== null)
@@ -148,7 +156,10 @@ export function parseFoodCheckReply(raw: string): FoodCheckReply | null {
 }
 
 /** Which picks the book cannot honour, by item index, each with the reason as evidence. */
-export function checkItems(items: FoodCheckItem[], book: Pick<CandidateBook, 'entries'>): Map<number, string> {
+export function checkItems(
+  items: FoodCheckItem[],
+  book: Pick<CandidateBook, 'entries' | 'shown'>,
+): Map<number, string> {
   const problems = new Map<number, string>();
   items.forEach((item, i) => {
     if (!item.pick) return;

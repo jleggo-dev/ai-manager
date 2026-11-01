@@ -11,13 +11,21 @@
  * What the book holds, per record: an id of this meal's own (`c1`, `c2`…), where it came from,
  * its per-gram numbers, the measures it offers with their grams, and the guards' notes. What it
  * refuses to do: rank, drop, or pick. A record with no usable calories is marked incomplete and
- * left in — the model is told, not protected (run 2 picked a zero-kcal "Cafe Latte" once).
+ * left in — the model is told, not protected (run 2 picked a zero-kcal "Cafe Latte" once). A
+ * record kept per item (a pinned estimate, "1 serving = 1") is printed per its own measure, not as
+ * "per 100 g" of a count — that read 25,000 kcal and raised a false disagreement.
+ *
+ * What the book will not do is overrun the engine: `text()` fits itself to BOOK_BUDGET_CHARS
+ * (round-robin by part, the cut announced in the part's head), and `shown()` answers only with
+ * the records the last rendering held, so a pick of a record the model never saw is refused
+ * rather than priced.
  *
  * The split is deliberately plain. Comma, newline, "and", "with", "+", "&" separate parts; a
  * leading amount ("150ml", "2 tbsp", "a handful of") is peeled off into the lookup's measure.
  * Dictated prose with no separators stays one part: the model may ask for one more round of
  * lookups to repair that, and the second call is its last (food-check.ts).
  */
+import { MAX_VARIABLE_LENGTH } from '@ai-admin/core';
 import type { FanOutResult, SourceCheck } from './food-source-fanout.ts';
 import type { FoodSourceName, MeasureOption, SourceCandidate } from './food-source-report.ts';
 import type { NutritionTier } from './food-sources/completeness.ts';
@@ -26,6 +34,18 @@ import type { NutritionTier } from './food-sources/completeness.ts';
 export const MAX_PARTS = 10;
 /** Records shown per lookup. Past this the book costs more tokens than the extra rows earn. */
 export const SHOW_PER_LOOKUP = 8;
+/**
+ * The most characters the rendered book may run to. The engine cuts ANY job variable past
+ * `MAX_VARIABLE_LENGTH` and appends "... [truncated]" (job-execution-utils.ts) — silently, from
+ * the tail, which is the last parts' records. Ten parts at eight records of 200–400 characters
+ * is three times that, so the book fits itself here instead: every part keeps its first rows
+ * (filled round-robin), and a part that had rows held back says so in its head, so the model can
+ * ask for a narrower lookup rather than read a cut it cannot see. Same move as compaction's
+ * transcript budget (session-compaction-plan.ts). The margin keeps the last line whole.
+ */
+export const BOOK_BUDGET_CHARS = MAX_VARIABLE_LENGTH - 100;
+/** Room kept per section for the "N more records not shown" note a cut adds to its head. */
+const CUT_NOTE_RESERVE = 110;
 
 const SEPARATORS = /\s*(?:,|;|\n|\+|&|\band\b|\bwith\b|\bplus\b)\s*/i;
 const AMOUNT =
@@ -101,7 +121,12 @@ export interface BookSection {
   entryIds: string[];
   checked: SourceCheck[];
   disagreements: string[];
-  text: string;
+  /** The section's first line: what was looked up. */
+  head: string;
+  /** One line per record, in the order the sources returned them. */
+  lines: string[];
+  /** Records held back the last time the book was rendered, because of the budget. */
+  omitted: number;
 }
 
 const fmt = (n: number | null | undefined, dp = 0): string => (typeof n === 'number' ? n.toFixed(dp) : '?');
@@ -119,6 +144,9 @@ export function uniqueMeasures(ms: MeasureOption[]): MeasureOption[] {
     return true;
   });
 }
+
+/** A food kept per item (a pinned estimate: "1 serving = 1") has no per-100 g numbers to print. */
+const perItem = (c: Pick<SourceCandidate, 'base_unit'>): boolean => c.base_unit === 'item';
 
 function entryOf(id: string, c: SourceCandidate): BookEntry {
   const g = c.per.grams;
@@ -150,6 +178,8 @@ export class CandidateBook {
   readonly entries = new Map<string, BookEntry>();
   readonly sections: BookSection[] = [];
   private readonly byKey = new Map<string, string>();
+  /** Ids the last `text()` rendered; unset until the book has been rendered once. */
+  private visible: Set<string> | null = null;
 
   private register(c: SourceCandidate): BookEntry {
     const key = `${c.source}|${c.food_id ?? ''}|${c.name}|${c.brand ?? ''}`;
@@ -167,46 +197,101 @@ export class CandidateBook {
     const head = `Lookup "${lookup.q}"${lookup.brand ? ` brand ${lookup.brand}` : ''}${lookup.measure ? ` at ${lookup.measure}` : ''}:`;
     const shown = r.candidates.slice(0, SHOW_PER_LOOKUP);
     const entries = shown.map((c) => ({ c, e: this.register(c) }));
-    const lines = entries.map(({ c, e }) => {
-      const per100 = (k: string): string => {
-        const v = e.per_g[k as 'kcal' | 'protein_g'];
-        return fmt(v === null || v === undefined ? null : v * 100, 1);
-      };
-      const g = c.per.grams;
-      const nut = c.per.nutrients as Record<string, number | undefined>;
-      const per100Of = (k: string): string =>
-        fmt(g && typeof nut[k] === 'number' ? ((nut[k] as number) * 100) / g : null, 1);
-      const measures = e.measures.map((m) => `${m.label} = ${fmt(m.grams, 1)} g`);
-      return (
-        `  ${e.id} · ${c.source} · ${c.name}${c.brand ? ` (${c.brand})` : ''} · per 100 g: ${per100('kcal')} kcal, ` +
-        `${per100('protein_g')} g protein, ${per100Of('carbs_g')} g carbs, ${per100Of('fat_g')} g fat · ` +
-        `measures: ${measures.join('; ') || 'grams only'} · completeness: ${c.completeness}` +
-        (e.incomplete ? ' · incomplete: no usable calories' : '') +
-        (c.notes.length ? ` · notes: ${c.notes.join('; ')}` : '')
-      );
-    });
-    const disagreements = r.disagreements.map((d) => `  where they disagree: ${d}`);
-    const text = shown.length ? [head, ...lines, ...disagreements].join('\n') : `${head}\n  no records on file`;
+    const lines = entries.map(({ c, e }) => recordLine(c, e));
     const section: BookSection = {
       lookup,
       entryIds: entries.map(({ e }) => e.id),
       checked: r.sources_checked,
       disagreements: r.disagreements,
-      text,
+      head,
+      lines,
+      omitted: 0,
     };
     this.sections.push(section);
     return section;
   }
 
-  /** The whole book as the model reads it. */
-  text(): string {
-    return this.sections.length ? this.sections.map((s) => s.text).join('\n\n') : '(nothing found for any part)';
+  /**
+   * The whole book as the model reads it, within `budget`. Every section keeps its head; record
+   * lines are dealt round-robin — the first row of every part, then the second — so a long meal
+   * loses the eighth row of each part before any part loses its first. A section that had rows
+   * held back says how many in its head. Disagreement notes come after every part's rows, while
+   * room remains. What was rendered is what `shown()` answers from then on.
+   */
+  text(budget: number = BOOK_BUDGET_CHARS): string {
+    if (!this.sections.length) return '(nothing found for any part)';
+    const n = this.sections.length;
+    const heads = this.sections.map((s) => (s.lines.length ? s.head : `${s.head}\n  no records on file`));
+    const shownRows = this.sections.map(() => 0);
+    const shownNotes = this.sections.map(() => 0);
+    const room = budget - n * CUT_NOTE_RESERVE;
+    let used = heads.reduce((sum, h) => sum + h.length, 0) + 2 * (n - 1);
+    const fits = (line: string): boolean => used + line.length + 1 <= room;
+
+    const most = Math.max(...this.sections.map((s) => s.lines.length));
+    rows: for (let r = 0; r < most; r += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const line = this.sections[i]!.lines[r];
+        if (line === undefined) continue;
+        if (!fits(line)) break rows;
+        used += line.length + 1;
+        shownRows[i] = r + 1;
+      }
+    }
+    notes: for (let i = 0; i < n; i += 1) {
+      for (const d of this.sections[i]!.disagreements) {
+        const line = `  where they disagree: ${d}`;
+        if (!fits(line)) break notes;
+        used += line.length + 1;
+        shownNotes[i] = (shownNotes[i] ?? 0) + 1;
+      }
+    }
+
+    const visible = new Set<string>();
+    const out = this.sections.map((s, i) => {
+      s.omitted = s.lines.length - shownRows[i]!;
+      s.entryIds.slice(0, shownRows[i]).forEach((id) => visible.add(id));
+      const note = s.omitted
+        ? ` (${s.omitted} more record${s.omitted === 1 ? '' : 's'} not shown for room; if none here fits, ask for a lookup with narrower words)`
+        : '';
+      const lines = s.lines.slice(0, shownRows[i]);
+      const notes = s.disagreements.slice(0, shownNotes[i]).map((d) => `  where they disagree: ${d}`);
+      return [heads[i]! + note, ...lines, ...notes].join('\n');
+    });
+    this.visible = visible;
+    return out.join('\n\n');
   }
 
-  /** Every record found so far — for the eval's scorer and for checking a pick. */
+  /**
+   * The records the model was actually shown — for checking a pick and for the eval's scorer.
+   * Every record until the book is first rendered; after that, what the last rendering held.
+   */
   shown(): Map<string, BookEntry> {
-    return this.entries;
+    if (!this.visible) return this.entries;
+    return new Map([...this.entries].filter(([id]) => this.visible!.has(id)));
   }
+}
+
+/** One record as the model reads it: per 100 g for a food kept by weight, per its measure when kept per item. */
+function recordLine(c: SourceCandidate, e: BookEntry): string {
+  const g = c.per.grams;
+  const nut = c.per.nutrients as Record<string, number | undefined>;
+  const byItem = perItem(c);
+  const per100Of = (k: string): string =>
+    fmt(g && typeof nut[k] === 'number' ? ((nut[k] as number) * 100) / g : null, 1);
+  const perMeasureOf = (k: string): string => fmt(typeof nut[k] === 'number' ? nut[k] : null, 1);
+  const numberOf = byItem ? perMeasureOf : per100Of;
+  const basis = byItem ? `per ${c.per.measure}` : 'per 100 g';
+  const measures = byItem ? e.measures.map((m) => m.label) : e.measures.map((m) => `${m.label} = ${fmt(m.grams, 1)} g`);
+  return (
+    `  ${e.id} · ${c.source} · ${c.name}${c.brand ? ` (${c.brand})` : ''} · ${basis}: ${numberOf('kcal')} kcal, ` +
+    `${numberOf('protein_g')} g protein, ${numberOf('carbs_g')} g carbs, ${numberOf('fat_g')} g fat · ` +
+    `measures: ${measures.join('; ') || 'grams only'}` +
+    (byItem ? ' · kept per item, not by weight: count multiplies the measure, grams are not offered' : '') +
+    ` · completeness: ${c.completeness}` +
+    (e.incomplete ? ' · incomplete: no usable calories' : '') +
+    (c.notes.length ? ` · notes: ${c.notes.join('; ')}` : '')
+  );
 }
 
 export type BookLookupFn = (lookup: BookLookup) => Promise<FanOutResult>;
@@ -261,9 +346,16 @@ const GRAMS = new Set(['g', 'gram', 'grams']);
  * record offers (or grams). A failed check reports why, in words that go back to the model as
  * evidence — a guard reports, it does not silently veto.
  */
-export function checkPick(input: PickInput, book: Pick<CandidateBook, 'entries'>): CheckedPick {
-  const entry = book.entries.get(input.pick);
-  if (!entry) return { ok: false, problem: `pick "${input.pick}" is not an id in the book` };
+export function checkPick(input: PickInput, book: Pick<CandidateBook, 'entries' | 'shown'>): CheckedPick {
+  const entry = book.shown().get(input.pick);
+  if (!entry) {
+    return {
+      ok: false,
+      problem: book.entries.has(input.pick)
+        ? `pick "${input.pick}" was not shown in the book`
+        : `pick "${input.pick}" is not an id in the book`,
+    };
+  }
   if (!entry.food_id) return { ok: false, problem: `${entry.id} is not a stored record and cannot be logged` };
   const count = typeof input.count === 'number' && input.count > 0 && Number.isFinite(input.count) ? input.count : 1;
   const want = norm(input.measure ?? '');

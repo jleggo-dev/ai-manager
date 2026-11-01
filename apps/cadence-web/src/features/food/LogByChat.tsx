@@ -12,9 +12,13 @@ import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
  */
 export const READING = 'The coach is checking your foods and the food databases…';
 
-/** The card when she could not be reached: the old automatic estimate priced it, and it says so. */
-export const NOT_REACHED =
-  "The coach couldn't be reached just now, so these are automatic estimates — tap a row to change anything.";
+/**
+ * When she could not be reached: the old automatic estimate priced it, and the notice says so.
+ * The sentence alone, so a surface without tap-to-edit (the quick-log sheet) can show it as is;
+ * the confirm card, whose rows open an editor, adds the hint.
+ */
+export const NOT_REACHED = "The coach couldn't be reached just now, so these are automatic estimates.";
+const NOT_REACHED_CARD = `${NOT_REACHED} Tap a row to change anything.`;
 
 /** Lines before the composer stops growing and scrolls — a whole meal, dictated, fits. */
 const COMPOSER_MAX_ROWS = 10;
@@ -106,7 +110,7 @@ export function LogByChat({
         {preview && !busy && (
           <div className="fc-heard">
             {preview.coach?.reached === false
-              ? NOT_REACHED
+              ? NOT_REACHED_CARD
               : "Here's what I found — an amount you gave I've kept; anything you didn't, I'll ask."}
             {/* Her work, shown as it happened: the trace renders from what actually ran. */}
             {preview.coach?.checked?.length ? <small> Checked {preview.coach.checked.join('; ')}.</small> : null}

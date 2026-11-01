@@ -20,11 +20,13 @@
  *       MODE=single SKIP_FLOOR=1 USER_ID=… node --import tsx apps/cadence-api/scripts/eval-food-check.ts
  *       USER_ID=… MODELS=gpt-5.4-mini npm run eval:food-check -- --prompt-from-config
  *
- * `--prompt-from-config` (or PROMPT_FROM_CONFIG=1) runs the SHIPPED shape: the config's own
- * `food-check` promptTemplate and strict schema, filled with the variables production sends, through
- * the service's split, book and round loop (eval-food-check-single.ts → runMealConfig). That is the
- * eval of the job as synced, not of a prompt kept beside it. The e2e job is given the config job's
- * expectedSchema and formattingRules so the output contract matches too.
+ * `--prompt-from-config` (or PROMPT_FROM_CONFIG=1) runs the SHIPPED shape: the e2e job is given the
+ * config's own `food-check` promptTemplate, variables, strict schema and formatting rules, and each
+ * call sends the VARIABLES production sends (meal, said, book, round_rule, guard_notes), through the
+ * service's split, book and round loop (eval-food-check-single.ts → runMealConfig). The engine fills
+ * the template exactly as in production — every variable wrapped in `<user_input name="…">`, every
+ * variable cut at MAX_VARIABLE_LENGTH — so what the model reads here is what it reads live. That is
+ * the eval of the job as synced, not of a prompt kept beside it.
  */
 import { config as dotenv } from 'dotenv';
 import fs from 'node:fs';
@@ -39,6 +41,7 @@ import { SINGLE_MAX_ROUNDS, runMealConfig, runMealSingle, withFatSecretRows } fr
 import type { FanOutResult } from '../src/services/food-source-fanout.ts';
 import type { SourceCandidate } from '../src/services/food-source-report.ts';
 import type { BookLookup } from '../src/services/food-candidate-book.ts';
+import type { FoodCheckVars } from '../src/services/food-check.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 dotenv({ path: path.join(root, 'apps/cadence-api/.env') });
@@ -99,7 +102,7 @@ const shippedJob = (() => {
   const cfg = JSON.parse(fs.readFileSync(path.join(root, 'config/ai-admin/ai-admin.config.json'), 'utf8')) as {
     jobs: Array<{
       slug: string;
-      config: { promptTemplate: string; expectedSchema?: unknown; formattingRules?: unknown };
+      config: { promptTemplate: string; variables?: unknown; expectedSchema?: unknown; formattingRules?: unknown };
     }>;
   };
   const job = cfg.jobs.find((j) => j.slug === 'food-check');
@@ -294,9 +297,14 @@ async function modelFor(model: string, jobId: string, c: FoodCheckCase): Promise
     spend();
     return runRemote(jobId, { prompt });
   };
+  /** Config mode: the job holds the shipped template, so the call carries only its variables. */
+  const runVars = (vars: FoodCheckVars) => {
+    spend();
+    return runRemote(jobId, { ...vars });
+  };
   const meal =
     MODE === 'config'
-      ? await runMealConfig(c, { run, lookup: lookupProd, template: shippedJob.promptTemplate })
+      ? await runMealConfig(c, { run: runVars, lookup: lookupProd })
       : MODE === 'single'
         ? await runMealSingle(c, { run, lookup, lookupWide })
         : await runMeal(c, { run, lookup });
@@ -368,18 +376,22 @@ async function main(): Promise<void> {
         profile_type?: string;
         runtime_options?: Record<string, unknown>;
       };
-      const config = {
-        promptTemplate: '{{prompt}}',
-        variables: [{ name: 'prompt', description: 'the round prompt', required: true }],
-        // Config mode measures the shipped contract too: the strict schema and the formatting rules.
-        ...(MODE === 'config'
+      // Config mode runs the shipped job's own template and variables through the engine, so the
+      // prompt the model reads is built the production way (wrapped, capped) — plus the strict
+      // schema and the formatting rules, so the output contract matches too.
+      const config =
+        MODE === 'config'
           ? {
+              promptTemplate: shippedJob.promptTemplate,
+              variables: shippedJob.variables,
               expectedResponseFormat: 'json',
               expectedSchema: shippedJob.expectedSchema,
               formattingRules: shippedJob.formattingRules,
             }
-          : {}),
-      };
+          : {
+              promptTemplate: '{{prompt}}',
+              variables: [{ name: 'prompt', description: 'the round prompt', required: true }],
+            };
       const existing = await getProcessingJobBySlug(E2E_JOB_SLUG);
       const fields = {
         description: 'E2E food-check eval (eval-food-check.ts). Swept by cleanup:test-data.',

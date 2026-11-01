@@ -3,8 +3,10 @@
  * explicit mention and never inferred (0013); the food-check shape has no flags, so the same rule
  * is a word list here — a named drink, nothing guessed. A router, so it ships with a table test.
  */
+// "wine gums" are sweets and "ginger beer" is a soft drink: a drink word is not a drink when it
+// is part of another food's name.
 const ALCOHOL =
-  /\b(beer|beers|lager|ale|ipa|stout|cider|wine|prosecco|champagne|whisky|whiskey|bourbon|vodka|gin|rum|tequila|mezcal|sake|cocktail|margarita|negroni|spritz|mimosa|sangria)\b/i;
+  /\b((?<!ginger\s)beer|(?<!ginger\s)beers|lager|ale|ipa|stout|cider|wine(?!\s+gums?\b)|prosecco|champagne|whisky|whiskey|bourbon|vodka|gin|rum|tequila|mezcal|sake|cocktail|margarita|negroni|spritz|mimosa|sangria)\b/i;
 const CAFFEINE =
   /\b(coffee|espresso|americano|latte|cappuccino|cortado|flat white|macchiato|mocha|cold brew|black tea|green tea|earl grey|matcha|chai|yerba|mate|energy drink|red bull|monster|cola|coke|pepsi)\b/i;
 

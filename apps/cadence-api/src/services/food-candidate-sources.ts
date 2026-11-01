@@ -25,7 +25,7 @@ export const FATSECRET_ROWS = 5;
 async function fatSecretTopRows(lookup: BookLookup): Promise<{ rows: SourceCandidate[]; check: SourceCheck }> {
   const started = Date.now();
   if (!isFatSecretConfigured()) {
-    return { rows: [], check: { source: 'fatsecret', status: 'skipped', ms: 0, detail: 'not configured here' } };
+    return { rows: [], check: { source: 'fatsecret', status: 'skipped', ms: 0, detail: 'not set up on this server' } };
   }
   try {
     const hits = await searchFatSecretFoods([lookup.brand, lookup.q].filter(Boolean).join(' '), FATSECRET_ROWS);

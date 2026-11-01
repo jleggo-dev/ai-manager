@@ -30,6 +30,24 @@ export const FOOD_SOURCES = [
 
 export type FoodSource = (typeof FOOD_SOURCES)[number];
 
+/**
+ * Where a described-meal row's numbers came from (docs/cadence/FOOD-LOGGING-COACH-LED.md). One
+ * array, two readers — the API labels rows with it and the web draws them — so neither can drift.
+ */
+export const DESCRIBED_BASES = [
+  /** A record the food-check picked, priced by the store. */
+  'record',
+  /** The phrase memory: words this person confirmed before. */
+  'remembered',
+  /** The model's own labelled estimate, because no record fit. */
+  'estimate',
+  /** The old automatic read, because the coach could not be reached. */
+  'fallback',
+  /** Nothing counted: an open question or a problem, named on the row. */
+  'none',
+] as const;
+export type DescribedBasis = (typeof DESCRIBED_BASES)[number];
+
 /** True when a value off the wire names a real food source. */
 export function isFoodSource(value: unknown): value is FoodSource {
   return typeof value === 'string' && (FOOD_SOURCES as readonly string[]).includes(value);

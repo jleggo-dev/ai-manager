@@ -125,6 +125,11 @@ export function useMealAmounts(preview: MealPreview) {
    * while keeping the meal total is how 450 mg of sodium that was never eaten stays on the day.
    * The AMOUNT is not summed — two rows of one food are one portion read twice, and a doubled
    * amount hides inside a plausible number where a wrong one is visible and correctable.
+   *
+   * The LINK is dropped: a merged row is neither of its halves, so the kept half's `food_id`
+   * would have the server re-price the sum from one food alone and lose the other's nutrients —
+   * the thing the merge exists to prevent. With no food the row re-matches by name, and with no
+   * `said` it teaches the phrase memory nothing.
    */
   const mergeRow = (from: number, into: number) =>
     setRows((prev) => {
@@ -139,9 +144,12 @@ export function useMealAmounts(preview: MealPreview) {
       }
       const merged: AmountRow = {
         ...b,
+        matched: false,
         ...(b.brand || a.brand ? { brand: b.brand || a.brand } : {}),
         ...(Object.keys(est).length ? { est: est as MealMacros } : {}),
       };
+      delete merged.food_id;
+      delete merged.said;
       return prev.map((r, j) => (j === into ? merged : r)).filter((_, j) => j !== from);
     });
 

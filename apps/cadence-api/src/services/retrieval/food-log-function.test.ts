@@ -74,8 +74,42 @@ describe('preview_meal.render', () => {
     } as never);
     expect(out).toContain('Fully priced (snack)');
     expect(out).toContain('105 kcal');
-    expect(out).toContain('log_meal with this same text prices it the same way');
+    expect(out).toContain('Everything here is settled');
+    // What is true since the coach-led read: log_meal runs the older match, not this read.
+    expect(out).toContain('log_meal does not run this read');
+    expect(out).not.toContain('prices it the same way');
     expect(out).not.toContain('Unresolved');
+  });
+
+  it('a row with an open question is listed as waiting, never as unresolved, and the meal is not fully priced', () => {
+    const out = PREVIEW_MEAL.render({
+      meal: 'breakfast',
+      raw_text: 'milk and a banana',
+      macros: { kcal: 105 },
+      items: [
+        { name: 'milk', question: 'Whole milk or 2%?', basis: 'none' },
+        { name: 'banana', qty: 1, unit: 'medium', est: { kcal: 105 }, basis: 'record', source_label: 'USDA' },
+      ],
+      coach: { reached: true, calls: 1, checked: [] },
+    } as never);
+    expect(out).toContain('Partly priced (breakfast): 1/2 items have numbers, 1 waiting on their answer');
+    expect(out).toContain('- milk: not priced yet (not counted; waiting on their answer: Whole milk or 2%?)');
+    expect(out).toContain('Waiting on their answer:\n- milk: Whole milk or 2%?');
+    expect(out).toContain('- 1 medium banana: 105 kcal (a record the coach picked; from USDA)');
+    expect(out).not.toContain('Fully priced');
+    expect(out).not.toContain('Unresolved');
+  });
+
+  it('says why a row counted nothing, and that the fallback priced an unreached read', () => {
+    const out = PREVIEW_MEAL.render({
+      meal: 'snack',
+      raw_text: 'a thing',
+      macros: null,
+      items: [{ name: 'a thing', basis: 'none', problem: 'no record fits and no estimate was given' }],
+      coach: { reached: false, calls: 1, checked: [] },
+    } as never);
+    expect(out).toContain('could not be reached');
+    expect(out).toContain('why: no record fits and no estimate was given');
   });
 
   it('names an unresolved branded item and points at research_food with its exact args', () => {

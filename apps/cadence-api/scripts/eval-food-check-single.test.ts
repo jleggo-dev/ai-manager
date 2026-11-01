@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { FanOutResult } from '../src/services/food-source-fanout.ts';
+import type { FoodCheckVars } from '../src/services/food-check.ts';
 import {
   buildSinglePrompt,
-  fillTemplate,
   partsToLookups,
+  runMealConfig,
   splitMealParts,
   stripAmount,
 } from './eval-food-check-single.ts';
@@ -70,8 +72,72 @@ describe('buildSinglePrompt — the last call cannot ask for more', () => {
   });
 });
 
-describe("fillTemplate — the engine's interpolation, for running the shipped prompt off a laptop", () => {
-  it('fills every placeholder it knows and leaves the rest as written', () => {
-    expect(fillTemplate('a {{x}} b {{ y }} c {{z}}', { x: '1', y: '2' })).toBe('a 1 b 2 c {{z}}');
+describe('runMealConfig — the shipped job, the production way', () => {
+  const c: FoodCheckCase = {
+    id: 'x',
+    kind: 'real',
+    meal: 'snack',
+    text: 'a banana',
+    kcal: 105,
+    protein_g: 1.3,
+    why: '',
+  };
+  const found: FanOutResult = {
+    query: 'banana',
+    brand: null,
+    requested_measure: null,
+    candidates: [
+      {
+        source: 'usda',
+        food_id: 'f-banana',
+        name: 'Banana, raw',
+        brand: null,
+        per: { measure: '1 medium (118g)', grams: 118, nutrients: { kcal: 105, protein_g: 1.3 } },
+        measures: [{ label: '1 medium (118g)', grams: 118 }],
+        micros: 'measured',
+        completeness: 'full',
+        notes: [],
+      },
+    ],
+    sources_checked: [],
+    disagreements: [],
+  };
+
+  it("sends the template's variables, never a prompt it filled itself, and scores against what the book showed", async () => {
+    const sent: FoodCheckVars[] = [];
+    const run = await runMealConfig(c, {
+      lookup: async () => found,
+      run: async (vars) => {
+        sent.push(vars);
+        return {
+          raw: JSON.stringify({
+            items: [
+              {
+                said: 'a banana',
+                name: null,
+                brand: null,
+                pick: 'c1',
+                measure: '1 medium (118g)',
+                count: 1,
+                assumption: null,
+                question: null,
+                estimate: null,
+              },
+            ],
+            lookups: [],
+          }),
+          ms: 1,
+          promptTokens: 1,
+          completionTokens: 1,
+        };
+      },
+    });
+    expect(sent).toHaveLength(1);
+    // Exactly the variables the config declares — the engine wraps and caps them server-side.
+    expect(Object.keys(sent[0]!).sort()).toEqual(['book', 'guard_notes', 'meal', 'round_rule', 'said']);
+    expect(sent[0]!.book).toContain('c1 · usda · Banana, raw');
+    expect(run.error).toBeNull();
+    expect(run.final?.[0]?.pick).toBe('c1');
+    expect([...run.shown.keys()]).toEqual(['c1']);
   });
 });

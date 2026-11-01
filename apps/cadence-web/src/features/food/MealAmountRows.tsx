@@ -38,9 +38,11 @@ function KeptRow({
     { k: 'carbs', v: scaled(row.est?.carbs_g) },
     { k: 'fat', v: scaled(row.est?.fat_g) },
   ];
-  // The amount, then what the coach assumed where the words left something open — her
-  // assumption is shown on the row, never hidden in a number (FOOD-LOGGING-COACH-LED.md).
-  const sub = [[qty, row.unit].filter(Boolean).join(' '), row.assumption].filter(Boolean).join(' · ');
+  // The amount, then what the coach assumed where the words left something open, then her
+  // question if the row still carries one — shown on the row, never hidden in a number
+  // (FOOD-LOGGING-COACH-LED.md). A question row normally has no amount and renders as AskedRow;
+  // one that arrives with an amount anyway still shows the question rather than losing it.
+  const sub = [[qty, row.unit].filter(Boolean).join(' '), row.assumption, row.question].filter(Boolean).join(' · ');
   return (
     <div className="fa-row">
       <div className="fa-row-t">

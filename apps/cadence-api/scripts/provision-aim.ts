@@ -1,5 +1,11 @@
 /**
  * One-time AI Admin provisioning for Cadence, via the HTTP API + SK.
+ *
+ * NOT FOR ROUTINE USE (CLAUDE.md): it re-syncs EVERY profile from the config and so writes the
+ * config's model pointers over live repoints. Prompts go through sync-jobs.ts; a single new
+ * profile goes through its own script (provision-evolve-profile.ts, provision-food-check-profile.ts).
+ * It resolves the evolve and food-check profile ids like sync-jobs.ts does, so a config whose jobs
+ * use those tokens no longer stops it — which is not a reason to run it.
  * Discovers providers, registers the calling app, syncs profiles → jobs → workflow
  * (resolving cross-refs by slug across staged sync calls), verifies each profile
  * with a live run-slot, and prints the AIM_* ids to put in apps/cadence-api/.env.

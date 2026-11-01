@@ -16,7 +16,7 @@
 -- Purely additive, house style: `if not exists`, no down-migration, no backfill.
 create table if not exists cadence.food_phrases (
   phrase_id    uuid primary key default gen_random_uuid(),
-  user_id      uuid not null,
+  user_id      uuid not null references cadence.users (id) on delete cascade,
   phrase       text not null,
   food_id      uuid not null references cadence.foods(food_id) on delete cascade,
   qty          numeric not null check (qty > 0),
