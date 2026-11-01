@@ -9,13 +9,15 @@
  * nobody said is shown as a question, and it waits as a chip on the drawer the way it always has
  * (draft mode: one unsettled amount holds the log, never the add).
  */
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../../lib/api.ts';
 import { CoachFace } from '../../../components/CoachFace.tsx';
 import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
 import { fmtKcal } from '../bracket/copy.ts';
 import { NOT_REACHED, READING } from '../LogByChat.tsx';
+import { MealQuestionChoices } from '../MealQuestionChoices.tsx';
+import { reReadAnswer } from '../reReadAnswer.ts';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
 
@@ -70,6 +72,20 @@ export function DescribeSheet({
   }
 
   const drop = (i: number) => setRead((r) => (r ? { ...r, rows: r.rows.filter((_, j) => j !== i) } : r));
+
+  /**
+   * Her question answered from this sheet — a tapped choice or a typed line. The part is re-read
+   * with the answer (reReadAnswer.ts, the same call the confirm card makes) and the priced row(s)
+   * take the asked row's place, so "Looks right" adds a settled row. False keeps the row as it was.
+   */
+  async function answer(i: number, text: string, chosen: boolean): Promise<boolean> {
+    const row = read?.rows[i];
+    if (!row) return false;
+    const p = await reReadAnswer(row, text, chosen, meal);
+    if (!p) return false;
+    setRead((r) => (r ? { ...r, rows: r.rows.flatMap((x, j) => (j === i ? p.items : [x])) } : r));
+    return true;
+  }
   const ready = !!fresh?.length;
   const label = looking ? READING : ready ? `Looks right · ${fmtKcal(kcal)} kcal` : 'Look it up';
 
@@ -104,24 +120,38 @@ export function DescribeSheet({
             {/* Her work as it happened — the true trace, one line per part, never canned copy. */}
             {coach?.checked?.length ? <div className="ms-ds-row-m">Checked {coach.checked.join('; ')}.</div> : null}
             {fresh.map((r, i) => (
-              <div className="ms-ds-row" key={`${r.name}-${i}`}>
-                <div className="ms-ds-row-w">
-                  <div className="ms-ds-row-n">{r.brand ? `${r.brand} ${r.name}` : r.name}</div>
-                  {(macroLine(r.est) || r.assumption || r.question) && (
-                    <div className="ms-ds-row-m">
-                      {[macroLine(r.est), r.assumption, r.question].filter(Boolean).join(' · ')}
-                    </div>
-                  )}
+              <Fragment key={`${r.name}-${i}`}>
+                <div className="ms-ds-row">
+                  <div className="ms-ds-row-w">
+                    <div className="ms-ds-row-n">{r.brand ? `${r.brand} ${r.name}` : r.name}</div>
+                    {(macroLine(r.est) || r.assumption || r.question) && (
+                      <div className="ms-ds-row-m">
+                        {[macroLine(r.est), r.assumption, r.question].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                  <span className={`ms-ds-amt${r.qty == null ? ' is-ask' : ''}`}>{amountWords(r)}</span>
+                  <span className="ms-ds-k">
+                    <b>{fmtKcal(r.est?.kcal)}</b>
+                    <i>KCAL</i>
+                  </span>
+                  <button type="button" className="ms-ds-drop" aria-label={`Drop ${r.name}`} onClick={() => drop(i)}>
+                    ×
+                  </button>
                 </div>
-                <span className={`ms-ds-amt${r.qty == null ? ' is-ask' : ''}`}>{amountWords(r)}</span>
-                <span className="ms-ds-k">
-                  <b>{fmtKcal(r.est?.kcal)}</b>
-                  <i>KCAL</i>
-                </span>
-                <button type="button" className="ms-ds-drop" aria-label={`Drop ${r.name}`} onClick={() => drop(i)}>
-                  ×
-                </button>
-              </div>
+                {/* Her answers as buttons under the row — the confirm card's own component, so the
+                    two doors cannot drift (FOOD-LOGGING-COACH-LED.md, "chips in her voice"). */}
+                {r.question && r.choices?.length ? (
+                  <div className="ms-ds-ask">
+                    <MealQuestionChoices
+                      name={r.name}
+                      choices={r.choices}
+                      busy={busy || looking}
+                      onAnswer={(text, chosen) => answer(i, text, chosen)}
+                    />
+                  </div>
+                ) : null}
+              </Fragment>
             ))}
           </div>
         )}

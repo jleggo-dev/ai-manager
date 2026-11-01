@@ -17,10 +17,12 @@ vi.mock('../../lib/query/index.ts', () => ({
 
 const api = vi.hoisted(() => ({
   logPreviewedMeal: vi.fn(async (_preview: unknown, _meal?: unknown) => ({ log_id: 'l1' })),
+  previewMealAnswer: vi.fn(async (_input: unknown): Promise<unknown> => ({ items: [] })),
 }));
 vi.mock('../../lib/api.ts', () => api);
 
 const { MealParseCard } = await import('./MealParseCard.tsx');
+const { CHECK_FAILED } = await import('./MealQuestionChoices.tsx');
 
 /** "toast and eggs" — the design's own case: the eggs are countable, the bread is not. */
 const preview = {
@@ -169,5 +171,147 @@ describe('MealParseCard — a coach-led question row', () => {
     expect(sent.items[0]).not.toHaveProperty('said');
     // The picked row keeps both, so the confirm prices from its food and the memory learns.
     expect(sent.items[1]).toMatchObject({ food_id: 'f-eggs', said: '2 eggs' });
+  });
+});
+
+/**
+ * Her question answered with a button (FOOD-LOGGING-COACH-LED.md, "chips in her voice"; owner
+ * 2026-11-01): the choices are buttons, the row counts nothing and gates the log until answered,
+ * a tap re-reads that part for the card's slot and the priced row takes its place — total,
+ * link and words included — and a failed re-read keeps the question, the buttons and the gate.
+ */
+describe('MealParseCard — her question answered with a button', () => {
+  const asked = {
+    meal: 'breakfast' as const,
+    raw_text: 'milk and 2 eggs',
+    items: [
+      {
+        name: 'milk',
+        question: 'Whole milk, 2% or skim?',
+        choices: ['Whole milk', '2%', 'Skim'],
+        asked_about: 'milk',
+        basis: 'none' as const,
+      },
+      {
+        name: 'eggs',
+        qty: 2,
+        unit: 'large',
+        est: { kcal: 144 },
+        food_id: 'f-eggs',
+        said: '2 eggs',
+        basis: 'record' as const,
+      },
+    ],
+    macros: { kcal: 144 },
+    confidence: null,
+    flags: {},
+    coach: { reached: true, calls: 1, checked: [] },
+  };
+  const answered = {
+    meal: 'breakfast' as const,
+    raw_text: 'whole milk',
+    items: [
+      {
+        name: 'Milk, whole',
+        qty: 1,
+        unit: 'cup',
+        est: { kcal: 149, protein_g: 8 },
+        food_id: 'f-whole',
+        said: 'milk',
+        basis: 'record' as const,
+        source_label: 'USDA',
+      },
+    ],
+    macros: { kcal: 149 },
+    confidence: null,
+    flags: {},
+    coach: { reached: true, calls: 1, checked: [] },
+  };
+
+  it('offers her answers as buttons, counts the row as a question, and will not log until it is answered', () => {
+    render(<MealParseCard preview={asked} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    expect(screen.getByText('Whole milk, 2% or skim?')).toBeInTheDocument();
+    expect(screen.getByText('1 QUESTION TO SETTLE')).toBeInTheDocument();
+    for (const name of ['Whole milk', '2%', 'Skim', 'Something else']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    // Never the amount chips for a question an amount cannot answer.
+    expect(screen.queryByRole('button', { name: '1 glass' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'One question to settle first' })).toBeDisabled();
+    // Nothing counted for it: the total is the eggs alone.
+    expect(screen.getByText('~144 kcal')).toBeInTheDocument();
+  });
+
+  it('a tap re-reads the part for this slot, the priced row takes its place, the total moves, and the confirm carries its food and words', async () => {
+    api.previewMealAnswer.mockResolvedValueOnce(answered);
+    const onLogged = vi.fn();
+    render(<MealParseCard preview={asked} initialMeal="breakfast" onLogged={onLogged} onCancel={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
+
+    await waitFor(() =>
+      expect(api.previewMealAnswer).toHaveBeenCalledWith({
+        asked_about: 'milk',
+        answer: 'Whole milk',
+        chosen: true,
+        meal: 'breakfast',
+      }),
+    );
+    expect(await screen.findByText('Milk, whole')).toBeInTheDocument();
+    expect(screen.queryByText('Whole milk, 2% or skim?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Skim' })).not.toBeInTheDocument();
+    expect(screen.getByText('1 cup')).toBeInTheDocument();
+    expect(screen.getByText('~293 kcal')).toBeInTheDocument();
+    expect(screen.queryByText(/TO SETTLE/)).not.toBeInTheDocument();
+
+    const log = screen.getByRole('button', { name: 'Log to breakfast' });
+    expect(log).toBeEnabled();
+    fireEvent.click(log);
+    await waitFor(() => expect(api.logPreviewedMeal).toHaveBeenCalled());
+    const [sent] = api.logPreviewedMeal.mock.calls[0] as unknown as [typeof answered];
+    expect(sent.items).toHaveLength(2);
+    // The answered row is a picked row now: its food and the words the question was about ride
+    // back, so the confirm prices from the food and the memory learns "milk".
+    expect(sent.items[0]).toMatchObject({ name: 'Milk, whole', qty: 1, unit: 'cup', food_id: 'f-whole', said: 'milk' });
+    expect(sent.items[1]).toMatchObject({ food_id: 'f-eggs', said: '2 eggs' });
+    expect(sent.macros?.kcal).toBe(293);
+    expect(onLogged).toHaveBeenCalled();
+  });
+
+  it('a typed answer goes the same way, marked as not chosen', async () => {
+    api.previewMealAnswer.mockResolvedValueOnce(answered);
+    render(<MealParseCard preview={asked} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Something else' }));
+    fireEvent.change(screen.getByLabelText('What the milk was'), { target: { value: 'lactose-free' } });
+    fireEvent.click(screen.getByRole('button', { name: "That's it" }));
+    await waitFor(() =>
+      expect(api.previewMealAnswer).toHaveBeenCalledWith({
+        asked_about: 'milk',
+        answer: 'lactose-free',
+        chosen: false,
+        meal: 'breakfast',
+      }),
+    );
+    expect(await screen.findByText('Milk, whole')).toBeInTheDocument();
+  });
+
+  it('a failed re-read keeps the question, the buttons and the gate', async () => {
+    api.previewMealAnswer.mockRejectedValueOnce(new Error('500'));
+    render(<MealParseCard preview={asked} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Skim' }));
+    expect(await screen.findByText(CHECK_FAILED)).toBeInTheDocument();
+    expect(screen.getByText('Whole milk, 2% or skim?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skim' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'One question to settle first' })).toBeDisabled();
+    expect(screen.getByText('~144 kcal')).toBeInTheDocument();
+    expect(api.logPreviewedMeal).not.toHaveBeenCalled();
+  });
+
+  it('near-miss: a re-read that comes back with nothing is a failure too, never an emptied card', async () => {
+    api.previewMealAnswer.mockResolvedValueOnce({ ...answered, items: [] });
+    render(<MealParseCard preview={asked} initialMeal="breakfast" onLogged={() => {}} onCancel={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '2%' }));
+    expect(await screen.findByText(CHECK_FAILED)).toBeInTheDocument();
+    expect(screen.getByText('Two things')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2%' })).toBeEnabled();
   });
 });

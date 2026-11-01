@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import type { MealMacros, MealPreview } from '../../lib/api.ts';
+import type { MealKind, MealMacros, MealPreview } from '../../lib/api.ts';
 import { amountSource, scaleMacros, type AmountSource } from './amounts.ts';
+import { reReadAnswer } from './reReadAnswer.ts';
 
 /** One row of the confirm card: the parsed item, where its amount came from, and where it is now. */
 export interface AmountRow {
@@ -22,7 +23,33 @@ export interface AmountRow {
   said?: string;
   assumption?: string;
   question?: string;
+  /** With a question: her answers, drawn as buttons (MealQuestionChoices). Typing stays open. */
+  choices?: string[];
+  /** With a question: their words for the part, amount included — what the answer is re-read with. */
+  asked_about?: string;
   source_label?: string;
+}
+
+/** One parsed item as a row of the card. `rawText` is what they typed, so a given amount reads as theirs. */
+function rowFromItem(it: MealPreview['items'][number], rawText: string): AmountRow {
+  return {
+    name: it.name,
+    ...(it.brand ? { brand: it.brand } : {}),
+    matched: !!it.food_id,
+    qty: it.qty ?? null,
+    unit: it.unit,
+    est: it.est,
+    source: amountSource(it, rawText),
+    // An unpriced item was read at "a typical portion", which is one of whatever it is.
+    baseQty: it.qty && it.qty > 0 ? it.qty : 1,
+    ...(it.food_id ? { food_id: it.food_id } : {}),
+    ...(it.said ? { said: it.said } : {}),
+    ...(it.assumption ? { assumption: it.assumption } : {}),
+    ...(it.question ? { question: it.question } : {}),
+    ...(it.choices?.length ? { choices: it.choices } : {}),
+    ...(it.asked_about ? { asked_about: it.asked_about } : {}),
+    ...(it.source_label ? { source_label: it.source_label } : {}),
+  };
 }
 
 /**
@@ -71,24 +98,7 @@ function sum(rows: AmountRow[]): MealMacros {
  * gets written.
  */
 export function useMealAmounts(preview: MealPreview) {
-  const [rows, setRows] = useState<AmountRow[]>(() =>
-    preview.items.map((it) => ({
-      name: it.name,
-      ...(it.brand ? { brand: it.brand } : {}),
-      matched: !!it.food_id,
-      qty: it.qty ?? null,
-      unit: it.unit,
-      est: it.est,
-      source: amountSource(it, preview.raw_text),
-      // An unpriced item was read at "a typical portion", which is one of whatever it is.
-      baseQty: it.qty && it.qty > 0 ? it.qty : 1,
-      ...(it.food_id ? { food_id: it.food_id } : {}),
-      ...(it.said ? { said: it.said } : {}),
-      ...(it.assumption ? { assumption: it.assumption } : {}),
-      ...(it.question ? { question: it.question } : {}),
-      ...(it.source_label ? { source_label: it.source_label } : {}),
-    })),
-  );
+  const [rows, setRows] = useState<AmountRow[]>(() => preview.items.map((it) => rowFromItem(it, preview.raw_text)));
 
   const setQty = (i: number, qty: number | null, unit?: string) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, qty, ...(unit !== undefined ? { unit } : {}) } : r)));
@@ -153,7 +163,27 @@ export function useMealAmounts(preview: MealPreview) {
       return prev.map((r, j) => (j === into ? merged : r)).filter((_, j) => j !== from);
     });
 
-  const asked = rows.filter((r) => r.source === 'asked' && r.qty == null).length;
+  /**
+   * Her question answered — a tapped choice or a typed line (MealQuestionChoices). The part is
+   * re-read with the answer as one text through the same read (reReadAnswer.ts), and the row(s)
+   * that come back take the asked row's place: priced, linked, with their words, so the confirm
+   * carries them like any picked row and the memory learns. False when the re-read failed or
+   * came back empty — the row then stays as it was, buttons and all.
+   */
+  const answerRow = async (i: number, answer: string, chosen: boolean, meal?: MealKind): Promise<boolean> => {
+    const row = rows[i];
+    if (!row) return false;
+    const p = await reReadAnswer(row, answer, chosen, meal);
+    if (!p) return false;
+    const fresh = p.items.map((it) => rowFromItem(it, p.raw_text));
+    setRows((prev) => prev.flatMap((r, j) => (j === i ? fresh : [r])));
+    return true;
+  };
+
+  const open = rows.filter((r) => r.source === 'asked' && r.qty == null);
+  const asked = open.length;
+  /** Of the open rows, how many wait on her question with answers to tap rather than on an amount. */
+  const askedChoices = open.filter((r) => !!r.choices?.length).length;
   const total = useMemo(() => sum(rows), [rows]);
 
   /** The card's own contents, in the shape the log endpoint takes back verbatim. */
@@ -175,5 +205,5 @@ export function useMealAmounts(preview: MealPreview) {
     macros: total,
   });
 
-  return { rows, setQty, setBrand, removeRow, renameRow, mergeRow, asked, total, toPreview };
+  return { rows, setQty, setBrand, removeRow, renameRow, mergeRow, answerRow, asked, askedChoices, total, toPreview };
 }

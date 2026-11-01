@@ -514,6 +514,17 @@
   width: 100%;
   margin-top: 6px;
 }
+/* Her question's answers as buttons (MealQuestionChoices): the status line sits above the chips;
+   a failed re-read speaks in the same quiet voice, in its own colour, and the chips stay. */
+.fa-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.fa-ask-fail {
+  color: oklch(50% 0.12 25);
+}
 /* A23 §1b — the vendor question. Quiet by construction: it sits under the rows, above the total,
    and never looks like something you have to answer. Reuses .food-field/.wiz-in so an optional
    line needs no new control. */

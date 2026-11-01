@@ -4,6 +4,7 @@ import {
   parseBody,
   logMealBodySchema,
   previewMealBodySchema,
+  previewMealAnswerBodySchema,
   previewFromReadingBodySchema,
   macroTargetsBodySchema,
   occurrenceLogBodySchema,
@@ -130,6 +131,39 @@ describe('parseBody / photo preview schema', () => {
 
   it('is needed: the words preview still refuses a reading this long', () => {
     expect(() => parseBody(previewMealBodySchema, { text: longReading })).toThrow(BodyValidationError);
+  });
+});
+
+describe('parseBody / meal answer schema — a question row answered', () => {
+  it('accepts a chosen answer with the slot, trimmed', () => {
+    expect(
+      parseBody(previewMealAnswerBodySchema, {
+        asked_about: ' a glass of milk ',
+        answer: ' Whole milk ',
+        chosen: true,
+        meal: 'breakfast',
+      }),
+    ).toEqual({ asked_about: 'a glass of milk', answer: 'Whole milk', chosen: true, meal: 'breakfast' });
+  });
+
+  it('accepts a typed answer with no chosen flag and no slot', () => {
+    expect(parseBody(previewMealAnswerBodySchema, { asked_about: 'milk', answer: 'lactose-free' })).toEqual({
+      asked_about: 'milk',
+      answer: 'lactose-free',
+      chosen: undefined,
+      meal: undefined,
+    });
+  });
+
+  it.each([
+    ['no words to answer', { answer: 'Skim' }],
+    ['no answer', { asked_about: 'milk' }],
+    ['a blank answer', { asked_about: 'milk', answer: '   ' }],
+    ["words past a row's 200", { asked_about: 'x'.repeat(201), answer: 'Skim' }],
+    ['an answer past 120', { asked_about: 'milk', answer: 'x'.repeat(121) }],
+    ['an unknown slot', { asked_about: 'milk', answer: 'Skim', meal: 'brunch' }],
+  ])('rejects %s', (_name, body) => {
+    expect(() => parseBody(previewMealAnswerBodySchema, body)).toThrow(BodyValidationError);
   });
 });
 

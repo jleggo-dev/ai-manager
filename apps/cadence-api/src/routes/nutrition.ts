@@ -17,6 +17,7 @@ import {
   setTargets,
 } from '../services/nutrition.ts';
 import { readMealPhoto, logMealFromReading, previewMealFromReading } from '../services/meal-photo-read.ts';
+import { previewAnsweredPart } from '../services/food-described-answer.ts';
 import { logWater } from '../services/water.ts';
 import { mergeItems, reachBackToPin, renameItem } from '../services/meal-corrections.ts';
 import { findNutritionLog } from '../repos/nutrition.ts';
@@ -28,6 +29,7 @@ import {
   logMealBodySchema,
   macroTargetsBodySchema,
   previewMealBodySchema,
+  previewMealAnswerBodySchema,
   waterBodySchema,
   readPhotoBodySchema,
   logFromReadingBodySchema,
@@ -166,6 +168,24 @@ router.post('/meals/preview', async (req: Request, res: Response) => {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /nutrition/meals/preview]', err);
     res.status(500).json({ error: 'failed to read that meal' });
+  }
+});
+
+/**
+ * POST /nutrition/meals/preview/answer — one question row answered (a tapped choice or a typed
+ * line): the part's words and the answer are re-read as ONE part through the same read, and the
+ * priced row(s) for that part come back for the card to put where the asked row was. Writes
+ * nothing; the confirm does.
+ */
+router.post('/meals/preview/answer', async (req: Request, res: Response) => {
+  const userId = req.cadenceUserId!;
+  try {
+    const body = parseBody(previewMealAnswerBodySchema, req.body);
+    res.json(await previewAnsweredPart(userId, body));
+  } catch (err) {
+    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
+    console.error('[POST /nutrition/meals/preview/answer]', err);
+    res.status(500).json({ error: 'failed to read that answer' });
   }
 });
 

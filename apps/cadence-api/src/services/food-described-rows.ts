@@ -14,7 +14,9 @@
  *   - A row with an open question carries NO number, NO food link and NO `said`. The question is
  *     what it waits for: the card asks it, nothing counts until it is answered, and on confirm the
  *     row re-matches by name like any row without a food — so a tentative pick is never logged,
- *     and with no words on the row the phrase memory has nothing to learn from it.
+ *     and with no words on the row the phrase memory has nothing to learn from it. It carries the
+ *     answers the model offered (`choices`, drawn as buttons) and their words for the part
+ *     (`asked_about`), so the answer can be re-read with those words (food-described-answer.ts).
  */
 import type { DescribedBasis, Food, MealItem, MealKind } from '@cadence/shared';
 import type { FoodPhraseRow } from '../repos/food-phrases.ts';
@@ -44,6 +46,13 @@ export interface DescribedMealItem extends MealItem {
   assumption?: string;
   /** The one question she would ask. A row with one carries no number and no link until answered. */
   question?: string;
+  /** With a question: the short answers offered, drawn as buttons in her words. Typing stays open. */
+  choices?: string[];
+  /**
+   * With a question: their words for this part, amount included ("a glass of milk"), so the
+   * answer is re-read with them. Not `said` — nothing is taught from a question row.
+   */
+  asked_about?: string;
   /** Why this row could not be counted from a record, when it could not. */
   problem?: string;
 }
@@ -176,11 +185,16 @@ export async function rowsFromOutcome(
     // from, their own words as the name (never the record the model leaned towards), so a chip
     // answers the amount and the confirm re-matches by name. Nothing tentative is logged or learned.
     if (item.question) {
+      const name = (item.name ?? stripAmount(said).q ?? said).slice(0, NAME_MAX) || 'something';
       return {
-        name: (item.name ?? stripAmount(said).q ?? said).slice(0, NAME_MAX) || 'something',
+        name,
         ...(item.brand ? { brand: item.brand } : {}),
         basis: 'none',
         question: item.question,
+        ...(item.choices?.length ? { choices: item.choices } : {}),
+        // The words the answer is re-read with: theirs for this part when the model echoed them,
+        // else the row's name — never empty, so a tap always has something to re-read.
+        asked_about: said || name,
         ...assumption,
       };
     }

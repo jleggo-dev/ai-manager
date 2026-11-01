@@ -4,15 +4,16 @@
  * question is shown as the question and left out of the button's total.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('../../../components/MicButton.tsx', () => ({ MicButton: () => <button type="button">mic</button> }));
 vi.mock('../../../components/CoachFace.tsx', () => ({ CoachFace: () => <span /> }));
-const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
+const api = vi.hoisted(() => ({ previewMeal: vi.fn(), previewMealAnswer: vi.fn() }));
 vi.mock('../../../lib/api.ts', () => api);
 
 const { DescribeSheet } = await import('./DescribeSheet.tsx');
 const { NOT_REACHED } = await import('../LogByChat.tsx');
+const { CHECK_FAILED } = await import('../MealQuestionChoices.tsx');
 
 const base = {
   meal: 'snack' as const,
@@ -86,5 +87,69 @@ describe('DescribeSheet — who read it, and what the rows say', () => {
     expect(screen.getByText('Whole milk or 2%?')).toBeInTheDocument();
     expect(screen.getByText('how much?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Her question answered from the sheet (FOOD-LOGGING-COACH-LED.md, "chips in her voice"): the
+ * same buttons as the confirm card, a tap re-reads the part for this sheet's slot, and the priced
+ * row takes the asked row's place — in the list and in the button's total.
+ */
+describe('DescribeSheet — her question answered with a button', () => {
+  const askedRow = {
+    name: 'milk',
+    question: 'Whole milk, 2% or skim?',
+    choices: ['Whole milk', '2%', 'Skim'],
+    asked_about: 'milk',
+  };
+  const whole = {
+    ...base,
+    raw_text: 'whole milk',
+    items: [{ name: 'Milk, whole', qty: 1, unit: 'cup', est: { kcal: 149 }, food_id: 'f-whole', said: 'milk' }],
+    macros: { kcal: 149 },
+  };
+
+  it('offers her answers as buttons under the row, and the row stays out of the total until answered', async () => {
+    await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
+    for (const name of ['Whole milk', '2%', 'Skim', 'Something else']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(screen.getByText(/Whole milk, 2% or skim\?/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+  });
+
+  it('a tap re-reads the part for this slot and the priced row takes its place, total included', async () => {
+    await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
+    api.previewMealAnswer.mockResolvedValueOnce(whole);
+    fireEvent.click(screen.getByRole('button', { name: 'Whole milk' }));
+    await waitFor(() =>
+      expect(api.previewMealAnswer).toHaveBeenCalledWith({
+        asked_about: 'milk',
+        answer: 'Whole milk',
+        chosen: true,
+        meal: 'snack',
+      }),
+    );
+    expect(await screen.findByText('Milk, whole')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Whole milk' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Looks right · 254 kcal/ })).toBeInTheDocument();
+  });
+
+  it('a failed re-read says so and keeps the buttons', async () => {
+    await lookUp({ ...base, items: [askedRow, ...base.items], coach: { reached: true, calls: 1, checked: [] } });
+    api.previewMealAnswer.mockRejectedValueOnce(new Error('500'));
+    fireEvent.click(screen.getByRole('button', { name: 'Skim' }));
+    expect(await screen.findByText(CHECK_FAILED)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skim' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Looks right · 105 kcal/ })).toBeInTheDocument();
+  });
+
+  it('near-miss: a question row without choices offers no buttons', async () => {
+    await lookUp({
+      ...base,
+      items: [{ name: 'milk', question: 'How much?', asked_about: 'milk' }, ...base.items],
+      coach: { reached: true, calls: 1, checked: [] },
+    });
+    expect(screen.queryByRole('button', { name: 'Something else' })).not.toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@
  * error — never as an empty meal.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { QUESTION_CHOICES_MAX, QUESTION_CHOICE_MAX_CHARS } from '@cadence/shared';
 import type { FanOutResult } from './food-source-fanout.ts';
 import type { SourceCandidate } from './food-source-report.ts';
 import { CandidateBook, MAX_PARTS } from './food-candidate-book.ts';
@@ -15,6 +16,7 @@ import {
   foodCheckRounds,
   guardNotes,
   parseFoodCheckReply,
+  readChoices,
   type FoodCheckVars,
 } from './food-check.ts';
 
@@ -51,6 +53,7 @@ const item = (over: Partial<Record<string, unknown>> = {}) => ({
   count: 1,
   assumption: null,
   question: null,
+  choices: null,
   estimate: null,
   ...over,
 });
@@ -98,6 +101,35 @@ describe('parseFoodCheckReply', () => {
   });
   it.each(['', 'no json here', '{"meal":"x"}', '[1,2]'])('%j is not a reply', (raw) => {
     expect(parseFoodCheckReply(raw)).toBeNull();
+  });
+  it('choices ride with a question: trimmed, no repeats (case apart), at most QUESTION_CHOICES_MAX, in the order given', () => {
+    const r = parseFoodCheckReply(
+      JSON.stringify({
+        items: [
+          item({
+            question: 'Whole milk, 2% or skim?',
+            choices: [' Whole milk ', '2%', 'whole milk', '', 'Skim', 'Oat milk', 'Almond milk'],
+          }),
+        ],
+        lookups: [],
+      }),
+    );
+    expect(QUESTION_CHOICES_MAX).toBe(4);
+    expect(r?.items[0]?.choices).toEqual(['Whole milk', '2%', 'Skim', 'Oat milk']);
+  });
+  it.each([
+    ['no choices given', item({ question: 'Whole milk or 2%?' })],
+    ['an empty list', item({ question: 'Whole milk or 2%?', choices: [] })],
+    ['a list of blanks', item({ question: 'Whole milk or 2%?', choices: ['', '  '] })],
+    ['not a list', item({ question: 'Whole milk or 2%?', choices: 'Whole milk' })],
+    ['near-miss: choices with no question answer nothing', item({ choices: ['Whole milk', 'Skim'] })],
+  ])('%s → choices null', (_label, it) => {
+    expect(parseFoodCheckReply(JSON.stringify({ items: [it], lookups: [] }))?.items[0]?.choices).toBeNull();
+  });
+  it("readChoices cuts each answer to a button's worth and keeps a lone answer", () => {
+    expect(readChoices(['x'.repeat(60)])).toEqual(['x'.repeat(QUESTION_CHOICE_MAX_CHARS)]);
+    expect(readChoices(['Oat milk'])).toEqual(['Oat milk']);
+    expect(readChoices([1, null, { a: 1 }])).toBeNull();
   });
   it('caps the items at MAX_PARTS, the parts a meal can have (the confirm takes up to twelve rows, so this is the tighter bound)', () => {
     const items = Array.from({ length: 14 }, (_, i) => item({ said: `part ${i}` }));

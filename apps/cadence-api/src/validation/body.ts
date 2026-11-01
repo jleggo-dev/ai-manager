@@ -84,6 +84,18 @@ export const previewMealBodySchema = z.object({
   meal: mealKindSchema.optional(),
 });
 
+/**
+ * The answer to a question row (services/food-described-answer.ts): the row's `asked_about` (its
+ * words, bounded like a row's `said`), the answer (a button's or a typed line's worth), whether it
+ * was one of the offered choices, and the slot the card is logging to.
+ */
+export const previewMealAnswerBodySchema = z.object({
+  asked_about: z.string().trim().min(1).max(200),
+  answer: z.string().trim().min(1).max(120),
+  chosen: z.boolean().optional(),
+  meal: mealKindSchema.optional(),
+});
+
 /** One pour of water, ml canonical (0037). The cap matches the table's own check constraint. */
 export const waterBodySchema = z.object({
   ml: z.number().int().min(1).max(5000),

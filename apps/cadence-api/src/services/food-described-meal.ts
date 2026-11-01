@@ -146,9 +146,37 @@ export async function previewDescribedMeal(
   if (!trimmed) throw new Error('a meal needs words');
   const named = readMealSlot(trimmed);
   const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : (named.slot ?? 'other');
-  const started = Date.now();
   // The slot phrase is not food: the parts are split from the words without it.
   const { lookups, not_read } = describedParts(named.rest);
+  return readParts(userId, { text: trimmed, meal, mealHint, lookups, not_read }, deps);
+}
+
+/** What the read is given once the parts are known. */
+export interface PartsToRead {
+  /** The words as a whole: the card's `raw_text`, the flags, the log. */
+  text: string;
+  meal: MealKind;
+  /** The caller's hint, kept on the log. */
+  mealHint?: MealKind;
+  /** One lookup per part, in their order. */
+  lookups: MealPartLookup[];
+  not_read: string[];
+  /** Set when the read is the answer to a question row (food-described-answer.ts), for the log. */
+  answered?: { asked_about: string; answer: string };
+}
+
+/**
+ * Steps 1–4 over parts already split: the memory, the book, the call, the pricing. The doors
+ * come in through `previewDescribedMeal` (the split); an answer to a question row comes in
+ * through `previewAnsweredPart` with its one part — the same read, never a second one.
+ */
+export async function readParts(
+  userId: string,
+  parts: PartsToRead,
+  deps: DescribedMealDeps = productionDeps(userId),
+): Promise<DescribedMealPreview> {
+  const { text: trimmed, meal, mealHint, lookups, not_read } = parts;
+  const started = Date.now();
 
   const remembered = await rememberedRows(lookups, userId, deps);
   const pending = lookups.filter((_, i) => !remembered.has(i));
@@ -177,7 +205,7 @@ export async function previewDescribedMeal(
   const checked = traceLines(book, rememberedLookups);
   const log = (reached: boolean, items: DescribedMealItem[]): void =>
     deps.log({
-      input: { text: trimmed, meal_hint: mealHint ?? null },
+      input: { text: trimmed, meal_hint: mealHint ?? null, ...(parts.answered ? { answered: parts.answered } : {}) },
       output: { items: outcome?.items ?? [], lookups: outcome?.lookups ?? [] },
       meta: {
         reached,

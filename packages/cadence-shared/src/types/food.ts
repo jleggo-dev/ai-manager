@@ -48,6 +48,15 @@ export const DESCRIBED_BASES = [
 ] as const;
 export type DescribedBasis = (typeof DESCRIBED_BASES)[number];
 
+/**
+ * A question row's answers as buttons (docs/cadence/FOOD-LOGGING-COACH-LED.md, "chips in her
+ * voice"; owner 2026-11-01): the food-check offers at most this many, the parser keeps at most
+ * this many, and the card draws one button each. One number, both readers.
+ */
+export const QUESTION_CHOICES_MAX = 4;
+/** One answer's length, in characters: a button's worth of words. */
+export const QUESTION_CHOICE_MAX_CHARS = 40;
+
 /** True when a value off the wire names a real food source. */
 export function isFoodSource(value: unknown): value is FoodSource {
   return typeof value === 'string' && (FOOD_SOURCES as readonly string[]).includes(value);

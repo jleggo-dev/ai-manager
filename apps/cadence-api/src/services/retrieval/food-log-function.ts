@@ -20,7 +20,7 @@
  * trace and costs nothing beyond the read itself. `log_meal` runs this same read and logs what it
  * shows (food-log-described.ts, FOOD-LOGGING-COACH-LED.md step 3), so the two never disagree.
  */
-import { macroLine, rowName, rowWords } from '../food-described-render.ts';
+import { macroLine, questionWords, rowName, rowWords } from '../food-described-render.ts';
 import type { DescribedMealItem } from '../food-described-rows.ts';
 import { previewMealParse } from '../nutrition.ts';
 import { toolFaultText } from '../tool-response.ts';
@@ -111,7 +111,7 @@ export const PREVIEW_MEAL: RetrievalFunction = {
     const waiting = asked.length
       ? [
           'Waiting on their answer:',
-          ...asked.map((i) => `- ${rowName(i)}: ${i.question}`),
+          ...asked.map((i) => `- ${rowName(i)}: ${questionWords(i)}`),
           'Ask them, then preview again with the answer in the text.',
         ]
       : [];

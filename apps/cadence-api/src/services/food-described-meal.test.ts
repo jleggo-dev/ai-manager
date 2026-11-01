@@ -194,7 +194,8 @@ describe('a row with an open question (the question is the answer it waits for)'
     const p = await previewDescribedMeal(USER, 'milk and a banana', 'breakfast', d);
     expect(p.items).toHaveLength(2);
     // No number, no link, no `said`: nothing for the confirm to price from or the memory to learn.
-    expect(p.items[0]).toEqual({ name: 'milk', basis: 'none', question: 'Whole milk or 2%?' });
+    // `asked_about` is what the answer is re-read with (food-described-answer.ts), not `said`.
+    expect(p.items[0]).toEqual({ name: 'milk', basis: 'none', question: 'Whole milk or 2%?', asked_about: 'milk' });
     expect(p.items[1]).toMatchObject({
       name: 'Banana, raw',
       food_id: 'f-banana',
@@ -230,8 +231,41 @@ describe('a row with an open question (the question is the answer it waits for)'
       name: 'yogurt parfait',
       basis: 'none',
       question: 'The small or the large?',
+      asked_about: 'a parfait',
     });
     expect(p.macros).toBeNull();
+  });
+
+  it('the answers she offered ride on the row as buttons, with their words for the part to re-read with', async () => {
+    const { d } = deps({
+      reply: [
+        item({
+          said: '2 cups milk',
+          pick: 'c1',
+          measure: '1 cup (244g)',
+          count: 2,
+          question: 'Whole milk, 2% or skim?',
+          choices: ['Whole milk', '2%', 'Skim'],
+        }),
+      ],
+    });
+    const p = await previewDescribedMeal(USER, '2 cups milk', 'breakfast', d);
+    // Still no number, no link, no `said`; the amount is kept in `asked_about`, not on the row.
+    expect(p.items[0]).toEqual({
+      name: 'milk',
+      basis: 'none',
+      question: 'Whole milk, 2% or skim?',
+      choices: ['Whole milk', '2%', 'Skim'],
+      asked_about: '2 cups milk',
+    });
+    expect(p.macros).toBeNull();
+  });
+
+  it('near-miss: a question with no choices carries none, and a model that echoed no words leaves the name to re-read with', async () => {
+    const { d } = deps({ reply: [item({ said: '', name: 'milk', question: 'How much?' })] });
+    const p = await previewDescribedMeal(USER, 'milk', 'breakfast', d);
+    expect(p.items[0]).toEqual({ name: 'milk', basis: 'none', question: 'How much?', asked_about: 'milk' });
+    expect(p.items[0]).not.toHaveProperty('choices');
   });
 });
 

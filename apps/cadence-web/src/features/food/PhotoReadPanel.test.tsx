@@ -182,6 +182,33 @@ describe('PhotoReadPanel — draft mode', () => {
     await waitFor(() => expect(appendDraft).toHaveBeenCalledWith(PRICED.items, PRICED.raw_text));
   });
 
+  it("a row waiting on the coach's question offers her answers as buttons on the photo card too", async () => {
+    api.previewMealFromReading.mockResolvedValueOnce({
+      ...PRICED,
+      items: [
+        {
+          name: 'milk',
+          question: 'Whole milk, 2% or skim?',
+          choices: ['Whole milk', '2%', 'Skim'],
+          asked_about: 'milk',
+        },
+        ...PRICED.items,
+      ],
+    });
+    const { user } = setupDraft();
+    await user.click(screen.getByRole('button', { name: /have a look/i }));
+    await user.click(await screen.findByRole('button', { name: /work out the nutrition/i }));
+
+    expect(await screen.findByRole('button', { name: 'Whole milk' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Something else' })).toBeTruthy();
+    expect(screen.getByText('Whole milk, 2% or skim?')).toBeTruthy();
+    // The same card as the typed door: a question an amount cannot answer gets no amount chips,
+    // counts nothing, and is named for what it is.
+    expect(screen.queryByRole('button', { name: '1 glass' })).toBeNull();
+    expect(screen.getByText('~560 kcal')).toBeTruthy();
+    expect(screen.getByText('1 QUESTION TO SETTLE')).toBeTruthy();
+  });
+
   it('goes back to the reading from the numbers, to fix it and price again', async () => {
     const { user } = setupDraft();
     await user.click(screen.getByRole('button', { name: /have a look/i }));

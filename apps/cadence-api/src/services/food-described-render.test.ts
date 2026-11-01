@@ -5,7 +5,7 @@
  * "what they picked last time; from what you picked last time" (step 3 review, 2026-11-01).
  */
 import { describe, expect, it } from 'vitest';
-import { basisWords, macroLine, rowName, rowWords, type CoachRow } from './food-described-render.ts';
+import { basisWords, macroLine, questionWords, rowName, rowWords, type CoachRow } from './food-described-render.ts';
 
 describe('rowWords — one line per basis, the basis said once, in the third person', () => {
   it.each<[string, CoachRow, string]>([
@@ -63,6 +63,11 @@ describe('rowWords — one line per basis, the basis said once, in the third per
       'milk: not priced yet (not counted; waiting on their answer: Whole milk or 2%?)',
     ],
     [
+      'a question row with the answers offered as buttons',
+      { name: 'milk', basis: 'none', question: 'Whole milk, 2% or skim?', choices: ['Whole milk', '2%', 'Skim'] },
+      'milk: not priced yet (not counted; waiting on their answer: Whole milk, 2% or skim? (choices: Whole milk / 2% / Skim))',
+    ],
+    [
       'a row that counted nothing',
       { name: 'a thing', basis: 'none', problem: 'no record fits and no estimate was given' },
       'a thing: not priced yet (not counted; why: no record fits and no estimate was given)',
@@ -100,6 +105,16 @@ describe('rowWords — one line per basis, the basis said once, in the third per
   it('basisWords on a row with only a card label says where it was priced from, once', () => {
     expect(basisWords({ name: 'x', source_label: 'FatSecret' })).toBe('priced from FatSecret');
     expect(basisWords({ name: 'x' })).toBe('');
+  });
+});
+
+describe('questionWords — the question, and the answers offered beside it', () => {
+  it('lists the choices after the question, and the question alone when there are none', () => {
+    expect(questionWords({ question: 'Whole milk or 2%?', choices: ['Whole milk', '2%'] })).toBe(
+      'Whole milk or 2%? (choices: Whole milk / 2%)',
+    );
+    expect(questionWords({ question: 'How much?' })).toBe('How much?');
+    expect(questionWords({ question: 'How much?', choices: [] })).toBe('How much?');
   });
 });
 

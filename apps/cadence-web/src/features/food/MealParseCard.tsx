@@ -7,6 +7,7 @@ import { macroLineProteinFirst } from './amounts.ts';
 import { MealAmountRows } from './MealAmountRows.tsx';
 import { MealVendorAsk } from './MealVendorAsk.tsx';
 import { MealItemEdit } from './MealItemEdit.tsx';
+import { settleButton, settleChip } from './settleWords.ts';
 import { useMealAmounts } from './useMealAmounts.ts';
 
 const countLine = (n: number): string =>
@@ -69,7 +70,8 @@ export function MealParseCard({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const invalidateNutritionDay = useInvalidateNutritionDay();
-  const { rows, setQty, setBrand, removeRow, renameRow, mergeRow, asked, total, toPreview } = useMealAmounts(preview);
+  const { rows, setQty, setBrand, removeRow, renameRow, mergeRow, answerRow, asked, askedChoices, total, toPreview } =
+    useMealAmounts(preview);
   const [editing, setEditing] = useState<number | null>(null);
 
   const draft = mode === 'draft' && !!onAppend;
@@ -100,14 +102,19 @@ export function MealParseCard({
     <div className="fa-card" role="region" aria-label="Confirm meal log">
       <div className="fa-card-h">
         <b>{countLine(rows.length)}</b>
-        {asked > 0 && (
-          <span className="fa-card-open">
-            {asked} AMOUNT{asked === 1 ? '' : 'S'} TO SETTLE
-          </span>
-        )}
+        {asked > 0 && <span className="fa-card-open">{settleChip(asked, askedChoices > 0)}</span>}
       </div>
 
-      <MealAmountRows rows={rows} busy={busy} onQty={setQty} onRemove={removeRow} onEdit={setEditing} />
+      {/* Her question's answers as buttons: a tap re-reads that part for the slot this card logs to
+          (FOOD-LOGGING-COACH-LED.md, "chips in her voice"). */}
+      <MealAmountRows
+        rows={rows}
+        busy={busy}
+        onQty={setQty}
+        onRemove={removeRow}
+        onEdit={setEditing}
+        onAnswer={(i, answer, chosen) => answerRow(i, answer, chosen, meal)}
+      />
 
       {/* The last honest moment: after this, an unmatched food is pinned and its name resolves
           again tomorrow. Both repairs keep the nutrition and change only the label. */}
@@ -176,11 +183,9 @@ export function MealParseCard({
             ? 'Writing it down…'
             : draft
               ? `Add to ${mealLabel ?? meal}`
-              : asked === 1
-                ? 'One amount to settle first'
-                : asked > 1
-                  ? `${asked} amounts to settle first`
-                  : `Log to ${meal}`}
+              : asked > 0
+                ? settleButton(asked, askedChoices > 0)
+                : `Log to ${meal}`}
         </button>
         {onAddAnother && (
           <button type="button" className="mc-addanother" disabled={busy} onClick={onAddAnother}>
