@@ -94,6 +94,9 @@ const clip = (s: string): string => {
   return t.length > MAX_TEXT ? `${t.slice(0, MAX_TEXT - 1)}…` : t;
 };
 
+/** A non-blank string. A stored row of the wrong shape is skipped rather than allowed to throw. */
+const isText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
+
 const byAdded = <T extends { created_at?: unknown }>(a: T, b: T): number =>
   (dayOf(a.created_at) ?? '').localeCompare(dayOf(b.created_at) ?? '');
 
@@ -128,13 +131,13 @@ interface Draft {
 
 function drafts(src: DossierSources): Draft[] {
   const constraints = src.constraints
-    .filter((c) => c?.label?.trim())
+    .filter((c) => isText(c?.label))
     .map((c): Draft => ({ kind: 'constraint', text: c.label, added: null, notes: constraintNotes(c) }));
   const doingNow = src.doingNow
-    .filter((s) => typeof s === 'string' && s.trim())
+    .filter(isText)
     .map((s): Draft => ({ kind: 'doing_now', text: s, added: null, notes: [] }));
   const equipment = src.equipment
-    .filter((e) => e?.name?.trim() && e.owned !== false && e.wear?.status !== 'retired')
+    .filter((e) => isText(e?.name) && e.owned !== false && e.wear?.status !== 'retired')
     .sort(byAdded)
     .map((e): Draft => ({
       kind: 'equipment',
@@ -143,7 +146,7 @@ function drafts(src: DossierSources): Draft[] {
       notes: e.category ? [e.category] : [],
     }));
   const goals = src.goals
-    .filter((g) => g?.title?.trim() && LIVE_GOAL_STATUSES.includes(g.status))
+    .filter((g) => isText(g?.title) && LIVE_GOAL_STATUSES.includes(g.status))
     .sort(byAdded)
     .map((g): Draft => ({ kind: 'goal', text: goalText(g), added: dayOf(g.created_at), notes: goalNotes(g) }));
   const detours = [...src.detours]

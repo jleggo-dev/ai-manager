@@ -109,6 +109,11 @@ describe('buildReviewDossier', () => {
     ['an abandoned goal', { goals: [goal('Daily cold plunge', { status: 'abandoned' })] }],
     ['a blank constraint', { constraints: [con('  ')] }],
     ['a blank doing-now line', { doingNow: [''] }],
+    [
+      'a constraint whose label is not text',
+      { constraints: [{ id: 'x', label: 7, plan_around: true } as unknown as Constraint] },
+    ],
+    ['a doing-now line that is not text', { doingNow: [null as unknown as string] }],
   ])('leaves out %s', (_label, over) => {
     expect(buildReviewDossier({ ...empty, ...over })).toEqual([]);
   });
