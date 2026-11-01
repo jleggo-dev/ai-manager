@@ -236,6 +236,58 @@ notice.
 - Negative assertions (backlog #7): a test asserting that the `'none'` tools never import a repo write
   function.
 
+**Built (P5, 2026-10-31).** All four gaps closed in one PR; no migration, no sync.
+- **Bounded.** `coach-tools.ts` passes every action and meta output, and the catch-path text,
+  through `boundToolResponse`. Test: an action returning 5,000 lines arrives cut, with TRUNCATED.
+- **`mutates` on every spec.** `CoachActionTool`, `MetaTool`, and `RetrievalFunction` (typed as
+  `'none'` only). Actions are built with `defineAction`, which replaces a `{gate}` token in the
+  description with the phrase for the mode (`tool-mutates.ts`). The regex in
+  `description-audit.test.ts` is gone; in its place, for every read, action (tail and
+  facade-inner included) and meta tool: a mode is declared, an action carries its own mode's
+  phrase exactly once and never the other's, and no action source types the phrase by hand.
+- **Three shapes.** `toolChangeText`, `toolNothingChangedText`, `toolActionFaultText`, read by
+  `toolOutputShape` from the first line. Every return path of every action now goes through one
+  of them; no allowlist was needed. `coach-action-contract.test.ts` walks all 21 registered
+  actions (changes something / changes nothing / fault where there is one) and fails any action
+  source that returns a hand-built string.
+- **Negative assertion.** `repo-write-imports.test.ts`, described in TOOL-HARNESS.md backlog #7.
+
+Differences from the design above, each from the code:
+- **The phrase is generated, not the whole sentence.** Most actions continue the sentence in
+  their own words ("Takes effect immediately: reflecting it back is the confirmation"), so the
+  token sits where the phrase was and the text after it stays the tool's. The phrase is
+  capitalized only where a sentence starts, so "This does NOT change anything…" and "…and takes
+  effect immediately" survive byte for byte. Every always-on definition is identical: 22,174
+  serialized chars before and after. Three tail descriptions changed: `shape_week` ("all taking
+  effect immediately" → "and each takes effect immediately", 759 → 763 chars);
+  `send_questionnaire` ("This writes nothing: … and nothing is on file until then" → "This does
+  NOT change anything: …", 792 → 767); `offer_repertoire_review` ("This saves nothing: no item
+  goes on their list until they mark it and confirm on that screen" → "This does NOT change
+  anything until they mark items and confirm on that screen", 797 → 783). **The last one rewords
+  a sentence the 2026-09-03 plain-words ruling produced** — the stock phrase once rather than
+  twice, which is what that ruling objected to, but it is the owner's to veto. All action
+  descriptions together: 14,814 → 14,779 chars. find_tools label 3,092 of 3,140 and the
+  capability manifest 5,804 of 5,824: both unchanged.
+- **The meta tools declare the field but are not generated.** `find_tools` is `'none'`.
+  `use_tool` runs whatever she names, so it declares the most it can do, `'immediate'`, and keeps
+  its own sentence, which sends her to the named tool's description. That sentence says every
+  `[changes their data]` tool "takes effect immediately", which is not true of the three tail
+  tools that wait for a tap, or of `rebuild`'s week scope; left as is (always-on wording), noted
+  for a ruling.
+- **`rebuild` is `'immediate'`** because its session scope is; its own words say the week scope
+  ends in a card.
+- **An action fault has its own helper.** The read fault ("could not be read … NOT an empty
+  record") is the wrong sentence for a write. `toolActionFaultText` keeps the old catch-path words
+  and shares the read fault's "this is a fault on our side", so both classify as a fault.
+- **`toolChangeText` takes a third field, `next`**, for the result-specific instructions every
+  action already carried; they follow the `changed:` and `unchanged:` lines.
+- **"Before and after" where the action already knew the before** (a goal's target and date,
+  the kcal target). Actions that never read the old value were not changed to read it — that would
+  change what they do, not how they report.
+- **`update_goal` moved to `coach-action-goal.ts`**: coach-actions.ts reached 567 of its 500 lines.
+
+`eval:tools` is owed (three tail descriptions and every action's output changed), owner-gated.
+
 ### C5. Evals built from real failures, and run on every model change
 
 **What exists.**
