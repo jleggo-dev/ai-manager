@@ -17,23 +17,27 @@ import {
 } from './session-compaction-history.ts';
 
 /**
- * The most characters of dialogue one round hands the summarizer.
+ * The most characters of dialogue one round hands the summarizer: the fold size.
  *
- * `interpolateTemplate` keeps only the first `MAX_VARIABLE_LENGTH` characters of a job variable.
- * A transcript longer than that used to be cut there while the mark still moved past the whole
+ * Pinned at 9,900, the size every compaction reading was measured at (eval:compaction, 94% over
+ * four folds, 2026-10-31). It used to be derived from the engine's variable cap, which was 10,000
+ * then: `interpolateTemplate` cut a longer transcript while the mark still moved past the whole
  * round, so the cut-off rows were neither summarized nor ever sent again (HARNESS-V3 P1b, finding
- * A). The cap is measured before the `<user_input name="transcript">` wrapper is added, so the
- * wrapper costs nothing today; the 100 characters keep the last row whole if that ever changes.
+ * A). The cap was raised to 40,000 on 2026-11-01; the fold did NOT follow it, because a bigger
+ * fold is a different summarizer input and wants its own reading before it goes live. The
+ * `Math.min` keeps the fold under whatever the engine reads, so the P1b loss cannot come back.
  */
-export const TRANSCRIPT_BUDGET_CHARS = MAX_VARIABLE_LENGTH - 100;
+const FOLD_CHARS = 9_900;
+export const TRANSCRIPT_BUDGET_CHARS = Math.min(FOLD_CHARS, MAX_VARIABLE_LENGTH - 100);
 
 /**
  * The most summary the job can read back. `existingSummary` is a job variable like `transcript`,
  * and `interpolateTemplate` cuts every variable at `MAX_VARIABLE_LENGTH`. The structured summary
  * keeps its headings in a fixed order, so a cut drops the LAST ones (where things stand, what did
  * not work) without a word. Past this the planner refuses to fold and says so (see `NoCompaction`).
- * At ~130 words a round that is roughly the eighth fold; the fix for a session that long is a fold
- * of the summary onto itself, not a bigger cap — logged in HARNESS-V3 C5.4.
+ * At ~130 words a round that is roughly the thirtieth fold (the eighth, at the old 10,000 cap); the
+ * fix for a session that long is a fold of the summary onto itself, not a bigger cap — logged in
+ * HARNESS-V3 C5.4.
  */
 export const SUMMARY_BUDGET_CHARS = MAX_VARIABLE_LENGTH;
 
