@@ -99,6 +99,13 @@ export interface FormattingStep {
   warning?: string;
 }
 
+/** One job variable the template fill had to cut: its name, how long it was, the cap it was cut to. */
+export interface VariableCut {
+  variable: string;
+  length: number;
+  cap: number;
+}
+
 export interface AiManagerResult {
   raw: string;
   formatted: string;
@@ -113,6 +120,8 @@ export interface AiManagerResult {
     jobName: string | null;
     aiProfile: string;
     provider: string;
+    /** Variables the fill cut to `MAX_VARIABLE_LENGTH` on this run; absent when none were. */
+    truncatedVariables?: VariableCut[];
   };
   diagnostics?: unknown;
 }

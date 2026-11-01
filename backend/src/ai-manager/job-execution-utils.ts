@@ -3,6 +3,7 @@
  */
 import { getSetting } from '../models/app-settings.ts';
 import type { ProviderRow } from '../types.ts';
+import type { VariableCut } from '../types/llm.ts';
 
 /**
  * Resolve the effective timeout (ms) for an LLM call.
@@ -38,19 +39,31 @@ export async function resolveTimeoutMs(
  */
 export const MAX_VARIABLE_LENGTH = 40_000;
 
-/** Replace {{variableName}} placeholders with actual values. */
-export function interpolateTemplate(template: string, variables: Record<string, unknown>): string {
-  return template.replace(/\{\{([\w.-]+)\}\}/g, (match: string, key: string): string => {
+/**
+ * Replace {{variableName}} placeholders with their values and report every variable that was cut.
+ * The report is what a run writes to its diagnostic row and hands back to the caller, so a cut is
+ * never only a line in a server log nobody reads.
+ */
+export function fillTemplate(
+  template: string,
+  variables: Record<string, unknown>,
+): { text: string; cuts: VariableCut[] } {
+  const cuts: VariableCut[] = [];
+  const text = template.replace(/\{\{([\w.-]+)\}\}/g, (match: string, key: string): string => {
     if (variables[key] === undefined) return match;
     let value = String(variables[key]);
     if (value.length > MAX_VARIABLE_LENGTH) {
-      console.warn('[job-execution] variable cut to the cap; the caller should size it', {
-        variable: key,
-        length: value.length,
-        cap: MAX_VARIABLE_LENGTH,
-      });
+      cuts.push({ variable: key, length: value.length, cap: MAX_VARIABLE_LENGTH });
       value = value.slice(0, MAX_VARIABLE_LENGTH) + '... [truncated]';
     }
     return `<user_input name="${key}">${value}</user_input>`;
   });
+  return { text, cuts };
+}
+
+/** The fill alone, for callers that only want the text; a cut still reaches the server log. */
+export function interpolateTemplate(template: string, variables: Record<string, unknown>): string {
+  const { text, cuts } = fillTemplate(template, variables);
+  for (const cut of cuts) console.warn('[job-execution] variable cut to the cap; the caller should size it', cut);
+  return text;
 }

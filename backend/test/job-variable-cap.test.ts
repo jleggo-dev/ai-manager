@@ -6,7 +6,7 @@
  * the 40,000 the callers size against.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { interpolateTemplate, MAX_VARIABLE_LENGTH } from '../src/ai-manager/job-execution-utils.ts';
+import { fillTemplate, interpolateTemplate, MAX_VARIABLE_LENGTH } from '../src/ai-manager/job-execution-utils.ts';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -41,5 +41,25 @@ describe('MAX_VARIABLE_LENGTH', () => {
     const out = interpolateTemplate('{{a}} {{b}}', { a: 'x'.repeat(MAX_VARIABLE_LENGTH + 5), b: 'short' });
     expect(out.endsWith('<user_input name="b">short</user_input>')).toBe(true);
     expect(out).toContain('... [truncated]</user_input> ');
+  });
+});
+
+describe('fillTemplate', () => {
+  it('reports every cut variable by name, and only those', () => {
+    const { text, cuts } = fillTemplate('{{a}}|{{b}}|{{c}}', {
+      a: 'x'.repeat(MAX_VARIABLE_LENGTH + 2),
+      b: 'ok',
+      c: 'y'.repeat(MAX_VARIABLE_LENGTH),
+    });
+    expect(cuts).toEqual([{ variable: 'a', length: MAX_VARIABLE_LENGTH + 2, cap: MAX_VARIABLE_LENGTH }]);
+    expect(text).toContain('<user_input name="b">ok</user_input>');
+    expect(text.split('... [truncated]')).toHaveLength(2);
+  });
+
+  it('reports nothing when nothing was cut', () => {
+    expect(fillTemplate('Hello {{name}}', { name: 'World' })).toEqual({
+      text: 'Hello <user_input name="name">World</user_input>',
+      cuts: [],
+    });
   });
 });

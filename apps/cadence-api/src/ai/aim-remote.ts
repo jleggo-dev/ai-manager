@@ -25,12 +25,18 @@
  * below must stay ABOVE that 600s worst case or finished jobs get discarded again.
  */
 
+import type { VariableCut } from '@ai-admin/core';
 import { Agent, fetch } from 'undici';
 
-interface RemoteJobResult {
+/**
+ * What a job run hands back on either path: the remote route's body, which an in-process
+ * `AiManagerResult` extends. `metadata.truncatedVariables` lists the variables the engine cut to
+ * its cap on this run (empty or absent when none were) — read it with `truncatedVariablesOf`.
+ */
+export interface JobRunResult {
   raw?: string;
   formatted?: string;
-  metadata?: { model?: string; durationMs?: number };
+  metadata?: { model?: string; durationMs?: number; truncatedVariables?: VariableCut[] };
 }
 
 const KEY = process.env.AI_ADMIN_API_KEY || process.env.VITE_DEV_API_KEY || '';
@@ -124,8 +130,8 @@ export async function remoteRunJobById(
   callingApplication: string,
   variables: Record<string, unknown>,
   promptOverride?: string,
-): Promise<RemoteJobResult> {
-  return api<RemoteJobResult>('POST', `/api/processing-jobs/${jobId}/test`, JOB_BUDGET_MS, {
+): Promise<JobRunResult> {
+  return api<JobRunResult>('POST', `/api/processing-jobs/${jobId}/test`, JOB_BUDGET_MS, {
     variables,
     callingApplication,
     // Used verbatim by the engine (no interpolation) — the caller fills the template in first.
@@ -138,7 +144,7 @@ export async function remoteRunJobBySlug(
   callingApplication: string,
   variables: Record<string, unknown>,
   promptOverride?: string,
-): Promise<RemoteJobResult> {
+): Promise<JobRunResult> {
   return remoteRunJobById(await resolveJobId(slug), callingApplication, variables, promptOverride);
 }
 
