@@ -99,6 +99,8 @@ vi.mock('../auth/middleware.ts', () => ({
 
 const { default: coachRoutes } = await import('./coach.ts');
 const { runCaptureExtract } = await import('../services/capture.ts');
+const { sendPlanReadyPush } = await import('../services/plan-ready-push.ts');
+const { getNotifyOnReply } = await import('../repos/conversations.ts');
 
 const app = express();
 app.use(express.json());
@@ -230,15 +232,42 @@ describe('turn metrics', () => {
  * Vercel the instance can be frozen the moment it does — awaiting them in the handler was not
  * enough (background.ts has the measured case). Both must go through `runInBackground`
  * (`waitUntil`), one label each.
+ *
+ * P7b, finding 6: the push to someone who left and the turn's own log row were still bare awaits
+ * after `res.end()` — 121 coach turns over 60 days left 40 `coach` log rows. They go the same way.
  */
+const AFTER_THE_REPLY = ['coach-notify', 'coach-record', 'coach-capture', 'coach-compaction'];
+
 describe('after the reply', () => {
-  it('hands capture and compaction to the background, once the response has ended', async () => {
+  it('hands the push, the turn record, capture and compaction to the background, once the response has ended', async () => {
     await send();
-    await vi.waitFor(() => expect(background.map((b) => b.label)).toEqual(['coach-capture', 'coach-compaction']));
+    await vi.waitFor(() => expect(background.map((b) => b.label)).toEqual(AFTER_THE_REPLY));
     expect(background.every((b) => b.responseEnded)).toBe(true);
 
     await Promise.all(background.map((b) => b.work));
     expect(compactCoachSessionAfterReply).toHaveBeenCalledWith('u1', 'sess-1');
     expect(runCaptureExtract).toHaveBeenCalledTimes(1);
+    expect(logAi.mock.calls.filter((c) => (c[1] as { kind?: string })?.kind === 'coach')).toHaveLength(1);
+  });
+
+  it('someone who left gets the push — from the background, after the response ended', async () => {
+    vi.mocked(getNotifyOnReply).mockResolvedValueOnce(true);
+    await send();
+    await vi.waitFor(() => expect(background.map((b) => b.label)).toEqual(AFTER_THE_REPLY));
+    const notify = background.find((b) => b.label === 'coach-notify')!;
+    expect(notify.responseEnded).toBe(true);
+    await notify.work;
+    expect(sendPlanReadyPush).toHaveBeenCalledWith('u1', 'coach_reply', 'sess-1:r1', 'Cadence replied', 'Hello there');
+  });
+
+  it('a push that fails still lets the turn be recorded, and never reaches the finished stream', async () => {
+    vi.mocked(getNotifyOnReply).mockResolvedValueOnce(true);
+    vi.mocked(sendPlanReadyPush).mockRejectedValueOnce(new Error('apns down'));
+    const res = await send();
+    await vi.waitFor(() => expect(background.map((b) => b.label)).toEqual(AFTER_THE_REPLY));
+    await Promise.all(background.map((b) => b.work));
+    expect(res.status).toBe(200);
+    expect(res.body).not.toContain('stream failed');
+    expect(logAi.mock.calls.some((c) => (c[1] as { kind?: string })?.kind === 'coach')).toBe(true);
   });
 });

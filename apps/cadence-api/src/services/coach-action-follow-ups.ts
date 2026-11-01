@@ -1,5 +1,6 @@
 import { closeFollowUp, noteFollowUp, FOLLOW_UP_ID_PREFIX } from '../repos/follow-ups.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
+import { isCalendarDate, normalizeFollowUpId } from './follow-up-input.ts';
 import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
 
 /**
@@ -16,7 +17,6 @@ import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
  */
 
 const MAX_TEXT = 300;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const NOTE_FOLLOW_UP: CoachActionTool = defineAction({
   name: 'note_follow_up',
@@ -43,8 +43,10 @@ export const NOTE_FOLLOW_UP: CoachActionTool = defineAction({
     if (text.length > MAX_TEXT)
       return toolNothingChangedText(`that is ${text.length} characters; keep it under ${MAX_TEXT}. Nothing was noted.`);
     const dueRaw = params.due_on == null ? '' : String(params.due_on).trim();
-    if (dueRaw && !ISO_DATE.test(dueRaw))
-      return toolNothingChangedText(`"due_on" must be YYYY-MM-DD (got "${dueRaw}"). Nothing was noted.`);
+    if (dueRaw && !isCalendarDate(dueRaw))
+      return toolNothingChangedText(
+        `"due_on" must be a real day written YYYY-MM-DD (got "${dueRaw}"). Nothing was noted.`,
+      );
 
     const row = await noteFollowUp(userId, { text, due_on: dueRaw || null });
     const id = row.follow_up_id.slice(0, FOLLOW_UP_ID_PREFIX);
@@ -74,8 +76,14 @@ export const CLOSE_FOLLOW_UP: CoachActionTool = defineAction({
     required: ['id'],
   },
   async run(userId, params) {
-    const id = String(params.id ?? '').trim();
-    if (!id) return toolNothingChangedText('no id was given, so nothing was closed.');
+    const raw = String(params.id ?? '').trim();
+    if (!raw) return toolNothingChangedText('no id was given, so nothing was closed.');
+    // "[3f9a2c1d]" is how her context prints it, so it is what she is likely to send back.
+    const id = normalizeFollowUpId(raw);
+    if (!id)
+      return toolNothingChangedText(
+        `"${raw}" is not one id — pass the 8-character code from the brackets beside the item, e.g. "3f9a2c1d". Nothing was closed.`,
+      );
     const outcome = params.outcome == null ? null : String(params.outcome).trim() || null;
 
     const row = await closeFollowUp(userId, id, 'coach', outcome);

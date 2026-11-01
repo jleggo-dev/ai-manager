@@ -40,6 +40,7 @@ const stubs = vi.hoisted(() => {
       get_consistency: make('get_consistency', { days: 7, scheduled: 0, done: 0, pct: null }, ''),
       get_weight: make('get_weight', null, ''),
       get_equipment: make('get_equipment', [], ''),
+      get_follow_ups: make('get_follow_ups', { items: [], open: 0, everHad: true }, '== FOLLOW-UPS =='),
     },
   };
 });
@@ -99,6 +100,21 @@ describe('API-06 — deterministic build path', () => {
     // Plus the per-intent list itself.
     expect(fns).toContain('get_objectives');
   });
+
+  /**
+   * HARNESS-V3 P7b, finding 3. The pack is built once and pinned for the session; follow-ups open
+   * and close DURING it, because she opens and closes them. A pinned copy showed closed items as
+   * open — and once the last one closed, the only list she could see. The per-turn floor is their
+   * only copy (coach-reachability.test.ts pins that side).
+   */
+  it.each(['ongoing', 'initial', 'onboarding', 'disrupted'] as const)(
+    'follow-ups never ride the pinned pack (%s)',
+    async (intent) => {
+      const pack = await buildContextPack(USER, intent);
+      expect(pack.provenance.map((p) => p.fn)).not.toContain('get_follow_ups');
+      expect(pack.rendered).not.toContain('FOLLOW-UPS');
+    },
+  );
 
   it('every intent gets the mandatory floor, even lists that never named them', async () => {
     // The onboarding list carries no get_weight; the floor appends it anyway.
