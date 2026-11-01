@@ -485,8 +485,15 @@ Differences from the design above, each from the code:
    2026-11-01): decisions, constraints and tried-and-failed 0%, corrections and own words 11%, open
    56%; round-1 facts 0%, round 2 15%, round 3 33%. Its round 2 still carries round 1's facts; its
    rounds 3 and 4 mostly hold none, because it rewrites from the new transcript once the old summary
-   is long. **The new prompt has not been measured there yet**, so whether its round 4 still holds
-   round 1's lines is open. What the 80-exchange runs do show about copying: the planted facts
+   is long. **The new prompt, measured there the same night (3 runs, 36 rounds, none over the
+   cap): 94% (51/54).** Decisions, constraints, own words, open and tried-and-failed 100%;
+   corrections 67% (the three misses are all a copied line that kept the old value beside the new
+   one under CORRECTIONS); facts first summarized in round 1 **100%** (was 0%), round 2 89%, round
+   3 100%. Round 4's summary held every round-1 planted term in 9 of 9 fixture runs. The cost: final
+   summaries ran 556–963 words (the 500 cap is not obeyed), which is up to ~2.1K billed on every
+   turn and ~1,400 units against the trigger; an engine guard on the summary's size is owed, as is
+   one on `existingSummary`, which the same 10,000-char variable cap would cut after seven or eight
+   folds. What the 80-exchange runs show about copying: the planted facts
    survived every fold, but the lines did not stay word for word. Of round 1's lines, 35–89% were
    still verbatim one fold later (9 fixture runs) and 20–81% two folds later (6); the rest were
    reworded with the fact kept. Rewording compounds, so a fourth fold is a real test, not a
