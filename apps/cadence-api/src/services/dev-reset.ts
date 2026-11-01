@@ -53,6 +53,8 @@ export const DEV_CHILD_TABLES = [
   'nutrition_logs',
   'occurrences',
   'plan_edits',
+  // 0061 — what the coach said she would come back to (HARNESS-V3 C3).
+  'follow_ups',
   'plans',
   'progress_layouts',
   'progress_photos',

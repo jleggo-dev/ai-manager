@@ -61,6 +61,7 @@ export const DOSSIER_READS = [
   'get_equipment',
   'get_dietary_profile',
   'get_health_history',
+  'get_follow_ups',
 ];
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.toLowerCase() : '');
@@ -570,6 +571,21 @@ const ACTIONS: EvalCase[] = [
     forbid: ['edit_calendar', 'rebuild'],
     from: 'edit_calendar ships (owner ruling 2026-09-15) — the tiebreak its description carries, measured.',
   },
+  {
+    id: 'A31',
+    kind: 'action',
+    turn: "remind me to ask you about the race entry on friday, i still haven't heard back",
+    expect: ['note_follow_up'],
+    allow: [...DOSSIER_READS],
+    // They asked her to remember to raise something, with a day. That is a follow-up, not a goal,
+    // not a plan change, and not a journal line — nothing else should be written.
+    forbid: ['update_goal', 'propose_plan_change', 'edit_calendar', 'close_follow_up'],
+    args: {
+      tool: 'note_follow_up',
+      check: (a) => (str(a.text).includes('race') ? null : `text was ${JSON.stringify(a.text)}, wanted the race entry`),
+    },
+    from: "HARNESS-V3 C3 (2026-10-31): the should-fire half the checklist asks for, from the design doc's own example.",
+  },
 ];
 
 /* ══ B · LONG-TAIL READS — the ones nothing injects, so a miss is genuinely a miss ═══════════ */
@@ -990,6 +1006,17 @@ const SILENCE: EvalCase[] = [
     forbid: ['get_calendar', 'edit_calendar', 'shape_week'],
     from: 'get_calendar ships (owner question 2026-09-15) — the restraint half of B13, TOOL-HARNESS.md step 7.',
   },
+  {
+    id: 'C22',
+    kind: 'silence',
+    turn: "i'll think about whether to sign up for the race and let you know",
+    expect: [],
+    allow: [...DOSSIER_READS],
+    // Thinking about it is theirs to do; nobody asked her to come back to anything, and a
+    // follow-up she invents is a nag they never asked for.
+    forbid: ['note_follow_up', 'close_follow_up', 'update_goal'],
+    from: "HARNESS-V3 C3 (2026-10-31): the must-not-fire half — the design doc's own near-miss.",
+  },
 ];
 
 /* ══ D · CANARIES — the grader on trial before the model is ══════════════════════════════════ */
@@ -1073,6 +1100,10 @@ export const ACTION_TOOLS = new Set([
   // A tail action all the same, and the one whose miss is least visible: when she does not call
   // it she asks the person to type their book out, which reads as helpfulness rather than a gap.
   'offer_repertoire_review',
+  // Follow-ups (HARNESS-V3 C3, 2026-10-31): a miss here is the brand promise failing quietly —
+  // she says "I'll check next week" and nothing is written anywhere next week can read.
+  'note_follow_up',
+  'close_follow_up',
 ]);
 
 /**

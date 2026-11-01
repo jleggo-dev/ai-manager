@@ -36,6 +36,7 @@ const DOSSIER = new Set([
   'get_equipment',
   'get_dietary_profile',
   'get_health_history',
+  'get_follow_ups',
 ]);
 
 const reachable = (name: string): boolean => liveTools.has(name) || DOSSIER.has(name);

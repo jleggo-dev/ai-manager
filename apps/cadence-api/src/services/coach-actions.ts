@@ -26,6 +26,7 @@ import { UPDATE_REPERTOIRE } from './coach-action-repertoire.ts';
 import { OFFER_REPERTOIRE_REVIEW } from './coach-action-offer-repertoire.ts';
 import { SEND_QUESTIONNAIRE } from './coach-action-questionnaire.ts';
 import { SET_HOME_LOCATION } from './coach-action-home-location.ts';
+import { NOTE_FOLLOW_UP, CLOSE_FOLLOW_UP } from './coach-action-follow-ups.ts';
 
 /** Today, YYYY-MM-DD — stamped on a target change so the weekly review throttle can see it. */
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -558,6 +559,10 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
   // date-context.ts's "ask once, warmly" nudge — the coach now has an explicit, consented write
   // path for a location volunteered in chat, instead of only Settings and ambient capture.
   set_home_location: SET_HOME_LOCATION,
+  // Tail tier (the drawer), not ALWAYS_ACTIONS: the write half of follow-ups (HARNESS-V3 C3).
+  // Most days she notes nothing; the open list is dossier and rides every turn regardless.
+  note_follow_up: NOTE_FOLLOW_UP,
+  close_follow_up: CLOSE_FOLLOW_UP,
   update_repertoire: UPDATE_REPERTOIRE,
   // Tail tier (the drawer), not ALWAYS_ACTIONS: laying out a book is a once-per-book moment, the
   // checklist's "changes data, weekly or rarer" row — and it changes LESS than that, since it

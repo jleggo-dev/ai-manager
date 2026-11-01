@@ -82,7 +82,9 @@ const INTENT_SELECTION: Record<CoachIntent, string[]> = {
  * that morning ("all of my equipment has disappeared from her memory"). A handful of owned items
  * renders in ~30 tokens.
  */
-const MANDATORY = ['get_identity', 'get_constraints', 'get_weight', 'get_equipment'];
+// Follow-ups joined 2026-10-31 (HARNESS-V3 C3): what she said she would come back to belongs in
+// every conversation's opening pack, whatever its intent, and renders '' when nothing is open.
+const MANDATORY = ['get_identity', 'get_constraints', 'get_weight', 'get_equipment', 'get_follow_ups'];
 
 const TTL_DAYS: Partial<Record<CoachIntent, number>> = { onboarding: 1 };
 

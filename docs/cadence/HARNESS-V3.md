@@ -1,6 +1,6 @@
 # Harness v3 — the coach's context over time, what she owes the user, and the checks around her
 
-**Status: SPEC; P1 (#431) and P2 (#433) shipped, P3 in review.** Written 2026-10-31. R1 ruled the same
+**Status: SPEC; P1 (#431), P2 (#433), P3 (#435) and the fold fix (#437) shipped; P7 in review.** Written 2026-10-31. R1 ruled the same
 day (compact around 75K billed) and checked by P3 the same day: the threshold holds, the fold does not
 (see C5.4).
 Companions: [TOOL-HARNESS.md](TOOL-HARNESS.md) (the rules for tools),
@@ -202,6 +202,16 @@ audit (CI). Two `eval:tools` cases: should-fire ("remind me to ask about the rac
 should-not ("I'll think about it"). An `eval:outcomes` scenario: promise in session A, session goes
 stale, session B opens, and the follow-up is in the pack.
 
+**Built (P7, 2026-10-31) — three amendments to the design above, each from the code:**
+- `source_session_id` is dropped: an action's `run(userId, params)` carries no session id, and a
+  column nothing fills is a lie waiting to be read. Add it with the plumbing, if ever.
+- Expiry runs on the WRITE path — `noteFollowUp` sweeps that person's items past 90 days before
+  inserting — so `listOpenFollowUps` stays a read (it also filters them out meanwhile).
+- She closes by an 8-character id prefix, printed in brackets on each line; a prefix that fits two
+  open items closes neither. `outcome` is a column, her words for how it ended.
+- Filed in a new drawer category `remembering`; no capability-manifest line (68 chars of headroom,
+  the category line takes ~55). Migration `0061_follow_ups.sql`, owner go.
+
 ### C4. What tools hand back: finish the contract
 
 **What exists, and better than the last answer assumed.** `tool-response.ts` +
@@ -358,7 +368,7 @@ Parcels sized for one PR each. Dependencies are explicit. Sizes respect the 500/
 | P4 | ~~R1 threshold~~ folded into P1 by the ruling; P3 checks it | — | — | — |
 | P5 | C4: bound actions, `mutates` field, `toolChangeText` | — | `coach-tools.ts`, action files, audit test | — |
 | P6 | C5.1–3: mine script, smoke subset, `--verify` on repoint | — | `scripts/` | — |
-| P7 | C3: follow-ups store, two tools, pack section | — | new repo/service/tool files, `context-pack.ts`, `turn-context.ts` | Cadence migration (owner go) |
+| P7 | C3: follow-ups store, two tools, pack section — BUILT, in review | — | `repos/follow-ups.ts`, `retrieval/follow-ups-function.ts`, `coach-action-follow-ups.ts`, tiers/pack/actions wiring | Cadence migration 0061 (owner go) |
 | P8 | C6: TOOL-HARNESS rule (doc); food-check continues on its own plan | — | docs | — |
 | P9 | C7: `fact-review` job, hooked to check-in close | P7 | new job + service | `sync-jobs` |
 

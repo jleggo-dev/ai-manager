@@ -69,6 +69,9 @@ export const TURN_FLOOR_FUNCTIONS = [
   // have to go looking for, and a coach who forgets it is the brand promise inverted. One short
   // line per goal.
   'get_objectives',
+  // Added 2026-10-31 (HARNESS-V3 C3): what she said she would come back to. Renders '' when
+  // nothing is open, so a person with no follow-ups pays nothing for it.
+  'get_follow_ups',
 ] as const;
 
 export const DOSSIER_FUNCTIONS = [
@@ -79,6 +82,7 @@ export const DOSSIER_FUNCTIONS = [
   'get_weight',
   'get_dietary_profile',
   'get_health_history',
+  'get_follow_ups',
 ] as const;
 
 /**
@@ -309,6 +313,8 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   shape_week: 'ACTION: this week’s edges — run it longer, write next week early, pause a stretch',
   rebuild: 'ACTION: rebuild one upcoming session, or the WHOLE week, from their words',
   set_home_location: 'ACTION: record where they live — weather and daylight outdoors',
+  note_follow_up: 'ACTION: note a thing to come back to with them',
+  close_follow_up: 'ACTION: close a follow-up, with how it ended',
   // 2026-09-15 (owner: "Shouldn't Cadence be able to see the calendar?" / "she should be able
   // to adjust the calendar and the plan"): the days as WRITTEN, beyond the seven the plan read
   // carries, and the hold menu's three edits from chat. Fourteen hooks above were trimmed of
@@ -435,6 +441,9 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
   // Filed with the journal rather than in a category of its own: the find_tools label is on a
   // budget (DRAWER_LABEL_MAX), and "what they wrote, and what they sent" is one shelf.
   { key: 'writing', label: 'what they wrote, and files they sent', members: ['get_journal', 'read_document'] },
+  // The write half of follow-ups (HARNESS-V3 C3, 2026-10-31). The read half is dossier, in front
+  // of her every turn; these two are how an item gets onto that list and off it again.
+  { key: 'remembering', label: 'things to come back to with them', members: ['note_follow_up', 'close_follow_up'] },
   {
     key: 'asking',
     label: 'ways to ask them things',
