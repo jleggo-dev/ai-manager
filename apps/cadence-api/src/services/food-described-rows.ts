@@ -29,6 +29,7 @@ import type { FoodCheckOutcome, FoodCheckVars } from './food-check.ts';
 import { phraseKey } from './food-phrases.ts';
 import { portionForPick } from './food-pick-portion.ts';
 import { priceFood } from './food-pricing-portion.ts';
+import { sumItemNutrients } from './food-pricing.ts';
 import type { ParsedMealResult } from './nutrition-parse.ts';
 import { parseMeasure } from './portion-measure.ts';
 
@@ -57,6 +58,20 @@ export interface DescribedMealDeps {
 }
 
 export const NAME_MAX = 80;
+
+/**
+ * The meal's total: every counted row. A row waiting on a question carries no number and is left
+ * out; the total is the store's when every counted row came from a record, hers otherwise. One
+ * rule for the preview and for the coach's write (food-log-described.ts), so both tools total the
+ * same rows the same way.
+ */
+export function describedTotals(items: DescribedMealItem[]): ParsedMealResult['macros'] {
+  const counted = items.filter((i) => !i.question);
+  const sum = sumItemNutrients(counted);
+  if (!sum) return null;
+  const fromStore = counted.every((i) => i.basis === 'record' || i.basis === 'remembered');
+  return { ...sum, source: fromStore ? 'ledger' : 'ai' };
+}
 
 /** Where a record's numbers came from, in the person's words. */
 export function sourceLabel(food: Pick<Food, 'owner_user_id' | 'source'>, userId: string): string {

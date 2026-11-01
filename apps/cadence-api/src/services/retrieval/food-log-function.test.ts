@@ -75,9 +75,11 @@ describe('preview_meal.render', () => {
     expect(out).toContain('Fully priced (snack)');
     expect(out).toContain('105 kcal');
     expect(out).toContain('Everything here is settled');
-    // What is true since the coach-led read: log_meal runs the older match, not this read.
-    expect(out).toContain('log_meal does not run this read');
-    expect(out).not.toContain('prices it the same way');
+    // What is true since FOOD-LOGGING-COACH-LED step 3: log_meal runs this same read and logs it.
+    expect(out).toContain('log_meal runs this same read and logs what it shows');
+    expect(out).toContain('a row waiting on their answer is handed back, not logged');
+    expect(out).not.toContain('does not run this read');
+    expect(out).not.toContain('older automatic match');
     expect(out).not.toContain('Unresolved');
   });
 

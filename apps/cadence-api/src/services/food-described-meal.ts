@@ -2,7 +2,8 @@
  * A described meal, coach-led: software splits and fetches, the food-check model decides once,
  * the store prices, the person confirms (docs/cadence/FOOD-LOGGING-COACH-LED.md, owner
  * 2026-10-29). This is what POST /nutrition/meals/preview runs — the typed and spoken doors on
- * the meal screen, and the coach's own preview_meal — in four steps:
+ * the meal screen, and the coach's own preview_meal and log_meal (food-log-described.ts writes
+ * what this reads) — in four steps:
  *
  *   1. Words this person confirmed before are priced from memory (food-phrases.ts): the
  *      deterministic rung, no lookup and no call.
@@ -32,13 +33,14 @@ import { CandidateBook, addLookups, partsToLookups, type MealPartLookup } from '
 import { wideLookup } from './food-candidate-sources.ts';
 import { FOOD_CHECK_JOB, foodCheckRounds, type FoodCheckOutcome } from './food-check.ts';
 import {
+  describedTotals,
   rememberedRows,
   rowsFromOutcome,
   type DescribedMealDeps,
   type DescribedMealItem,
 } from './food-described-rows.ts';
 import { phraseKey, recallPhrases } from './food-phrases.ts';
-import { priceParsedMeal, sumItemNutrients } from './food-pricing.ts';
+import { priceParsedMeal } from './food-pricing.ts';
 import { mealFlags } from './meal-flags.ts';
 import { isMeal, parseMealResult, usageSlot, type ParsedMealResult } from './nutrition-parse.ts';
 
@@ -123,15 +125,6 @@ export function traceLines(book: Pick<CandidateBook, 'sections'>, remembered: Me
   return lines;
 }
 
-/** The meal's total: every counted row. A row waiting on a question carries no number and is left out. */
-function totals(items: DescribedMealItem[]): ParsedMealResult['macros'] {
-  const counted = items.filter((i) => !i.question);
-  const sum = sumItemNutrients(counted);
-  if (!sum) return null;
-  const fromStore = counted.every((i) => i.basis === 'record' || i.basis === 'remembered');
-  return { ...sum, source: fromStore ? 'ledger' : 'ai' };
-}
-
 /** The preview behind the described-meal doors. Throws only when there are no words at all. */
 export async function previewDescribedMeal(
   userId: string,
@@ -201,7 +194,7 @@ export async function previewDescribedMeal(
       flags: { ...base.flags, ...fb.flags },
       confidence: fb.confidence,
       items,
-      macros: totals(items),
+      macros: describedTotals(items),
       // The card's notice says she could not be reached; the trace does not say it twice.
       coach: { reached: false, calls, checked },
     };
@@ -214,5 +207,5 @@ export async function previewDescribedMeal(
   );
   const items = [...remembered.values(), ...hers];
   log(true, items);
-  return { ...base, items, macros: totals(items), coach: { reached: true, calls, checked } };
+  return { ...base, items, macros: describedTotals(items), coach: { reached: true, calls, checked } };
 }

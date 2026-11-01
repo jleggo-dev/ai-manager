@@ -1,8 +1,10 @@
 # Food logging, coach-led — design draft
 
-_Status: build step 2 SHIPPED 2026-11-01 (the `food-check` job on its own profile, the candidate
-book as a service, the described-meal doors wired through it — see "Suggested build order" and
-"What was built" at the end). Rulings 2, 3, 4 and 6 are still the owner's._
+_Status: build steps 2 and 3 SHIPPED 2026-11-01 (step 2: the `food-check` job on its own profile,
+the candidate book as a service, the described-meal doors wired through it; step 3: the coach's
+`log_meal` runs the same read and logs through the card's confirm path — see "Suggested build
+order" and the two "What was built" sections at the end). Rulings 2, 3, 4 and 6 are still the
+owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -426,11 +428,12 @@ on the card as an automatic estimate, not hers.
    FatSecret's top rows, the book, the one-call-plus-one shape, the answer-format checks, the
    pricing through `priceFood`, the phrase memory, the labelled fallback, and the typed/spoken
    doors on it. Ruling 6 is built as the eval ran it (top 5 rows fetched in full) and stays open.
-3. Change `log_meal` / `preview_meal` to take her rows; keep the waterfall behind them only for
-   the outage case, labelled. _Partly done by step 2: `preview_meal` (the coach's tool) runs the
-   coach-led read because it wraps the same service; a confirmed row that names its food is priced
-   from that food and never re-matched (`food-pricing.ts`). `log_meal` (the coach's one-call
-   write) still runs the old waterfall._
+3. ~~Change `log_meal` / `preview_meal` to take her rows; keep the waterfall behind them only for
+   the outage case, labelled.~~ — **built 2026-11-01**, see "What was built (step 3)" below.
+   `preview_meal` wraps the same service as the doors (step 2); `log_meal` now runs that same
+   read and logs its settled rows through the card's confirm path (`food-log-described.ts`), so
+   what she logs is what she previewed. A row with an open question is not logged: it comes back
+   to her as a fact and she asks. The waterfall stays behind both only as the labelled fallback.
 4. Route the meal screen's Chat / Voice / Photo doors to it; the trace UI, per-row source labels,
    the assumption line, question rows that do not count. _Chat and Voice (`LogByChat`, the
    quick-log `DescribeSheet`, the plan sheet's capture) are on it, with the trace line, the
@@ -441,7 +444,8 @@ on the card as an automatic estimate, not hers.
    (`food_phrases`, migration 0064): the confirm teaches it, the next read of the same words is a
    deterministic hit and no call.
 6. Retire `acceptMatch` and the code-decided research trigger from the logging path. _Still in
-   place behind the fallback and behind `log_meal`._
+   place behind the fallback, and behind the confirm's re-match of a row that names no food (an
+   estimate, a fallback row); a row that names its food never meets them._
 
 ## What was built (step 2, 2026-11-01)
 
@@ -513,9 +517,10 @@ The path behind `POST /nutrition/meals/preview` (`services/food-described-meal.t
    proves the primary with a live call after the sync; `sync-jobs.ts` then binds the job to it
    (the `<CADENCE_FOOD_CHECK_PROFILE_UUID>` token).
 
-What stays as it was: `log_meal` (the coach's one-call write) and the photo door run the old
-pipeline; `acceptMatch` and the research trigger stay behind them and behind the fallback;
-`ai_log` gets a `food_check` row per read (calls, reached, parts, remembered, records, problems).
+What stayed as it was after step 2: `log_meal` (the coach's one-call write — moved to this read
+in step 3, below) and the photo door run the old pipeline; `acceptMatch` and the research trigger
+stay behind them and behind the fallback; `ai_log` gets a `food_check` row per read (calls,
+reached, parts, remembered, records, problems).
 
 Decided while building, for the owner to overrule:
 
@@ -535,3 +540,79 @@ Decided while building, for the owner to overrule:
   link too: renaming on the card does not re-match.
 - **FatSecret is always asked on this path** (five rows per part, billed unless already fresh in
   the ledger). Ruling 6 decides whether that stays.
+
+## What was built (step 3, 2026-11-01)
+
+The coach's `log_meal` (`services/coach-action-log-meal.ts`) runs the same read as `preview_meal`
+and the meal screen's doors, and logs through the same confirm path the card uses
+(`services/food-log-described.ts`):
+
+1. **One read, both tools.** `log_meal` by text calls `previewDescribedMeal` — the phrase memory
+   first, one fan-out per part, one call to the food-check model (at most two), the store pricing
+   — exactly as `preview_meal` does. The two tools can no longer price the same words differently
+   (the Venti latte logged as Matcha, #426, was `log_meal` on the old waterfall beside a preview on
+   the new read). `preview_meal` now says so: "log_meal runs this same read and logs what it shows".
+2. **The card's confirm path writes it.** The settled rows go to `logMeal({ parsed })` in the
+   card's wire shape (name, brand, amount, numbers, `food_id`, `said` — none of what the read noted
+   for the card): a row that names its food is priced from that food and never re-matched
+   (`food-pricing.ts`), and only a confirmed pick teaches the phrase memory (`confirmedPickRows`).
+   So "Starbucks venti latte" logs Caffè Latte (Venti), 250 kcal, the phrase is learned, and the
+   next `log_meal` of the same words prices from the memory with no lookup and no call. The total
+   handed over is the total of what is logged, not of the card.
+3. **An open row is not logged, and comes back as a fact.** A row with a question ("whole or
+   2%?") and a row she could not count (no record fits, no estimate given) are handed back — the
+   words and the question, or the words and why — never logged, never the pick she leaned towards.
+   On its own: `nothing changed: nothing was logged — "milk" waits on their answer: Whole milk or
+   2%?`. Beside settled rows: those are logged (`changed:` lines), and the open row is an
+   `unchanged:` line, with "the rest of the meal is already on their file" — a person who said
+   "milk and a banana" has eaten the banana whatever the milk turns out to be. She asks in
+   conversation and calls `log_meal` again with that part's words plus the answer, which lands as
+   its own row at the same slot. Never a tentative pick (the "one cup of protein" lesson, kept).
+4. **The answer says where every number came from.** One `changed:` line per logged row in the
+   same grammar `preview_meal` uses (`food-described-render.ts`: amount, name, numbers, then the
+   basis — "a record the coach picked; from USDA", "the coach's own estimate", "what they picked
+   last time" — the assumption, and why a row counted nothing), a total line when more than one
+   row logged, and the `changed:` / `nothing changed:` / fault contract throughout
+   (`coach-action-contract.test.ts`).
+5. **When she cannot be reached**, the fallback's rows log as before — every row "an automatic
+   estimate, the coach not reached" — and the answer says the food-check model could not be
+   reached. A fallback the confirm marks provisional is told as unsettled, as before. A read that
+   fails past its fallback, or a write that throws, is a fault, never "nothing".
+6. **The same words previewed a moment ago run the read again.** A preview writes nothing, and the
+   words can change between the two calls (a size named, a detail added). The repeat costs one
+   food-check call, once: the confirm then teaches the memory, and the next time those words price
+   from it with no call at all. A cache keyed on the words would save that one call and add a
+   staleness rule nobody has measured a need for, so none is built. What would change this: a
+   measured run showing preview-then-log pairs are common AND the second read disagrees with the
+   first often enough to matter (the model runs at temperature 0.1 on the same book, so a
+   disagreement should be rare; the answer names the pick, so she can see one).
+
+Tests: `coach-action-log-meal.test.ts` runs the action through the `DescribedMealDeps` seam with
+the write faked at the service boundary — a picked row logs and `confirmedPickRows` keeps it, a
+remembered phrase makes no call, an estimate logs labelled and teaches nothing, a question row
+logs nothing and comes back, a settled row beside it is logged, an uncountable part comes back
+with why, the fallback logs labelled and says so, faults are faults, bad calls never reach the
+read.
+
+What stays as it was after step 3: the photo door (`parse-meal-description` prices the reading;
+its own session, in flight); `acceptMatch` and the research trigger behind the fallback and the
+confirm's re-match of a row that names no food; `POST /nutrition/meals` with bare `text` (no
+caller in the web client today; the coach's tool no longer uses it).
+
+Decided while building, for the owner to overrule:
+
+- **An open row is held back per row, not per meal.** The alternative — log nothing while any
+  part has a question — would make her repeat the whole meal and run the read again for the parts
+  that were settled (not yet learned, since nothing was confirmed). Per row, the settled parts are
+  on the file at once and the answered part follows as its own row at the same slot. The day
+  then shows two rows under one slot for that meal, which the Food screen already handles for
+  any two quick-adds.
+- **A meal with no slot named is filed under "other".** The old path let `parse-meal` guess the
+  slot from the words alone; the coach-led read takes the slot as an input and no step guesses
+  one. The tool's description tells her to pass the meal when it was said or is clear from the
+  time of day. A time-of-day default would need the person's timezone and a new rule with its own
+  table test — not built until asked for.
+- **`log_meal`'s description changed** (the always-on list): it now says the read is the one
+  `preview_meal` runs, that a part needing an answer is not logged and its question comes back,
+  and that an unnamed meal is filed under "other". 798 characters, inside the 800-character action
+  bound. `eval:tools` is the owner's call.
