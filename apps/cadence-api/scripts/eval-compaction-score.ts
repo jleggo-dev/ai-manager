@@ -5,7 +5,16 @@
  * supply a fake one.
  */
 import { planCompaction, type ChatMessageRow, type ChatSessionRow } from '@ai-admin/core';
-import type { CompactionFixture, Exchange, FactKind, PlantedFact } from './eval-compaction-fixtures.ts';
+import type { CompactionFixture, FactKind, PlantedFact } from './eval-compaction-fixtures.ts';
+import { composeConversation } from './eval-compaction-filler.ts';
+
+/**
+ * The engine cuts every job variable at this many characters and appends "... [truncated]"
+ * (`MAX_VARIABLE_LENGTH` in backend/src/ai-manager/job-execution-utils.ts, not exported today).
+ * Whatever a round's `transcript` holds past this point never reaches the summarizer. Switch to the
+ * core export when one exists.
+ */
+export const JOB_VARIABLE_CAP = 10_000;
 
 /** The policy shape `planCompaction` reads, with every default filled in. */
 export interface EvalPolicy {
@@ -19,11 +28,18 @@ export interface EvalPolicy {
 
 const START = Date.parse('2026-10-01T08:00:00Z');
 
-/** Sized like the real blocks (persona ~20k chars; capabilities + picks ~6.5k; per-turn ~3k). */
-const pad = (label: string, chars: number) =>
-  `${label}\n${'- a line of injected detail, standing in for the real block.\n'.repeat(Math.ceil(chars / 60))}`;
-const wrap = (source: string, body: string) =>
-  `<context source="${source}" version="1" built_at="2026-10-01T08:00:00.000Z">\n${body}\n</context>`;
+const INJECTED_LINE = '- a line of injected detail, standing in for the real block.\n';
+/**
+ * A `<context>` row of exactly `chars` characters (or the bare wrapper, if `chars` is smaller).
+ * The real blocks: persona ~20k chars; dossier ~6k; capabilities + picks ~6.5k; per turn, whatever
+ * `composeConversation` drew.
+ */
+export function injectedRow(source: string, label: string, chars: number): string {
+  const open = `<context source="${source}" version="1" built_at="2026-10-01T08:00:00.000Z">\n${label}\n`;
+  const close = '\n</context>';
+  const room = Math.max(0, chars - open.length - close.length);
+  return `${open}${INJECTED_LINE.repeat(Math.ceil(room / INJECTED_LINE.length)).slice(0, room)}${close}`;
+}
 
 export interface BuiltFixture {
   rows: ChatMessageRow[];
@@ -34,8 +50,7 @@ export interface BuiltFixture {
 /**
  * One fixture as stored rows: the persona, the three blocks sent once per session, then for every
  * exchange a per-turn context row, the user's message and her reply — the shape the coach route
- * writes. A planted fact (or the earlier statement a correction overrides) takes its exchange's
- * slot; filler fills the rest.
+ * writes.
  */
 export function buildFixtureRows(fixture: CompactionFixture, persona: string): BuiltFixture {
   let t = START;
@@ -50,22 +65,18 @@ export function buildFixtureRows(fixture: CompactionFixture, persona: string): B
     } as ChatMessageRow);
 
   push('system', persona);
-  push('user', wrap('registry-pack', pad('== WHO THEY ARE ==', 6000)));
-  push('user', wrap('capabilities', pad('== WHAT YOU CAN DO ==', 4500)));
-  push('user', wrap('pick-protocol', pad('== QUICK PICKS ==', 2000)));
+  push('user', injectedRow('registry-pack', '== WHO THEY ARE ==', 6000));
+  push('user', injectedRow('capabilities', '== WHAT YOU CAN DO ==', 4500));
+  push('user', injectedRow('pick-protocol', '== QUICK PICKS ==', 2000));
 
-  const planted = new Map<number, Exchange>();
-  for (const f of fixture.facts) {
-    planted.set(f.at, f.plant);
-    if (f.before) planted.set(f.before.at, f.before);
-  }
   const exchangeEnds: string[] = [];
-  let fillerIndex = 0;
-  for (let i = 0; i < fixture.exchanges; i++) {
-    const ex = planted.get(i) ?? fixture.filler[fillerIndex++ % fixture.filler.length]!;
-    push('user', wrap('turn-context', pad(`[ctx:get_active_plan:${i.toString(16).padStart(8, '0')}]`, 3000)));
-    push('user', ex.user.replace('{n}', String(i + 1)));
-    push('assistant', ex.coach.replace('{n}', String(i + 1)));
+  for (const [i, turn] of composeConversation(fixture).entries()) {
+    push(
+      'user',
+      injectedRow('turn-context', `[ctx:get_active_plan:${i.toString(16).padStart(8, '0')}]`, turn.contextChars),
+    );
+    push('user', turn.exchange.user);
+    push('assistant', turn.exchange.coach);
     exchangeEnds.push(rows[rows.length - 1]!.created_at);
   }
   return { rows, exchangeEnds };
