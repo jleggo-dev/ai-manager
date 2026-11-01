@@ -32,6 +32,9 @@ interface ExecuteJobOptions {
   /** https image URLs attached as vision content parts AFTER template interpolation.
    *  Templates stay text-only; diagnostics record the URL references, never image bytes. */
   images?: string[];
+  /** What the caller knows that the run's diagnostic row should carry: the chat session the run
+   *  serves (`chat_session_id`) and facts of its own, merged into `metadata`. */
+  diagnostics?: { chatSessionId?: string | null; metadata?: Record<string, unknown> };
 }
 
 interface ExecuteJobByIdOptions extends ExecuteJobOptions {
@@ -75,6 +78,7 @@ export async function executeJob(jobSlug: string, options: ExecuteJobOptions = {
     modelOverride = null,
     enableFailover = true,
     images = [],
+    diagnostics,
   } = options;
 
   /* ── 1. Resolve the processing job ──────────────────────── */
@@ -90,6 +94,7 @@ export async function executeJob(jobSlug: string, options: ExecuteJobOptions = {
     modelOverride,
     enableFailover,
     images,
+    diagnostics,
     _job: job,
   });
 }
@@ -107,6 +112,7 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
     enableFailover = true,
     attachments = [],
     images = [],
+    diagnostics,
     _job = null /* Internal: pre-fetched job to avoid double query */,
   } = options;
 
@@ -145,7 +151,14 @@ export async function executeJobById(jobId: string, options: ExecuteJobByIdOptio
    */
   const diagCheck = shouldRunDiagnostics(advancedConfig);
   const fullDiagnostics = diagCheck.enabled && diagCheck.persist;
-  const diag = new DiagnosticSession(job.id, callingApplication, true, job.workspace_id);
+  const diag = new DiagnosticSession(
+    job.id,
+    callingApplication,
+    true,
+    job.workspace_id,
+    diagnostics?.chatSessionId ?? null,
+  );
+  for (const [key, value] of Object.entries(diagnostics?.metadata ?? {})) diag.addMetadata(key, value);
 
   if (fullDiagnostics) {
     diag.logRequestPayload({

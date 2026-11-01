@@ -69,6 +69,40 @@ export async function updateChatSession(id: string, updates: Partial<ChatSession
   return row;
 }
 
+/**
+ * Replace a session's `config` and nothing else — `updated_at` included. A policy change is not
+ * activity, and diagnostics read `updated_at` as the session's last activity (its duration). Used
+ * by policy backfills (`apps/cadence-api/scripts/backfill-session-summarizer.ts`).
+ */
+export async function updateChatSessionConfig(id: string, config: Record<string, unknown>): Promise<void> {
+  const { error } = await tenantFrom(SESSION_TABLE).update({ config }).eq('id', id);
+  if (error) throw new Error(`Chat session config update error: ${error.message}`);
+}
+
+/**
+ * Write a compaction result only if the summary mark is still where the plan found it.
+ *
+ * Two compactions can overlap: the after-reply run and a pre-send ceiling run, or two sends at
+ * once. Each plans from the mark it read. Without this check the slower one writes its older mark
+ * over the newer one, and rows already folded into the summary come back verbatim (and get
+ * summarized twice). `summary_through_at is not distinct from expectedMark`; null means no row
+ * matched, i.e. someone else moved the mark first.
+ */
+export async function updateChatSessionIfMarkUnchanged(
+  id: string,
+  updates: Partial<ChatSessionRow>,
+  expectedMark: string | null,
+): Promise<ChatSessionRow | null> {
+  const query = tenantFrom(SESSION_TABLE)
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  const guarded =
+    expectedMark === null ? query.is('summary_through_at', null) : query.eq('summary_through_at', expectedMark);
+  const { data, error } = await guarded.select().maybeSingle();
+  if (error) throw new Error(`Chat session update error: ${error.message}`);
+  return (data as ChatSessionRow | null) ?? null;
+}
+
 export async function deleteChatSession(id: string): Promise<void> {
   const { error } = await tenantFrom(SESSION_TABLE).delete().eq('id', id);
   if (error) throw new Error(`Chat session delete error: ${error.message}`);
@@ -214,13 +248,28 @@ export async function createChatMessage(data: Partial<ChatMessageRow>): Promise<
   return row;
 }
 
+/**
+ * Supabase returns at most this many rows per request (its default `max_rows`). Asked for more, it
+ * sends the first 1,000 and says nothing, and in ascending order those are the OLDEST: the newest
+ * messages, the ones the next request most needs, would be the ones missing.
+ */
+const MESSAGE_PAGE = 1000;
+
+/** Every message of a session, oldest first, read a page at a time so a long session loses none. */
 export async function listChatMessages(sessionId: string): Promise<ChatMessageRow[]> {
-  const { data, error } = await tenantFrom(MESSAGE_TABLE)
-    .select('*')
-    .eq('chat_session_id', sessionId)
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(`Chat message list error: ${error.message}`);
-  return data || [];
+  const rows: ChatMessageRow[] = [];
+  for (let from = 0; ; from += MESSAGE_PAGE) {
+    const { data, error } = await tenantFrom(MESSAGE_TABLE)
+      .select('*')
+      .eq('chat_session_id', sessionId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + MESSAGE_PAGE - 1);
+    if (error) throw new Error(`Chat message list error: ${error.message}`);
+    const page = (data || []) as ChatMessageRow[];
+    rows.push(...page);
+    if (page.length < MESSAGE_PAGE) return rows;
+  }
 }
 
 /** Rewrite one stored message. The system row is the only caller today (see session-persona-refresh). */

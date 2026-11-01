@@ -150,7 +150,8 @@ MP33 (HARNESS-V2.md:253-265).
   capability manifest and pick protocol (`coach-block-refresh.ts`) arrive once per session. They
   are matched by their `source` (`PINNED_CONTEXT` in `coach-turns.ts`, handed to the engine as
   `pinnedRowPattern`), with no change to the tag, which the refresher compares exactly. Pinned rows
-  are kept like instruction rows, placed just before the summary. This closes MP33.
+  are kept like instruction rows. In the stored history they sit just before the summary; on the
+  wire the summary goes first, inside `instructions` (P1b, H below). This closes MP33.
 - Do it only at compaction time, never per turn. Removing a row from the middle of the history
   changes the cached prefix, and the cache covers ~2/3 of every message
   (memory: prompt cache is global). Compaction already breaks the cache once; doing the dropping
@@ -159,6 +160,70 @@ MP33 (HARNESS-V2.md:253-265).
 **Tests.** The summarizer input contains no `<context`/`<note` text. Pinned blocks survive two
 compactions. A config-pinning test asserts the manifest is present after compaction (this is the MP33
 regression).
+
+**Built (P1b, 2026-10-31): compaction hardening.** An independent audit of P1 and P2 found one
+blocker and several should-fixes. Each fix landed with the test that would have caught it, on rows
+the size production stores (`backend/test/helpers/compaction-sim.ts`: user 87/181 chars avg/p90,
+reply 446/893, injected ≈3.1k/12.5k per turn, persona ~20k, once-per-session blocks ~12.5k).
+
+- **A. The variable cap lost most of a round (the blocker).** `interpolateTemplate` keeps the first
+  10,000 characters of a job variable, and the mark still moved past the whole round. At production
+  sizes a round is ~27 exchanges (~15k chars of dialogue), so ~10 exchanges a round were neither
+  summarized nor ever sent again. Now the transcript is built row by row up to
+  `TRANSCRIPT_BUDGET_CHARS` (`MAX_VARIABLE_LENGTH` − 100, exported from `job-execution-utils.ts`;
+  the cap is measured before the `<user_input>` wrapper is added, so the 100 is only a margin). The
+  mark moves to the last row included, and a cut round ends on her reply. Rows that did not fit
+  stay after the mark. One row longer than the whole budget is shortened and says so, so it cannot
+  block every round after it. After a reply, one run does up to 3 rounds, so a backlog catches up;
+  the pre-send ceiling path does one.
+- **B. Folding on every message.** With 12.5k-char injected rows, a 20-turn tail is itself at the
+  trigger: 50 folds in 60 exchanges, two rows each, and every fold loses something (P3). Now
+  `keepTailUnits` sizes the tail over every row in it, as whole exchanges, never fewer than two
+  (`keepLastNTurns` stays as the fallback for sessions that lack it), and `minRemovedUnits` skips,
+  and logs, a fold that would take out less. A round the budget filled always runs, and the minimum
+  is capped at half the trigger. The coach's values are 12,000 and 4,000; the arithmetic is in
+  `coach-compaction-policy.ts`. Same scenario: 8 folds on the live policy (25 with the guard on
+  the old tail). The guard can only delay a fold, never stop one: everything that ages out of the
+  tail adds to what the next fold would remove. A send can go past the ceiling while it waits (by
+  at most about one exchange in the tests); in normal use the after-reply run clears the guard
+  first, because 4,000 is under ceiling − trigger (8,000).
+- **C. Rows written once in a while were dropped for good:** the daily `date` stamp (date, weather,
+  check-in due), the last `attachments` note (its `photo_ref`) and a mid-session `health-digest`.
+  New engine rule `keepNewestRowPattern`, a regex with one capture group naming the source: of the
+  rows behind the mark, the newest of each source is sent again after the summary, unless the tail
+  already has one. Chosen over putting the date line in the per-turn floor, which would not cover
+  attachments or digests. Limit: only the newest attachment note survives; an older photo's ref is
+  gone unless the summary carries it, and the summarizer never reads injected rows.
+- **D. Work after the reply could be frozen.** The route awaited capture and compaction after
+  `res.end()`; both now go through `runInBackground` (`waitUntil`). Evidence: in the 19 days before
+  this the coach had one real turn (2026-10-29), and neither its capture nor its `coach` ai_log row
+  (also written after `res.end()`) landed. Over the 60 days before, capture ran on 93 of 121 coach
+  turns. So "0 captures in 19 days" was mostly no chat; the one turn fits a freeze but proves
+  nothing alone. Still after `res.end()` and not moved here: `notifyIfTheyLeft`, `recordCoachTurn`.
+- **E. The mark could move backwards** when two runs overlapped. The write is compare-and-set on the
+  mark the plan was built from (`updateChatSessionIfMarkUnchanged`); a miss is skipped and logged.
+- **F. The summarizer's diagnostic row** now carries `chat_session_id` and `metadata.compaction`
+  (rows summarized, injected rows dropped, transcript chars, whether the budget cut the round,
+  units removed). `executeJob` takes an optional `diagnostics: { chatSessionId, metadata }`.
+  Failures before the run log the session id.
+- **G. The policy reaches open sessions.** It is copied onto a session at open, and an active user's
+  session is never reopened. `npm run backfill:session-summarizer` (dry by default, `--write`
+  applies, `--days 30`) sets it on every coach session that has a summarizer or was active in the
+  window. Dry run 2026-10-31: 461 to write (458 at trigger 20,000, 3 at 32,000), 0 already live.
+- **H. Order on the wire.** The design above said pinned rows sit before the summary. In the stored
+  history they do. On the wire they don't: the Responses dialect (`buildResponsesRequest`, used by
+  Devs.ai v2 and the gateway) lifts every system row into `instructions`, so the summary rides with
+  the persona, ahead of the pinned rows, which are the first input items. Kept: the summary carrying
+  system weight is fine. The ordering test now pins both orders.
+- **I. Reading the session.** `listChatMessages` asked for every row in one request, and Supabase
+  returns at most 1,000 and says nothing; in ascending order the rows lost are the newest. It now
+  reads a page at a time (largest session today: 304 rows). **Follow-up, not done:** read only what
+  can be sent (system rows, pinned rows, the newest row per kept source, rows after the mark). Not
+  cheap now: the kept-source rows come from behind the mark, and both patterns are JS regexes that
+  would have to be rewritten for Postgres.
+
+**Rollout:** deploy; `set-coach-persona.ts` (new sessions copy the job's policy);
+`npm run backfill:session-summarizer -- --write` (sessions already open); `eval:compaction`.
 
 ### C3. Follow-ups that outlive the conversation
 
@@ -356,10 +421,11 @@ Differences from the design above, each from the code:
      scores the summary; asking her is the next arm.
    - Found on the way: `interpolateTemplate` cuts every job variable at **10,000 characters**
      (`job-execution-utils.ts`, `MAX_VARIABLE_LENGTH`), so one round's `transcript` can never hand
-     the summarizer more than ~2,500 units. A round today is ~1,500 units (~30 exchanges of
-     dialogue once injected rows are dropped), so there is room, but a chattier user would hit it
-     silently: the tail of the round would be "... [truncated]" and gone. Not fixed here; the right
-     answer is probably a per-job override of the cap, or compaction splitting a round in two.
+     the summarizer more than ~2,500 units. **There is no room** (corrected by the P1b audit): the
+     fixture's dialogue is shorter than real dialogue. At production sizes (user 87 chars, reply
+     446, measured 2026-10-31) a round is ~27 exchanges, ~15k characters, so about a third of
+     every round was cut to "... [truncated]" while the mark moved past it: neither summarized nor
+     sent again. Fixed in P1b (C2, "Built (P1b)", finding A): compaction splits a round to fit.
 
    **Built (P3b, 2026-10-31): fixtures and scorer rebuilt so the numbers can be trusted.** An audit
    found the first fixtures were about a third of real length, so no round came near the cap above

@@ -22,6 +22,7 @@
     "eval:mine": "node --import tsx scripts/mine-eval-candidates.ts",
     "eval:outcomes": "node --import tsx scripts/eval-outcomes.ts",
     "eval:compaction": "node --import tsx scripts/eval-compaction.ts",
+    "backfill:session-summarizer": "node --import tsx scripts/backfill-session-summarizer.ts",
     "metrics:food-ledger": "node --import tsx scripts/food-variance-baseline.ts",
     "eval:food-vision": "node --import tsx scripts/eval-food-vision.ts",
     "smoke:food-sources": "tsx scripts/smoke-food-sources.ts",
