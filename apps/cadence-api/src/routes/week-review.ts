@@ -31,6 +31,7 @@ import { buildWeekReviewFacts } from '../services/week-review-facts.ts';
 import { confirmSession, toggleMealSlot, toggleMindStep } from '../services/week-review-write.ts';
 import { writeRecapForReview } from '../services/recap-write.ts';
 import { maybeRunFactReview } from '../services/fact-review-trigger.ts';
+import { runInBackground } from '../services/background.ts';
 import { addDaysIso, mondayOnOrBefore } from '../services/progress-rhythm.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon, writtenAheadDays } from '../services/plan-horizon.ts';
 import {
@@ -207,12 +208,12 @@ router.post('/week-review/recap', async (req: Request, res: Response) => {
     );
     res.json({ ok: true });
     // The weekly fact review (HARNESS-V3 C7) rides the check-in close: facts in their file that
-    // disagree become questions for the coach, never edits. After the response, so nobody waits on
-    // it; awaited, because a promise left running past the handler is one this platform may never
-    // finish (same as ambient capture in coach.ts). It never throws, and the catch is belt and braces.
-    await maybeRunFactReview(userId, recap?.week_start).catch((e) =>
-      console.error('[POST /plan/week-review/recap] fact review', e),
-    );
+    // disagree become questions for the coach, never edits. Handed to runInBackground, so nobody
+    // waits on it: its `waitUntil` keeps the invocation alive until the review settles. A bare
+    // `await` after the response does not — Vercel freezes the instance the moment the response is
+    // sent, and work still in flight never runs (services/background.ts). runInBackground also
+    // catches and logs, so a failed review never reaches the confirm.
+    runInBackground('fact-review', maybeRunFactReview(userId, recap?.week_start));
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /plan/week-review/recap]', err);

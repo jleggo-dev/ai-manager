@@ -39,6 +39,11 @@ const maybeRunFactReview = vi.fn();
 vi.mock('../services/fact-review-trigger.ts', () => ({
   maybeRunFactReview: (...a: unknown[]) => maybeRunFactReview(...a),
 }));
+// Catches like the real one (services/background.ts), so a rejected review is logged, never unhandled.
+const runInBackground = vi.fn((_label: string, work: Promise<unknown>) => void work.catch(() => {}));
+vi.mock('../services/background.ts', () => ({
+  runInBackground: (label: string, work: Promise<unknown>) => runInBackground(label, work),
+}));
 vi.mock('../auth/middleware.ts', () => ({
   requireCadenceUser: (req: { cadenceUserId?: string }, _res: unknown, next: () => void) => {
     req.cadenceUserId = 'u1';
@@ -209,16 +214,26 @@ describe('POST /plan/week-review/recap — the weekly fact review', () => {
     expect(maybeRunFactReview).toHaveBeenCalledWith('u1', '2026-08-17');
   });
 
+  it('hands the review to runInBackground — a bare await after the response is frozen on Vercel', async () => {
+    const work = Promise.resolve({ ran: true, reason: 'reviewed' });
+    maybeRunFactReview.mockReturnValue(work);
+    await post();
+    expect(runInBackground).toHaveBeenCalledTimes(1);
+    expect(runInBackground).toHaveBeenCalledWith('fact-review', work);
+  });
+
   it('never runs when the recap write fails — the week did not close', async () => {
     writeRecapForReview.mockRejectedValue(new Error('db down'));
     await post();
     expect(maybeRunFactReview).not.toHaveBeenCalled();
+    expect(runInBackground).not.toHaveBeenCalled();
   });
 
   it('never runs on a 404 — nothing pending is not a closed week', async () => {
     getUser.mockResolvedValue({ pending_week_review: null, baseline: {} });
     await post();
     expect(maybeRunFactReview).not.toHaveBeenCalled();
+    expect(runInBackground).not.toHaveBeenCalled();
   });
 
   it('answers before the review finishes — nobody waits on it', async () => {
