@@ -25,7 +25,12 @@ export async function confirmGoals(): Promise<{ confirmed: number }> {
 
 /* ── Review wizard: accept / reject / modify captured data ─────── */
 export async function updateGoal(goalId: string, fields: Partial<Goal>): Promise<void> {
-  await fetch(`${BASE}/review/goals/${goalId}`, { method: 'PATCH', headers: headers(), body: JSON.stringify(fields) });
+  const res = await fetch(`${BASE}/review/goals/${goalId}`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(`updateGoal failed: ${res.status}`);
 }
 /** Coach's realism read on a goal + proposed stepping-stones (suggest-only). null if unavailable. */
 export async function assessGoal(goalId: string): Promise<GoalAssessment | null> {
@@ -34,7 +39,8 @@ export async function assessGoal(goalId: string): Promise<GoalAssessment | null>
   return res.json();
 }
 export async function deleteGoal(goalId: string): Promise<void> {
-  await fetch(`${BASE}/review/goals/${goalId}`, { method: 'DELETE', headers: headers() });
+  const res = await fetch(`${BASE}/review/goals/${goalId}`, { method: 'DELETE', headers: headers() });
+  if (!res.ok) throw new Error(`deleteGoal failed: ${res.status}`);
 }
 /** Settings Room: rename a goal's title in place. */
 export async function renameGoal(goalId: string, title: string): Promise<boolean> {
@@ -62,10 +68,16 @@ export async function addGoal(fields: Partial<Goal> & { confirm?: boolean }): Pr
   return res.json();
 }
 export async function updateEquipment(id: string, fields: Partial<Equipment>): Promise<void> {
-  await fetch(`${BASE}/review/equipment/${id}`, { method: 'PATCH', headers: headers(), body: JSON.stringify(fields) });
+  const res = await fetch(`${BASE}/review/equipment/${id}`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(`updateEquipment failed: ${res.status}`);
 }
 export async function deleteEquipmentItem(id: string): Promise<void> {
-  await fetch(`${BASE}/review/equipment/${id}`, { method: 'DELETE', headers: headers() });
+  const res = await fetch(`${BASE}/review/equipment/${id}`, { method: 'DELETE', headers: headers() });
+  if (!res.ok) throw new Error(`deleteEquipmentItem failed: ${res.status}`);
 }
 export async function addEquipment(fields: Partial<Equipment>): Promise<Equipment> {
   const res = await fetch(`${BASE}/review/equipment`, {
@@ -76,9 +88,25 @@ export async function addEquipment(fields: Partial<Equipment>): Promise<Equipmen
   if (!res.ok) throw new Error(`addEquipment failed: ${res.status}`);
   return res.json();
 }
+/**
+ * These writes THROW when the server refuses, like addGoal/addEquipment above. They used to
+ * resolve on any answer, so a refused weigh-in choice (a 400 or a 500) looked saved in Settings
+ * until the next reload — the screen's "That didn't save" sits in a catch that never ran
+ * (found 2026-11-01; both sides pinned in the API's settings.client.test.ts).
+ */
 export async function updateBaseline(patch: Partial<Baseline>): Promise<void> {
-  await fetch(`${BASE}/review/baseline`, { method: 'PATCH', headers: headers(), body: JSON.stringify(patch) });
+  const res = await fetch(`${BASE}/review/baseline`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`updateBaseline failed: ${res.status}`);
 }
 export async function updateName(name: string): Promise<void> {
-  await fetch(`${BASE}/review/profile`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ name }) });
+  const res = await fetch(`${BASE}/review/profile`, {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`updateName failed: ${res.status}`);
 }

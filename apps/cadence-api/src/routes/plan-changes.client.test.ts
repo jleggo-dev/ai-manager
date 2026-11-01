@@ -10,14 +10,11 @@
  * re-implemented) call the real plan-changes router over HTTP. Only what sits BEHIND the route is
  * faked — the account row (an in-memory pending change) and the commit itself — because the
  * contract under test is the HTTP one: which status, which body, and what the client makes of it.
- * Change either side's half of that and this goes red.
+ * Change either side's half of that and this goes red. The shared setup is src/test/client-route.ts.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import express from 'express';
-import type { Server } from 'node:http';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { PendingPlan } from '@cadence/shared';
+import { serveRoutesToWebClient, type ClientAgainstRoutes } from '../test/client-route.ts';
 
 /** The account behind the route: what's pending, and the plan version it last committed. */
 const account: { pending_plan: PendingPlan | null; version: number } = { pending_plan: null, version: 29 };
@@ -59,42 +56,22 @@ vi.mock('../auth/middleware.ts', () => ({
   },
 }));
 
-/** The web client's real functions. Loaded by path at runtime so the API's typecheck does not try
- *  to compile browser code; this interface is the slice of it under test. */
+/** The slice of the web client's lib/api/plan.ts under test. */
 interface WebPlanApi {
   applyPendingChange(): Promise<{ ok: true } | { ok: false; message: string | null }>;
   setPendingChangeToggles(toggles: { index: number; enabled: boolean }[]): Promise<boolean>;
   getPendingChangeDetail(): Promise<{ plan_version: number | null; items: { index: number; enabled: boolean }[] }>;
 }
-const WEB_PLAN_API = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../cadence-web/src/lib/api/plan.ts',
-);
 
 const { default: planChangesRoutes } = await import('./plan-changes.ts');
+let served: ClientAgainstRoutes<WebPlanApi>;
 let web: WebPlanApi;
-let server: Server;
 
 beforeAll(async () => {
-  // Mounted where app.ts mounts it.
-  const app = express();
-  app.use(express.json());
-  app.use('/plan', planChangesRoutes);
-  server = app.listen(0);
-  const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-
-  // The client builds `${BASE}/plan/...` with BASE = '/api' (Vercel strips it before the app sees
-  // the path) and reads `window.location` to pick its auth header. Point both at this server.
-  const realFetch = globalThis.fetch;
-  vi.stubGlobal('window', { location: { search: '' } });
-  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => realFetch(origin + url.replace(/^\/api/, ''), init));
-
-  web = (await import(/* @vite-ignore */ WEB_PLAN_API)) as WebPlanApi;
+  served = await serveRoutesToWebClient<WebPlanApi>('plan.ts', (app) => app.use('/plan', planChangesRoutes));
+  web = served.web;
 });
-afterAll(() => {
-  server.close();
-  vi.unstubAllGlobals();
-});
+afterAll(() => served.close());
 
 function pending(...titles: string[]): PendingPlan {
   return {

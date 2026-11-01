@@ -30,7 +30,7 @@ const committed = { ok: true, committed: true };
 beforeEach(() => {
   vi.clearAllMocks();
   // 202: the run is CLAIMED, not finished. Completion arrives through the poll.
-  lockPlan.mockResolvedValue({ status: 202, body: { running: true } });
+  lockPlan.mockResolvedValue({ ok: true });
   getPlan.mockResolvedValue({ stage: 'in_progress' });
   getBuildRun.mockResolvedValue(committed);
 });
@@ -55,16 +55,17 @@ describe('useBuildPlan under StrictMode', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a too-much-at-once verdict as something they can act on', async () => {
-    lockPlan.mockResolvedValue({ status: 409, body: { status: 'needs_focus' } });
+  it("a route that fails outright shows the route's words, not a generic apology", async () => {
+    lockPlan.mockResolvedValue({ ok: false, message: 'No confirmed goals to lock.' });
+    getPlan.mockResolvedValue({ stage: 'in_progress' });
     const { result } = renderHook(() => useBuildPlan({ onDone: vi.fn() }), { wrapper: StrictMode });
 
     await waitFor(() => expect(result.current.phase).toBe('failed'));
-    expect(result.current.error).toMatch(/lot to carry at once/);
+    expect(result.current.error).toBe('No confirmed goals to lock.');
   });
 
   it('routes to the plan when the build already landed server-side', async () => {
-    lockPlan.mockResolvedValue({ status: 422, body: {} });
+    lockPlan.mockResolvedValue({ ok: false, message: null });
     getPlan.mockResolvedValue({ stage: 'committed' });
     const onDone = vi.fn();
     const { result } = renderHook(() => useBuildPlan({ onDone }), { wrapper: StrictMode });

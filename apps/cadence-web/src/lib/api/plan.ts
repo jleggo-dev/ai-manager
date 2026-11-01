@@ -578,17 +578,25 @@ export async function toggleWeekReviewMindStep(occurrenceId: string, step: strin
 }
 
 /**
- * Start the first build. Answers 202 as soon as the run is CLAIMED — the synthesis itself runs
- * in the background and is watched with `getBuildRun`. It used to hold the connection open for
- * the whole build, which on a phone meant the one thing guaranteed not to survive it.
+ * Start the first build. The route answers 202 as soon as the run is CLAIMED — the synthesis
+ * itself runs in the background and is watched with `getBuildRun`. It used to hold the connection
+ * open for the whole build, which on a phone meant the one thing guaranteed not to survive it.
  *
- * `joined: true` means a run was already in flight and this tap joined it rather than starting a
- * second one; either way the caller polls. 409/422 still carry a real refusal (needs_focus, no
- * goals) and are surfaced as before.
+ * `ok` means the run was claimed (or a tap joined one already in flight); either way the caller
+ * polls. Every refusal — too many goals, a failed check — arrives through the poll as the run's
+ * failure, in the server's words, because the gate runs inside the background run. A non-2xx here
+ * is the route itself failing; `message` carries its words when it sent any. A fetch that never
+ * got an answer THROWS: the run may still have been claimed, so only the poll can say.
+ *
+ * The answer is read here rather than in the caller so one test can hand the real route's answer
+ * to it (plan-build.client.test.ts) — the change buttons misread a 202 for two months because the
+ * reading lived where no such test could reach it.
  */
-export async function lockPlan(): Promise<{ status: number; body: Record<string, unknown> }> {
+export async function lockPlan(): Promise<{ ok: true } | { ok: false; message: string | null }> {
   const res = await fetch(`${BASE}/plan/lock`, { method: 'POST', headers: headers() });
-  return { status: res.status, body: await res.json() };
+  if (res.ok) return { ok: true };
+  const body = (await res.json().catch(() => null)) as { violations?: string[] } | null;
+  return { ok: false, message: body?.violations?.length ? body.violations.join('; ') : null };
 }
 
 /**
