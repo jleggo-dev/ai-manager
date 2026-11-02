@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { Food } from '@cadence/shared';
 import { priceFood } from './food-pricing-portion.ts';
 import { portionForPick } from './food-pick-portion.ts';
+import { mapUsdaPortions } from './food-sources/usda-map.ts';
 
 const banana: Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> = {
   base_unit: 'g',
@@ -82,5 +83,35 @@ describe('portionForPick', () => {
 
   it('a food with no numbers prices nothing', () => {
     expect(portionForPick({ ...banana, macros_per_base: {} }, { label: 'g', grams: 1 }, 10)).toBeNull();
+  });
+
+  it('a Survey (FNDDS) food reads back in its words, not its code (2026-11-01, spanakopita)', () => {
+    const servings = mapUsdaPortions([
+      {
+        modifier: '61109',
+        portionDescription: '1 regular/large',
+        gramWeight: 120,
+        measureUnit: { name: 'undetermined' },
+      },
+      { modifier: '10205', portionDescription: '1 cup', gramWeight: 120, measureUnit: { name: 'undetermined' } },
+      {
+        modifier: '90000',
+        portionDescription: 'Quantity not specified',
+        gramWeight: 90,
+        measureUnit: { name: 'undetermined' },
+      },
+    ]);
+    const spanakopita: typeof banana = {
+      base_unit: 'g',
+      macros_per_base: { kcal: 212, protein_g: 8.3 },
+      servings,
+      default_serving: 0,
+    };
+    expect(portionForPick(spanakopita, { label: '1 regular/large (120g)', grams: 120 }, 1)).toMatchObject({
+      qty: 1,
+      unit: 'regular/large',
+      reads_back: true,
+    });
+    expect(portionForPick(spanakopita, { label: '1 serving (90g)', grams: 90 }, 1)).toMatchObject({ reads_back: true });
   });
 });

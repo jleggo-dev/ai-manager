@@ -41,6 +41,9 @@ export interface AmountRow {
   /** Where the number came from (DESCRIBED_BASES); `fallback` is drawn on the row as an automatic estimate. */
   basis?: DescribedBasis;
   source_label?: string;
+  /** Grams in one of `unit` (from the record), so the row reads "1 regular/large (120g)". Dropped
+   *  when the unit changes — it described the old one. */
+  grams_each?: number;
 }
 
 /** One parsed item as a row of the card. `rawText` is what they typed, so a given amount reads as theirs. */
@@ -63,6 +66,7 @@ function rowFromItem(it: MealPreview['items'][number], rawText: string): AmountR
     ...(it.asked_about ? { asked_about: it.asked_about } : {}),
     ...(it.basis ? { basis: it.basis } : {}),
     ...(it.source_label ? { source_label: it.source_label } : {}),
+    ...(it.grams_each ? { grams_each: it.grams_each } : {}),
   };
 }
 
@@ -147,6 +151,7 @@ export function useMealAmounts(preview: MealPreview) {
               ...r,
               qty,
               ...(unit !== undefined ? { unit } : {}),
+              ...(unit !== undefined && unit !== r.unit ? { grams_each: undefined } : {}),
               ...(r.question && qty != null ? { answered: true } : {}),
             }
           : r,

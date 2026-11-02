@@ -205,6 +205,8 @@ export interface MealPreviewItem {
   basis?: DescribedBasis;
   /** "your saved food", "USDA", "the coach's estimate" — so an estimate never looks like a lookup. */
   source_label?: string;
+  /** Grams in one of `unit` when it is a measure, not g/ml — drawn as "1 cup (120g)". */
+  grams_each?: number;
   /** What the coach assumed where the words left something open ("Took this as 2% milk"). */
   assumption?: string;
   /**
