@@ -38,6 +38,7 @@ export function WeekChangeCard({
           <span>{item.next}</span>
         </div>
       </div>
+      {item.how_to && <p className="wkc-reason">{item.how_to}</p>}
       {item.change_reason && <p className="wkc-reason">{item.change_reason}</p>}
       <label className="wkc-switch">
         <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`Include: ${item.title}`} />

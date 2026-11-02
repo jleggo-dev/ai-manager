@@ -132,6 +132,45 @@ describe('WeekChangesSheet', () => {
     expect(await screen.findByText(/Nothing to change right now/)).toBeInTheDocument();
   });
 
+  it('a swap inside a session shows its new contents — days and time alone read the same', async () => {
+    api.getPendingChangeDetail.mockResolvedValue({
+      plan_version: 30,
+      items: [
+        {
+          index: 7,
+          title: 'Obstacle strength',
+          enabled: true,
+          now: 'Sun · 4:30 pm · 45 min',
+          next: 'Sun · 4:30 pm · 45 min',
+          how_to: 'Replace the bike warm-up with 5 minutes of easy step-ups.',
+        },
+      ],
+      removed: [],
+    });
+    render(<WeekChangesSheet onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/easy step-ups/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply 1 change and build next week/ })).toBeInTheDocument();
+  });
+
+  it('lists a dropped commitment without a toggle, and counts it in the button', async () => {
+    api.getPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: [ITEMS[0]], removed: ['Sauna'] });
+    render(<WeekChangesSheet onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Sauna')).toBeInTheDocument();
+    expect(screen.getByText('Comes off your plan.')).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Apply 2 changes and build next week/ })).toBeInTheDocument();
+  });
+
+  it('a change that only drops something still opens, rather than saying there is nothing', async () => {
+    api.getPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: [], removed: ['Sauna'] });
+    render(<WeekChangesSheet onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Sauna')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing to change right now/)).not.toBeInTheDocument();
+  });
+
   it('the close control reports back to the caller', async () => {
     const onClose = vi.fn();
     render(<WeekChangesSheet onClose={onClose} />);

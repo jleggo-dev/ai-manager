@@ -399,12 +399,18 @@ export interface PendingChangeDetailItem {
    *  for a pure add — there is no "now" for a commitment that doesn't exist yet. */
   now: string | null;
   next: string;
+  /** What the session will contain from now on, when the change is to its contents — a swap
+   *  keeps its days and time, so NOW and NEXT alone read the same. */
+  how_to?: string;
 }
 export interface PendingChangeDetail {
   /** The active plan's version, so the sheet can label the row "WEEK {version + 1}". Null when
    *  there is nothing pending. */
   plan_version: number | null;
+  /** Only the commitments the change actually alters — never the rest of the plan. */
   items: PendingChangeDetailItem[];
+  /** Titles of commitments the change drops. Shown, not toggleable. */
+  removed: string[];
 }
 
 /**
@@ -415,7 +421,7 @@ export interface PendingChangeDetail {
  */
 export async function getPendingChangeDetail(): Promise<PendingChangeDetail> {
   const res = await fetch(`${BASE}/plan/pending-change/detail`, { headers: headers() }).catch(() => null);
-  if (!res?.ok) return { plan_version: null, items: [] };
+  if (!res?.ok) return { plan_version: null, items: [], removed: [] };
   return res.json();
 }
 

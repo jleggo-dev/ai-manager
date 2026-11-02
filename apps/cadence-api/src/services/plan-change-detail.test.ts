@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { Activity, PendingPlan } from '@cadence/shared';
+import type { Activity, PendingPlan, PendingPlanActivity } from '@cadence/shared';
 
 /**
  * The Changes sheet's one read, composed from two independent sources: the stored `pending_plan`
@@ -51,14 +51,14 @@ describe('buildPendingChangeDetail', () => {
   it('returns an empty list rather than erroring when nothing is pending', async () => {
     getUser.mockResolvedValue({ pending_plan: null });
     const r = await buildPendingChangeDetail('u1');
-    expect(r).toEqual({ plan_version: null, items: [] });
+    expect(r).toEqual({ plan_version: null, items: [], removed: [] });
     expect(getActivePlan).not.toHaveBeenCalled();
   });
 
   it('also collapses to empty when the user record itself is gone', async () => {
     getUser.mockResolvedValue(null);
     const r = await buildPendingChangeDetail('u1');
-    expect(r).toEqual({ plan_version: null, items: [] });
+    expect(r).toEqual({ plan_version: null, items: [], removed: [] });
   });
 
   it('composes NOW from the active plan and NEXT from the proposal, for an edited commitment', async () => {
@@ -87,7 +87,7 @@ describe('buildPendingChangeDetail', () => {
         title: 'Easy run',
         change_reason: "You've made 4 of 4 morning sessions this month and 1 of 4 evening ones.",
         enabled: true,
-        now: 'Thu · 6:30 pm',
+        now: 'Thu · 6:30 pm · 40 min',
         next: 'Fri · 6:15 am',
       },
     ]);
@@ -175,7 +175,141 @@ describe('buildPendingChangeDetail', () => {
   });
 });
 
+/** The current run as the proposal stores it — the row propose_plan_change leaves alone. */
+function runAsProposed(overrides: Partial<PendingPlanActivity> = {}): PendingPlanActivity {
+  return {
+    commitment_id: RUN_COMMITMENT,
+    title: 'Easy run',
+    kind: 'user',
+    cadence: 'Thursday',
+    recurrence: 'FREQ=WEEKLY;BYDAY=TH',
+    time_of_day: '18:30',
+    duration_min: 40,
+    completion_source: 'self_report',
+    ...overrides,
+  };
+}
+
+const STRENGTH: Activity = {
+  activity_id: 'a-str-old',
+  commitment_id: 'c-str-2222-4222-8222-222222222222',
+  plan_id: 'p1',
+  title: 'Obstacle strength',
+  kind: 'user',
+  schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=SU', time_of_day: '16:30', duration_min: 45 },
+  how_to: 'Bike warm-up, then pull, carry, grip.',
+  completion_source: 'self_report',
+};
+
+describe('buildPendingChangeDetail — only what the proposal changes', () => {
+  /**
+   * 2026-11-01: swapping the bike warm-up for step-ups put up "Apply 18 changes and build next
+   * week" — the proposal stores the whole next plan, and the sheet listed all of it. Positives
+   * (a real change shows) AND near-misses (a row that merely round-tripped does not).
+   */
+  it.each([
+    ['the same row, untouched', {}, false],
+    ['no time stored as "" against undefined', { time_of_day: '' }, true], // differs: current has 18:30
+    ['a new time', { time_of_day: '06:15' }, true],
+    ['new days', { recurrence: 'FREQ=WEEKLY;BYDAY=FR' }, true],
+    ['new minutes', { duration_min: 30 }, true],
+    ['new contents', { how_to: 'Strides at the end.' }, true],
+    ['a new name', { title: 'Recovery run' }, true],
+    ['a new target', { target: { metric: 'distance', value: 3, unit: 'km' } }, true],
+    ['the same name with a stray space', { title: 'Easy run ' }, false],
+    ['a display-only field reworded', { why: 'Keeps the aerobic base.', cadence: 'Every Thursday' }, false],
+  ] as const)('%s → listed: %s', async (_label, overrides, listed) => {
+    getUser.mockResolvedValue({ pending_plan: pendingPlan({ activities: [runAsProposed(overrides)] }) });
+    const r = await buildPendingChangeDetail('u1');
+    expect(r.items.length).toBe(listed ? 1 : 0);
+  });
+
+  it('a one-session swap in a full plan lists that one session, keeping its stored index', async () => {
+    listActivities.mockResolvedValue([CURRENT_RUN, STRENGTH]);
+    getUser.mockResolvedValue({
+      pending_plan: pendingPlan({
+        activities: [
+          runAsProposed(),
+          {
+            commitment_id: STRENGTH.commitment_id,
+            title: 'Obstacle strength',
+            kind: 'user',
+            cadence: 'Sunday',
+            recurrence: 'FREQ=WEEKLY;BYDAY=SU',
+            time_of_day: '16:30',
+            duration_min: 45,
+            how_to: 'Replace the bike warm-up with 5 minutes of easy step-ups.',
+            completion_source: 'self_report',
+          },
+        ],
+      }),
+    });
+
+    const r = await buildPendingChangeDetail('u1');
+    expect(r.items).toEqual([
+      {
+        index: 1,
+        title: 'Obstacle strength',
+        enabled: true,
+        now: 'Sun · 4:30 pm · 45 min',
+        next: 'Sun · 4:30 pm · 45 min',
+        how_to: 'Replace the bike warm-up with 5 minutes of easy step-ups.',
+      },
+    ]);
+    expect(r.removed).toEqual([]);
+  });
+
+  it('leaves how_to off a row whose contents did not change', async () => {
+    listActivities.mockResolvedValue([STRENGTH]);
+    getUser.mockResolvedValue({
+      pending_plan: pendingPlan({
+        activities: [
+          {
+            commitment_id: STRENGTH.commitment_id,
+            title: 'Obstacle strength',
+            kind: 'user',
+            cadence: 'Sunday',
+            recurrence: 'FREQ=WEEKLY;BYDAY=SU',
+            time_of_day: '06:00',
+            duration_min: 45,
+            how_to: STRENGTH.how_to!,
+            completion_source: 'self_report',
+          },
+        ],
+      }),
+    });
+
+    const r = await buildPendingChangeDetail('u1');
+    expect(r.items[0]!.next).toBe('Sun · 6 am · 45 min');
+    expect(r.items[0]).not.toHaveProperty('how_to');
+  });
+
+  it('names what the proposal drops, since a dropped commitment has no row of its own', async () => {
+    listActivities.mockResolvedValue([CURRENT_RUN, STRENGTH]);
+    getUser.mockResolvedValue({ pending_plan: pendingPlan({ activities: [runAsProposed()] }) });
+
+    const r = await buildPendingChangeDetail('u1');
+    expect(r.items).toEqual([]);
+    expect(r.removed).toEqual(['Obstacle strength']);
+  });
+
+  it("matches a rebuild's rows by name, as the commit does — a kept row is neither new nor removed", async () => {
+    getUser.mockResolvedValue({
+      pending_plan: pendingPlan({ activities: [runAsProposed({ commitment_id: undefined })] }),
+    });
+
+    const r = await buildPendingChangeDetail('u1');
+    expect(r.items).toEqual([]);
+    expect(r.removed).toEqual([]);
+  });
+});
+
 describe('scheduleLine', () => {
+  it('adds the minutes when they are set, so a resize reads as one', () => {
+    expect(scheduleLine('FREQ=WEEKLY;BYDAY=TH', '18:30', 40)).toBe('Thu · 6:30 pm · 40 min');
+    expect(scheduleLine('FREQ=WEEKLY;BYDAY=TH', undefined, 40)).toBe('Thu · 40 min');
+  });
+
   it('joins the cadence and a 12-hour clock with a middle dot', () => {
     expect(scheduleLine('FREQ=WEEKLY;BYDAY=TH', '18:30')).toBe('Thu · 6:30 pm');
   });

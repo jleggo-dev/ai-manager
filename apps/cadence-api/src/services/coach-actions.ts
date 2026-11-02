@@ -83,6 +83,19 @@ export { PLAN_EDIT_ACTIONS } from './plan-edit-schema.ts';
  */
 const ACTION_ALIASES: Record<string, PlanEdit['action']> = { rename: 'rework', retitle: 'rework', reschedule: 'move' };
 
+/**
+ * Said back whenever a rework goes on the card. On 2026-11-01 the owner asked to swap the bike
+ * warm-up in TODAY's session; she put up a rework — which rewrites every future session of that
+ * commitment — and told the owner it "changes only today's session". The result now states the reach.
+ */
+function reworkReach(edits: PlanEdit[]): string[] {
+  return edits.some((e) => e.action === 'rework')
+    ? [
+        'A rework changes what EVERY future session of that commitment contains, from Apply on — not one day. If they meant only one day\'s session, that is rebuild with scope "session"; take this card down with start_over.',
+      ]
+    : [];
+}
+
 function asEdits(raw: unknown): { edits: PlanEdit[]; unknown: string[] } {
   if (!Array.isArray(raw)) return { edits: [], unknown: [] };
   const unknown: string[] = [];
@@ -338,6 +351,7 @@ export const COACH_ACTION_TOOLS: Record<string, CoachActionTool> = {
          * because nothing showed her the week her edits added up to.
          */
         ...planEditEvidence(next, me?.baseline?.constraints),
+        ...reworkReach(edits),
         'What you have put up is theirs to apply. Do NOT claim it is done or scheduled — it is not, until they tap it.',
         unknownNote,
       ];

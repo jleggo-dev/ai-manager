@@ -13,7 +13,7 @@ import { WeekChangeCard } from './WeekChangeCard.tsx';
  * A pure DB read, same as WeekReviewSheet — SheetRowsSkeleton, not chat dots.
  */
 export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
-  const { state, planVersion, items, enabled, toggle, enabledCount, applyState, applyError, apply } = useWeekChanges();
+  const { state, planVersion, items, removed, enabled, toggle, enabledCount, applyState, applyError, apply } = useWeekChanges();
 
   async function onApply() {
     const ok = await apply();
@@ -53,6 +53,14 @@ export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; 
                 checked={!!enabled[item.index]}
                 onToggle={() => toggle(item.index)}
               />
+            ))}
+            {removed.map((title) => (
+              <div className="wkc-card" key={`removed-${title}`}>
+                <div className="wkc-card-head">
+                  <b>{title}</b>
+                </div>
+                <p className="wkc-reason">Comes off your plan.</p>
+              </div>
             ))}
             {applyState === 'failed' && <div className="wkc-err">{applyError ?? 'That didn’t take — try again?'}</div>}
             <button
