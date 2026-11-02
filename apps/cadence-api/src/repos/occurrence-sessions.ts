@@ -67,14 +67,18 @@ export async function setOccurrenceSession(
  * unscoped match ("today's workout", no date given) lands on the next one on the calendar.
  * `kind = 'user'` for the same reason as everywhere else: a system tracking row (weigh-in, food
  * log) has no session inside it to rebuild.
+ *
+ * The window is the CALLER's, in the user's own days. It used to floor at the UTC date, so every
+ * evening in the Americas today's session had already left the list: on 2026-11-01 at 00:22 UTC
+ * (Nov 2) the owner's Nov 1 "Obstacle strength" could not be rebuilt, though `reviseSession`
+ * itself has always judged "past" by their own today.
  */
 export async function listUpcomingForRevision(
   userId: string,
-  days = 28,
+  from: string,
+  to: string,
   limit = 40,
 ): Promise<Array<{ occurrence_id: string; date: string; title: string }>> {
-  const from = new Date().toISOString().slice(0, 10);
-  const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
   return sql<Array<{ occurrence_id: string; date: string; title: string }>>`
     select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title
     from cadence.occurrences o
