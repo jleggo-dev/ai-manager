@@ -263,13 +263,14 @@
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  background: oklch(55% 0.12 35);
+  /* Done is green, as the commit buttons (owner ruling 2026-11-02). */
+  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
   color: #fff;
   font-size: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 0 oklch(43% 0.11 35);
+  box-shadow: 0 6px 0 oklch(39% 0.08 152);
   animation: pop 0.5s ease;
 }
 @media (prefers-reduced-motion: reduce) {

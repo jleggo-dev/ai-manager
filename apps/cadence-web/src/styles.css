@@ -1396,8 +1396,10 @@ html[data-native] .sheet-body {
   place-items: center;
   cursor: pointer;
 }
+/* Done is green — the same green as the commit buttons (owner ruling 2026-11-02: orange opens a
+   door, green commits; what's committed and happened is green). */
 .occ-done .occ-check {
-  background: linear-gradient(135deg, var(--dawn-2), var(--dawn-3));
+  background: linear-gradient(180deg, oklch(60% 0.1 152), oklch(52% 0.09 152));
   border-color: transparent;
 }
 .occ-skip .occ-check {
