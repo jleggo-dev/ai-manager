@@ -1,19 +1,38 @@
 import { SheetRowsSkeleton } from '../SheetSkeletons.tsx';
 import { useWeekChanges } from './useWeekChanges.ts';
 import { WeekChangeCard } from './WeekChangeCard.tsx';
+import { WeekStrip } from './WeekStrip.tsx';
+import { WeekView } from './WeekView.tsx';
+import { useSheetDetent, type Detent } from './useSheetDetent.ts';
+import { weekAsToggled } from './weekDays.ts';
 
 /**
- * The Changes sheet (check-in rebuild, step 7 — client half): the swap candidates the coach
- * persisted the moment she offered them, via propose_plan_change's `reason`/`optional` fields
- * (coach-actions.ts, plan-edit.ts). Reads the stored pending change back — never the turn that
- * announced it — lets the user flip any card's toggle, then applies through the SAME call
- * ChangeCard's own inline Apply runs: toggles persisted first, then applyPendingChange(), so the
- * commit funnel (confirmPendingPlan → resolveToggledActivities) resolves exactly what's on screen.
+ * The Changes sheet: what the coach's pending change does, then — one drag or tap away — the week
+ * it adds up to. Owner, 2026-11-01: "show the one change — allow the user to see the full week…
+ * grouped by day", after a one-session swap read as "Apply 18 changes and build next week".
  *
- * A pure DB read, same as WeekReviewSheet — SheetRowsSkeleton, not chat dots.
+ * Two heights. Half shows only the change (the rows that actually differ, any drop, the toggles)
+ * and a quiet seven-day strip; full shows the seven days with the change applied. Reads the stored
+ * pending change back — never the turn that announced it — and applies through the SAME call
+ * ChangeCard's inline Apply runs: toggles persisted first, then applyPendingChange(), so the
+ * commit funnel (confirmPendingPlan → resolveToggledActivities) resolves exactly what's on screen.
+ * The week follows the toggles, so turning a change off shows the week without it.
  */
-export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; onApplied?: () => void }) {
-  const { state, planVersion, items, enabled, toggle, enabledCount, applyState, applyError, apply } = useWeekChanges();
+export function WeekChangesSheet({
+  onClose,
+  onApplied,
+  initial = 'half',
+}: {
+  onClose: () => void;
+  onApplied?: () => void;
+  /** 'full' when the person asked for the week itself (ChangeCard's strip). */
+  initial?: Detent;
+}) {
+  const { state, items, removed, week, enabled, toggle, enabledCount, applyState, applyError, apply } =
+    useWeekChanges();
+  const { detent, setDetent, handlers } = useSheetDetent(initial, onClose);
+  const shown = weekAsToggled(week, enabled);
+  const full = detent === 'full' && shown.length > 0;
 
   async function onApply() {
     const ok = await apply();
@@ -26,16 +45,24 @@ export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; 
   return (
     <>
       <div className="sheet-scrim" onClick={onClose} aria-hidden />
-      <div className="sheet wkc-sheet" role="dialog" aria-label="Changes for next week">
-        <div className="sheet-grab" aria-hidden />
-        <div className="sheet-head">
-          <div className="sheet-title">
-            <b>Changes for next week</b>
-            {planVersion != null && <span>WEEK {planVersion + 1} · SUGGESTED BY YOUR COACH</span>}
+      <div className={`sheet wkc-sheet${full ? ' full' : ''}`} role="dialog" aria-label="Your coach's change">
+        <div className="wkc-drag" {...handlers}>
+          <div className="sheet-grab" aria-hidden />
+          <div className="sheet-head">
+            <div className="sheet-title">
+              <b>{full ? 'Your week' : 'What changes'}</b>
+              <span>{full ? 'WITH THIS CHANGE' : 'SUGGESTED BY YOUR COACH'}</span>
+            </div>
+            <button
+              className="sheet-x"
+              onClick={onClose}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              aria-label="Close"
+            >
+              ×
+            </button>
           </div>
-          <button className="sheet-x" onClick={onClose} aria-label="Close">
-            ×
-          </button>
         </div>
 
         {state === 'loading' && <SheetRowsSkeleton rows={3} label="Loading your coach's suggestions." />}
@@ -46,14 +73,34 @@ export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; 
 
         {state === 'ready' && (
           <div className="sheet-body">
-            {items.map((item) => (
-              <WeekChangeCard
-                key={item.index}
-                item={item}
-                checked={!!enabled[item.index]}
-                onToggle={() => toggle(item.index)}
-              />
-            ))}
+            {full ? (
+              <WeekView week={shown} />
+            ) : (
+              <>
+                {items.map((item) => (
+                  <WeekChangeCard
+                    key={item.index}
+                    item={item}
+                    checked={!!enabled[item.index]}
+                    onToggle={() => toggle(item.index)}
+                  />
+                ))}
+                {removed.map((title) => (
+                  <div className="wkc-card" key={`removed-${title}`}>
+                    <div className="wkc-card-head">
+                      <b>{title}</b>
+                    </div>
+                    <p className="wkc-reason">Comes off your plan.</p>
+                  </div>
+                ))}
+                <WeekStrip week={shown} onOpen={() => setDetent('full')} />
+              </>
+            )}
+          </div>
+        )}
+
+        {state === 'ready' && (
+          <div className="wkc-foot">
             {applyState === 'failed' && <div className="wkc-err">{applyError ?? 'That didn’t take — try again?'}</div>}
             <button
               type="button"
@@ -64,8 +111,8 @@ export function WeekChangesSheet({ onClose, onApplied }: { onClose: () => void; 
               {applyState === 'applying'
                 ? 'Applying…'
                 : enabledCount > 0
-                  ? `Apply ${enabledCount} change${enabledCount === 1 ? '' : 's'} and build next week`
-                  : 'Build next week with no changes'}
+                  ? `Apply ${enabledCount} change${enabledCount === 1 ? '' : 's'}`
+                  : 'Keep my plan as it is'}
             </button>
           </div>
         )}

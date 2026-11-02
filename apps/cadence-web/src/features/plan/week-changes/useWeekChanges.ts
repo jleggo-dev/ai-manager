@@ -4,6 +4,7 @@ import {
   setPendingChangeToggles,
   applyPendingChange,
   type PendingChangeDetailItem,
+  type WeekDay,
 } from '../../../lib/api.ts';
 
 export type WeekChangesLoadState = 'loading' | 'ready' | 'unavailable';
@@ -22,6 +23,8 @@ export function useWeekChanges() {
   const [state, setState] = useState<WeekChangesLoadState>('loading');
   const [planVersion, setPlanVersion] = useState<number | null>(null);
   const [items, setItems] = useState<PendingChangeDetailItem[]>([]);
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [week, setWeek] = useState<WeekDay[]>([]);
   const [enabled, setEnabled] = useState<Record<number, boolean>>({});
   const [applyState, setApplyState] = useState<WeekChangesApplyState>('idle');
   /** The server's own words for a refused apply, when it gave any. */
@@ -32,12 +35,16 @@ export function useWeekChanges() {
     void getPendingChangeDetail()
       .then((d) => {
         if (!alive) return;
-        if (!d.items.length) {
+        // An older API answers without `removed`; read it as nothing dropped.
+        const dropped = d.removed ?? [];
+        if (!d.items.length && !dropped.length) {
           setState('unavailable');
           return;
         }
         setPlanVersion(d.plan_version);
         setItems(d.items);
+        setRemoved(dropped);
+        setWeek(d.week ?? []);
         setEnabled(Object.fromEntries(d.items.map((i) => [i.index, i.enabled])));
         setState('ready');
       })
@@ -53,7 +60,8 @@ export function useWeekChanges() {
     setEnabled((prev) => ({ ...prev, [index]: !prev[index] }));
   }
 
-  const enabledCount = items.filter((i) => enabled[i.index]).length;
+  /** Drops count too: they apply with the rest and have no toggle to turn them off. */
+  const enabledCount = items.filter((i) => enabled[i.index]).length + removed.length;
 
   /**
    * Toggles first, THEN the same applyPendingChange() ChangeCard's own Apply runs — in that order,
@@ -85,5 +93,5 @@ export function useWeekChanges() {
     }
   }
 
-  return { state, planVersion, items, enabled, toggle, enabledCount, applyState, applyError, apply };
+  return { state, planVersion, items, removed, week, enabled, toggle, enabledCount, applyState, applyError, apply };
 }

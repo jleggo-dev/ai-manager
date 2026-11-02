@@ -6,7 +6,7 @@
  * plain one is genuinely UNCHANGED.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, act } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
   getPendingChange: vi.fn(),
@@ -40,6 +40,57 @@ const OFFER_DETAIL = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+const WEEK_DETAIL = {
+  ...PLAIN_DETAIL,
+  removed: [],
+  week: [
+    { date: '2026-11-05', entries: [{ title: 'Easy run', time: '6:30 pm', kind: 'was', index: 0 }] },
+    { date: '2026-11-06', entries: [{ title: 'Easy run', time: '6:30 pm', kind: 'new', index: 0 }] },
+  ],
+};
+
+describe('ChangeCard — the week, one tap away (owner, 2026-11-01)', () => {
+  it('shows the quiet week strip under the change, and opens the sheet straight at the week', async () => {
+    api.getPendingChange.mockResolvedValueOnce(CHANGE);
+    api.getPendingChangeDetail.mockResolvedValueOnce(WEEK_DETAIL);
+    const onShowChanges = vi.fn();
+    render(<ChangeCard onShowChanges={onShowChanges} />);
+
+    (await screen.findByRole('button', { name: 'Week view' })).click();
+    expect(onShowChanges).toHaveBeenCalledWith('full', expect.any(Function));
+    expect(api.applyPendingChange).not.toHaveBeenCalled();
+  });
+
+  it('when the sheet applies, the card shows it done instead of offering Apply again', async () => {
+    api.getPendingChange.mockResolvedValueOnce(CHANGE);
+    api.getPendingChangeDetail.mockResolvedValueOnce(WEEK_DETAIL);
+    const onApplied = vi.fn();
+    let whenApplied: (() => void) | undefined;
+    render(
+      <ChangeCard
+        onApplied={onApplied}
+        onShowChanges={(_view, cb) => {
+          whenApplied = cb;
+        }}
+      />,
+    );
+    (await screen.findByRole('button', { name: 'Week view' })).click();
+    act(() => whenApplied!());
+
+    expect(await screen.findByText("Done — that's your plan now")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply this' })).not.toBeInTheDocument();
+    expect(onApplied).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws no strip without a host to open the sheet', async () => {
+    api.getPendingChange.mockResolvedValueOnce(CHANGE);
+    api.getPendingChangeDetail.mockResolvedValueOnce(WEEK_DETAIL);
+    render(<ChangeCard />);
+    await screen.findByText("Here's what I'd change");
+    expect(screen.queryByRole('button', { name: 'Week view' })).not.toBeInTheDocument();
+  });
 });
 
 describe('ChangeCard — no per-item fields (an ordinary requested tweak)', () => {

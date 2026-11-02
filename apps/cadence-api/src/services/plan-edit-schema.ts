@@ -21,7 +21,7 @@ export const EDIT_SCHEMA = {
         type: 'string',
         enum: [...PLAN_EDIT_ACTIONS],
         description:
-          'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment; rework = change what the session CONTAINS, keeping its slot (swap an exercise, change the focus).',
+          'move = which days it happens on; retime = what time of day; resize = how many minutes; remove = drop it; add = a new commitment; rework = change what EVERY future session of it CONTAINS, keeping its slot (swap an exercise, change the focus). One day\'s session alone is rebuild with scope "session", not rework.',
       },
       activities: {
         type: 'array',

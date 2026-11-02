@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { PlanView } from '../plan/PlanView.tsx';
 import { OnboardingChat, type AutoSend } from '../onboarding/OnboardingChat.tsx';
 import { ProgressView } from '../progress/ProgressView.tsx';
@@ -102,7 +102,9 @@ export function MainTabs({
   const [weekReviewOpen, setWeekReviewOpen] = useState(false);
   /** ChangeCard's "Show me" tap — mounts the Changes sheet for a check-in-offered swap (check-in
    *  rebuild, step 7 client half). Same idiom as weekReviewOpen just above. */
-  const [weekChangesOpen, setWeekChangesOpen] = useState(false);
+  const [weekChangesOpen, setWeekChangesOpen] = useState<false | 'half' | 'full'>(false);
+  /** The chat card that opened the sheet, told when the sheet applies so it stops offering Apply. */
+  const weekChangesApplied = useRef<(() => void) | undefined>(undefined);
   /**
    * "Open ›" on the coach's seed receipt (design frame 1e). The list lives on the Progress tab and
    * there is exactly one of it, so this switches tabs and asks ProgressView to open its own
@@ -337,7 +339,10 @@ export function MainTabs({
               onSessionNoteUsed={() => setCoachNote(null)}
               onPlanChanged={() => setPlanReload((k) => k + 1)}
               onOpenWeekReview={() => setWeekReviewOpen(true)}
-              onShowChanges={() => setWeekChangesOpen(true)}
+              onShowChanges={(view = 'half', whenApplied) => {
+                weekChangesApplied.current = whenApplied;
+                setWeekChangesOpen(view);
+              }}
               onShowPlan={() => setPlanCardOpen(true)}
               onOpenRepertoire={() => {
                 setOpenRepertoire(true);
@@ -460,7 +465,14 @@ export function MainTabs({
           />
         )}
         {weekChangesOpen && (
-          <WeekChangesSheet onClose={() => setWeekChangesOpen(false)} onApplied={() => setPlanReload((k) => k + 1)} />
+          <WeekChangesSheet
+            initial={weekChangesOpen}
+            onClose={() => setWeekChangesOpen(false)}
+            onApplied={() => {
+              weekChangesApplied.current?.();
+              setPlanReload((k) => k + 1);
+            }}
+          />
         )}
         {logDidOpen && (
           <QuickAddSheet
