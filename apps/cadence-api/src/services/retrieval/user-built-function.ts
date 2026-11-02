@@ -14,8 +14,15 @@ import { listUserRoutines, type UserRoutineView } from '../user-routines.ts';
  * nothing is built, so the overwhelming default user pays nothing.
  */
 
-/** Step names from the built session, capped so one elaborate routine can't flood the pack. */
-function stepNames(session: OccurrenceSession, cap = 8): string {
+/**
+ * Step names from the built session, capped so one elaborate routine can't flood the pack — and
+ * the cut says where the rest are. Until 2026-11-01 it said only "+9 more", and the coach, asked
+ * about today's 17-step "Obstacle strength", read this line as the session: "I can only see the
+ * first eight steps … the rest are hidden from me." A cut with no way past it reads as a wall.
+ */
+export const ROUTINE_STEPS_SHOWN = 8;
+
+export function stepNames(session: OccurrenceSession, onPlan: boolean, cap = ROUTINE_STEPS_SHOWN): string {
   const names: string[] = [];
   for (const block of session.blocks ?? []) {
     for (const item of block.items ?? []) {
@@ -24,7 +31,12 @@ function stepNames(session: OccurrenceSession, cap = 8): string {
   }
   if (names.length === 0) return 'no steps';
   const shown = names.slice(0, cap).join(', ');
-  return names.length > cap ? `${shown}, +${names.length - cap} more` : shown;
+  if (names.length <= cap) return shown;
+  const rest = names.length - cap;
+  const where = onPlan
+    ? 'get_session reads every step of a dated one'
+    : 'not listed here; the user sees them in Settings › Your activities';
+  return `${shown}, +${rest} more (${where})`;
 }
 
 /** Real minutes only — sums the steps' own durations; '' when none carries one. */
@@ -47,7 +59,7 @@ function routineLine(r: UserRoutineView): string {
   const sched = r.schedule
     ? `on the plan ${r.schedule.days.join(', ')}${r.schedule.time_of_day ? ` (${r.schedule.time_of_day})` : ''}`
     : 'not scheduled';
-  return `- "${r.name}"${area} — steps: ${stepNames(r.session)}${totalMin(r.session)}; ${runs}; ${sched}.`;
+  return `- "${r.name}"${area} — steps: ${stepNames(r.session, r.schedule !== null)}${totalMin(r.session)}; ${runs}; ${sched}.`;
 }
 
 const MAX_LINES = 12;

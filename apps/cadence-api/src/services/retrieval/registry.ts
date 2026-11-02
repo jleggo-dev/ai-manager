@@ -50,6 +50,7 @@ import {
   titlesFor,
   type WrittenCalendar,
 } from './calendar-function.ts';
+import { GET_SESSION } from './session-function.ts';
 import { listPlanEdits, type PlanEdit } from '../../repos/plan-edits.ts';
 import { localDayIso } from '../plan-day.ts';
 import { isoRange, type RetrievalFunction } from './types.ts';
@@ -616,6 +617,10 @@ export const RETRIEVAL_FUNCTIONS: Record<string, RetrievalFunction> = {
   // The calendar as written, further than the 7 days get_active_plan carries (owner 2026-09-15).
   // Tail category `plan`.
   [GET_CALENDAR.name]: GET_CALENDAR,
+  // Every step of one dated session (2026-11-01: she could not see today's warm-up). Tail
+  // category `plan`; a drawer read, not the pack, by owner ruling — the pack would go stale the
+  // moment she rebuilt the session.
+  [GET_SESSION.name]: GET_SESSION,
   // The things she said she would come back to (HARNESS-V3 C3). Dossier: in the per-turn floor
   // only (not the pinned pack — P7b), never a tail tool — the writes are note_/close_follow_up.
   [GET_FOLLOW_UPS.name]: GET_FOLLOW_UPS,
