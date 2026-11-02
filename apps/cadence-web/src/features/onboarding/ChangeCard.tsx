@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { applyPendingChange, dismissPendingChange, getPendingChange, getPendingChangeDetail } from '../../lib/api.ts';
+import { applyPendingChange, dismissPendingChange, getPendingChange, getPendingChangeDetail, type WeekDay } from '../../lib/api.ts';
+import { WeekStrip } from '../plan/week-changes/WeekStrip.tsx';
 
 /**
  * "Here's the one change — apply it?"
@@ -32,7 +33,7 @@ export function ChangeCard({
   /** Opens the Changes sheet instead of applying inline — set only when this pending change
    *  carries per-item fields, the signature of a check-in offer. Same idiom as WeekReviewCard's
    *  `onOpen`: the host mounts the real surface, this card only asks for it. */
-  onShowChanges?: () => void;
+  onShowChanges?: (view?: 'half' | 'full', whenApplied?: () => void) => void;
   /** Opens the full plan sheet — offered ONLY once the change is applied. Before the tap the
    *  sheet shows the committed week WITHOUT this change (the proposal lives outside the plan
    *  until Apply), and a door that opens on the untruth would read as the change being rejected.
@@ -42,6 +43,7 @@ export function ChangeCard({
 }) {
   const [lines, setLines] = useState<string[] | null>(null);
   const [hasOffers, setHasOffers] = useState(false);
+  const [week, setWeek] = useState<WeekDay[]>([]);
   const [state, setState] = useState<'idle' | 'applying' | 'applied' | 'gone' | 'failed'>('idle');
   /** The server's own words for a refused apply (an expired card, a failed check), when it gave any. */
   const [failure, setFailure] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function ChangeCard({
         if (!alive) return;
         setLines(c?.changes ?? null);
         setHasOffers(detail.items.some((i) => !!i.change_reason || !i.enabled));
+        setWeek(detail.week ?? []);
       })
       .catch(() => {
         /* the prose still says what she proposed; a missing card is not a broken turn */
@@ -99,7 +102,7 @@ export function ChangeCard({
             <li key={i}>{l}</li>
           ))}
         </ul>
-        <button type="button" className="cfm-build" onClick={onShowChanges}>
+        <button type="button" className="cfm-build" onClick={() => onShowChanges()}>
           Show me
         </button>
         <button type="button" className="cfm-more" onClick={() => void dismiss()}>
@@ -117,6 +120,17 @@ export function ChangeCard({
           <li key={i}>{l}</li>
         ))}
       </ul>
+      {/* Before the tap the week shown is the PROPOSED one (the change applied), so this door
+          tells the truth where the plan sheet would not — see onShowPlan above. */}
+      {state !== 'applied' && onShowChanges && <WeekStrip
+          week={week}
+          onOpen={() =>
+            onShowChanges('full', () => {
+              setState('applied');
+              onApplied?.();
+            })
+          }
+        />}
       {state === 'applied' ? (
         onShowPlan && (
           <button type="button" className="cfm-more" onClick={onShowPlan}>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { WeekChangesSheet } from './WeekChangesSheet.tsx';
 
 const api = vi.hoisted(() => ({
@@ -27,9 +27,21 @@ const ITEMS = [
   },
 ];
 
+/** Sunday 2026-11-01 onward: the run moves Thu → Fri (change 0), the optional add lands Saturday
+ *  (change 1), piano stays put. */
+const WEEK = [
+  { date: '2026-11-01', entries: [] },
+  { date: '2026-11-02', entries: [{ title: 'Piano practice', time: '8 pm', minutes: 30, kind: 'same' }] },
+  { date: '2026-11-03', entries: [] },
+  { date: '2026-11-04', entries: [] },
+  { date: '2026-11-05', entries: [{ title: 'Easy run', time: '6:30 pm', kind: 'was', index: 0 }] },
+  { date: '2026-11-06', entries: [{ title: 'Easy run', time: '6:15 am', kind: 'new', index: 0 }] },
+  { date: '2026-11-07', entries: [{ title: 'Second strength day', time: '9 am', kind: 'new', index: 1 }] },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
-  api.getPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: ITEMS });
+  api.getPendingChangeDetail.mockResolvedValue({ plan_version: 4, items: ITEMS, removed: [], week: WEEK });
   api.setPendingChangeToggles.mockResolvedValue(true);
   api.applyPendingChange.mockResolvedValue({ ok: true });
 });
@@ -37,11 +49,14 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('WeekChangesSheet', () => {
-  it('renders the mockup copy verbatim: header, eyebrow, NOW/NEXT columns, reason, OPTIONAL tag', async () => {
+  it('renders the change: header, eyebrow, NOW/AFTER columns, reason, OPTIONAL tag', async () => {
     render(<WeekChangesSheet onClose={vi.fn()} />);
 
-    expect(await screen.findByText('Changes for next week')).toBeInTheDocument();
-    expect(screen.getByText('WEEK 5 · SUGGESTED BY YOUR COACH')).toBeInTheDocument();
+    // "Changes for next week" / "WEEK 5" went 2026-11-01: a change applies from today, and the
+    // number was the plan's version, not a week anyone counts.
+    expect(await screen.findByText('What changes')).toBeInTheDocument();
+    expect(screen.getByText('SUGGESTED BY YOUR COACH')).toBeInTheDocument();
+    expect(screen.getAllByText('AFTER')).toHaveLength(2);
     expect(screen.getByText('Easy run')).toBeInTheDocument();
     expect(screen.getByText('Thu · 6:30 pm')).toBeInTheDocument();
     expect(screen.getByText('Fri · 6:15 am')).toBeInTheDocument();
@@ -60,7 +75,7 @@ describe('WeekChangesSheet', () => {
     expect(boxes[0]!.checked).toBe(true);
     expect(boxes[1]!.checked).toBe(false);
     // One item defaults on — the button counts it.
-    expect(screen.getByRole('button', { name: /Apply 1 change and build next week/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply 1 change/ })).toBeInTheDocument();
   });
 
   it('a toggle flip updates the button label, both directions and pluralization', async () => {
@@ -69,13 +84,13 @@ describe('WeekChangesSheet', () => {
     const boxes = screen.getAllByRole('checkbox');
 
     boxes[1]!.click(); // turn the optional add ON — now 2
-    expect(await screen.findByRole('button', { name: /Apply 2 changes and build next week/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Apply 2 changes/ })).toBeInTheDocument();
 
     boxes[0]!.click(); // turn the run OFF — now 1 (the add)
-    expect(await screen.findByRole('button', { name: /Apply 1 change and build next week/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Apply 1 change/ })).toBeInTheDocument();
 
     boxes[1]!.click(); // turn the add back off too — now 0
-    expect(await screen.findByRole('button', { name: 'Build next week with no changes' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Keep my plan as it is' })).toBeInTheDocument();
   });
 
   it('tapping Apply posts the toggles, then locks, in that order, then closes and reports applied', async () => {
@@ -84,7 +99,7 @@ describe('WeekChangesSheet', () => {
     render(<WeekChangesSheet onClose={onClose} onApplied={onApplied} />);
     await screen.findByText('Easy run');
 
-    screen.getByRole('button', { name: /Apply 1 change and build next week/ }).click();
+    screen.getByRole('button', { name: /Apply 1 change/ }).click();
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(api.setPendingChangeToggles).toHaveBeenCalledWith([
@@ -104,12 +119,12 @@ describe('WeekChangesSheet', () => {
     render(<WeekChangesSheet onClose={onClose} />);
     await screen.findByText('Easy run');
 
-    screen.getByRole('button', { name: /Apply 1 change and build next week/ }).click();
+    screen.getByRole('button', { name: /Apply 1 change/ }).click();
 
     expect(await screen.findByText(/didn.t take/)).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     // The toggle state survives the failure — still showing the same button label.
-    expect(screen.getByRole('button', { name: /Apply 1 change and build next week/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply 1 change/ })).toBeInTheDocument();
   });
 
   it("a refused apply shows the server's own words, not the generic line", async () => {
@@ -120,7 +135,7 @@ describe('WeekChangesSheet', () => {
     render(<WeekChangesSheet onClose={vi.fn()} />);
     await screen.findByText('Easy run');
 
-    screen.getByRole('button', { name: /Apply 1 change and build next week/ }).click();
+    screen.getByRole('button', { name: /Apply 1 change/ }).click();
 
     expect(await screen.findByText(/change card expired/)).toBeInTheDocument();
     expect(screen.queryByText(/didn.t take/)).not.toBeInTheDocument();
@@ -150,7 +165,7 @@ describe('WeekChangesSheet', () => {
     render(<WeekChangesSheet onClose={vi.fn()} />);
 
     expect(await screen.findByText(/easy step-ups/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Apply 1 change and build next week/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply 1 change/ })).toBeInTheDocument();
   });
 
   it('lists a dropped commitment without a toggle, and counts it in the button', async () => {
@@ -160,7 +175,7 @@ describe('WeekChangesSheet', () => {
     expect(await screen.findByText('Sauna')).toBeInTheDocument();
     expect(screen.getByText('Comes off your plan.')).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /Apply 2 changes and build next week/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply 2 changes/ })).toBeInTheDocument();
   });
 
   it('a change that only drops something still opens, rather than saying there is nothing', async () => {
@@ -171,10 +186,68 @@ describe('WeekChangesSheet', () => {
     expect(screen.queryByText(/Nothing to change right now/)).not.toBeInTheDocument();
   });
 
+  it('opens on the change alone; the week strip opens the week, grouped by day', async () => {
+    render(<WeekChangesSheet onClose={vi.fn()} />);
+    await screen.findByText('What changes');
+    expect(screen.queryByText('Tomorrow')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Week view' }));
+
+    expect(await screen.findByText('Your week')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Today' })).toHaveTextContent('Nothing planned');
+    expect(screen.getByRole('region', { name: 'Thu · Nov 5' })).toHaveTextContent('Easy run');
+    expect(screen.getByRole('region', { name: 'Fri · Nov 6' })).toHaveTextContent('New');
+    // Apply stays in reach at full height.
+    expect(screen.getByRole('button', { name: /Apply 1 change/ })).toBeInTheDocument();
+  });
+
+  it('the week follows the toggles — an add left off is not in it', async () => {
+    render(<WeekChangesSheet onClose={vi.fn()} initial="full" />);
+    expect(await screen.findByText('Your week')).toBeInTheDocument();
+    expect(screen.queryByText('Second strength day')).not.toBeInTheDocument();
+  });
+
+  it('a tap on the handle moves between the change and the week', async () => {
+    const { container } = render(<WeekChangesSheet onClose={vi.fn()} />);
+    await screen.findByText('What changes');
+    const handle = container.querySelector('.wkc-drag')!;
+
+    fireEvent.pointerDown(handle, { clientY: 300 });
+    fireEvent.pointerUp(handle, { clientY: 300 });
+    expect(await screen.findByText('Your week')).toBeInTheDocument();
+
+    fireEvent.pointerDown(handle, { clientY: 300 });
+    fireEvent.pointerUp(handle, { clientY: 300 });
+    expect(await screen.findByText('What changes')).toBeInTheDocument();
+  });
+
+  it('dragging the handle up opens the week; down from the change closes the sheet', async () => {
+    const onClose = vi.fn();
+    const { container } = render(<WeekChangesSheet onClose={onClose} />);
+    await screen.findByText('What changes');
+    const handle = container.querySelector('.wkc-drag')!;
+
+    fireEvent.pointerDown(handle, { clientY: 400 });
+    fireEvent.pointerMove(handle, { clientY: 320 });
+    fireEvent.pointerUp(handle, { clientY: 320 });
+    expect(await screen.findByText('Your week')).toBeInTheDocument();
+
+    fireEvent.pointerDown(handle, { clientY: 200 });
+    fireEvent.pointerMove(handle, { clientY: 300 });
+    fireEvent.pointerUp(handle, { clientY: 300 });
+    expect(await screen.findByText('What changes')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(handle, { clientY: 200 });
+    fireEvent.pointerMove(handle, { clientY: 300 });
+    fireEvent.pointerUp(handle, { clientY: 300 });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('the close control reports back to the caller', async () => {
     const onClose = vi.fn();
     render(<WeekChangesSheet onClose={onClose} />);
-    await screen.findByText('Changes for next week');
+    await screen.findByText('What changes');
     screen.getByRole('button', { name: 'Close' }).click();
     expect(onClose).toHaveBeenCalledTimes(1);
   });

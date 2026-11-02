@@ -141,7 +141,7 @@ export function OnboardingChat({
   onOpenWeekReview?: () => void;
   /** ChangeCard's "Show me" tap, offered only when the pending change carries per-item fields
    *  (a check-in offer) — the host mounts the Changes sheet, same idiom as onOpenWeekReview. */
-  onShowChanges?: () => void;
+  onShowChanges?: (view?: 'half' | 'full', whenApplied?: () => void) => void;
   /** ChangeCard's "See your whole week" tap — the host opens the full plan sheet. The card shows
    *  only the delta; this is the door to everything it lands in. */
   onShowPlan?: () => void;

@@ -95,13 +95,6 @@ export {
   dismissProposal,
   lockPlan,
   getBuildRun,
-  getPendingChange,
-  dismissPendingChange,
-  getPendingChangeDetail,
-  setPendingChangeToggles,
-  applyPendingChange,
-  type PendingChangeDetailItem,
-  type PendingChangeDetail,
   getPendingWeekReview,
   dismissPendingWeekReview,
   getWeekReviewFacts,
@@ -122,7 +115,6 @@ export {
   type PlanViewData,
   type ActiveEpisode,
   type ReplanPreview,
-  type PendingChange,
   type WeekBuildResult,
   type WeekReviewMeal,
   type WeekReviewMealSlot,
@@ -133,6 +125,18 @@ export {
   type WeekReviewWeighIn,
   type WeekReviewFacts,
 } from './api/plan.ts';
+export {
+  getPendingChange,
+  dismissPendingChange,
+  getPendingChangeDetail,
+  setPendingChangeToggles,
+  applyPendingChange,
+  type PendingChangeDetailItem,
+  type PendingChangeDetail,
+  type PendingChange,
+  type WeekDay,
+  type WeekEntry,
+} from './api/plan-changes.ts';
 
 export {
   getProgressHistory,

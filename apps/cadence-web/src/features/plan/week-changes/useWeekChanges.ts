@@ -4,6 +4,7 @@ import {
   setPendingChangeToggles,
   applyPendingChange,
   type PendingChangeDetailItem,
+  type WeekDay,
 } from '../../../lib/api.ts';
 
 export type WeekChangesLoadState = 'loading' | 'ready' | 'unavailable';
@@ -23,6 +24,7 @@ export function useWeekChanges() {
   const [planVersion, setPlanVersion] = useState<number | null>(null);
   const [items, setItems] = useState<PendingChangeDetailItem[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
+  const [week, setWeek] = useState<WeekDay[]>([]);
   const [enabled, setEnabled] = useState<Record<number, boolean>>({});
   const [applyState, setApplyState] = useState<WeekChangesApplyState>('idle');
   /** The server's own words for a refused apply, when it gave any. */
@@ -42,6 +44,7 @@ export function useWeekChanges() {
         setPlanVersion(d.plan_version);
         setItems(d.items);
         setRemoved(dropped);
+        setWeek(d.week ?? []);
         setEnabled(Object.fromEntries(d.items.map((i) => [i.index, i.enabled])));
         setState('ready');
       })
@@ -90,5 +93,5 @@ export function useWeekChanges() {
     }
   }
 
-  return { state, planVersion, items, removed, enabled, toggle, enabledCount, applyState, applyError, apply };
+  return { state, planVersion, items, removed, week, enabled, toggle, enabledCount, applyState, applyError, apply };
 }

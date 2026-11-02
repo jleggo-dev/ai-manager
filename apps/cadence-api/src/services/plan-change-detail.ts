@@ -2,9 +2,11 @@ import { getUser } from '../repos/users.ts';
 import { getActivePlan } from '../repos/plans.ts';
 import { listActivities } from '../repos/activities.ts';
 import { describeRecurrence } from './scheduling.ts';
-import { ANYTIME } from './plan-edit.ts';
+import { clockLabel12 } from './plan-change-detail-labels.ts';
 import { inheritCommitmentIds } from './plan-synthesis.ts';
 import { sessionFingerprint } from './plan-commit-diff.ts';
+import { buildProposedWeek, type ProposedRow, type WeekDay } from './plan-change-week.ts';
+import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 import type { Activity, PendingPlanActivity } from '@cadence/shared';
 
 /**
@@ -45,19 +47,9 @@ export interface PendingChangeDetail {
   /** Titles of the commitments the proposal drops. Not toggleable: the toggles address rows of the
    *  stored proposal, and a removed commitment has no row there. */
   removed: string[];
-}
-
-/** "6:30 pm", "7 am" — the user's own 12-hour clock, minutes dropped on the hour. Anything that
- *  isn't a bare HH:MM passes through unchanged, except the literal `anytime` plan-edit.ts stores
- *  for "no particular time" — spelled out the same way its own card lines already say it. */
-function clockLabel12(raw: string): string {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
-  if (!m) return raw === ANYTIME ? 'any time' : raw;
-  const minute = Number(m[2]);
-  let hour = Number(m[1]) % 12;
-  if (hour === 0) hour = 12;
-  const suffix = Number(m[1]) >= 12 ? 'pm' : 'am';
-  return minute === 0 ? `${hour} ${suffix}` : `${hour}:${String(minute).padStart(2, '0')} ${suffix}`;
+  /** The next seven days with the change applied, grouped by day — the sheet's full-height view.
+   *  See plan-change-week.ts. */
+  week: WeekDay[];
 }
 
 /** "Thu · 6:30 pm · 40 min" — the days it happens, when, and for how long, one line for a NOW/NEXT
@@ -100,9 +92,10 @@ function unchanged(a: PendingPlanActivity, now: Activity | undefined): boolean {
  * after ChangeCard (or its own "Show me" branch) has already confirmed something is there, so this
  * is a detail fetch, never the existence check.
  */
-export async function buildPendingChangeDetail(userId: string): Promise<PendingChangeDetail> {
-  const pending = (await getUser(userId))?.pending_plan;
-  if (!pending?.activities?.length) return { plan_version: null, items: [], removed: [] };
+export async function buildPendingChangeDetail(userId: string, now = new Date()): Promise<PendingChangeDetail> {
+  const user = await getUser(userId);
+  const pending = user?.pending_plan;
+  if (!pending?.activities?.length) return { plan_version: null, items: [], removed: [], week: [] };
 
   const plan = await getActivePlan(userId);
   const current = plan ? await listActivities(plan.plan_id) : [];
@@ -115,23 +108,39 @@ export async function buildPendingChangeDetail(userId: string): Promise<PendingC
   inheritCommitmentIds(proposed, current);
 
   const items: PendingChangeDetailItem[] = [];
+  const rows: ProposedRow[] = [];
   proposed.forEach((a, index) => {
-    const now = a.commitment_id ? byCommitmentId.get(a.commitment_id) : undefined;
-    if (unchanged(a, now)) return;
+    const before = a.commitment_id ? byCommitmentId.get(a.commitment_id) : undefined;
+    const same = unchanged(a, before);
+    rows.push({ row: a, index, changed: !same });
+    if (same) return;
     const how = a.how_to?.trim();
     items.push({
       index,
       title: a.title,
       ...(a.change_reason ? { change_reason: a.change_reason } : {}),
       enabled: a.enabled !== false,
-      now: now ? scheduleLine(now.schedule.recurrence, now.schedule.time_of_day, now.schedule.duration_min) : null,
+      now: before
+        ? scheduleLine(before.schedule.recurrence, before.schedule.time_of_day, before.schedule.duration_min)
+        : null,
       next: scheduleLine(a.recurrence, a.time_of_day, a.duration_min),
-      ...(how && how !== (now?.how_to ?? '').trim() ? { how_to: how } : {}),
+      ...(how && how !== (before?.how_to ?? '').trim() ? { how_to: how } : {}),
     });
   });
 
   const kept = new Set(proposed.map((a) => a.commitment_id).filter(Boolean));
   const removed = current.filter((a) => !kept.has(a.commitment_id)).map((a) => a.title);
 
-  return { plan_version: plan?.version ?? null, items, removed };
+  const week = buildProposedWeek({
+    proposed: rows,
+    current,
+    from: localDayIso(now, user?.timezone),
+    to: localDayIsoPlus(now, 6, user?.timezone),
+    // The same anchors a commit uses (plan-synthesis.ts): the active plan's generated_at date, and
+    // the date the new version would be generated on.
+    currentAnchor: plan ? new Date(plan.generated_at).toISOString().slice(0, 10) : now.toISOString().slice(0, 10),
+    proposedAnchor: now.toISOString().slice(0, 10),
+  });
+
+  return { plan_version: plan?.version ?? null, items, removed, week };
 }

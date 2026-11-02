@@ -6,7 +6,8 @@
  * `getPendingReplan`'s `ok` flag documents.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { applyPendingChange, getRoutineSession } from './plan.ts';
+import { getRoutineSession } from './plan.ts';
+import { applyPendingChange } from './plan-changes.ts';
 
 describe('getRoutineSession', () => {
   let fetchMock: ReturnType<typeof vi.fn>;

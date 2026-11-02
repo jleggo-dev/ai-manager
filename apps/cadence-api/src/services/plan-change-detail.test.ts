@@ -43,7 +43,7 @@ function pendingPlan(overrides: Partial<PendingPlan> = {}): PendingPlan {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 4 });
+  getActivePlan.mockResolvedValue({ plan_id: 'p1', version: 4, generated_at: '2026-10-26T12:00:00.000Z' });
   listActivities.mockResolvedValue([CURRENT_RUN]);
 });
 
@@ -51,14 +51,14 @@ describe('buildPendingChangeDetail', () => {
   it('returns an empty list rather than erroring when nothing is pending', async () => {
     getUser.mockResolvedValue({ pending_plan: null });
     const r = await buildPendingChangeDetail('u1');
-    expect(r).toEqual({ plan_version: null, items: [], removed: [] });
+    expect(r).toEqual({ plan_version: null, items: [], removed: [], week: [] });
     expect(getActivePlan).not.toHaveBeenCalled();
   });
 
   it('also collapses to empty when the user record itself is gone', async () => {
     getUser.mockResolvedValue(null);
     const r = await buildPendingChangeDetail('u1');
-    expect(r).toEqual({ plan_version: null, items: [], removed: [] });
+    expect(r).toEqual({ plan_version: null, items: [], removed: [], week: [] });
   });
 
   it('composes NOW from the active plan and NEXT from the proposal, for an edited commitment', async () => {
@@ -291,6 +291,17 @@ describe('buildPendingChangeDetail — only what the proposal changes', () => {
     const r = await buildPendingChangeDetail('u1');
     expect(r.items).toEqual([]);
     expect(r.removed).toEqual(['Obstacle strength']);
+  });
+
+  it('carries the week the change adds up to, seven days from today', async () => {
+    getUser.mockResolvedValue({ timezone: 'UTC', pending_plan: pendingPlan({ activities: [runAsProposed({ time_of_day: '06:15' })] }) });
+    const r = await buildPendingChangeDetail('u1', new Date('2026-11-01T15:00:00Z')); // a Sunday
+    expect(r.week.map((d) => d.date)).toEqual([
+      '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07',
+    ]);
+    expect(r.week[4]!.entries).toEqual([
+      { title: 'Easy run', time: '6:15 am', minutes: 40, kind: 'changed', index: 0, was_time: '6:30 pm' },
+    ]);
   });
 
   it("matches a rebuild's rows by name, as the commit does — a kept row is neither new nor removed", async () => {

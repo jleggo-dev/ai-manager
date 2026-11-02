@@ -1,7 +1,7 @@
 import type { PendingChangeDetailItem } from '../../../lib/api.ts';
 
 /**
- * One swap candidate — title, NOW → NEXT WEEK, the coach's reason (if she gave one), and the
+ * One swap candidate — title, NOW → AFTER, the coach's reason (if she gave one), and the
  * toggle that decides whether it actually applies. `item.enabled` is the row's STORED default (an
  * "OPTIONAL" tag marks a take-it-or-leave-it offer regardless of how the user has since flipped
  * it); `checked` is the LIVE, possibly-flipped state the sheet is tracking.
@@ -34,7 +34,7 @@ export function WeekChangeCard({
           →
         </span>
         <div className="wkc-col">
-          <span className="wkc-col-label">NEXT WEEK</span>
+          <span className="wkc-col-label">AFTER</span>
           <span>{item.next}</span>
         </div>
       </div>

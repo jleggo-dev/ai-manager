@@ -35,6 +35,8 @@ vi.mock('../services/plan-change-detail.ts', () => ({
       now: null,
       next: a.cadence,
     })),
+    removed: [],
+    week: [],
   }),
 }));
 vi.mock('../services/lock.ts', () => ({
@@ -56,7 +58,7 @@ vi.mock('../auth/middleware.ts', () => ({
   },
 }));
 
-/** The slice of the web client's lib/api/plan.ts under test. */
+/** The slice of the web client's lib/api/plan-changes.ts under test. */
 interface WebPlanApi {
   applyPendingChange(): Promise<{ ok: true } | { ok: false; message: string | null }>;
   setPendingChangeToggles(toggles: { index: number; enabled: boolean }[]): Promise<boolean>;
@@ -68,7 +70,7 @@ let served: ClientAgainstRoutes<WebPlanApi>;
 let web: WebPlanApi;
 
 beforeAll(async () => {
-  served = await serveRoutesToWebClient<WebPlanApi>('plan.ts', (app) => app.use('/plan', planChangesRoutes));
+  served = await serveRoutesToWebClient<WebPlanApi>('plan-changes.ts', (app) => app.use('/plan', planChangesRoutes));
   web = served.web;
 });
 afterAll(() => served.close());
