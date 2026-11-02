@@ -759,6 +759,26 @@ const READS: EvalCase[] = [
       'Owner question 2026-09-15 ("Shouldn\'t Cadence be able to see the calendar?") — she read the rules and ' +
       'called the days present when they were not; the calendar as written is now a read of its own.',
   },
+  {
+    id: 'B14',
+    kind: 'read',
+    turn: "About today's Obstacle strength: the bike isn't set up, i need a different warm-up",
+    expect: ['get_session'],
+    // Reading the session and then rebuilding it from their words is the whole answer, so the
+    // rebuild that follows is allowed. Changing the commitment for good is not what they asked.
+    allow: [...DOSSIER_READS, 'rebuild'],
+    forbid: ['propose_plan_change'],
+    args: {
+      tool: 'get_session',
+      check: (a) =>
+        /obstacle/i.test(String(a.session ?? ''))
+          ? null
+          : `session was ${JSON.stringify(a.session)}, wanted "Obstacle strength"`,
+    },
+    from:
+      'The 2026-11-01 incident: the Start sheet\'s "Custom — let\'s talk" door, verbatim shape. She answered "I can ' +
+      'only see the first eight steps of that session" — no read carried a dated session\'s steps until get_session.',
+  },
 ];
 
 /* ══ C · SILENCE — a set of only positive cases measures recall and ignores false triggering ══ */
@@ -1018,6 +1038,17 @@ const SILENCE: EvalCase[] = [
     // follow-up she invents is a nag they never asked for.
     forbid: ['note_follow_up', 'close_follow_up', 'update_goal'],
     from: "HARNESS-V3 C3 (2026-10-31): the must-not-fire half — the design doc's own near-miss.",
+  },
+  {
+    id: 'C23',
+    kind: 'silence',
+    turn: "what's on today?",
+    expect: [],
+    allow: [...DOSSIER_READS],
+    // Today's sessions are in the plan read she already holds, by title and time. A glance at the
+    // day is not a question about what is inside one of them.
+    forbid: ['get_session', 'rebuild'],
+    from: 'get_session ships (2026-11-01 incident) — the restraint half of B14, TOOL-HARNESS.md step 7.',
   },
 ];
 

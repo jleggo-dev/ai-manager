@@ -67,14 +67,18 @@ export async function setOccurrenceSession(
  * unscoped match ("today's workout", no date given) lands on the next one on the calendar.
  * `kind = 'user'` for the same reason as everywhere else: a system tracking row (weigh-in, food
  * log) has no session inside it to rebuild.
+ *
+ * The window is the CALLER's, in the user's own days. It used to floor at the UTC date, so every
+ * evening in the Americas today's session had already left the list: on 2026-11-01 at 00:22 UTC
+ * (Nov 2) the owner's Nov 1 "Obstacle strength" could not be rebuilt, though `reviseSession`
+ * itself has always judged "past" by their own today.
  */
 export async function listUpcomingForRevision(
   userId: string,
-  days = 28,
+  from: string,
+  to: string,
   limit = 40,
 ): Promise<Array<{ occurrence_id: string; date: string; title: string }>> {
-  const from = new Date().toISOString().slice(0, 10);
-  const to = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
   return sql<Array<{ occurrence_id: string; date: string; title: string }>>`
     select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title
     from cadence.occurrences o
@@ -102,4 +106,44 @@ export async function getLatestSessionByTitle(
     order by o.date desc
     limit 1`;
   return row ?? null;
+}
+
+/** One dated session as the coach's `get_session` matches it — the row and its status, no contents. */
+export interface DatedSessionRow {
+  occurrence_id: string;
+  date: string;
+  title: string;
+  status: string;
+}
+
+/**
+ * Dated sessions in a window — what `get_session` matches a title against. Unlike
+ * `listUpcomingForRevision` the window is the caller's, so it floors at the user's own today
+ * rather than UTC's, and any status reads: a session already done today is still the one they are
+ * asking about. Titles only; the one session asked for is read by `getOccurrenceSessionById`.
+ */
+export async function listDatedSessions(
+  userId: string,
+  from: string,
+  to: string,
+  limit = 300,
+): Promise<DatedSessionRow[]> {
+  return sql<DatedSessionRow[]>`
+    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title, o.status
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date >= ${from} and o.date <= ${to} and a.kind = 'user'
+    order by o.date asc
+    limit ${limit}`;
+}
+
+/** The session written on one of this user's rows — null when none is written yet (or no such row). */
+export async function getOccurrenceSessionById(
+  userId: string,
+  occurrenceId: string,
+): Promise<OccurrenceSession | null> {
+  const [row] = await sql<Array<{ session: OccurrenceSession | null }>>`
+    select o.session from cadence.occurrences o
+    where o.user_id = ${userId} and o.occurrence_id = ${occurrenceId}`;
+  return row?.session ?? null;
 }

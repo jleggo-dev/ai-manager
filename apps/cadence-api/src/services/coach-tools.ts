@@ -66,6 +66,17 @@ const TOOL_PARAMS: Record<string, { properties: Record<string, unknown>; require
       },
     },
   },
+  // One dated session, every step (retrieval/session-function.ts, 2026-11-01).
+  get_session: {
+    properties: {
+      session: { type: 'string', description: 'Which session, by the title the plan lists.' },
+      date: {
+        type: 'string',
+        description: 'The day, as YYYY-MM-DD. Omit to take the soonest one from today.',
+      },
+    },
+    required: ['session'],
+  },
   get_practice_totals: {
     properties: { days: { type: 'integer', description: 'How many days back to add up (default 30, up to 365).' } },
   },

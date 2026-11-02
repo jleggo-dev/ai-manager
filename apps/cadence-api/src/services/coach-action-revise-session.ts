@@ -1,4 +1,6 @@
 import { listUpcomingForRevision } from '../repos/occurrence-sessions.ts';
+import { getUser } from '../repos/users.ts';
+import { localDayIso, localDayIsoPlus } from './plan-day.ts';
 import { reviseSession } from './session-generate.ts';
 import { matchActivity } from './plan-edit.ts';
 import { defineAction, type CoachActionTool } from './coach-action-types.ts';
@@ -17,6 +19,9 @@ import { toolChangeText, toolNothingChangedText } from './tool-response.ts';
  * never a coin flip. The list it matches against floors at today (you cannot rebuild the past)
  * the way logging's list is ceilinged at today (you cannot log the future).
  */
+/** How far ahead a rebuild may aim, in the user's own days. */
+export const REVISION_LOOKAHEAD_DAYS = 28;
+
 export const REVISE_SESSION: CoachActionTool = defineAction({
   name: 'revise_session',
   mutates: 'immediate',
@@ -44,7 +49,14 @@ export const REVISE_SESSION: CoachActionTool = defineAction({
     if (!steer) return toolNothingChangedText('no change was described.', ['Ask what they want different about it.']);
     const date = String(params.date ?? '').trim();
 
-    const rows = await listUpcomingForRevision(userId);
+    // Their own today, the same one `reviseSession` judges "past" by — never UTC's (see the repo).
+    const timezone = (await getUser(userId).catch(() => null))?.timezone;
+    const now = new Date();
+    const rows = await listUpcomingForRevision(
+      userId,
+      localDayIso(now, timezone),
+      localDayIsoPlus(now, REVISION_LOOKAHEAD_DAYS, timezone),
+    );
     const scoped = date ? rows.filter((r) => r.date === date) : rows;
     const found = matchActivity(scoped, query);
     if (!found) {

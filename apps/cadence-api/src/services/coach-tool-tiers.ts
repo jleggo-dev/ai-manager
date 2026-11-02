@@ -301,7 +301,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   get_practice_totals: 'totals of what they count — words, minutes sat, pages read',
   get_repertoire: 'pieces, katas, poems they know or are learning, with standing',
   offer_repertoire_review: 'ACTION: show a music book, kata or reading list as a checklist',
-  get_user_built_activities: 'activities they built themselves — steps, runs, plan placement',
+  get_user_built_activities: 'activities they built — steps, runs, plan placement',
   get_journal: 'recent journal entries, verbatim; private ones excluded',
   get_goal_progress: 'per-goal progress numbers from what they logged',
   propose_progress_layout: 'redesign what their Progress page watches; they confirm',
@@ -324,6 +324,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   // "excluded", "what a household measure … weighs in grams" → "grams in a household measure")
   // per the DRAWER_LABEL_MAX rule — trim first.
   get_calendar: 'the days as written — what sits on each date, done or not',
+  get_session: 'every step of one dated session',
   edit_calendar: 'ACTION: move, copy or delete one dated session this week',
   // 88 of the 90 the hook rule allows. The brief's wording ("...on their screen AT ONCE; THEIR
   // answers...") measured 102 with the ACTION mark; "at once" and one "their" went, and the two
@@ -489,7 +490,10 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // pause: the week's edges) and `rebuild` (one session, or the whole week, from their words)
     // — coach-action-plan-facade.ts. The ladder still reads whole from here: one session or the
     // week rebuilt, the week's edges moved, one dated session moved, the days as written.
-    members: ['shape_week', 'rebuild', 'edit_calendar', 'get_calendar', 'get_user_built_activities'],
+    // `get_session` (2026-11-01): every step of one dated session — what "what one session holds"
+    // in this label always promised and no read delivered, until she told the owner she could see
+    // eight steps of today's and not its warm-up.
+    members: ['shape_week', 'rebuild', 'edit_calendar', 'get_calendar', 'get_session', 'get_user_built_activities'],
   },
   {
     key: 'progress',
