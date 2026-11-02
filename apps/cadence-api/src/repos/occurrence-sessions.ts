@@ -103,3 +103,43 @@ export async function getLatestSessionByTitle(
     limit 1`;
   return row ?? null;
 }
+
+/** One dated session as the coach's `get_session` matches it — the row and its status, no contents. */
+export interface DatedSessionRow {
+  occurrence_id: string;
+  date: string;
+  title: string;
+  status: string;
+}
+
+/**
+ * Dated sessions in a window — what `get_session` matches a title against. Unlike
+ * `listUpcomingForRevision` the window is the caller's, so it floors at the user's own today
+ * rather than UTC's, and any status reads: a session already done today is still the one they are
+ * asking about. Titles only; the one session asked for is read by `getOccurrenceSessionById`.
+ */
+export async function listDatedSessions(
+  userId: string,
+  from: string,
+  to: string,
+  limit = 300,
+): Promise<DatedSessionRow[]> {
+  return sql<DatedSessionRow[]>`
+    select o.occurrence_id, to_char(o.date, 'YYYY-MM-DD') as date, a.title, o.status
+    from cadence.occurrences o
+    join cadence.activities a on a.activity_id = o.activity_id
+    where o.user_id = ${userId} and o.date >= ${from} and o.date <= ${to} and a.kind = 'user'
+    order by o.date asc
+    limit ${limit}`;
+}
+
+/** The session written on one of this user's rows — null when none is written yet (or no such row). */
+export async function getOccurrenceSessionById(
+  userId: string,
+  occurrenceId: string,
+): Promise<OccurrenceSession | null> {
+  const [row] = await sql<Array<{ session: OccurrenceSession | null }>>`
+    select o.session from cadence.occurrences o
+    where o.user_id = ${userId} and o.occurrence_id = ${occurrenceId}`;
+  return row?.session ?? null;
+}
