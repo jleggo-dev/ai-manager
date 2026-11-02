@@ -207,6 +207,20 @@ describe('a row with an open question (the question is the answer it waits for)'
     expect(p.coach).toMatchObject({ reached: true, calls: 1 });
   });
 
+  it('a measure row carries its weight; a per-item or gram row does not (2026-11-01)', async () => {
+    const { d } = deps({
+      reply: [
+        item({ said: 'a banana', pick: 'c1', measure: '1 medium (118g)', count: 2 }),
+        item({ said: '2 eggs', pick: 'c2', measure: '1 large', count: 2 }),
+      ],
+    });
+    const p = await previewDescribedMeal(USER, 'a banana, 2 eggs', 'breakfast', d);
+    expect(p.items[0]).toMatchObject({ unit: 'medium', qty: 2, grams_each: 118 });
+    // Eggs are kept per item: their "amount_g" of 1 is one egg, never a gram.
+    expect(p.items[1]).toMatchObject({ unit: 'large', qty: 2 });
+    expect(p.items[1]).not.toHaveProperty('grams_each');
+  });
+
   it('near-miss: the same pick without a question is priced, linked and counted', async () => {
     const { d } = deps({ reply: [item({ said: 'milk', pick: 'c1', measure: '1 cup (244g)', count: 1 })] });
     const p = await previewDescribedMeal(USER, 'milk', 'breakfast', d);

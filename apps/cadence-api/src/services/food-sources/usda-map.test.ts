@@ -5,6 +5,7 @@ import {
   mapUsdaNutrients,
   mapUsdaPortions,
   parseUsdaSearchHit,
+  usdaPortion,
 } from './usda-map.ts';
 
 describe('mapUsdaNutrients', () => {
@@ -79,6 +80,96 @@ describe('mapUsdaPortions', () => {
     expect(servings.some((s) => s.amount_g === 118)).toBe(true);
     expect(servings.some((s) => s.unit === 'g' && s.amount_g === 100)).toBe(true);
     expect(defaultServingIndex(servings)).toBe(0);
+  });
+});
+
+/**
+ * The words on a serving. Survey (FNDDS) foods carry a numeric code in `modifier` and the words in
+ * `portionDescription`; reading the code stored "61109" as the serving and the meal card said
+ * "1 61109" (2026-11-01). Rows are the real FDC 2708729 (Spanakopita) portions plus near-misses.
+ */
+describe('usdaPortion — a serving is named in words, never a code', () => {
+  const undetermined = { id: 9999, name: 'undetermined', abbreviation: 'undetermined' };
+  const rows: Array<[string, Record<string, unknown>, number, { label: string; unit: string }]> = [
+    [
+      'FNDDS: code in modifier, words in the description',
+      { modifier: '61109', portionDescription: '1 regular/large', measureUnit: undetermined },
+      120,
+      { label: '1 regular/large (120g)', unit: 'regular/large' },
+    ],
+    [
+      'FNDDS: a two-word measure',
+      { modifier: '51000', portionDescription: '1 cubic inch', measureUnit: undetermined },
+      12,
+      { label: '1 cubic inch (12g)', unit: 'cubic inch' },
+    ],
+    [
+      'FNDDS: a fractional count',
+      { modifier: '10205', portionDescription: '1/2 cup', measureUnit: undetermined },
+      60,
+      { label: '1/2 cup (60g)', unit: 'cup' },
+    ],
+    [
+      'FNDDS: no household measure reads as one serving',
+      { modifier: '90000', portionDescription: 'Quantity not specified', measureUnit: undetermined },
+      90,
+      { label: '1 serving (90g)', unit: 'serving' },
+    ],
+    [
+      'a description with no count gets one',
+      { modifier: '61109', portionDescription: 'piece', measureUnit: undetermined },
+      120,
+      { label: '1 piece (120g)', unit: 'piece' },
+    ],
+    [
+      'nothing at all is one serving',
+      { modifier: '61109', measureUnit: undetermined },
+      120,
+      { label: '1 serving (120g)', unit: 'serving' },
+    ],
+    // Near-misses: a modifier that is a WORD still wins, including one with a number in it.
+    [
+      'SR Legacy: the word modifier is kept',
+      { amount: 1, modifier: 'medium', measureUnit: { name: 'fruit' } },
+      118,
+      { label: '1 medium fruit (118g)', unit: 'medium' },
+    ],
+    [
+      'a modifier with digits AND words is not a code',
+      { amount: 1, modifier: '2" slice', measureUnit: undetermined },
+      40,
+      { label: '1 2" slice (40g)', unit: '2" slice' },
+    ],
+    [
+      'Foundation: the measure unit alone',
+      { amount: 0.5, measureUnit: { name: 'cup' } },
+      75,
+      { label: '0.5 cup (75g)', unit: 'cup' },
+    ],
+  ];
+  it.each(rows)('%s', (_why, portion, grams, want) => {
+    expect(usdaPortion(portion, grams)).toEqual(want);
+  });
+
+  it('a whole FNDDS food has no code anywhere in its servings', () => {
+    const servings = mapUsdaPortions(
+      [
+        ['51000', '1 cubic inch', 12],
+        ['61109', '1 regular/large', 120],
+        ['64770', '1 small/individual', 30],
+        ['10205', '1 cup', 120],
+        ['90000', 'Quantity not specified', 90],
+      ].map(([modifier, portionDescription, gramWeight]) => ({
+        modifier,
+        portionDescription,
+        gramWeight,
+        measureUnit: undetermined,
+      })),
+    );
+    expect(servings.map((s) => s.label)).toEqual(
+      expect.arrayContaining(['1 regular/large (120g)', '1 cup (120g)', '1 serving (90g)']),
+    );
+    expect(servings.filter((s) => /\d{4,}/.test(`${s.unit} ${s.label}`))).toEqual([]);
   });
 });
 

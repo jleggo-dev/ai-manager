@@ -43,8 +43,11 @@ function KeptRow({
   // her question if the row still carries one — shown on the row, never hidden in a number
   // (FOOD-LOGGING-COACH-LED.md). A question row normally has no amount and renders as MealAskedRow;
   // one that arrives with an amount anyway still shows the question rather than losing it.
+  // "1 regular/large (120g)", the way a label writes a serving — the measure alone does not say
+  // how much, and two of one food's measures can share a word (owner, 2026-11-01).
+  const grams = row.grams_each ? ` (${Math.round(row.grams_each * qty)}g)` : '';
   const sub = [
-    [qty, row.unit].filter(Boolean).join(' '),
+    [qty, row.unit].filter(Boolean).join(' ') + grams,
     row.basis === 'fallback' ? row.source_label : '',
     row.assumption,
     row.question,
@@ -63,14 +66,17 @@ function KeptRow({
           {row.source === 'assumed' && <span className="fa-tag">ASSUMED</span>}
         </span>
         <span className="fa-row-s">{sub}</span>
-      </div>
-      <div className="fa-row-macros">
-        {macros.map((m) => (
-          <span key={m.k} className="fa-row-m">
-            <i>{m.k}</i>
-            {m.v}
-          </span>
-        ))}
+        {/* Under the name, not beside it: as a sibling in the row the strip took the middle and
+            squeezed the name, amount and her note into a one-word column (2026-11-01, photo read
+            of a spanakopita — the long assumption made it visible). */}
+        <div className="fa-row-macros">
+          {macros.map((m) => (
+            <span key={m.k} className="fa-row-m">
+              <i>{m.k}</i>
+              {m.v}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="fa-step">
         <button

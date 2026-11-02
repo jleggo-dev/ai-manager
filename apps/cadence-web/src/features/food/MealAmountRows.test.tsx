@@ -80,3 +80,40 @@ describe('MealAmountRows — the question is shown wherever the row lands', () =
     expect(screen.getByText('ASSUMED')).toBeInTheDocument();
   });
 });
+
+describe('MealAmountRows — a kept row reads left to right', () => {
+  it('puts the macros under the name and amount, never between them and the stepper', () => {
+    // The photo read of a spanakopita (2026-11-01): as a sibling in the row the strip took the
+    // middle and squeezed the name, amount and her note into a one-word column.
+    const { container } = draw([
+      row({
+        name: 'Spanakopita',
+        qty: 1,
+        unit: 'piece',
+        source: 'given',
+        est: { kcal: 254, protein_g: 10 },
+        assumption: 'Took one piece as the 120 g portion available in the record.',
+      }),
+    ]);
+    const kept = container.querySelector('.fa-row');
+    expect(kept?.querySelector(':scope > .fa-row-t > .fa-row-macros')).not.toBeNull();
+    expect(kept?.querySelector(':scope > .fa-row-macros')).toBeNull();
+    // The row's direct children: the words, the stepper, the remove — nothing in between.
+    expect([...(kept?.children ?? [])].map((c) => c.className)).toEqual(['fa-row-t', 'fa-step', 'fa-row-x']);
+  });
+});
+
+describe('MealAmountRows — a measure says how much it weighs', () => {
+  // "1 61109" on a spanakopita (2026-11-01): the owner asked for "1 serving (120g)", the way a
+  // label writes it. Positives carry grams_each; near-misses (grams, or no weight known) do not.
+  const cases: Array<[string, Partial<AmountRow>, string]> = [
+    ['one measure', { qty: 1, unit: 'regular/large', grams_each: 120 }, '1 regular/large (120g)'],
+    ['scales with the amount', { qty: 1.5, unit: 'cup', grams_each: 120 }, '1.5 cup (180g)'],
+    ['already in grams: no second weight', { qty: 120, unit: 'g' }, '120 g'],
+    ['no weight on file: the measure alone', { qty: 1, unit: 'slice' }, '1 slice'],
+  ];
+  it.each(cases)('%s', (_why, fields, want) => {
+    const { container } = draw([row({ name: 'Spanakopita', source: 'given', est: { kcal: 254 }, ...fields })]);
+    expect(container.querySelector('.fa-row-s')?.textContent).toBe(want);
+  });
+});

@@ -43,6 +43,9 @@ export interface DescribedMealItem extends MealItem {
   basis?: DescribedBasis;
   /** "your saved food", "USDA", "the coach's estimate" — so an estimate never looks like a lookup. */
   source_label?: string;
+  /** Grams in ONE of `unit` when the unit is a measure ("regular/large"), so the card can say
+   *  "1 regular/large (120g)" the way a label does. Absent when the row is already in g/ml. */
+  grams_each?: number;
   assumption?: string;
   /** The one question she would ask. A row with one carries no number and no link until answered. */
   question?: string;
@@ -218,6 +221,10 @@ export async function rowsFromOutcome(
           ...(food.brand ? { brand: food.brand } : {}),
           qty: portion.qty,
           unit: portion.unit,
+          // Weight only for a food kept by weight: a per-item food's `amount_g` is a count.
+          ...(food.base_unit === 'g' && portion.unit !== 'g' && pick.measure.grams > 0
+            ? { grams_each: pick.measure.grams }
+            : {}),
           est: { ...portion.est, source: 'ledger' },
           food_id: food.food_id,
           basis: 'record',

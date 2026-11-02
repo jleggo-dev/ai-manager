@@ -211,3 +211,18 @@ describe('useMealAmounts.answerRow — what the answer brings with it', () => {
     expect(result.current.answering).toBe(false);
   });
 });
+
+describe('useMealAmounts — the weight of a measure belongs to that measure', () => {
+  it('keeps grams_each through a new amount, drops it when the unit changes', () => {
+    const { result } = renderHook(() =>
+      useMealAmounts(card([priced('spanakopita', 254, { unit: 'regular/large', grams_each: 120 })])),
+    );
+    expect(result.current.rows[0]!.grams_each).toBe(120);
+    act(() => result.current.setQty(0, 2));
+    expect(result.current.rows[0]!.grams_each).toBe(120);
+    act(() => result.current.setQty(0, 2, 'regular/large'));
+    expect(result.current.rows[0]!.grams_each).toBe(120);
+    act(() => result.current.setQty(0, 240, 'g'));
+    expect(result.current.rows[0]!.grams_each).toBeUndefined();
+  });
+});

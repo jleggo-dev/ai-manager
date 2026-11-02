@@ -228,16 +228,40 @@ export function mapUsdaNutrients(foodNutrients: unknown): FoodNutrients {
 
 function portionLabel(amount: number, modifier: string, unitName: string, gramWeight: number): string {
   const qty = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 100) / 100);
-  const parts = [qty, modifier, unitName].filter((p) => p && p !== 'undetermined').join(' ');
-  const base = parts || 'serving';
-  return `${base} (${Math.round(gramWeight)}g)`;
+  return `${[qty, modifier, unitName].filter(Boolean).join(' ')} (${Math.round(gramWeight)}g)`;
 }
 
-function portionUnit(modifier: string, unitName: string): string {
-  const m = modifier.toLowerCase().trim();
-  if (m) return m.slice(0, 40);
-  const u = unitName.toLowerCase().trim();
-  return (u || 'serving').slice(0, 40);
+/** A Survey (FNDDS) portion's `modifier` is a code ("61109"), never a word to show. */
+const PORTION_CODE = /^\d+$/;
+/** FNDDS's catch-all row: there is no household measure, so it reads as one serving. */
+const NO_QUANTITY = /^quantity not specified$/i;
+
+/**
+ * One USDA portion as the words a person reads and the unit a row is priced in.
+ *
+ * SR Legacy and Foundation foods put the words in `modifier`/`measureUnit` ("1 medium fruit").
+ * Survey (FNDDS) foods put a numeric code in `modifier`, "undetermined" in `measureUnit`, and the
+ * words in `portionDescription` ("1 regular/large") — reading `modifier` there stored "61109" as
+ * the serving's name, and the meal card said "1 61109" (2026-11-01, a spanakopita). With no words
+ * anywhere it is "1 serving (90g)", the way MyFitnessPal writes it (owner, 2026-11-01).
+ */
+export function usdaPortion(p: Record<string, unknown>, gramWeight: number): { label: string; unit: string } {
+  const rawModifier = (asString(p.modifier) ?? '').trim();
+  const modifier = PORTION_CODE.test(rawModifier) ? '' : rawModifier;
+  const rawUnit = (asString(asRecord(p.measureUnit)?.name) ?? asString(p.measureUnitName) ?? '').trim();
+  const unitName = rawUnit.toLowerCase() === 'undetermined' ? '' : rawUnit;
+  const grams = `(${Math.round(gramWeight)}g)`;
+  if (modifier || unitName) {
+    const unit = (modifier || unitName).toLowerCase().slice(0, 40);
+    return { label: portionLabel(asNumber(p.amount) ?? 1, modifier, unitName, gramWeight), unit };
+  }
+  const described = (asString(p.portionDescription) ?? '').trim();
+  if (described && !NO_QUANTITY.test(described)) {
+    const counted = /^(\d+(?:[./]\d+)?)\s+(.+)$/.exec(described);
+    const label = counted ? described : `1 ${described}`;
+    return { label: `${label} ${grams}`, unit: (counted ? counted[2]! : described).toLowerCase().slice(0, 40) };
+  }
+  return { label: `1 serving ${grams}`, unit: 'serving' };
 }
 
 /**
@@ -277,12 +301,7 @@ export function mapUsdaPortions(foodPortions: unknown): FoodServing[] {
       if (!p) continue;
       const gramWeight = asNumber(p.gramWeight);
       if (gramWeight === null || gramWeight <= 0) continue;
-      const amount = asNumber(p.amount) ?? 1;
-      const modifier = asString(p.modifier) ?? '';
-      const measure = asRecord(p.measureUnit);
-      const unitName = asString(measure?.name) ?? asString(p.measureUnitName) ?? '';
-      const label = portionLabel(amount, modifier, unitName, gramWeight);
-      const unit = portionUnit(modifier, unitName);
+      const { label, unit } = usdaPortion(p, gramWeight);
       const key = `${unit}:${Math.round(gramWeight * 10)}`;
       if (seen.has(key)) continue;
       seen.add(key);
