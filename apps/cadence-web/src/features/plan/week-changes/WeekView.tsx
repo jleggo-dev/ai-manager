@@ -1,5 +1,5 @@
 import type { WeekDay, WeekEntry } from '../../../lib/api.ts';
-import { dayChanges, dayLabel } from './weekView.ts';
+import { dayChanges, dayLabel } from './weekDays.ts';
 
 /**
  * The sheet's full height: the seven days with the change applied, grouped by day (owner ask,
@@ -17,7 +17,11 @@ function Entry({ e }: { e: WeekEntry }) {
         {e.title}
         {e.was_time != null && <span className="wkv-was"> · was {e.was_time}</span>}
       </span>
-      {TAG[e.kind] ? <span className="wkv-tag">{TAG[e.kind]}</span> : e.minutes ? <span className="wkv-min">{e.minutes} min</span> : null}
+      {TAG[e.kind] ? (
+        <span className="wkv-tag">{TAG[e.kind]}</span>
+      ) : e.minutes ? (
+        <span className="wkv-min">{e.minutes} min</span>
+      ) : null}
     </li>
   );
 }

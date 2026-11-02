@@ -42,14 +42,38 @@ const STRENGTH = current('str', 'Obstacle strength', 'FREQ=WEEKLY;BYDAY=SU', '16
 const PIANO = current('pno', 'Piano practice', 'FREQ=WEEKLY;BYDAY=MO,WE,FR', '20:00');
 
 function week(proposed: ProposedRow[], cur: Activity[] = [RUN, STRENGTH, PIANO]) {
-  const days = buildProposedWeek({ proposed, current: cur, from: FROM, to: TO, currentAnchor: FROM, proposedAnchor: FROM });
-  return Object.fromEntries(days.map((d) => [d.date, d.entries.map((e) => `${e.kind}:${e.title}${e.index != null ? `#${e.index}` : ''}`)]));
+  const days = buildProposedWeek({
+    proposed,
+    current: cur,
+    from: FROM,
+    to: TO,
+    currentAnchor: FROM,
+    proposedAnchor: FROM,
+  });
+  return Object.fromEntries(
+    days.map((d) => [d.date, d.entries.map((e) => `${e.kind}:${e.title}${e.index != null ? `#${e.index}` : ''}`)]),
+  );
 }
 
 describe('buildProposedWeek', () => {
   it('gives every one of the seven days, empty ones included', () => {
-    const days = buildProposedWeek({ proposed: [], current: [], from: FROM, to: TO, currentAnchor: FROM, proposedAnchor: FROM });
-    expect(days.map((d) => d.date)).toEqual([FROM, '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', TO]);
+    const days = buildProposedWeek({
+      proposed: [],
+      current: [],
+      from: FROM,
+      to: TO,
+      currentAnchor: FROM,
+      proposedAnchor: FROM,
+    });
+    expect(days.map((d) => d.date)).toEqual([
+      FROM,
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      TO,
+    ]);
     expect(days.every((d) => d.entries.length === 0)).toBe(true);
   });
 

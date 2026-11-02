@@ -31,7 +31,8 @@ export function asToggled(e: WeekEntry, enabled: Record<number, boolean>): WeekE
   if (e.index == null || enabled[e.index] !== false) return e;
   if (e.kind === 'new') return null;
   if (e.kind === 'was') return { ...e, kind: 'same' };
-  if (e.kind === 'changed') return { ...e, kind: 'same', time: e.was_time !== undefined ? e.was_time : e.time, was_time: undefined };
+  if (e.kind === 'changed')
+    return { ...e, kind: 'same', time: e.was_time !== undefined ? e.was_time : e.time, was_time: undefined };
   return e;
 }
 

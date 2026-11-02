@@ -3,7 +3,9 @@
    (.wkc-sheet.full) shows the seven days, grouped by day. The change carries the green the
    sheet's toggles already use; everything unchanged is dimmed but present. */
 .wkc-sheet {
-  transition: max-height 0.24s ease, height 0.24s ease;
+  transition:
+    max-height 0.24s ease,
+    height 0.24s ease;
 }
 .wkc-sheet.full {
   height: 92%;

@@ -294,10 +294,19 @@ describe('buildPendingChangeDetail — only what the proposal changes', () => {
   });
 
   it('carries the week the change adds up to, seven days from today', async () => {
-    getUser.mockResolvedValue({ timezone: 'UTC', pending_plan: pendingPlan({ activities: [runAsProposed({ time_of_day: '06:15' })] }) });
+    getUser.mockResolvedValue({
+      timezone: 'UTC',
+      pending_plan: pendingPlan({ activities: [runAsProposed({ time_of_day: '06:15' })] }),
+    });
     const r = await buildPendingChangeDetail('u1', new Date('2026-11-01T15:00:00Z')); // a Sunday
     expect(r.week.map((d) => d.date)).toEqual([
-      '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07',
+      '2026-11-01',
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-07',
     ]);
     expect(r.week[4]!.entries).toEqual([
       { title: 'Easy run', time: '6:15 am', minutes: 40, kind: 'changed', index: 0, was_time: '6:30 pm' },

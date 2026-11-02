@@ -65,7 +65,9 @@ export function scheduleLine(recurrence: string, timeOfDay?: string, durationMin
 }
 
 /** A proposal row in the stored-Activity shape the commit's own fingerprint reads. */
-function asCommitted(a: PendingPlanActivity): Pick<Activity, 'category' | 'schedule' | 'target' | 'how_to' | 'goal_id'> {
+function asCommitted(
+  a: PendingPlanActivity,
+): Pick<Activity, 'category' | 'schedule' | 'target' | 'how_to' | 'goal_id'> {
   return {
     category: a.category,
     schedule: { recurrence: a.recurrence, time_of_day: a.time_of_day, duration_min: a.duration_min },

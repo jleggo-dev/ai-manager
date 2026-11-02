@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { applyPendingChange, dismissPendingChange, getPendingChange, getPendingChangeDetail, type WeekDay } from '../../lib/api.ts';
+import {
+  applyPendingChange,
+  dismissPendingChange,
+  getPendingChange,
+  getPendingChangeDetail,
+  type WeekDay,
+} from '../../lib/api.ts';
 import { WeekStrip } from '../plan/week-changes/WeekStrip.tsx';
 
 /**
@@ -122,7 +128,8 @@ export function ChangeCard({
       </ul>
       {/* Before the tap the week shown is the PROPOSED one (the change applied), so this door
           tells the truth where the plan sheet would not — see onShowPlan above. */}
-      {state !== 'applied' && onShowChanges && <WeekStrip
+      {state !== 'applied' && onShowChanges && (
+        <WeekStrip
           week={week}
           onOpen={() =>
             onShowChanges('full', () => {
@@ -130,7 +137,8 @@ export function ChangeCard({
               onApplied?.();
             })
           }
-        />}
+        />
+      )}
       {state === 'applied' ? (
         onShowPlan && (
           <button type="button" className="cfm-more" onClick={onShowPlan}>

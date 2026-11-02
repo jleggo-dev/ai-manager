@@ -78,10 +78,12 @@ export function buildProposedWeek(w: WeekInputs): WeekDay[] {
     const next = new Set(expandRecurrence(row.recurrence, w.from, w.to, w.proposedAnchor));
     const before = row.commitment_id ? currentById.get(row.commitment_id) : undefined;
     if (before) kept.add(before.commitment_id);
-    const prev = new Set(
-      before ? expandRecurrence(before.schedule.recurrence, w.from, w.to, w.currentAnchor) : [],
-    );
-    const base = { title: row.title, time: time(row.time_of_day), ...(row.duration_min ? { minutes: row.duration_min } : {}) };
+    const prev = new Set(before ? expandRecurrence(before.schedule.recurrence, w.from, w.to, w.currentAnchor) : []);
+    const base = {
+      title: row.title,
+      time: time(row.time_of_day),
+      ...(row.duration_min ? { minutes: row.duration_min } : {}),
+    };
 
     for (const date of next) {
       const onBoth = prev.has(date);

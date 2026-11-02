@@ -1,5 +1,5 @@
 import type { WeekDay } from '../../../lib/api.ts';
-import { dayChanges, dayLetter } from './weekView.ts';
+import { dayChanges, dayLetter } from './weekDays.ts';
 
 /**
  * The quiet way into the week (owner, 2026-11-01: "a more subtle indicator… keep the text light").

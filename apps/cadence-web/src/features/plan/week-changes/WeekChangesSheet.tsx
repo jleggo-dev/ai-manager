@@ -4,7 +4,7 @@ import { WeekChangeCard } from './WeekChangeCard.tsx';
 import { WeekStrip } from './WeekStrip.tsx';
 import { WeekView } from './WeekView.tsx';
 import { useSheetDetent, type Detent } from './useSheetDetent.ts';
-import { weekAsToggled } from './weekView.ts';
+import { weekAsToggled } from './weekDays.ts';
 
 /**
  * The Changes sheet: what the coach's pending change does, then — one drag or tap away — the week

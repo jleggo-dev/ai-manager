@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WeekEntry } from '../../../lib/api.ts';
-import { asToggled, dayLabel, dayLetter } from './weekView.ts';
+import { asToggled, dayLabel, dayLetter } from './weekDays.ts';
 
 describe('dayLabel', () => {
   it.each([
@@ -23,7 +23,12 @@ describe('asToggled — a change switched off shows the plan as it is now', () =
     ['an unchanged session ignores the toggles', { ...base, kind: 'same' }, false, { ...base, kind: 'same' }],
     ['a change left on reads as itself', { ...base, kind: 'new', index: 0 }, true, { ...base, kind: 'new', index: 0 }],
     ['a session it would add disappears', { ...base, kind: 'new', index: 0 }, false, null],
-    ['a session it would move away stays, unchanged', { ...base, kind: 'was', index: 0 }, false, { ...base, kind: 'same', index: 0 }],
+    [
+      'a session it would move away stays, unchanged',
+      { ...base, kind: 'was', index: 0 },
+      false,
+      { ...base, kind: 'same', index: 0 },
+    ],
     [
       'a retimed session goes back to its old time',
       { ...base, kind: 'changed', index: 0, was_time: '6:30 pm' },
