@@ -9,6 +9,7 @@ import {
   deleteGoal,
   retireGoal,
   restoreGoal,
+  getGoal,
 } from '../repos/goals.ts';
 import { listEquipment, insertEquipment, updateEquipment, deleteEquipment } from '../repos/equipment.ts';
 import { getUser, mergeBaseline, setName } from '../repos/users.ts';
@@ -100,12 +101,17 @@ router.patch('/goals/:id', async (req: Request, res: Response) => {
  * sessions logged, milestones hit — stays exactly as readable in Progress (progress.ts draws on
  * 'parked' on purpose). Reversible only through the coach (update_goal's 'restore' action) —
  * Settings itself never shows a retired goal again, by design.
+ *
+ * A goal that is already retired answers 200 with the goal as it stands: a second tap (or a retry
+ * after the first answer was lost) asked for a state that is already true, so it is done, not
+ * missing. Only a goal that isn't this user's answers 404.
  */
 router.post('/goals/:id/retire', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
+  const goalId = req.params.id as string;
   try {
-    const goal = await retireGoal(userId, req.params.id as string);
-    if (!goal) return void res.status(404).json({ error: 'goal not found or already retired' });
+    const goal = (await retireGoal(userId, goalId)) ?? (await getGoal(userId, goalId));
+    if (goal?.status !== 'parked') return void res.status(404).json({ error: 'goal not found' });
     res.json({ ok: true, goal });
   } catch (err) {
     console.error('[POST /review/goals/:id/retire]', err);
