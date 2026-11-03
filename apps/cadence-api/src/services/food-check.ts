@@ -2,7 +2,8 @@
  * The food-check: one call to a small model with the words, the slot and the candidate book; it
  * picks, assumes, or asks (docs/cadence/FOOD-LOGGING-COACH-LED.md, owner 2026-10-29). The job is
  * `food-check` in config/ai-admin/ai-admin.config.json, on its own profile (`cadence-food-check`:
- * gpt-5.4-mini, claude-sonnet-5-5 failover — ruling 1, confirmed by eval run 2).
+ * claude-sonnet-5-5, gpt-5.4-mini failover — ruling 1 as amended 2026-11-03: the web round is
+ * reached only by a model that asks for it, and the small model asked 1 in 5).
  *
  * The SHAPE bounds it, not the wording. Run 2's eggs plate: told "this is your last reply" while
  * lookups were still on offer, every model asked for more anyway; with the offer removed from the

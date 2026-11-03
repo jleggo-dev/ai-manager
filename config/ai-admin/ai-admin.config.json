@@ -71,16 +71,16 @@
     {
       "slug": "cadence-food-check",
       "name": "Cadence Food Check",
-      "description": "The food-check job only (docs/cadence/FOOD-LOGGING-COACH-LED.md, build step 2, 2026-11-01): one call that picks which food records describe a meal someone typed or said, from a candidate book the software already fetched. gpt-5.4-mini PRIMARY by measurement, not by name: eval runs 1 and 2 (2026-10-29, 60 scored meals) put it within one meal of claude-sonnet-5-5 at half the prompt tokens and 5-6 s a meal, with no made-up record id. claude-sonnet-5-5 is the failover because it is a different family (owner 2026-10-27: one provider-side withdrawal must not take both). Strict json_schema is native on the gpt primary (CLAUDE.md, Broker model). Both ids were catalog-listed and proved with live calls in the eval; prove them again with a live call before any repoint, because Devs.ai lists models it will not run (scripts/list-v2-models.ts, scripts/repoint-profile.ts). Low temperature: it chooses, it does not write. Created by scripts/provision-food-check-profile.ts alone, never by a full provision-aim.ts pass.",
+      "description": "The food-check job only (docs/cadence/FOOD-LOGGING-COACH-LED.md, build step 2, 2026-11-01): one call that picks which food records describe a meal someone typed or said, from a candidate book the software already fetched. gpt-5.4-mini PRIMARY by measurement, not by name: eval runs 1 and 2 (2026-10-29, 60 scored meals) put it within one meal of claude-sonnet-5-5 at half the prompt tokens and 5-6 s a meal, with no made-up record id. claude-sonnet-5-5 is the failover because it is a different family (owner 2026-10-27: one provider-side withdrawal must not take both). Strict json_schema is native on the gpt primary (CLAUDE.md, Broker model). Both ids were catalog-listed and proved with live calls in the eval; prove them again with a live call before any repoint, because Devs.ai lists models it will not run (scripts/list-v2-models.ts, scripts/repoint-profile.ts). Low temperature: it chooses, it does not write. Created by scripts/provision-food-check-profile.ts alone, never by a full provision-aim.ts pass. AMENDED 2026-11-03 (owner, after the web-rung eval): claude-sonnet-5-5 PRIMARY, gpt-5.4-mini failover. On first sight of a maker-named food with only a chain's row, the second lookup round is where the web rung runs, and only a model that asks for it reaches it: gpt-5.4-mini asked 1 in 5, claude-sonnet-5-5 2 of 2 (real-rickards-pint); the failover stays a different family. Both ids proved by live calls that day.",
       "provider_id": "<DEVS_AI_PROVIDER_UUID>",
-      "external_ai_id": "gpt-5.4-mini",
+      "external_ai_id": "claude-sonnet-5-5",
       "profile_type": "model",
       "mode": "completion",
       "runtime_options": {
         "temperature": 0.1
       },
       "failover_provider_id": "<DEVS_AI_PROVIDER_UUID>",
-      "failover_external_ai_id": "claude-sonnet-5-5"
+      "failover_external_ai_id": "gpt-5.4-mini"
     }
   ],
   "jobs": [

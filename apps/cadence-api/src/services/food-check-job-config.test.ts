@@ -67,10 +67,10 @@ describe('food-check job config', () => {
     expect(job?.ai_profile_id).toBe('<CADENCE_FOOD_CHECK_PROFILE_UUID>');
   });
 
-  it('its profile carries ruling 1: gpt-5.4-mini primary, claude-sonnet-5-5 failover, low temperature', () => {
+  it('its profile carries ruling 1 as amended 2026-11-03: claude-sonnet-5-5 primary (it asks for the web round), gpt-5.4-mini failover, low temperature', () => {
     const profile = config.profiles.find((p) => p.slug === 'cadence-food-check');
-    expect(profile?.external_ai_id).toBe('gpt-5.4-mini');
-    expect(profile?.failover_external_ai_id).toBe('claude-sonnet-5-5');
+    expect(profile?.external_ai_id).toBe('claude-sonnet-5-5');
+    expect(profile?.failover_external_ai_id).toBe('gpt-5.4-mini');
     expect(profile?.runtime_options?.temperature).toBeLessThanOrEqual(0.2);
   });
 
