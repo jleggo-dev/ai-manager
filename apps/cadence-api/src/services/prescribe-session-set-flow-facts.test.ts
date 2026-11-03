@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BLOCK_LABEL_MAX, ITEM_DETAIL_MAX, ITEM_LOAD_MAX, ITEM_NAME_MAX } from './session-normalize.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const config = JSON.parse(readFileSync(path.join(root, 'config/ai-admin/ai-admin.config.json'), 'utf8')) as {
@@ -93,5 +94,24 @@ describe('prescribe-session — facts, not picks', () => {
     expect(template).not.toContain('ONLY for a physical movement a beginner might not know');
     expect(template).toContain('any bank is valid on any journal item');
     expect(template).toContain('where seeing it performed would help');
+  });
+});
+
+/**
+ * Walkthrough v3, step 1b: the normalizer's text limits are told to the coach as facts, in the
+ * same sentence that states the block and item caps. The numbers here come from the constants
+ * the normalizer enforces, so raising one without the other fails CI.
+ */
+describe('prescribe-session — states the text limits the normalizer enforces', () => {
+  const template = job?.config.promptTemplate ?? '';
+
+  it('names each limit, in characters, next to the app-enforced caps', () => {
+    expect(template).toContain(
+      `Text limits per item, in characters: name up to ${ITEM_NAME_MAX}, load up to ${ITEM_LOAD_MAX}, detail up to ${ITEM_DETAIL_MAX}; a block label up to ${BLOCK_LABEL_MAX}.`,
+    );
+  });
+
+  it('says what happens to longer text, as a fact about the app', () => {
+    expect(template).toContain('Longer text is cut at a word and ends with … (an ellipsis).');
   });
 });
