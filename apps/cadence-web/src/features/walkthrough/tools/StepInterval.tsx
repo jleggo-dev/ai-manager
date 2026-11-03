@@ -31,7 +31,7 @@ import {
   secBtn,
   stage,
 } from './intervalStyles.ts';
-import { CHIME_DONE, CHIME_RECOVER, CHIME_WORK, playTones } from './chime.ts';
+import { CHIME_DONE, CHIME_RECOVER, CHIME_WORK, playTones, unlockAudio } from './chime.ts';
 import { formatClock } from './timer.ts';
 import { ringSegments } from './intervalRing.ts';
 import { useIntervalClock } from './useIntervalClock.ts';
@@ -184,6 +184,11 @@ export function StepInterval({
   useEffect(() => () => onChrome?.(null), [onChrome]);
 
   function startOrPause() {
+    // Inside the tap, every time: the chimes this run will play — the first one five seconds from
+    // now at the end of the pre-roll, the rest minutes later with no finger near the phone — are
+    // only allowed to sound if the audio was opened by a gesture. StepTimer does the same; this
+    // player didn't, so on iOS the whole run was silent (owner's gym session, 2026-11-02).
+    unlockAudio();
     if (status === 'live') {
       pause();
       setStatus('paused');
@@ -208,6 +213,7 @@ export function StepInterval({
   }
 
   function restart() {
+    unlockAudio(); // a restart is a tap that leads to a run, so it opens the audio like Start does
     // Restart inside the 600 ms hand-off means stay here — don't move on to the next step.
     handoff.cancel();
     finished.current = false;
