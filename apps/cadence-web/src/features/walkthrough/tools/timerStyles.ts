@@ -80,3 +80,21 @@ export const minutesInput: CSSProperties = {
   color: 'oklch(30% 0.02 150)',
   outline: 'none',
 };
+/** The − / + that flank a ring's centre number. */
+export const dialBtn: CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  width: 50,
+  height: 44,
+  border: 'none',
+  borderRadius: 999,
+  background: 'linear-gradient(180deg,#fff 0%,oklch(96% 0.01 85) 46%)',
+  boxShadow: '0 4px 0 oklch(88% 0.02 85), 0 0 0 1px oklch(92% 0.015 85)',
+  fontSize: 24,
+  fontWeight: 800,
+  color: 'oklch(40% 0.02 150)',
+  cursor: 'pointer',
+  padding: 0,
+  lineHeight: 1,
+};

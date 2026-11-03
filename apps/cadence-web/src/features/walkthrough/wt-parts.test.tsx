@@ -25,6 +25,12 @@ describe("targetText — the prescription in the log line's grammar", () => {
     ['sets only', { kind: 'reps', sets: 3 }, '3 sets'],
     ['timer', { kind: 'timer', seconds: 300 }, '5 min'],
     ['timer under a minute rounds up to 1', { kind: 'timer', seconds: 20 }, '1 min'],
+    // Sets of a timed effort read like the reps line, in seconds (walkthrough v3 design B).
+    ['timer in sets with a load', { kind: 'timer', seconds: 45, sets: 4, load: '40 lb' }, '45 s × 40 lb · 4 sets'],
+    ['timer in sets, no load', { kind: 'timer', seconds: 30, sets: 3 }, '30 s · 3 sets'],
+    ['timer in sets of whole minutes', { kind: 'timer', seconds: 120, sets: 2 }, '2 min · 2 sets'],
+    ['timer in sets, odd seconds', { kind: 'timer', seconds: 90, sets: 3 }, '1:30 · 3 sets'],
+    ['a single hold with a load', { kind: 'timer', seconds: 60, load: '10 kg' }, '1 min × 10 kg'],
     ['checkoff with a label', { kind: 'checkoff', label: 'Done' }, 'Done'],
     ['checkoff without a label', { kind: 'checkoff' }, ''],
     ['measure is its unit', { kind: 'measure', metric: 'Weight', unit: 'kg' }, 'kg'],

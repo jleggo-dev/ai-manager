@@ -25,6 +25,7 @@ import { clampFreeWriteMinutes } from './freewrite.ts';
 import { type IntervalPlan, intervalTotalMinutes, singleSetPlan } from './interval.ts';
 import { type MetronomeSpec, normalizeMetronome } from './metronome.ts';
 import { bodyCheckinPart, bodyCheckinPrompt, isOpenEndedTimer, mentionsSides } from './step-cues.ts';
+import { clampRestSec, isTimedSets } from './timed-sets.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -49,7 +50,20 @@ export type StepTool =
   // practice block — and the log is the time actually spent. `switch_sides`: a chime and a visible
   // cue at the halfway point, for a stretch or hold done one side then the other. Both are read
   // off the step's own words and length (step-cues.ts); the coach never writes them.
-  | { kind: 'timer'; seconds: number; chime?: boolean; open_ended?: boolean; switch_sides?: boolean }
+  // `sets` (2 or more): the same timed effort done that many times — a carry, a hang, a plank in
+  // sets (walkthrough v3 R1, owner 2026-11-03). `seconds` is ONE set. The player runs one clock
+  // per set, counts up past the target until stopped, and logs each set's seconds; `rest_sec` is
+  // stored but not drawn yet (the next set waits for a Start tap). `load` is what is held.
+  | {
+      kind: 'timer';
+      seconds: number;
+      chime?: boolean;
+      open_ended?: boolean;
+      switch_sides?: boolean;
+      sets?: number;
+      rest_sec?: number;
+      load?: string;
+    }
   // Intervals — the timer generalised from one phase to a list (warm-up → work/recover × rounds →
   // cool-down), handing over on its own. The already-clamped PLAN travels with the step, not the
   // expanded phases: expansion is deterministic arithmetic the renderer can do (`expandIntervalPhases`),
@@ -124,8 +138,10 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
       return 'none';
     // `breathing` and `meditate` sit here deliberately: they capture nothing structured — the log
     // records the rounds or the minutes you did, never anything about the person.
-    case 'read':
+    // A timer done in sets captures each set's seconds, so it sits with reps below.
     case 'timer':
+      return tool.sets ? 'structured' : 'done';
+    case 'read':
     case 'interval':
     case 'checkoff':
     case 'breathing':
@@ -176,6 +192,10 @@ function minutesOf(item: SessionItem, tool: StepTool): number {
   // `duration_min` the coach also wrote down is ignored rather than allowed to contradict the ring.
   if (tool.kind === 'interval') return intervalTotalMinutes(tool.plan);
   const d = item.duration_min;
+  // Sets of a timed effort: `duration_min` is one set, so the step is sets × that plus the rests.
+  if (tool.kind === 'timer' && tool.sets && typeof d === 'number' && d > 0) {
+    return Math.max(1, Math.round(tool.sets * d + ((tool.sets - 1) * (tool.rest_sec ?? 0)) / 60));
+  }
   if (typeof d === 'number' && d > 0) return Math.round(d);
   return DEFAULT_MINUTES[tool.kind];
 }
@@ -258,8 +278,9 @@ function measureTool(item: SessionItem): StepTool {
  * because they are unambiguous where quantities never were: `journal_bank` can only mean journal,
  * `grounding_game` only grounding, `meditate_bells` only meditate, `breath_pattern` only breathing,
  * `interval_work_sec` only intervals, `measure_metric`/`measure_unit` only measure (the one pair
- * with no `item.tool` route at all — see `measureTool`). Quantities come after: sets → **reps**,
- * duration → **timer**, distance → **checkoff**, else **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
+ * with no `item.tool` route at all — see `measureTool`). Quantities come after: sets + duration
+ * with no reps → **timer in sets**, sets → **reps**, duration → **timer**, distance → **checkoff**,
+ * else **read**. The catalog's preamble tells the coach `tool: null` is safe; this ordering is what
  * makes that sentence true — before it, a journal item with a duration and no tag silently became
  * a bare timer, and a bank with no duration became `read` (the widget vanished entirely).
  *
@@ -278,6 +299,12 @@ export function inferTool(item: SessionItem): StepTool {
   if ((item.measure_metric && item.measure_metric.trim()) || (item.measure_unit && item.measure_unit.trim())) {
     return measureTool(item);
   }
+  // Before `sets` wins: a count of sets with a length and no reps is a timed effort in sets. Until
+  // walkthrough v3 the sets won and the length was dropped — nine stored carries, hangs and planks
+  // played as a reps counter with the seconds only in the cue text (audit of 1,319 items, 2026-11-03).
+  if (isTimedSets(item) && typeof item.duration_min === 'number') {
+    return timerTool(item, Math.round(item.duration_min * 60));
+  }
   if (typeof item.sets === 'number' && item.sets > 0) return repsTool(item);
   if (typeof item.duration_min === 'number' && item.duration_min > 0) {
     return timerTool(item, Math.round(item.duration_min * 60));
@@ -293,18 +320,24 @@ export function inferTool(item: SessionItem): StepTool {
  * keeps running past its target (a threshold, step-cues.ts), and a two-sided hold gets its halfway
  * chime. The coach STATES the second as `per_side`; reading the cue text for "each side" is only
  * the fallback for sessions prescribed before the field existed, and is never consulted when the
- * coach said anything either way. Neither key is written when it is off, so a plain 30-second hold
- * stays exactly `{ kind, seconds, chime }`.
+ * coach said anything either way. Two or more `sets` make it a timed effort in sets, with the rest
+ * and the load carried along. No key is written when it is off or absent, so a plain 30-second
+ * hold stays exactly `{ kind, seconds, chime }`.
  */
 function timerTool(item: SessionItem, seconds: number): StepTool {
   const sides =
     typeof item.per_side === 'boolean' ? item.per_side : mentionsSides(item.name) || mentionsSides(item.detail);
+  const sets = typeof item.sets === 'number' && item.sets > 1 ? Math.round(item.sets) : undefined;
+  const rest = sets ? clampRestSec(item.rest_sec) : undefined;
   return {
     kind: 'timer',
     seconds,
     chime: true,
     ...(isOpenEndedTimer(seconds) ? { open_ended: true } : {}),
     ...(sides ? { switch_sides: true } : {}),
+    ...(sets ? { sets } : {}),
+    ...(rest ? { rest_sec: rest } : {}),
+    ...(item.load ? { load: item.load } : {}),
   };
 }
 

@@ -104,6 +104,11 @@ export interface SessionItem {
    *  coach states it here; the walkthrough only falls back to reading the cue text for sessions
    *  prescribed before this field existed (step-cues.ts). */
   per_side?: boolean;
+  /** `timer` only — seconds of rest between sets, when the timed effort is done in sets (`sets`
+   *  on a timer item, walkthrough v3 R1). Stored now so a rest clock can be drawn later without a
+   *  schema change; the player does not draw it yet (owner, 2026-11-03: tap Start for the next
+   *  set). Bounded in session-normalize.ts, never in coach output. */
+  rest_sec?: number;
   /** `measure` only — what's being measured ("Weight", "Distance", "Wingspan"). Deliberately NOT
    *  a `SessionItemTool` member (see tool-catalog.ts's exclusion note): the coach never emits this
    *  tool, so these two fields exist only for a client-built activity (or any other direct writer
@@ -146,6 +151,10 @@ export interface OccurrenceLogItem {
   sets?: number;
   reps?: number;
   load?: string;
+  /** Minutes. On an item that also has `sets` and no `reps` — a carry or hang done in sets — this
+   *  is the length of ONE set, the same convention the prescription uses (`SessionItem` sets 4,
+   *  duration_min 0.75 is four 45-second sets), and the walkthrough's summary line says it that way
+   *  ("4×40 s @ 2×40 lb"). Never the sum. */
   duration_min?: number;
   distance_km?: number;
   felt?: 'easy' | 'right' | 'hard';

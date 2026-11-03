@@ -93,7 +93,8 @@ export type ItemField =
   | 'interval_cooldown_sec'
   | 'metronome_bpm'
   | 'metronome_meter'
-  | 'per_side';
+  | 'per_side'
+  | 'rest_sec';
 
 /** Capture class (mirrors `stepCaptureMode`): `guided` = do it, log records only that it happened;
  *  `capture` = the person emits data that BECOMES the log. */
@@ -138,10 +139,10 @@ export const COACH_TOOLS: Record<SessionItemTool, CoachToolSpec> = {
     // practice, which is how a 5-min noticing practice kept getting a bare clock (probe, 2 of 3
     // runs 2026-08-04) instead of the grounding flow that IS the practice.
     summary:
-      'one physical effort held or sustained for a set time — a 1-min plank, a 20-min zone-2 run, a wall sit. A timer of 10 min or more keeps running past its target until they stop it (a ruck can run long) and logs the time they actually spent. Set per_side: true when the hold is done one side then the other (a calf stretch, a single-leg balance) — the app chimes and says "switch sides" at the halfway point, so give duration_min as the TOTAL for both sides',
+      'one physical effort held or sustained for a set time — a 1-min plank, a 20-min zone-2 run, a wall sit. A timer of 10 min or more keeps running past its target until they stop it (a ruck can run long) and logs the time they actually spent. Set per_side: true when the hold is done one side then the other (a calf stretch, a single-leg balance) — the app chimes and says "switch sides" at the halfway point, so give duration_min as the TOTAL for both sides. With sets (2 or more) it is one timed effort repeated that many times, with rest_sec seconds of rest between: duration_min is then the length of ONE set, and load is what is held. The app runs one clock per set, keeps counting past the target until they stop it, and logs each set\'s seconds',
     notWhen:
       'do NOT pick timer just because a step has a duration: "a minute to settle in" has a duration but is read. A timer is ONE continuous stretch — work that alternates with rest and repeats (sprints, HIIT, EMOM, Tabata) is interval. A duration alone does not pick the tool: meditate runs silence with bells, grounding runs a noticing game, and timer runs a plain clock',
-    reads: ['duration_min', 'per_side'],
+    reads: ['duration_min', 'per_side', 'sets', 'rest_sec', 'load'],
     example: { name: 'Forearm plank', tool: 'timer', duration_min: 1 },
   },
   interval: {

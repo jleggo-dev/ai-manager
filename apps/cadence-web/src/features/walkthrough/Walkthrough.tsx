@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MetronomeSpec, Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/shared';
 import { StepReps } from './tools/StepReps.tsx';
 import { StepTimer, type TimerClock } from './tools/StepTimer.tsx';
+import { StepTimedSets } from './tools/StepTimedSets.tsx';
 import { StepCircuit } from './tools/StepCircuit.tsx';
 import { StepInterval, type StepChrome } from './tools/StepInterval.tsx';
 import { StepBreathing } from './tools/StepBreathing.tsx';
@@ -352,6 +353,25 @@ function renderTool(
         />
       );
     case 'timer':
+      // Two or more sets play as sets of a timed effort (walkthrough v3 R1); one set is the hold
+      // it always was. Both share the remembered running clock.
+      if (t.sets && t.sets > 1) {
+        return (
+          <StepTimedSets
+            seconds={t.seconds}
+            sets={t.sets}
+            load={t.load}
+            chime={t.chime ?? true}
+            switchSides={t.switch_sides ?? false}
+            title={step.title}
+            log={log?.kind === 'timed_sets' ? log : undefined}
+            resumeClock={clock?.resume}
+            onClock={clock?.set}
+            onLog={(l) => setLog(step.id, l)}
+            onDone={onAdvance}
+          />
+        );
+      }
       return (
         <StepTimer
           seconds={t.seconds}

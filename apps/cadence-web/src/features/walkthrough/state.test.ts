@@ -41,6 +41,29 @@ describe('reps & sets — counted, logged', () => {
   });
 });
 
+describe("sets of a timed effort — each set's seconds, logged (walkthrough v3 R1)", () => {
+  const carry = step({ kind: 'timer', seconds: 45, sets: 4, load: '2×40 lb' });
+
+  it('partial credit: sets logged over sets asked, a short set still a set', () => {
+    expect(stepFraction(carry, { kind: 'timed_sets', sets: [45, 32], targetSec: 45 })).toBeCloseTo(2 / 4);
+    expect(stepFraction(carry, { kind: 'timed_sets', sets: [45, 53, 32, 45], targetSec: 45 })).toBe(1);
+  });
+
+  it('log line: uniform sets collapse to sets×seconds, uneven sets list each one', () => {
+    expect(logLine(carry, { kind: 'timed_sets', sets: [40, 40, 40, 40], targetSec: 45, load: '2×40 lb' })).toBe(
+      '4×40 s @ 2×40 lb',
+    );
+    expect(logLine(carry, { kind: 'timed_sets', sets: [45, 53, 32, 45], targetSec: 45, load: '2×40 lb' })).toBe(
+      '45 · 53 · 32 · 45 s @ 2×40 lb',
+    );
+  });
+
+  it('degrades honestly: no load never prints " @ undefined"; no sets falls back to the title', () => {
+    expect(logLine(carry, { kind: 'timed_sets', sets: [30], targetSec: 45 })).toBe('1×30 s');
+    expect(logLine(carry, { kind: 'timed_sets', sets: [], targetSec: 45 })).toBe('Step');
+  });
+});
+
 describe('check off — did it, with an optional note', () => {
   const checkoffStep = step({ kind: 'checkoff', label: '5 km' });
 

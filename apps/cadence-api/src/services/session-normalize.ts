@@ -8,6 +8,7 @@ import {
   SESSION_TOOL_KINDS,
   clampCycles,
   clampIntervalMinutes,
+  clampRestSec,
   singleSetPlan,
   clampSitMinutes,
   isBreathPatternId,
@@ -182,6 +183,9 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             ...metronomeFieldsOf(i),
             // A stated fact, kept only when stated: anything but a literal true is absent.
             ...(i.per_side === true ? { per_side: true } : {}),
+            // Rest between timed sets (walkthrough v3 R1): kept only when given, bounded, so a
+            // stored session never holds a rest nobody can wait out. Not drawn yet; stored now.
+            ...(clampRestSec(num(i.rest_sec)) !== undefined ? { rest_sec: clampRestSec(num(i.rest_sec)) } : {}),
             // Bounded here too, so a stored session never holds an out-of-range sit.
             meditate_interval_min:
               num(i.meditate_interval_min) === undefined
