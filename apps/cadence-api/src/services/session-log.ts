@@ -10,7 +10,7 @@ import { getOccurrenceWithActivity, recordOccurrenceLog } from '../repos/occurre
 import { insertGoalEvent } from '../repos/goal-events.ts';
 import { sessionTexts, touchPracticedFromText } from './repertoire-practice.ts';
 import { logAi } from './ai-log.ts';
-import { MAX_ITEMS, num, str } from './session-normalize.ts';
+import { ITEM_LOAD_MAX, ITEM_NAME_MAX, MAX_ITEMS, num, str } from './session-normalize.ts';
 
 const MAX_LOG_TEXT = 2000;
 const FELTS = new Set(['easy', 'right', 'hard']);
@@ -30,14 +30,14 @@ function normalizeLogItems(raw: unknown): OccurrenceLogItem[] {
     .slice(0, MAX_ITEMS)
     .map((it): OccurrenceLogItem | null => {
       const i = it as Record<string, unknown>;
-      const name = str(i.name, 120);
+      const name = str(i.name, ITEM_NAME_MAX);
       if (!name) return null;
       return {
         name,
         done: typeof i.done === 'boolean' ? i.done : true,
         sets: num(i.sets),
         reps: num(i.reps),
-        load: str(i.load, 40),
+        load: str(i.load, ITEM_LOAD_MAX),
         duration_min: num(i.duration_min),
         distance_km: num(i.distance_km),
         felt: typeof i.felt === 'string' && FELTS.has(i.felt) ? (i.felt as OccurrenceLogItem['felt']) : undefined,
