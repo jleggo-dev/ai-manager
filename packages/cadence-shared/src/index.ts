@@ -44,6 +44,7 @@ export * from './session-budget.ts';
 export * from './walkthrough.ts';
 export * from './tool-catalog.ts';
 export * from './step-cues.ts';
+export * from './timed-sets.ts';
 export * from './breathing.ts';
 export * from './interval.ts';
 export * from './workout-activities.ts';

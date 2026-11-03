@@ -132,3 +132,33 @@ describe('Walkthrough — every step opens at the top', () => {
     expect(scroller(container).scrollTop).toBe(300);
   });
 });
+
+/** A timer with two or more sets is dispatched to the timed-sets player (walkthrough v3 R1); a
+ *  single hold is still the plain timer. The shell's switch is the router here, so both sides. */
+const carryWt: WalkthroughData = {
+  total_min: 4,
+  steps: [
+    {
+      id: 's1',
+      title: 'Farmer carry',
+      minutes: 3,
+      tool: { kind: 'timer', seconds: 45, sets: 4, load: '2×40 lb' },
+      skippable: true,
+    },
+    { id: 's2', title: 'Plank', minutes: 1, tool: { kind: 'timer', seconds: 60 }, skippable: true },
+  ],
+};
+
+describe('Walkthrough — a timer in sets plays as sets; a single hold does not', () => {
+  it('the carry opens on set 1 with the target as plain text; the plank opens as the hold it always was', () => {
+    render(<Walkthrough walkthrough={carryWt} title="Obstacle strength" onClose={() => {}} onComplete={() => {}} />);
+    expect(screen.getByText('45 s × 2×40 lb · 4 sets')).toBeInTheDocument();
+    expect(screen.getByText('Set 1 of 4')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Next step'));
+    expect(screen.getByText('1 min')).toBeInTheDocument();
+    expect(screen.queryByText(/Set 1 of/)).toBeNull();
+    expect(screen.getByRole('button', { name: /^Start · 1 min/ })).toBeInTheDocument();
+  });
+});

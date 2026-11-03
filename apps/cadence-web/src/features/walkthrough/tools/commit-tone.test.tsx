@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BREATH_PATTERNS, groundingSpec, singleSetPlan, type WalkthroughStep } from '@cadence/shared';
 import { StepReps } from './StepReps.tsx';
 import { StepTimer } from './StepTimer.tsx';
+import { StepTimedSets } from './StepTimedSets.tsx';
 import { StepInterval } from './StepInterval.tsx';
 import { StepCircuit } from './StepCircuit.tsx';
 import { StepMeditate } from './StepMeditate.tsx';
@@ -51,7 +52,7 @@ function tickUntilButton(label: string | RegExp, maxMs = 20_000) {
 
 const STEP: WalkthroughStep = { id: 's1', title: 'Step', minutes: 1, tool: { kind: 'read' }, skippable: true };
 
-type Row = [name: string, setup: () => void, label: string | RegExp, expected: 'commit' | 'amber'];
+type Row = [name: string, setup: () => void, label: string | RegExp, expected: 'commit' | 'amber' | 'other'];
 
 const ROWS: Row[] = [
   // Writes → commit green.
@@ -84,6 +85,17 @@ const ROWS: Row[] = [
       tickUntilButton(/^Stop · log/);
     },
     /^Stop · log/,
+    'commit',
+  ],
+  [
+    'timed sets: Log writes the set',
+    () => {
+      render(<StepTimedSets seconds={5} sets={3} chime={false} onLog={vi.fn()} />);
+      press('Start');
+      tickUntilButton('Stop');
+      press('Stop');
+    },
+    'Log',
     'commit',
   ],
   [
@@ -130,6 +142,31 @@ const ROWS: Row[] = [
     () => render(<StepTimer seconds={60} chime={false} onLog={vi.fn()} onDone={vi.fn()} />),
     /^Start/,
     'amber',
+  ],
+  [
+    'timed sets: Start',
+    () => render(<StepTimedSets seconds={45} sets={3} chime={false} onLog={vi.fn()} />),
+    'Start',
+    'amber',
+  ],
+  [
+    'timed sets: Stop halts the clock and writes nothing (the design drew it green; #472 rules amber)',
+    () => {
+      render(<StepTimedSets seconds={45} sets={3} chime={false} onLog={vi.fn()} />);
+      press('Start');
+    },
+    'Stop',
+    'amber',
+  ],
+  [
+    'timed sets: Keep going is a step back, neither amber nor green',
+    () => {
+      render(<StepTimedSets seconds={45} sets={3} chime={false} onLog={vi.fn()} />);
+      press('Start');
+      press('Stop');
+    },
+    'Keep going',
+    'other',
   ],
   [
     'interval: Start',

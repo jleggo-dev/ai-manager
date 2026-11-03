@@ -123,3 +123,43 @@ describe('logOccurrence — revising a session', () => {
     expect(fields.log.raw_text).toBe(ALREADY_LOGGED.log.raw_text);
   });
 });
+
+/**
+ * Sets of a timed effort (walkthrough v3 R1). The walkthrough's Finish writes a summary line like
+ * "farmer carry 4×40 s @ 2×40 lb"; the parse hands back an item with `sets`, `duration_min` (one
+ * set — see `OccurrenceLogItem`) and `load`. All three have to reach the stored log — a sets-of-time
+ * item that lost its seconds would read as four sets of nothing.
+ */
+describe('logOccurrence — a timed effort done in sets keeps sets, the length of one set and the load', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    recordOccurrenceLog.mockResolvedValue(true);
+    logAi.mockResolvedValue(undefined);
+    getOccurrenceWithActivity.mockResolvedValue({
+      occurrence_id: OCC,
+      activity_id: 'a1',
+      title: 'Obstacle strength',
+      category: 'strength',
+      session: {},
+      value: null,
+      log: null,
+    });
+  });
+
+  it('stores all three fields as the parse returned them', async () => {
+    runJobBySlug.mockResolvedValue(
+      reply({
+        items: [{ name: 'Farmer carry', done: true, sets: 4, reps: null, load: '2×40 lb', duration_min: 0.67 }],
+        summary: 'Four 40-second carries with the 40s.',
+        metrics: {},
+        events: [],
+      }),
+    );
+    const out = await logOccurrence(USER, OCC, 'farmer carry 4×40 s @ 2×40 lb');
+    expect(out?.log.items).toEqual([
+      { name: 'Farmer carry', done: true, sets: 4, load: '2×40 lb', duration_min: 0.67 },
+    ]);
+    const stored = recordOccurrenceLog.mock.calls[0]![2] as { log: { items: unknown[] } };
+    expect(stored.log.items).toEqual(out?.log.items);
+  });
+});

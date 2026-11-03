@@ -194,28 +194,36 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 ## Phase 2 — timed sets (after R1; finished look after design B)
 
-- [ ] **2a. Shared.**
-  - Timer step: add `sets?`, `rest_sec?`, `load?`.
+- [x] **2a. Shared.** (PR: timed sets, 2026-11-03)
+  - Timer step: add `sets?`, `rest_sec?`, `load?`. Done; `rest_sec` added to `SessionItem` and
+    the API normalizer (bounded 1–600 s, `clampRestSec` in `timed-sets.ts`).
   - `inferTool`: when an item has `sets` + `duration_min` and no `reps`, it becomes timed sets, and
-    the duration is no longer dropped.
-  - Add a table test with positives taken from the real rows (carry, hang × 3, plank × 3, the
-    Oct 5 rows) and near-misses (glute bridge with "pause 2 seconds", step-down with "lower over
-    3 seconds").
-- [ ] **2b. The player (design B).**
+    the duration is no longer dropped. Done; the step's minutes are sets × one set plus the rests.
+  - Table test with positives from the real rows and the near-misses: `timed-sets.test.ts`.
+- [x] **2b. The player (design B).** `tools/StepTimedSets.tsx`, its own file (StepTimer.tsx is
+      361 lines; the clock pieces are shared). The set chips are `tools/SetChips.tsx`, drawn once
+      for reps and timed sets (done chips green, per "done is green").
   - The ring is the set's clock; the set chips carry the sets.
   - Past the target the clock counts up ("8 s over"), with a chime at the target, until Stop.
   - Stop opens a review: seconds with − / +, "N over/under target · Reset to 45", then Keep going
-    or Log. So it does NOT log automatically at the target, unlike a single hold today.
-  - Switch-sides still works.
-  - Resuming a remembered session (`sessionInProgress`) keeps the set and the clock.
-  - **Open:** rest between sets isn't drawn. Either a rest countdown with `rest_sec` or none (the
-    person taps Start for the next set). Ask the owner before building it.
-- [ ] **2c. Log.** A new `StepLog` kind; log line `4×40 s @ 2×40 lb`; Recap, `recapSummary`, and
-      check that `parse-session-log` reads it.
-- [ ] **2d. Catalog wording, facts only.** "timer: one timed effort; with sets, repeated that many
-      times with rest_sec between." No rule that carries are timed (facts-not-picks).
-- [ ] **2e. Watch.** Check whether the watch plays sessions. If it does, either reach parity
-      or explicitly fall back.
+    or Log. It does NOT log at the target; a single hold still does.
+  - Switch-sides works per set. A remembered session reopens on the same set, clock running.
+  - Rest between sets is not drawn (owner: start undrawn); `rest_sec` is stored for later.
+- [x] **2c. Log.** `StepLog` kind `timed_sets` (seconds per set, target, load); log line
+      `4×40 s @ 2×40 lb` from `timedSetsLogLine` in shared; Recap and the all-steps row read it
+      through `logLine`. `parse-session-log` reads the summary line; its normalizer already keeps
+      `sets`, `duration_min` and `load` — `duration_min` on a sets item is ONE set, documented on
+      `OccurrenceLogItem`. No prompt change.
+- [x] **2d. Catalog wording, facts only.** The timer entry states the sets fact and lists
+      `sets`, `rest_sec`, `load` under fills. Filled in code at session build, so no sync-jobs.
+- [x] **2e. Watch.** Checked, nothing built. The watch plays sessions (CadenceWatch; the strength
+      list comes from `watch-week.ts`, which sends `sets` and `durationSec` together), and
+      `StrengthPlan.swift` already walks every set as its own step and opens a duration-without-reps
+      item in `HoldView` — so a carry plays as "Set 2 of 4" then a hands-free 45-second hold, per
+      set. Near parity, with three gaps left as they are: the wrist hold ends itself at the target
+      (no count-up, no − / + review); `WatchExercise.spec` prints the duration only when `sets`
+      is nil, so the prescription line shows the load alone; and `composeWorkoutPlan` counts one
+      set's minutes for the WorkoutKit goal, not sets × one set.
 - After merge: deploy the API and rebuild the phone. Then re-run the audit (Phase 3c) after a week
   of new sessions.
 

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { type WalkthroughStep, intervalShorthand, intervalTotalMinutes } from '@cadence/shared';
+import { type WalkthroughStep, intervalShorthand, intervalTotalMinutes, secondsText } from '@cadence/shared';
 import { type StepLog, logLine } from './state.ts';
 import { TONE, COMMIT } from './tools/tone.ts';
 
@@ -14,7 +14,13 @@ export function targetText(step: WalkthroughStep): string {
     const head = [t.reps != null ? String(t.reps) : '', t.load ? `× ${t.load}` : ''].filter(Boolean).join(' ');
     return t.sets ? `${head}${head ? ' · ' : ''}${t.sets} sets` : head;
   }
-  if (t.kind === 'timer') return `${Math.round(t.seconds / 60) || 1} min`;
+  if (t.kind === 'timer') {
+    // A plain hold keeps its minute ("5 min"). Sets or a load read like the reps line, in
+    // seconds: "45 s × 40 lb · 4 sets" (walkthrough v3 design B).
+    if (!t.sets && !t.load) return `${Math.round(t.seconds / 60) || 1} min`;
+    const head = [secondsText(t.seconds), t.load ? `× ${t.load}` : ''].filter(Boolean).join(' ');
+    return t.sets ? `${head} · ${t.sets} sets` : head;
+  }
   if (t.kind === 'checkoff') return t.label ?? '';
   // The unit IS the prescription here — there's no target number, just what to type it in.
   // Absent unit degrades honestly: the target line disappears rather than showing a blank label.
@@ -27,7 +33,7 @@ export function toolNoun(step: WalkthroughStep): string {
   const t = step.tool;
   if (t.kind === 'circuit') return `Circuit · ${t.rounds} rounds`;
   if (t.kind === 'interval') return `Intervals · ${intervalShorthand(t.plan)} · ${intervalTotalMinutes(t.plan)} min`;
-  if (t.kind === 'timer') return `Timer · ${Math.round(t.seconds / 60) || 1} min`;
+  if (t.kind === 'timer') return `Timer · ${targetText(step)}`;
   if (t.kind === 'reps') return `${t.sets} × ${t.reps ?? ''}`.trim();
   if (t.kind === 'journal') return 'Journal · one line for the coach';
   if (t.kind === 'measure') return t.unit ? `Measure · ${t.unit}` : 'Measure';

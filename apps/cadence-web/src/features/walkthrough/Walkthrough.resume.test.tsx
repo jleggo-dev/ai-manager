@@ -100,6 +100,38 @@ describe('Walkthrough remembers the session in progress', () => {
     expect(screen.getByText('12:00')).toBeInTheDocument();
   });
 
+  it('a remembered carry reopens on the same SET with its clock running — the set index is the sets logged', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(new Date('2026-11-03T12:10:00Z'));
+    const carry: WalkthroughData = {
+      total_min: 3,
+      steps: [
+        { id: 's1', title: 'Farmer carry', minutes: 3, tool: { kind: 'timer', seconds: 45, sets: 4 }, skippable: true },
+      ],
+    };
+    // Two sets logged, the third started 20 seconds ago, then the phone was locked.
+    writeSessionInProgress({
+      occurrenceId: 'o1',
+      title: 'Obstacle strength',
+      area: 'movement',
+      walkthrough: carry,
+      idx: 0,
+      visited: [0],
+      logs: { s1: { kind: 'timed_sets', sets: [45, 53], targetSec: 45 } },
+      tempos: {},
+      phase: 'step',
+      clock: { stepId: 's1', startedAt: Date.now() - 20_000, base: 0 },
+    });
+    mount({ walkthrough: carry, title: 'Obstacle strength', resume: readSessionInProgress() });
+    expect(screen.getByText('Set 3 of 4')).toBeInTheDocument();
+    expect(screen.getByText('0:25')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(screen.getByText('0:20')).toBeInTheDocument();
+  });
+
   it('leaving a running timer step forgets the clock — stepping away stops a timer, as it always has', () => {
     mount({
       resume: {

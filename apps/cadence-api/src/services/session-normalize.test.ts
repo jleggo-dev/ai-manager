@@ -269,6 +269,35 @@ describe('per_side survives normalize only as a stated true', () => {
   });
 });
 
+describe('rest between timed sets survives normalize, bounded (walkthrough v3 R1)', () => {
+  const one = (item: Record<string, unknown>) =>
+    normalizeSession({ blocks: [{ label: 'Main', items: [{ name: 'Farmer carry', ...item }] }] })!.blocks[0]!.items[0]!;
+
+  it('keeps a stated rest, whole seconds', () => {
+    expect(one({ sets: 4, duration_min: 0.75, rest_sec: 90 }).rest_sec).toBe(90);
+    expect(one({ sets: 4, duration_min: 0.75, rest_sec: 89.6 }).rest_sec).toBe(90);
+  });
+
+  it('caps it at ten minutes', () => {
+    expect(one({ sets: 4, duration_min: 0.75, rest_sec: 5000 }).rest_sec).toBe(600);
+  });
+
+  it('never invents one — absent, zero, negative or a string all leave it absent', () => {
+    expect(one({ sets: 4, duration_min: 0.75 })).not.toHaveProperty('rest_sec');
+    expect(one({ sets: 4, duration_min: 0.75, rest_sec: 0 })).not.toHaveProperty('rest_sec');
+    expect(one({ sets: 4, duration_min: 0.75, rest_sec: -30 })).not.toHaveProperty('rest_sec');
+    expect(one({ sets: 4, duration_min: 0.75, rest_sec: '90' })).not.toHaveProperty('rest_sec');
+  });
+
+  it('the timed-sets shape itself survives: sets, the length of one set and the load all stored', () => {
+    expect(one({ sets: 4, duration_min: 0.75, load: '2 × 40 lb kettlebells' })).toMatchObject({
+      sets: 4,
+      duration_min: 0.75,
+      load: '2 × 40 lb kettlebells',
+    });
+  });
+});
+
 describe('the metronome survives normalize, bounded', () => {
   const one = (item: Record<string, unknown>) =>
     normalizeSession({ blocks: [{ label: 'Practice', items: [{ name: 'Scales', ...item }] }] })!.blocks[0]!.items[0]!;

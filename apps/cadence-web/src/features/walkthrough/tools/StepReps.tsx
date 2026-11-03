@@ -2,6 +2,8 @@ import { useState, type CSSProperties } from 'react';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C, COMMIT } from './tone.ts';
 import { useHandoff } from './useHandoff.ts';
+import { SetChips } from './SetChips.tsx';
+import { dialBtn } from './timerStyles.ts';
 
 const GAP = 10;
 type RepsLog = Extract<StepLog, { kind: 'reps' }>;
@@ -149,58 +151,18 @@ export function StepReps({
             : `Log set ${setNum} · ${reps} reps`}
       </button>
 
-      <div style={{ display: 'flex', gap: 6, borderTop: '1px solid oklch(93% 0.012 85)', paddingTop: 13 }}>
-        {Array.from({ length: sets }).map((_, i) => {
-          const done = i < logged.length;
-          const isCurrent = editing != null ? i === editing : i === logged.length;
-          const off = done && target != null && logged[i] !== target;
-          return (
-            <div
-              key={i}
-              onClick={
-                done
-                  ? () => {
-                      handoff.cancel(); // re-opening a set inside the hand-off window means stay
-                      setEditing(i);
-                      setDial(logged[i]!);
-                    }
-                  : undefined
-              }
-              style={{
-                flex: 1,
-                textAlign: 'center',
-                borderRadius: 12,
-                padding: '8px 0',
-                background: done ? 'oklch(97% 0.02 74)' : 'white',
-                border: `1.5px solid ${done ? 'oklch(90% 0.05 70)' : isCurrent ? TONE.fillA : 'oklch(93% 0.012 85)'}`,
-                cursor: done ? 'pointer' : 'default',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: 900,
-                  lineHeight: 1.1,
-                  color: done ? (off ? TONE.off : 'oklch(40% 0.06 62)') : 'oklch(78% 0.015 85)',
-                }}
-              >
-                {done ? logged[i] : isCurrent ? '·' : '—'}
-              </div>
-              <div
-                style={{
-                  fontSize: 9,
-                  fontWeight: 900,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: done ? 'oklch(52% 0.04 62)' : 'oklch(66% 0.015 85)',
-                }}
-              >
-                Set {i + 1}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {/* The chips are shared with the timed-sets clock (SetChips.tsx); re-opening a logged set
+          inside the hand-off window means stay here. */}
+      <SetChips
+        count={sets}
+        logged={logged.map((r) => ({ label: String(r), off: target != null && r !== target }))}
+        current={editing != null ? null : { index: logged.length }}
+        onEdit={(i) => {
+          handoff.cancel();
+          setEditing(i);
+          setDial(logged[i]!);
+        }}
+      />
     </div>
   );
 }
@@ -221,23 +183,6 @@ const eyebrow: CSSProperties = {
   letterSpacing: '0.09em',
   textTransform: 'uppercase',
   color: TONE.sub,
-};
-const dialBtn: CSSProperties = {
-  position: 'absolute',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  width: 50,
-  height: 44,
-  border: 'none',
-  borderRadius: 999,
-  background: 'linear-gradient(180deg,#fff 0%,oklch(96% 0.01 85) 46%)',
-  boxShadow: '0 4px 0 oklch(88% 0.02 85), 0 0 0 1px oklch(92% 0.015 85)',
-  fontSize: 24,
-  fontWeight: 800,
-  color: 'oklch(40% 0.02 150)',
-  cursor: 'pointer',
-  padding: 0,
-  lineHeight: 1,
 };
 const logBtn: CSSProperties = {
   border: 'none',

@@ -5,6 +5,7 @@ import {
   groundingLogLine,
   intervalLogLine,
   sitLogLine,
+  timedSetsLogLine,
 } from '@cadence/shared';
 
 /**
@@ -17,6 +18,11 @@ export type StepLog =
   | { kind: 'reps'; sets: number[]; target?: number; load?: string }
   | { kind: 'circuit'; roundsDone: number; totalRounds: number }
   | { kind: 'timer'; elapsedSec: number; targetSec: number; done: boolean }
+  // Sets of a timed effort (walkthrough v3 R1): the seconds each set actually ran, in order, and
+  // the target one set was set for. Its own kind rather than a list on `timer`: a timer log is one
+  // number read as elapsed-over-target, and every reader of it would have had to branch; this is
+  // read like `reps` — sets logged over sets asked — with a load so the line reads "4×40 s @ 2×40 lb".
+  | { kind: 'timed_sets'; sets: number[]; targetSec: number; load?: string }
   // An interval run logs the ROUNDS finished and the seconds actually spent — never the
   // prescription. `shorthand` is carried rather than re-derived because the person may have
   // edited the plan before starting, and the receipt has to describe what they ran.
@@ -57,6 +63,11 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
   switch (log.kind) {
     case 'reps': {
       const target = step.tool.kind === 'reps' ? step.tool.sets : log.sets.length;
+      return target > 0 ? Math.min(1, log.sets.length / target) : log.sets.length > 0 ? 1 : 0;
+    }
+    // Sets logged over sets asked, like reps — a short set still counts as a set done.
+    case 'timed_sets': {
+      const target = step.tool.kind === 'timer' && step.tool.sets ? step.tool.sets : log.sets.length;
       return target > 0 ? Math.min(1, log.sets.length / target) : log.sets.length > 0 ? 1 : 0;
     }
     case 'circuit':
@@ -115,6 +126,8 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
       const base = uniform ? `${sets.length}×${first}` : `${sets.length}×[${sets.join(',')}]`;
       return `${base}${load}`;
     }
+    case 'timed_sets':
+      return timedSetsLogLine(log.sets, log.load) || step.title;
     case 'circuit':
       return `${log.roundsDone} of ${log.totalRounds} rounds`;
     case 'interval':
