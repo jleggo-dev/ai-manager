@@ -124,7 +124,7 @@ export function StepMeditate({
             </>
           ) : null}
         </div>
-        <button style={primaryBtn} onClick={onDone}>
+        <button style={{ ...primaryBtn, ...COMMIT }} onClick={onDone}>
           Done
         </button>
       </div>
@@ -194,7 +194,8 @@ export function StepMeditate({
       )}
 
       <button
-        style={isPre ? greyBtn : primaryBtn}
+        // "End here" writes the sit, so it wears the commit green; Begin / Sit again only start one.
+        style={isPre ? greyBtn : isRun ? { ...primaryBtn, ...COMMIT } : primaryBtn}
         onClick={(e) => {
           e.stopPropagation(); // never let ending the sit read as a return
           primary();
@@ -290,7 +291,8 @@ const primaryBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  ...COMMIT,
+  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
+  boxShadow: `0 5px 0 ${TONE.deep}`,
 };
 const greyBtn: CSSProperties = {
   border: 'none',

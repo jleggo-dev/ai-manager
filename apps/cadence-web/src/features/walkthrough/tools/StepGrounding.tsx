@@ -90,7 +90,7 @@ export function StepGrounding({
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
           <div style={creditLine}>{groundingLogLine(spec.game, idx + 1, total, spec.openEnded)}</div>
         </div>
-        <button style={forwardBtn} onClick={close}>
+        <button style={{ ...forwardBtn, ...COMMIT }} onClick={close}>
           Done
         </button>
       </div>
@@ -182,7 +182,12 @@ export function StepGrounding({
           </button>
         )}
         <button
-          style={{ ...(step.field === 'arc' ? outlineBtn : forwardBtn), flex: step.secondary ? 1.6 : 1 }}
+          // Mid-game the forward only moves you on (amber); on the last card it finishes and logs the
+          // game, so there it wears the commit green.
+          style={{
+            ...(step.field === 'arc' ? outlineBtn : idx + 1 >= total ? { ...forwardBtn, ...COMMIT } : forwardBtn),
+            flex: step.secondary ? 1.6 : 1,
+          }}
           onClick={step.field === 'arc' ? finish : advance}
         >
           {step.forward}
@@ -271,7 +276,8 @@ const forwardBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  ...COMMIT,
+  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
+  boxShadow: `0 5px 0 ${TONE.deep}`,
 };
 const outlineBtn: CSSProperties = {
   border: '1.5px solid oklch(88% 0.02 85)',
