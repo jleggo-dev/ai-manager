@@ -315,3 +315,78 @@ describe('the three refusal buckets never share wording (MP35)', () => {
     expect(out.reason).not.toMatch(/\brefused\b/i);
   });
 });
+
+/**
+ * A place they did not say (2026-11-03): the maker's own record is what this rung is for, and one
+ * of four live answers for "Rickard's — Red" put the restaurant in both fields — "Rickard's Red
+ * Beer (Perkins Restaurant)" by "Perkins Restaurant & Bakery". Refused in words, before any
+ * number is weighed; the full table of words is food-research-place.test.ts. The numbers here are
+ * the beer's own (45 kcal per 100 ml, a pint on the label).
+ */
+describe('researchFoodOutcome — a restaurant or store they did not name is refused', () => {
+  const RICKARDS = {
+    name: "Rickard's Red Beer",
+    brand: 'Molson Coors',
+    base_unit: 'ml',
+    serving_label: '1 pint (473 ml)',
+    serving_amount: 473,
+    macros_per_serving: { kcal: 214, protein_g: 0, carbs_g: 11.3, fat_g: 0 },
+    macros_per_100: { kcal: 45.2, protein_g: 0, carbs_g: 2.4, fat_g: 0 },
+    confidence: 0.8,
+    source_url: 'https://www.molsoncoors.com/brands/rickards',
+    alternates: [],
+  };
+  const asked = { name: 'Red', brand: "Rickard's" };
+  const runWith = async (patch: Record<string, unknown>, item = asked) => {
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify({ ...RICKARDS, ...patch }) });
+    return researchFoodOutcome('u1', item);
+  };
+
+  it('the restaurant as the brand: refused, and the reason quotes the place and the field', async () => {
+    const out = await runWith({ brand: 'Perkins Restaurant & Bakery' });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('refused');
+    expect(out.reason).toContain('"Perkins Restaurant" in brand "Perkins Restaurant & Bakery"');
+    // The three buckets never share wording (MP35).
+    expect(out.reason).not.toMatch(/\bnothing\b/i);
+    expect(out.reason).not.toMatch(/\bbroke\b/i);
+  });
+
+  it('the restaurant in brackets after the name, the maker in brand: refused on the name', async () => {
+    const out = await runWith({ name: "Rickard's Red Beer (Perkins Restaurant)" });
+    expect(out.result).toBeNull();
+    expect(out.reason).toContain('"Perkins Restaurant" in name "Rickard\'s Red Beer (Perkins Restaurant)"');
+  });
+
+  it("the maker's own record: accepted as it is", async () => {
+    const out = await runWith({});
+    expect(out.reason).toBeNull();
+    expect(out.result?.food).toMatchObject({ name: "Rickard's Red Beer", brand: 'Molson Coors' });
+  });
+
+  it("a restaurant's own dish, asked by that restaurant: accepted — the place is the maker they named", async () => {
+    const out = await runWith(
+      { name: 'Buttermilk Pancakes', brand: 'Perkins Restaurant & Bakery' },
+      { name: 'pancakes', brand: 'Perkins' },
+    );
+    expect(out.reason).toBeNull();
+    expect(out.result?.food.brand).toBe('Perkins Restaurant & Bakery');
+  });
+
+  it('no brand in the answer: the maker they named stands in, and is never a place they did not say', async () => {
+    const out = await runWith({ brand: '' });
+    expect(out.reason).toBeNull();
+    expect(out.result?.food.brand).toBe("Rickard's");
+  });
+
+  it('a prompt override rides to the job as the eval affordance it is (never set by the app)', async () => {
+    runJobBySlug.mockResolvedValue({ formatted: JSON.stringify(RICKARDS) });
+    await researchFoodOutcome('u1', asked, { promptOverride: 'the whole prompt, filled in' });
+    expect(runJobBySlug).toHaveBeenCalledWith(
+      'u1',
+      'research-food',
+      { food_text: "Rickard's — Red" },
+      { promptOverride: 'the whole prompt, filled in' },
+    );
+  });
+});
