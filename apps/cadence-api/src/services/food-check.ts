@@ -249,9 +249,11 @@ const webCheck = (status: SourceCheck['status'], detail: string): SourceCheck =>
 });
 
 /**
- * The web's rows go first in the section. The book shows the first SHOW_PER_LOOKUP rows of a
- * lookup and ranks nothing, and the free sources answered these words in the first fill already,
- * so the row the web found — the one she asked for — must not be the ninth and unseen.
+ * The web's rows go first in the section. The book ranks nothing: it deals a lookup's rows
+ * round-robin by source, in the order the sources first appear, and shows the first
+ * SHOW_PER_LOOKUP of the deal (`dealBySource`). A row in front of the result is its source's first
+ * and the first dealt, so the row the web found — the one she asked for — is the first line of
+ * its section and never the ninth and unseen; `food-candidate-book.test.ts` pins that.
  */
 export function withWebRows(base: FanOutResult, web: WebRows): FanOutResult {
   const key = (c: SourceCandidate): string => `${c.source}|${c.food_id ?? c.name}`;

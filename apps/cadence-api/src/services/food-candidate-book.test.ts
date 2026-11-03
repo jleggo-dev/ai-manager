@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { FanOutResult } from './food-source-fanout.ts';
-import type { SourceCandidate } from './food-source-report.ts';
+import type { FoodSourceName, SourceCandidate } from './food-source-report.ts';
 import {
   BOOK_BUDGET_CHARS,
   CandidateBook,
@@ -20,12 +20,15 @@ import {
   addLookups,
   checkPick,
   cutAtWord,
+  dealBySource,
+  distinctRecords,
   matchBookMeasure,
   partsToLookups,
   splitMealParts,
   stripAmount,
   withFatSecretRows,
 } from './food-candidate-book.ts';
+import { withWebRows } from './food-check.ts';
 
 function candidate(over: Partial<SourceCandidate> & { name: string }): SourceCandidate {
   return {
@@ -287,6 +290,255 @@ describe('CandidateBook — every record found, none dropped, ids stable', () =>
       candidate({ name: 'Matcha', source: 'fatsecret', food_id: 'fs-2' }),
     ];
     expect(withFatSecretRows(base, rows).candidates.map((c) => c.food_id)).toEqual(['fs-1', 'fs-2']);
+  });
+});
+
+/**
+ * A lookup's rows are dealt round-robin by source before the first SHOW_PER_LOOKUP are shown.
+ * Until 2026-11-03 the book took the first eight in source order — ledger, then USDA, then
+ * FatSecret — so whenever the ledger answered with eight rows (as it did for "one pint of
+ * Rickards red": one real row and seven pinto-bean rows) no USDA or FatSecret row was ever shown.
+ * The deal ranks nothing: the sources keep the order they first appear in, each source keeps its
+ * own order, and the first eight of the deal hold every source's first rows.
+ */
+describe("CandidateBook — the shown rows are dealt round-robin by source, never one source's first eight", () => {
+  const rows = (source: FoodSourceName, prefix: string, n: number): SourceCandidate[] =>
+    Array.from({ length: n }, (_, i) =>
+      candidate({ name: `${prefix}${i}`, source, food_id: `${source}-${prefix}-${i}` }),
+    );
+  const names = (cs: SourceCandidate[]): string[] => cs.map((c) => c.name);
+  const ledger8 = rows('ledger', 'L', 8);
+  const usda2 = rows('usda', 'U', 2);
+  const fatsecret2 = rows('fatsecret', 'F', 2);
+  const lookup = { q: 'pint of Rickards red', measure: null, brand: null };
+
+  describe('dealBySource', () => {
+    it.each<[string, SourceCandidate[], string[]]>([
+      ['nothing stays nothing', [], []],
+      ['one source is unchanged', rows('ledger', 'L', 3), ['L0', 'L1', 'L2']],
+      [
+        'the first row of every source, then the second, then the rest of the longest',
+        [...ledger8, ...usda2, ...fatsecret2],
+        ['L0', 'U0', 'F0', 'L1', 'U1', 'F1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7'],
+      ],
+      [
+        'a source with more rows fills the tail, in its own order',
+        [...rows('usda', 'U', 1), ...rows('fatsecret', 'F', 3)],
+        ['U0', 'F0', 'F1', 'F2'],
+      ],
+      // The sources keep the order they first appear in: a row put in front (the web's) is dealt first.
+      [
+        'the source in front is dealt first',
+        [...rows('research', 'R', 1), ...rows('ledger', 'L', 2)],
+        ['R0', 'L0', 'L1'],
+      ],
+      // Near-miss: a result that is already interleaved is left as it is — nothing is reordered within a source.
+      [
+        'an interleaved result is unchanged',
+        [ledger8[0]!, usda2[0]!, ledger8[1]!, usda2[1]!],
+        ['L0', 'U0', 'L1', 'U1'],
+      ],
+    ])('%s', (_label, input, expected) => {
+      expect(names(dealBySource(input))).toEqual(expected);
+    });
+
+    it("keeps each source's own order: the ledger's phrase rows stay ahead of its by-word rows", () => {
+      // searchLedger (food-source-fanout.ts) puts the phrase's own rows first, then the by-word rows.
+      const phrase = rows('ledger', 'phrase ', 2);
+      const byWord = rows('ledger', 'by-word ', 2);
+      const dealt = names(dealBySource([...phrase, ...byWord, ...usda2]));
+      expect(dealt).toEqual(['phrase 0', 'U0', 'phrase 1', 'U1', 'by-word 0', 'by-word 1']);
+      expect(dealt.indexOf('by-word 0')).toBeGreaterThan(dealt.indexOf('phrase 1'));
+    });
+  });
+
+  it("eight ledger rows plus two USDA and two FatSecret rows: the shown eight hold each source's first rows", () => {
+    const book = new CandidateBook();
+    const section = book.add(lookup, found([...ledger8, ...usda2, ...fatsecret2]));
+    expect(section.entryIds).toHaveLength(SHOW_PER_LOOKUP);
+    expect(section.entryIds.map((id) => book.entries.get(id)!.name)).toEqual([
+      'L0',
+      'U0',
+      'F0',
+      'L1',
+      'U1',
+      'F1',
+      'L2',
+      'L3',
+    ]);
+    const text = book.text();
+    for (const shown of ['U0', 'U1', 'F0', 'F1', 'L0', 'L3']) expect(text).toContain(` · ${shown} · `);
+    // What the old slice would have shown instead — the ledger's fifth to eighth rows — is held back.
+    for (const hidden of ['L4', 'L5', 'L6', 'L7']) expect(text).not.toContain(` · ${hidden} · `);
+    expect(book.shown().size).toBe(SHOW_PER_LOOKUP);
+    // The ids follow the deal, so the model's c1…c8 are the lines in the order it reads them.
+    expect(section.entryIds).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8']);
+  });
+
+  it('a single-source result is unchanged: the first eight, in order', () => {
+    const book = new CandidateBook();
+    const section = book.add(lookup, found(rows('ledger', 'L', 10)));
+    expect(section.entryIds.map((id) => book.entries.get(id)!.name)).toEqual([
+      'L0',
+      'L1',
+      'L2',
+      'L3',
+      'L4',
+      'L5',
+      'L6',
+      'L7',
+    ]);
+    expect(book.entries.size).toBe(SHOW_PER_LOOKUP);
+  });
+
+  it('a record seen twice still keeps its first id, wherever the deal puts it the second time', () => {
+    const book = new CandidateBook();
+    const milk = candidate({ name: 'Milk, 2%' });
+    book.add({ q: 'milk', measure: null, brand: null }, found([milk]));
+    // The second lookup's result has a USDA row in front, so the deal puts the USDA row first and the milk second.
+    book.add(
+      { q: '2% milk', measure: null, brand: null },
+      found([candidate({ name: 'Milk, reduced fat', source: 'usda' }), milk, candidate({ name: 'Milk, whole' })]),
+    );
+    expect(book.entries.size).toBe(3);
+    expect(book.sections[1]?.entryIds).toEqual(['c2', 'c1', 'c3']);
+    expect(book.entries.get('c1')?.name).toBe('Milk, 2%');
+  });
+
+  it("the web's row (withWebRows, food-check.ts) is still the first line of its section after the deal", () => {
+    const web = candidate({ name: "Rickard's Red Beer", brand: 'Molson Coors', source: 'research', food_id: 'r-1' });
+    const base = found([...ledger8, ...usda2, ...fatsecret2]);
+    const merged = withWebRows(base, { rows: [web], check: { source: 'research', status: 'hit', ms: 0, detail: '' } });
+    const book = new CandidateBook();
+    const section = book.add({ q: 'Red', measure: '1 pint', brand: "Rickard's" }, merged);
+    expect(section.entryIds[0]).toBe('c1');
+    expect(book.entries.get('c1')?.name).toBe("Rickard's Red Beer");
+    expect(section.lines[0]).toContain("c1 · research · Rickard's Red Beer (Molson Coors)");
+    expect(section.entryIds.map((id) => book.entries.get(id)!.name)).toEqual([
+      "Rickard's Red Beer",
+      'L0',
+      'U0',
+      'F0',
+      'L1',
+      'U1',
+      'F1',
+      'L2',
+    ]);
+  });
+
+  it("near-miss: the deal does not favour the web's source — a research row at the end of a result is dealt in its turn", () => {
+    const late = candidate({ name: 'Late web row', source: 'research', food_id: 'r-2' });
+    expect(names(dealBySource([...ledger8, ...usda2, ...fatsecret2, late]))).toEqual([
+      'L0',
+      'U0',
+      'F0',
+      'Late web row',
+      'L1',
+      'U1',
+      'F1',
+      'L2',
+      'L3',
+      'L4',
+      'L5',
+      'L6',
+      'L7',
+    ]);
+  });
+
+  describe('distinctRecords — a stored record two sources both returned is shown once', () => {
+    const stored = (source: FoodSourceName, name: string, food_id: string): SourceCandidate =>
+      candidate({ name, source, food_id });
+    it.each<[string, SourceCandidate[], Array<[string, string]>]>([
+      ['nothing stays nothing', [], []],
+      [
+        "FatSecret's fresh copy of a ledger row is the same food_id: the ledger's row stays, with its label",
+        [stored('ledger', 'Banana', 'f-1'), stored('fatsecret', 'Banana', 'f-1')],
+        [['ledger', 'Banana']],
+      ],
+      [
+        'the first occurrence keeps its place, whichever source it came from',
+        [
+          stored('fatsecret', 'Espresso (Solo)', 'f-2'),
+          stored('ledger', 'Espresso (Solo)', 'f-2'),
+          stored('ledger', 'Espresso', 'f-3'),
+        ],
+        [
+          ['fatsecret', 'Espresso (Solo)'],
+          ['ledger', 'Espresso'],
+        ],
+      ],
+      // Near-misses: the same name under two food_ids is two records; the same food_id under two names is one.
+      [
+        'two records that share a name are both kept',
+        [stored('ledger', 'Banana', 'f-1'), stored('fatsecret', 'Banana', 'f-9')],
+        [
+          ['ledger', 'Banana'],
+          ['fatsecret', 'Banana'],
+        ],
+      ],
+      [
+        'one record under two names is one',
+        [stored('ledger', 'Bananas', 'f-1'), stored('usda', 'Banana, raw', 'f-1')],
+        [['ledger', 'Bananas']],
+      ],
+      [
+        'a transient record (no food_id) is kept once per source, name and brand',
+        [
+          candidate({ name: 'Red Ale', source: 'research', food_id: null }),
+          candidate({ name: 'Red Ale', source: 'research', food_id: null }),
+          candidate({ name: 'Red Ale', source: 'research', food_id: null, brand: "Rickard's" }),
+          stored('ledger', 'Red Ale', 'f-4'),
+        ],
+        [
+          ['research', 'Red Ale'],
+          ['research', 'Red Ale'],
+          ['ledger', 'Red Ale'],
+        ],
+      ],
+    ])('%s', (_label, input, expected) => {
+      expect(distinctRecords(input).map((c) => [c.source, c.name])).toEqual(expected);
+    });
+
+    it('"one 0.0 guinness" (2026-11-03): with the copies gone, the ledger\'s by-word row is in the eight again', () => {
+      // The ledger: five chain rows the phrase found, then what the word "guinness" found (searchLedger).
+      const chains = ['Malta Guinness', 'Guinness (Can)', 'Guinness (Bottled)', 'Guinness - 14 oz', 'Guinness Draught'];
+      const ledger = [
+        ...chains.map((n, i) => stored('ledger', n, `chain-${i}`)),
+        stored('ledger', 'Guinness 0, Non-Alcoholic Draught', 'own-1'),
+        stored('ledger', 'Guinness Extra Stout', 'cnf-1'),
+        stored('ledger', 'Guinness Blonde', 'cnf-2'),
+      ];
+      // FatSecret's five: four are the chain rows the ledger already holds, one is new.
+      const fatsecret = [
+        ...chains.slice(0, 4).map((n, i) => stored('fatsecret', n, `chain-${i}`)),
+        stored('fatsecret', 'Guinness Draught - Pitcher', 'chain-9'),
+      ];
+      const book = new CandidateBook();
+      const section = book.add({ q: '0.0 guinness', measure: null, brand: null }, found([...ledger, ...fatsecret]));
+      const names = section.entryIds.map((id) => book.entries.get(id)!.name);
+      expect(names).toHaveLength(SHOW_PER_LOOKUP);
+      expect(names).toContain('Guinness 0, Non-Alcoholic Draught');
+      expect(names).toContain('Guinness Draught - Pitcher');
+      expect(new Set(section.entryIds.map((id) => book.entries.get(id)!.food_id)).size).toBe(SHOW_PER_LOOKUP);
+      // Without the dedup the deal gave FatSecret's four copies four slots and the Non-Alcoholic row none.
+      const dealtWithCopies = dealBySource([...ledger, ...fatsecret])
+        .slice(0, SHOW_PER_LOOKUP)
+        .map((c) => c.name);
+      expect(dealtWithCopies).not.toContain('Guinness 0, Non-Alcoholic Draught');
+    });
+  });
+
+  it("text()'s budget cut now keeps each source's first rows too, not one source's first three", () => {
+    const book = new CandidateBook();
+    const section = book.add(lookup, found([...ledger8, ...usda2, ...fatsecret2]));
+    // Room for the head, the cut note and about three record lines.
+    const budget = 110 + section.head.length + 3 * (section.lines[0]!.length + 1) + 20;
+    const [head, ...lines] = book.text(budget).split('\n');
+    expect(head).toContain('more records not shown for room');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    expect(lines.length).toBeLessThan(SHOW_PER_LOOKUP);
+    const dealt = ['L0', 'U0', 'F0', 'L1', 'U1', 'F1', 'L2', 'L3'];
+    expect(lines.map((l) => l.split(' · ')[2])).toEqual(dealt.slice(0, lines.length));
   });
 });
 
