@@ -37,6 +37,14 @@ describe('Walkthrough v2 — browse / do / commit', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it('draws no line explaining the buttons (owner ruling 2026-11-03: no text that covers for the UI)', () => {
+    render(<Walkthrough walkthrough={wt} title="Easy run" onClose={() => {}} onComplete={() => {}} />);
+    expect(screen.queryByText(/Back and Next only/)).toBeNull();
+    expect(screen.queryByText(/nothing is logged/)).toBeNull();
+    fireEvent.click(screen.getByText('All steps'));
+    expect(screen.queryByText(/Looking around changes nothing/)).toBeNull();
+  });
+
   it('reaching the end with nothing logged offers a no-op close, not a false finish', () => {
     const onComplete = vi.fn();
     render(<Walkthrough walkthrough={wt} title="Easy run" onClose={() => {}} onComplete={onComplete} />);
@@ -75,5 +83,52 @@ describe('Walkthrough — measure step end to end', () => {
 
     fireEvent.click(screen.getByLabelText('Next step')); // → recap
     expect(screen.getByText('82.4 kg')).toBeInTheDocument();
+  });
+});
+
+/** Three steps so the shell can be scrolled on a middle step and then moved on. */
+const threeWt: WalkthroughData = {
+  total_min: 9,
+  steps: [
+    { id: 's1', title: 'Warm up', minutes: 3, tool: { kind: 'read' }, skippable: true },
+    { id: 's2', title: 'Long read', body: 'A long cue.', minutes: 3, tool: { kind: 'read' }, skippable: true },
+    { id: 's3', title: 'Cool down', minutes: 3, tool: { kind: 'read' }, skippable: true },
+  ],
+};
+
+describe('Walkthrough — every step opens at the top', () => {
+  const scroller = (container: HTMLElement) => container.querySelector<HTMLDivElement>('[data-step-body]')!;
+
+  it('a step reached from one scrolled to the bottom starts at the top (Next, Back, and a pip)', () => {
+    const { container } = render(
+      <Walkthrough walkthrough={threeWt} title="Easy run" onClose={() => {}} onComplete={() => {}} />,
+    );
+    fireEvent.click(screen.getByLabelText('Next step')); // step 2
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
+    scroller(container).scrollTop = 300;
+
+    fireEvent.click(screen.getByLabelText('Next step')); // step 3
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
+    expect(scroller(container).scrollTop).toBe(0);
+
+    scroller(container).scrollTop = 120;
+    fireEvent.click(screen.getByLabelText('Previous step')); // back to step 2
+    expect(scroller(container).scrollTop).toBe(0);
+
+    scroller(container).scrollTop = 80;
+    fireEvent.click(screen.getByText('All steps'));
+    fireEvent.click(screen.getByText('Warm up')); // jump to step 1 from the sheet
+    expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
+    expect(scroller(container).scrollTop).toBe(0);
+  });
+
+  it('scrolling within a step is left alone', () => {
+    const { container } = render(
+      <Walkthrough walkthrough={threeWt} title="Easy run" onClose={() => {}} onComplete={() => {}} />,
+    );
+    scroller(container).scrollTop = 300;
+    fireEvent.click(screen.getByText('All steps'));
+    fireEvent.click(screen.getByText(/^Back to Warm up/)); // same step, sheet closed
+    expect(scroller(container).scrollTop).toBe(300);
   });
 });
