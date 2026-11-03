@@ -229,31 +229,48 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 ## Phase 3 — the checker and repair round (after R4; can run alongside Phase 2)
 
-- [ ] **3a. `checkSession()` in `@cadence/shared`.** It returns findings, never fixes. Rules (each
-      with a table of positives and near-misses):
-  - a timer with no time on it;
-  - reps with `reps ≤ 1`;
-  - a timer with `sets > 1` that has no `rest_sec`, _until 2b ships_;
-  - a check-off whose cue counts walks/sets/rounds;
-  - an item with `reps` and no `sets` outside a circuit;
-  - a circuit block with no `rounds`;
-  - text over the length limit.
+- [x] **3a. `checkSession()` in `@cadence/shared`** (`session-check.ts`, PR: the session checker,
+      2026-11-03). It returns findings, never fixes. Each finding is `{ rule, blockIndex, itemIndex,
+      item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
+      each with a table of positives (the stored shapes) and near-misses:
+  - `timer_no_time` (error): a timer with no `duration_min`;
+  - `one_rep_sets` (question): `reps` ≤ 1 with `sets` ≥ 2 — the carry; the cue's time is quoted
+    when there is one;
+  - `checkoff_counts` (question): a check-off with `sets` ≥ 2 or whose words count walks, sets,
+    rounds, trips or carries;
+  - `reps_no_sets` (question): `reps` with no `sets` outside a circuit;
+  - `circuit_no_rounds` (error): a circuit block with no `rounds` (the normalizer keeps it; the
+    player falls back to the largest sets count);
+  - `text_cut`: text over the limit (error), or ending with the "…" the app leaves when it cuts
+    (question). The limits moved to `@cadence/shared/session-limits.ts`, read by the normalizer
+    and the checker.
 
-  Unclear signals (time mentioned in the cue) are reported as a **question**, never as an error.
+  Two of the rules written before Phase 2 are gone: a timer with sets and no `rest_sec` is not a
+  finding (rest is undrawn and optional), and sets + `duration_min` with no reps is the timed-sets
+  shape, fine. Time mentioned in a reps item's cue ("pause 2 seconds at the top") is never a
+  finding.
 
-- [ ] **3b. The repair round** in `generateSession` / `reviseSession`. When there are findings,
-      re-run `prescribe-session` ONCE with them as facts, in a new `<check_findings>` variable ("item
-      7: tool reps, reps 1; its detail says 40–45 seconds of walking"). Sessions are built ahead of
-      time, at commit, so the person never waits for this. Log every finding, including those still
-      present after the repair.
-  - Job prompt change → **sync-jobs**.
-- [ ] **3c. The audit as a script** (`apps/cadence-api/scripts/audit-session-tools.ts`). It runs
-      `checkSession` over stored sessions and prints counts by rule. The 2026-11-02 baseline is ~9 real
-      errors in 1,319 steps. Use `\y`, not `\b`: in Postgres regex `\b` is a backspace, which returned
-      0 the first time.
-- [ ] **3d. Strict output format.** Check which model the coach profile points at. Strict json_schema
-      is about free on gpt-class models and ~2.2× slower on gemini. If it's gpt-class, require each
-      tool's fields (a timer needs its time, timed sets need sets + seconds).
+- [x] **3b. The repair loop** (`apps/cadence-api/src/services/session-repair.ts`), per R4 — a
+      bounded loop, not one round. Every `prescribe-session` call goes through `generateSession`
+      (first open, prefetch and `reviseSession` alike), so the loop lives there: normalize, check,
+      and when there are findings call the job again with them in `<check_findings>`. Cap
+      `REPAIR_ROUNDS_MAX` = 3; each round must strictly reduce the findings; stop when clean, when
+      they stop shrinking, or at the cap. The session with the fewest findings ships (the latest on
+      a tie); a round whose call fails or whose answer is unusable keeps the last good session.
+      Every round's findings and the stop reason land in the `prescribe_session` ai_log row under
+      `meta.check`.
+  - Job prompt change (`check_findings` variable + one rule line) → **sync-jobs owed**.
+- [x] **3c. The audit as a script** (`apps/cadence-api/scripts/audit-session-tools.ts`, read-only;
+      `--since` and `--user` filters). The 2026-11-02 baseline is documented at its top. `\y`, not
+      `\b`, in a Postgres regex — the script matches in TypeScript instead.
+- [x] **3d. Strict output format.** Checked 2026-11-03: the coach profile is `claude-sonnet-5-5`
+      on the Devs.ai v2 provider (failover `gpt-5.2`, same provider). AI Admin only enforces a
+      native `json_schema` on the Vercel AI Gateway provider type; Devs.ai v2 accepts the field and
+      ignores it (measured 2026-10-29, `ai-profile-runtime-options.ts`). The job's schema also
+      declares `blocks` as an array of open objects, which strict mode cannot take, and the
+      `fields` descriptor has no way to say "a timer needs `duration_min`" (no per-tool
+      conditional). So a strict schema buys nothing on the live path today and the schema was
+      left as it is; the checker is the gate. Revisit if the profile moves to the gateway.
 - After merge: sync-jobs, then deploy the API.
 
 ## Phase 4 — design (Claude Design, runs alongside Phases 1–3)

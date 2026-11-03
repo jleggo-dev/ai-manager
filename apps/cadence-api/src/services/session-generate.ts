@@ -11,6 +11,7 @@
  * (expectedSchema is best-effort in the engine — see plan-synthesis.ts normalizeActivity).
  */
 import {
+  renderCheckFindings,
   renderCoachToolCatalog,
   settledTempo,
   type OccurrenceSession,
@@ -37,6 +38,7 @@ import { getUser } from '../repos/users.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeSession } from './session-normalize.ts';
 import { CoachUnreachableError, withCoachRetry } from './session-generate-retry.ts';
+import { repairLogMeta, repairSession } from './session-repair.ts';
 import { fallbackSessionFor } from './session-fallback.ts';
 import { computeSession, weekIndexBetween } from './progression.ts';
 import { getWeatherForUser, isOutdoorActivity, type WeatherSnapshot } from './weather/weather.ts';
@@ -186,6 +188,9 @@ async function generateSession(
     // Empty on ordinary generations — the template ignores an empty tag, so every existing
     // caller's prompt is byte-compatible with what it was before the steer existed.
     user_steer: steer,
+    // Empty on the first call. The repair loop below fills it with the checker's findings when
+    // it asks her again (session-repair.ts).
+    check_findings: '',
     weather: weatherLine,
     tool_catalog: TOOL_CATALOG,
   };
@@ -201,13 +206,30 @@ async function generateSession(
   // two never multiply — a call that gets through but comes back unusable is re-rolled once here,
   // a call that never gets through is retried there, and when it is gone for good the typed
   // error surfaces to the route as a 503 the sheet can say in words.
-  let session: OccurrenceSession | null = null;
-  let attempts = 0;
-  for (; attempts < 2 && !session; attempts += 1) {
-    const res = await withCoachRetry(() => runJobBySlug(userId, 'prescribe-session', variables), {
+  const runOnce = async (vars: Record<string, string>): Promise<OccurrenceSession | null> => {
+    const res = await withCoachRetry(() => runJobBySlug(userId, 'prescribe-session', vars), {
       label: 'prescribe-session',
     });
-    session = normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
+    return normalizeSession(parseJson(res.formatted ?? res.raw ?? ''));
+  };
+  let session: OccurrenceSession | null = null;
+  let attempts = 0;
+  for (; attempts < 2 && !session; attempts += 1) session = await runOnce(variables);
+
+  // The repair loop (walkthrough v3, R4): the app checks what she wrote and, when the check finds
+  // something, asks her again with the findings as facts in <check_findings>. Bounded, each round
+  // must shrink the findings, and on every stop the session ships as it is — a failed or
+  // unusable repair round keeps the last good session. Every round is logged below.
+  const repair = session
+    ? await repairSession(session, (findings) =>
+        runOnce({ ...variables, check_findings: renderCheckFindings(findings) }),
+      )
+    : null;
+  if (repair) {
+    session = repair.session;
+    if (repair.stop === 'job_failed') {
+      console.warn(`[prescribe-session] repair round failed, shipping the last good session: ${repair.error}`);
+    }
   }
   // The coach WINS on tempo (owner ruling). She is now told the settled tempo in {{repertoire}},
   // so a bpm she prescribed is an informed decision — "let's take it slower this week" — and a
@@ -218,7 +240,14 @@ async function generateSession(
     kind: 'prescribe_session',
     input: { occurrenceId: occ.occurrence_id, title: occ.title, date: occ.date, ...(steer ? { steer } : {}) },
     output: session,
-    meta: { blocks: session?.blocks.length ?? 0, ok: !!session, sessions_logged: history.length, attempts },
+    meta: {
+      blocks: session?.blocks.length ?? 0,
+      ok: !!session,
+      sessions_logged: history.length,
+      attempts,
+      // The check's every round and why it stopped — the audit reads these (never silently).
+      ...(repair ? { check: repairLogMeta(repair) } : {}),
+    },
   });
   return session;
 }
