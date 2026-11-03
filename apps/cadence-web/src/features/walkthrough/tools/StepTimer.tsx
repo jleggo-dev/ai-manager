@@ -297,9 +297,9 @@ export function StepTimer({
           </div>
         )}
         {showSwitch && <div style={banner}>Switch sides</div>}
-        {isOver && (
-          <div style={{ ...banner, background: 'oklch(96% 0.035 62)' }}>Time&apos;s up — keep going or stop</div>
-        )}
+        {/* The state only. What to do next is the button's job ("Stop · log 7 min") and the clock's
+            ("+0:12 past 5:00"); spelling it out here explained the UI (owner ruling 2026-11-03). */}
+        {isOver && <div style={{ ...banner, background: 'oklch(96% 0.035 62)' }}>Time&apos;s up</div>}
       </div>
 
       {/* Past the target the button logs (commit green); before that it only starts or pauses. */}

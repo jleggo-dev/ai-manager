@@ -64,7 +64,9 @@ describe('StepTimer — an open-ended effort', () => {
     tick(2_000);
     expect(onDone).not.toHaveBeenCalled();
     expect(screen.getByText(/^past 1:00/)).toBeInTheDocument();
+    // The banner names the state and stops there — "keep going or stop" explained the UI (owner, 2026-11-03).
     expect(screen.getByText(/Time.s up/)).toBeInTheDocument();
+    expect(screen.queryByText(/keep going or stop/)).toBeNull();
   });
 
   it('Stop logs the time actually spent — 110 minutes on a 50-minute ruck — and hands off', () => {
