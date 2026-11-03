@@ -3,6 +3,7 @@ import { runJobBySlug } from '../ai/aim.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeFood, describeNormalizationProblems } from './food-sources/normalized.ts';
 import { nutritionTier } from './food-sources/completeness.ts';
+import { placeNotAsked, type AskedFood } from './food-research-place.ts';
 
 /**
  * The web-grounded rung — `research-food` — for a VENDOR-NAMED food nothing deterministic matched.
@@ -147,7 +148,7 @@ function toNutrients(raw: unknown): FoodNutrients {
   return out;
 }
 
-function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | null): ResearchOutcome {
+function shapeResult(parsed: Record<string, unknown>, asked: AskedFood): ResearchOutcome {
   const confidence = num(parsed.confidence) ?? 0;
   if (confidence < MIN_CONFIDENCE) {
     return {
@@ -163,7 +164,21 @@ function shapeResult(parsed: Record<string, unknown>, fallbackBrand: string | nu
     return { result: null, reason: 'refused — the lookup returned no product name to pin' };
   }
   const brand =
-    typeof parsed.brand === 'string' && parsed.brand.trim() ? parsed.brand.trim().slice(0, 80) : fallbackBrand;
+    typeof parsed.brand === 'string' && parsed.brand.trim() ? parsed.brand.trim().slice(0, 80) : asked.brand;
+  // The maker's own record is what this rung is for (2026-11-03): a restaurant or store the
+  // person did not name, in either field, is the chain's menu row the lookup exists to get past,
+  // and pinned it would answer these words forever. food-research-place.ts holds the words.
+  const placeInBrand = brand ? placeNotAsked(brand, asked) : null;
+  const placeInName = placeInBrand ? null : placeNotAsked(name, asked);
+  if (placeInBrand || placeInName) {
+    const where = placeInBrand ? `brand "${brand}"` : `name "${name}"`;
+    return {
+      result: null,
+      reason:
+        `refused — the answer names a place they did not say: "${placeInBrand ?? placeInName}" in ${where}; ` +
+        'the maker’s own record is what this lookup is for, and a restaurant’s row pinned here would answer these words forever',
+    };
+  }
   const base_unit = BASE_UNITS.includes(parsed.base_unit as FoodBaseUnit) ? (parsed.base_unit as FoodBaseUnit) : 'g';
 
   const macros = toNutrients(parsed.macros_per_100);
@@ -282,6 +297,9 @@ export async function researchFood(
 export async function researchFoodOutcome(
   userId: string,
   item: { name: string; brand?: string | null; qty?: number; unit?: string },
+  /** `promptOverride`: the FULL prompt to run in place of the synced job's (see `runJobBySlug`),
+   *  for an eval measuring a prompt before it is synced. The app never sets it. */
+  opts: { promptOverride?: string } = {},
 ): Promise<ResearchOutcome> {
   const foodText = [item.brand?.trim(), item.name.trim()].filter(Boolean).join(' — ').slice(0, 300);
   if (!foodText) {
@@ -300,7 +318,7 @@ export async function researchFoodOutcome(
   let rawOut = '';
   try {
     const res = await Promise.race([
-      runJobBySlug(userId, 'research-food', { food_text: foodText }),
+      runJobBySlug(userId, 'research-food', { food_text: foodText }, opts),
       new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error(`research-food timed out after ${RESEARCH_TIMEOUT_MS}ms`)),
@@ -311,7 +329,7 @@ export async function researchFoodOutcome(
     rawOut = res.formatted ?? res.raw ?? '';
     const parsed = firstJsonObject(rawOut);
     const outcome: ResearchOutcome = parsed
-      ? shapeResult(parsed, item.brand?.trim() || null)
+      ? shapeResult(parsed, { name: item.name.trim(), brand: item.brand?.trim() || null })
       : { result: null, reason: 'nothing usable came back — the response carried no readable JSON to shape' };
     void logAi(userId, {
       kind: 'research_food',

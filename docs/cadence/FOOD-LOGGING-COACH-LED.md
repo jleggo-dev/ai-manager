@@ -1012,6 +1012,43 @@ job's own answers varied across four calls ("Rickard's Red Beer" by Molson's, by
 with the restaurant in its name, once refused); that job's prompt is a separate matter. Whether the
 food-check should run on the model that asks is the owner's next call.
 
+**The research job answers the maker (2026-11-03, the same evening).** The four `research-food`
+calls above answered four ways because its prompt let a restaurant land in the answer: "Rickard's
+Red Beer (Perkins Restaurant)" by "Perkins Restaurant & Bakery" is the chain's row the web rung
+exists to get past, pinned as the person's food for good. The prompt now says what the words are
+(the maker or seller they named, a dash, the food as they said it), what `name` is (the product's
+plain name as the maker's label writes it — no maker, size or place), what `brand` is (the company
+that makes it; a restaurant only for a dish it cooks itself; a beer served at a restaurant is the
+brewer's), and that a menu or store page is evidence for the numbers, not for the name. The
+schema's `name` and `brand` carry the same definitions, and `research-food-job-config.test.ts`
+pins them. Behind the prompt, `food-research-place.ts` refuses an answer that names a place they
+did not say — restaurant, bakery, diner, steakhouse, pizzeria, bistro, eatery, bar & grill — in
+either field, in words (`refused — the answer names a place they did not say: "Perkins Restaurant"
+in brand "Perkins Restaurant & Bakery"`), unless the place is the maker they named by its fuller
+name ("Perkins Restaurant & Bakery" for "Perkins"). Cafe, grill, bar and pub are not place words
+there: Caffè Latte, Grill Mates, Bar Harbor and Pub Mix are products. A chain with no place word in
+its name ("Boston Pizza") is the prompt's to keep out, and a maker named like a place, found for a
+retailer the person named ("Costco — cheesecake" answered by "The Cheesecake Factory Bakery"), is
+refused too and falls through to the estimate. The guard would have refused the third answer above.
+
+Measured with four live calls on the new prompt (`promptOverride`, before the sync, so the schema
+descriptions were not yet live; gpt-4.1 with web search, 9–16 s each), two for "Rickard's — Red"
+and two for "Rickard's — red beer":
+
+| | the four calls above (old prompt) | the four on the new prompt |
+| --- | --- | --- |
+| a restaurant in name or brand | 1 of 4 | 0 of 4 |
+| the maker's record, accepted | 2 of 4: "Rickard's Red Beer" by Molson's (46.8 kcal/100 ml, a pint); by Molson Coors (45.2, a 354 ml serving) | 2 of 4: "Red Beer" by "Rickard's (Molson Coors)" (46.8, a pint, no URL kept); "Rickard's Red" by "Molson Coors Canada" (46.8, a 473 ml can, FatSecret URL) |
+| refused below the 0.4 confidence floor | 1 of 4 (0.30, "red ale") | 2 of 4 (0.30; 0.35) |
+
+The two refusals are the open question now, not the restaurant. Canada exempts beer from nutrition
+labelling, so the brewer publishes no numbers; told to put confidence below 0.4 when it "cannot
+find all four from a credible source", the model rated FatSecret's pint 0.30 and the Perkins menu
+row 0.35 — while in both it kept the restaurant out of the name and brand and took only the
+numbers, as the new rule says. Four calls is a count, not a rate. The ruling owed: let a menu or
+store listing count as a credible source for the numbers when the maker publishes none (one prompt
+line), or keep the floor as it is and accept that such a beer reaches the web and comes back empty.
+
 The first eval run showed why the model had not been asking: the book for "one pint of Rickards
 red" held the Perkins row and seven pinto-bean rows, because the by-word ledger search (the
 morning's own change) had searched "pint" on its own. A measure word is no longer searched by
