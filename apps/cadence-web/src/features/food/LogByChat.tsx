@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../lib/api.ts';
+import { newRequestId } from '../../lib/api/kept-answers.ts';
+import { clearReadInProgress, rememberRead, type ReadInProgress } from './readInProgress.ts';
 import { MicButton } from '../../components/MicButton.tsx';
 import { PhotoButton } from '../../components/PhotoButton.tsx';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
@@ -35,7 +37,9 @@ export const TRY_AGAIN = 'Try again';
  */
 export function LogByChat({
   meal,
+  date,
   listening = false,
+  resume,
   mode = 'log',
   mealLabel,
   onAppend,
@@ -44,8 +48,12 @@ export function LogByChat({
   onPhoto,
 }: {
   meal: MealKind;
+  /** The meal's date. With it, a read in flight is remembered for a relaunch (readInProgress.ts). */
+  date?: string;
   /** Opened from the Voice tile — the mic starts live. */
   listening?: boolean;
+  /** The read the app was relaunched in the middle of: asked after under its remembered id on open. */
+  resume?: ReadInProgress;
   /**
    * Draft mode (meal-logging rework, 1b): this door APPENDS into the open meal — the confirm
    * card's button reads "Add to {meal}" and `onAppend` carries the rows through verbatim.
@@ -76,20 +84,40 @@ export function LogByChat({
     if (el) el.scrollTop = el.scrollHeight;
   }, [said, correction, busy, preview, fail]);
 
-  async function read() {
-    const q = text.trim();
-    if (!q || busy) return;
+  /**
+   * The read. With `pickUp`, the read the app was relaunched in the middle of: its words and
+   * correction come from the record, and it is asked after under its remembered id
+   * (readInProgress.ts), sent again only if the server never got it.
+   */
+  async function read(pickUp?: ReadInProgress) {
+    const typed = text.trim();
+    if ((!typed && !pickUp) || busy) return;
     // With a card up, the message is about the card: the same words go back with it.
-    const correcting = preview && said ? { words: q, previous: previousRows(preview.items) } : null;
+    const correcting = pickUp
+      ? pickUp.correction
+      : preview && said
+        ? { words: typed, previous: previousRows(preview.items) }
+        : undefined;
+    const forWords = pickUp ? pickUp.words : correcting ? said! : typed;
+    const requestId = pickUp?.requestId ?? newRequestId();
     setBusy(true);
     setFail(null);
-    if (correcting) setCorrection(q);
-    else {
-      setSaid(q);
-      setCorrection(null);
-    }
+    setSaid(forWords);
+    setCorrection(correcting?.words ?? null);
+    // Remembered for a relaunch while it runs; forgotten once it settles.
+    if (date)
+      rememberRead({
+        door: 'chat',
+        kind: 'words',
+        meal,
+        date,
+        words: forWords,
+        correction: correcting,
+        requestId,
+        listening,
+      });
     try {
-      const p = correcting ? await previewMeal(said!, meal, correcting) : await previewMeal(q, meal);
+      const p = await previewMeal(forWords, meal, correcting, { requestId, resume: !!pickUp });
       if (!p.items.length) {
         setFail({ line: NOTHING_READ, retry: false });
         return;
@@ -100,8 +128,16 @@ export function LogByChat({
       setFail(failureWords(e, 'read'));
     } finally {
       setBusy(false);
+      clearReadInProgress();
     }
   }
+
+  // Relaunched mid-read: pick it up, once, on open. Leaving the door forgets any read in flight.
+  useEffect(() => {
+    if (resume) void read(resume);
+    return () => clearReadInProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="fc">

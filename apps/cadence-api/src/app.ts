@@ -38,6 +38,7 @@ import deviceRoutes from './routes/devices.ts';
 import notificationPrefsRoutes from './routes/notification-prefs.ts';
 import coachMomentRoutes from './routes/coach-moments.ts';
 import recapsRoutes from './routes/recaps.ts';
+import answersRoutes from './routes/answers.ts';
 import journalRoutes from './routes/journal.ts';
 import devRoutes from './routes/dev.ts';
 import internalRoutes from './routes/internal.ts';
@@ -84,6 +85,8 @@ export function createApp() {
   app.use('/me', notificationPrefsRoutes);
   app.use('/me', coachMomentRoutes);
   app.use('/me', recapsRoutes);
+  // The answer to a long request the client could not stay for (services/kept-answers.ts).
+  app.use('/answers', answersRoutes);
   // Machine-to-machine (cron). Owns its own shared-secret gate — see routes/internal.ts.
   app.use('/internal', internalRoutes);
   app.use('/dev', devRoutes);

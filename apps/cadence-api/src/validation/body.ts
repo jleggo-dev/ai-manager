@@ -96,9 +96,18 @@ export const parsedMealSchema = z.object({
   photo_reading: z.string().max(20000).optional(),
 });
 
+/**
+ * A long request's own id, minted by the client (services/kept-answers.ts): the route keeps the
+ * answer under it, so a phone that left mid-read can come back for it, and a re-send under the
+ * same id joins the running read instead of starting another. Optional — a client without one
+ * is answered the old way.
+ */
+const requestId = z.string().uuid().optional();
+
 export const previewMealBodySchema = z.object({
   text: z.string().trim().min(1).max(500),
   meal: mealKindSchema.optional(),
+  request_id: requestId,
   /**
    * "Not quite" (services/food-described-correction.ts): what the person said was wrong with the
    * previous answer, and that answer's rows as the card showed them, one line each. The same
@@ -118,6 +127,7 @@ export const previewMealAnswerBodySchema = z.object({
   answer: z.string().trim().min(1).max(ANSWER_MAX_CHARS),
   chosen: z.boolean().optional(),
   meal: mealKindSchema.optional(),
+  request_id: requestId,
 });
 
 /** One pour of water, ml canonical (0037). The cap matches the table's own check constraint. */
@@ -137,6 +147,7 @@ export const readPhotoBodySchema = z.object({
   photo: z.string().refine((s) => s.startsWith('data:image/'), { message: 'photo must be a data:image URL' }),
   caption: z.string().max(2000).optional(),
   date: calendarDate().optional(),
+  request_id: requestId,
 });
 
 /** POST /progress/photos — one opt-in progress photo; `taken_on` defaults to today server-side. */
@@ -157,6 +168,7 @@ export const previewFromReadingBodySchema = z.object({
   reading: z.string().max(20000),
   caption: z.string().max(2000).optional(),
   meal: mealKindSchema.optional(),
+  request_id: requestId,
 });
 
 export const logFromReadingBodySchema = z.object({

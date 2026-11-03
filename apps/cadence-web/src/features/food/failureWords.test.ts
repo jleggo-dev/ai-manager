@@ -37,6 +37,14 @@ describe('failureWords — what happened, in plain words, and what to do', () =>
     ['our side (500)', withStatus(500), 'read', /my side looking that up.*kept here.*Try again/i, true],
     ['our side (503), answering', withStatus(503), 'answer', /my side looking that up/i, true],
     ['our side (500), adding', withStatus(500), 'add', new RegExp(ADD_FAILED.slice(0, 30)), true],
+    // The server lost the run after the phone left (lib/api/kept-answers.ts): ours, with a way to try again.
+    [
+      'the run was lost on the server',
+      Object.assign(withStatus(500), { lost: true }),
+      'read',
+      /my side looking that up.*kept here.*Try again/i,
+      true,
+    ],
     // Near-misses: a 404 on a read is not "the meal is gone"; an unknown throw is our side.
     ['404 on a read', withStatus(404), 'read', /my side looking that up/i, true],
     ['a bare throw', 'boom', 'read', /my side looking that up/i, true],

@@ -14,6 +14,7 @@ import { ActivityBuilder } from '../builder/ActivityBuilder.tsx';
 import type { BuilderSeed } from '../plan/quick-add/builderSeed.ts';
 import { readDraft, type BuilderDraft } from '../builder/draftStore.ts';
 import { DraftPill } from '../builder/DraftPill.tsx';
+import { readReadInProgress } from '../food/readInProgress.ts';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -130,8 +131,13 @@ export function MainTabs({
    * than inside PlanView so the ＋ FAB knows to stand down and the coach hand-off is one hop.
    * 'shop' opens straight onto the Kitchen tab's shopping list (a shop trail task lands there);
    * 'log' opens straight into the Log screen (the quick-add sheet's meal row).
+   *
+   * Opens on 'log' when the app was relaunched in the middle of a meal read
+   * (features/food/readInProgress.ts): iOS reclaimed the webview while the phone sat locked, and
+   * the person is put back in the drawer, on the read, the way a walkthrough is put back on its
+   * step (owner, 2026-11-03). FoodHome reads the same record to pick the slot and the door.
    */
-  const [food, setFood] = useState<null | 'home' | 'shop' | 'log'>(null);
+  const [food, setFood] = useState<null | 'home' | 'shop' | 'log'>(() => (readReadInProgress() ? 'log' : null));
   /**
    * The Activity Builder (Activity Builder wave 3) — a full screen that replaces the Plan tab's
    * content while the tab bar stays, the exact same escape `food` above uses. `seed` is undefined

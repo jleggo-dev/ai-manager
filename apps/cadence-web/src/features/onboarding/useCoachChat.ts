@@ -17,7 +17,7 @@ import {
 import type { AttachmentRef } from '@cadence/shared';
 import { capabilities } from '../../lib/capability/index.ts';
 import { useCoachActivity } from './useCoachActivity.ts';
-import { recoverTurnFromServer, useReplyNotifyArm, useResumeHealer } from './coach-recovery.ts';
+import { serverRecovery, useReplyNotifyArm, useResumeHealer, waitForReply } from './coach-recovery.ts';
 import { useCoachTranscript } from './useCoachTranscript.ts';
 import { healthOfferAnswered } from './health-digest.ts';
 
@@ -168,13 +168,19 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
     sessionId,
     streaming,
     onSettled: () => void loadCapturedGoals(setCapturedGoals),
+    // The app reopened on a reply still being written (a lock long enough for iOS to reclaim the
+    // webview): wait for it in her empty bubble, the way a dropped stream is waited for. Runs
+    // after the restore, so everything it names below exists by then.
+    onGenerating: () => void waitForReply({ recover: recoverFromServer, onLost: fillLastCoach, setStreaming, healer }),
   });
+  /** The healer's entry point (coach-recovery.ts): adopt whatever the server has as the thread. */
+  const recoverFromServer = serverRecovery({ wait, sessionId, setTurns });
   // Live only while a turn is streaming — the Stop button's handle on it.
   const abort = useRef<AbortController | null>(null);
   const stopped = useRef(false);
   const notifyArm = useReplyNotifyArm(sessionId);
   const healer = useResumeHealer({
-    recover: () => recoverFromServer(),
+    recover: recoverFromServer,
     // Leaving mid-turn arms the "Cadence replied" ping — the server cannot see it happen.
     onLeave: notifyArm.arm,
     onHealed: () => {
@@ -184,18 +190,6 @@ export function useCoachChat({ intent = 'onboarding', delay }: UseCoachChatArgs 
       clearActivity();
     },
   });
-
-  /** Thin wrapper so callers (and this hook's tests) keep one entry point; the polling
-   *  conversation itself lives in coach-recovery.ts. */
-  async function recoverFromServer(): Promise<boolean> {
-    return recoverTurnFromServer({
-      wait,
-      onRecovered: (sid, next) => {
-        sessionId.current = sid;
-        setTurns(next);
-      },
-    });
-  }
 
   const { resetSegmentBreak, noteSegment, applyStreamDelta, fillLastCoach, retractPendingNote } = useRef(
     makeStreamWriters(setTurns, clearActivity),

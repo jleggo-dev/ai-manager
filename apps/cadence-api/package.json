@@ -14,6 +14,7 @@
     "account": "node --import tsx scripts/account.ts",
     "cleanup:dev-accounts": "node --import tsx scripts/account.ts reset-all",
     "probe:backgrounded": "node --import tsx scripts/probe-backgrounded-phone.ts",
+    "probe:kept-answer": "node --import tsx scripts/probe-kept-answer.ts",
     "probe:replan": "node --import tsx scripts/probe-replan-preview.ts",
     "probe:office": "node --import tsx scripts/probe-devs-ai-office.ts",
     "probe:v1-file": "node --import tsx scripts/probe-devs-ai-v1-file.ts",

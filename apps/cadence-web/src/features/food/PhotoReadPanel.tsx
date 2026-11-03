@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Meal, MealKind, MealPreview } from '../../lib/api.ts';
 import { useMealPhotoRead } from './useMealPhotoRead.ts';
+import type { ReadInProgress } from './readInProgress.ts';
 import { MealParseCard } from './MealParseCard.tsx';
 import { CoachReadLine } from './CoachReadLine.tsx';
 import { HERE_IS, READ_FAILED } from './photoReadCopy.ts';
@@ -62,6 +63,8 @@ export type AppendDraft = (
 export function PhotoReadPanel({
   photo,
   meal,
+  date,
+  resume,
   mode = 'log',
   appendDraft,
   onLogged,
@@ -71,6 +74,10 @@ export function PhotoReadPanel({
 }: {
   photo: string;
   meal: MealKind;
+  /** The meal's date. With it, a read in flight is remembered for a relaunch (readInProgress.ts). */
+  date?: string;
+  /** The read the app was relaunched in the middle of: asked after under its remembered id on open. */
+  resume?: ReadInProgress;
   /**
    * Draft mode (meal-logging rework, 1b): the photo appends into the open meal — the card's
    * button reads "Add to {meal}" and `appendDraft` carries the rows and the photo to the draft;
@@ -87,7 +94,12 @@ export function PhotoReadPanel({
 }) {
   const [caption, setCaption] = useState(initialCaption);
   const draft = mode === 'draft' && !!appendDraft;
-  const r = useMealPhotoRead();
+  const r = useMealPhotoRead(date ? { meal, date, photo } : undefined);
+  // Relaunched mid-read: pick the stage that was running back up, once, on open.
+  useEffect(() => {
+    if (resume) void r.resume(resume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const working = r.phase === 'reading' || r.phase === 'nutrition';
   const said = caption.trim();
   const hasReading = !!r.reading.trim();

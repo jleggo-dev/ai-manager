@@ -29,7 +29,8 @@ vi.mock('../repos/conversations.ts', () => ({
   createConversation: vi.fn(),
   getLatestConversation: vi.fn(),
   setInFlightResponse: vi.fn(),
-  touchConversation: vi.fn(),
+  startTurn: vi.fn(),
+  endTurn: vi.fn(),
 }));
 vi.mock('../ai/aim.ts', () => ({
   AimError: { fromUnknown: (e: unknown) => ({ kind: 'upstream', message: String(e), httpStatus: 502 }) },

@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({ previewMeal: vi.fn(), previewMealAnswer: vi.fn()
 vi.mock('../../../lib/api.ts', () => api);
 
 const { DescribeSheet, TRY_AGAIN } = await import('./DescribeSheet.tsx');
+const { readReadInProgress, rememberRead } = await import('../readInProgress.ts');
 const { ANOTHER_GO, NOT_REACHED, NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
 const { NOT_QUITE, WHATS_OFF } = await import('../NotQuiteField.tsx');
 const { THATS_IT } = await import('../OwnAnswerField.tsx');
@@ -380,10 +381,12 @@ describe('DescribeSheet — "not quite"', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: THATS_IT }));
     await waitFor(() =>
-      expect(api.previewMeal).toHaveBeenLastCalledWith('a 0.0 guinness', 'snack', {
-        words: 'it was the 0.0 one',
-        previous: ['Red Robin Guinness (Can), 1 serving'],
-      }),
+      expect(api.previewMeal).toHaveBeenLastCalledWith(
+        'a 0.0 guinness',
+        'snack',
+        { words: 'it was the 0.0 one', previous: ['Red Robin Guinness (Can), 1 serving'] },
+        expect.objectContaining({ resume: false }),
+      ),
     );
     expect(await screen.findByText('Guinness 0, Non-Alcoholic Draught')).toBeInTheDocument();
     expect(screen.queryByText('Red Robin Guinness (Can)')).not.toBeInTheDocument();
@@ -393,6 +396,80 @@ describe('DescribeSheet — "not quite"', () => {
 
   it('near-miss: the first read carries no correction', async () => {
     await lookUp(base);
-    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack');
+    // The fourth argument is the read's own id and whether it is being picked up (kept-answers.ts).
+    expect(api.previewMeal).toHaveBeenCalledWith(
+      'a banana',
+      'snack',
+      undefined,
+      expect.objectContaining({ resume: false }),
+    );
+  });
+});
+
+/**
+ * The read the app was relaunched in the middle of (readInProgress.ts, owner 2026-11-03): the
+ * sheet reopens with the words back in the box and asks after the answer under the remembered id
+ * instead of reading the meal again. And a fresh read inside a dated meal is remembered while it
+ * runs, under the id it was sent with, and forgotten once it settles.
+ */
+describe('DescribeSheet — a read remembered for a relaunch', () => {
+  const inFlight = {
+    door: 'describe' as const,
+    meal: 'snack' as const,
+    date: '2026-11-03',
+    requestId: '3f2c9b1e-4d5a-4c6b-8e7f-1a2b3c4d5e6f',
+    kind: 'words' as const,
+    words: 'a banana',
+  };
+
+  it('reopened on a read: asks after the remembered id, nothing typed again, and forgets the record once it lands', async () => {
+    api.previewMeal.mockResolvedValueOnce({ ...base, coach: { reached: true, calls: 1, checked: [] } });
+    rememberRead(inFlight);
+    render(
+      <DescribeSheet
+        meal="snack"
+        date="2026-11-03"
+        seed="a banana"
+        resume={inFlight}
+        onAdd={async () => true}
+        onClose={() => {}}
+      />,
+    );
+    await screen.findByText('Banana, raw');
+    expect(api.previewMeal).toHaveBeenCalledTimes(1);
+    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', undefined, {
+      requestId: inFlight.requestId,
+      resume: true,
+    });
+    expect(screen.getByRole('textbox', { name: 'What did you have?' })).toHaveValue('a banana');
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('a fresh read inside a dated meal is remembered under its id while it runs, and forgotten after', async () => {
+    let release!: (v: unknown) => void;
+    api.previewMeal.mockReturnValueOnce(new Promise((r) => (release = r)));
+    render(
+      <DescribeSheet meal="snack" date="2026-11-03" seed="a banana" onAdd={async () => true} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    await waitFor(() =>
+      expect(readReadInProgress()).toMatchObject({
+        door: 'describe',
+        meal: 'snack',
+        date: '2026-11-03',
+        words: 'a banana',
+      }),
+    );
+    const { requestId } = readReadInProgress()!;
+    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', undefined, { requestId, resume: false });
+    release({ ...base, coach: { reached: true, calls: 1, checked: [] } });
+    await screen.findByText('Banana, raw');
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('without a date (a sheet outside a meal) nothing is remembered', async () => {
+    await lookUp({ ...base, coach: { reached: true, calls: 1, checked: [] } });
+    expect(readReadInProgress()).toBeNull();
+    expect(api.previewMeal.mock.calls[0]![3]).toMatchObject({ resume: false });
   });
 });

@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../lib/api.ts', () => api);
 
 const { LogByChat, TRY_AGAIN } = await import('./LogByChat.tsx');
+const { readReadInProgress, rememberRead } = await import('./readInProgress.ts');
 const { ANOTHER_GO_CARD, NOT_REACHED_CARD, READING } = await import('./coachReadCopy.ts');
 
 const base = {
@@ -109,10 +110,12 @@ describe('LogByChat — a second message is "not quite"', () => {
     fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'it was two' } });
     fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
     await waitFor(() =>
-      expect(api.previewMeal).toHaveBeenLastCalledWith('a banana', 'snack', {
-        words: 'it was two',
-        previous: ['Banana, raw, 1 medium'],
-      }),
+      expect(api.previewMeal).toHaveBeenLastCalledWith(
+        'a banana',
+        'snack',
+        { words: 'it was two', previous: ['Banana, raw, 1 medium'] },
+        expect.objectContaining({ resume: false }),
+      ),
     );
     expect(await screen.findByText(ANOTHER_GO_CARD)).toBeInTheDocument();
     expect(screen.getByText('it was two')).toBeInTheDocument();
@@ -127,5 +130,48 @@ describe('LogByChat — a second message is "not quite"', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/my side/);
     expect(screen.getByLabelText('What did you have?')).toHaveValue('a banana');
     expect(screen.getByRole('button', { name: TRY_AGAIN })).toBeEnabled();
+  });
+});
+
+/**
+ * The read the app was relaunched in the middle of (readInProgress.ts, owner 2026-11-03): the chat
+ * door reopens with the words said, asks after the answer under the remembered id — the correction
+ * too, when the read was a "not quite" — and forgets the record once the card is up.
+ */
+describe('LogByChat — a read remembered for a relaunch', () => {
+  it('reopened on a "not quite" re-read: the same words and correction go back under the remembered id', async () => {
+    const inFlight = {
+      door: 'chat' as const,
+      meal: 'snack' as const,
+      date: '2026-11-03',
+      requestId: '3f2c9b1e-4d5a-4c6b-8e7f-1a2b3c4d5e6f',
+      kind: 'words' as const,
+      words: 'a banana',
+      correction: { words: 'it was a big one', previous: ['Banana, raw, 1 medium'] },
+    };
+    api.previewMeal.mockResolvedValueOnce({ ...base, coach: { reached: true, calls: 1, checked: [] } });
+    rememberRead(inFlight);
+    render(<LogByChat meal="snack" date="2026-11-03" resume={inFlight} onLogged={() => {}} onBack={() => {}} />);
+    await screen.findByText('the card');
+    expect(api.previewMeal).toHaveBeenCalledTimes(1);
+    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', inFlight.correction, {
+      requestId: inFlight.requestId,
+      resume: true,
+    });
+    expect(screen.getByText('a banana')).toBeInTheDocument();
+    expect(screen.getByText('it was a big one')).toBeInTheDocument();
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('a fresh read inside a dated meal is remembered under its id while it runs', async () => {
+    let release!: (v: unknown) => void;
+    api.previewMeal.mockReturnValueOnce(new Promise((r) => (release = r)));
+    render(<LogByChat meal="snack" date="2026-11-03" onLogged={() => {}} onBack={() => {}} />);
+    fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'a banana' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
+    await waitFor(() => expect(readReadInProgress()).toMatchObject({ door: 'chat', words: 'a banana' }));
+    release({ ...base, coach: { reached: true, calls: 1, checked: [] } });
+    await screen.findByText('the card');
+    expect(readReadInProgress()).toBeNull();
   });
 });

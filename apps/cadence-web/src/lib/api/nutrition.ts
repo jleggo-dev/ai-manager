@@ -7,7 +7,8 @@ import type {
   MicronutrientKey,
   MicroTargetOverride,
 } from '@cadence/shared';
-import { BASE, headers, timeoutSignal } from './http.ts';
+import { BASE, headers } from './http.ts';
+import { postKept, type KeptReadOptions } from './kept-answers.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
 
@@ -256,20 +257,26 @@ export interface MealPreview {
 /**
  * Parse the words into an itemized meal WITHOUT logging it — the confirm-first read for a
  * multi-ingredient description, where the quantities in the text ARE the serving sizes.
+ *
+ * Kept under a request id (kept-answers.ts): the read runs 10–150 s, and a phone that switches
+ * apps or locks meanwhile comes back for the answer instead of losing it. `opts` is the caller's
+ * own stop and, for a surface that remembers what it is waiting on, the id to pick up again.
  */
-export async function previewMeal(text: string, meal?: MealKind, correction?: MealCorrection): Promise<MealPreview> {
-  const res = await fetch(`${BASE}/nutrition/meals/preview`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({
+export async function previewMeal(
+  text: string,
+  meal?: MealKind,
+  correction?: MealCorrection,
+  opts: KeptReadOptions = {},
+): Promise<MealPreview> {
+  return postKept<MealPreview>(
+    '/nutrition/meals/preview',
+    {
       text,
       ...(meal ? { meal } : {}),
       ...(correction ? { correction: correction.words, previous: correction.previous } : {}),
-    }),
-    signal: timeoutSignal(READ_TIMEOUT_MS),
-  });
-  if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
-  return res.json();
+    },
+    { timeoutMs: READ_TIMEOUT_MS, label: 'meal preview', ...opts },
+  );
 }
 
 /**
@@ -286,30 +293,33 @@ export interface MealCorrection {
  * A read takes up to ~20 s (two model calls and every source), and up to a minute more when the
  * second round sends a maker-named part to the web (the API's food-web-lookup.ts waits 60 s on
  * it); a request past that is a dead socket, not a slow read, and the person is better told than
- * left waiting.
+ * left waiting. Since the answer is kept server-side, this bounds the whole wait — a dead socket
+ * on its own no longer ends the read (kept-answers.ts).
  */
 export const READ_TIMEOUT_MS = 150_000;
+/** Stage 1 of a photo read (the eyes) measured 11–35 s; a minute and a half is a hang. */
+export const PHOTO_READ_TIMEOUT_MS = 90_000;
 
 /**
  * One question row answered — a tapped choice or a typed line. The part's words and the answer
  * are re-read as one part through the same read, and the preview that comes back holds the
  * row(s) for that part alone, priced; the card puts them where the asked row was. Writes nothing.
  */
-export async function previewMealAnswer(input: {
-  asked_about: string;
-  answer: string;
-  /** True when the answer was one of the offered choices, false when typed. */
-  chosen: boolean;
-  meal?: MealKind;
-}): Promise<MealPreview> {
-  const res = await fetch(`${BASE}/nutrition/meals/preview/answer`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify(input),
-    signal: timeoutSignal(READ_TIMEOUT_MS),
+export async function previewMealAnswer(
+  input: {
+    asked_about: string;
+    answer: string;
+    /** True when the answer was one of the offered choices, false when typed. */
+    chosen: boolean;
+    meal?: MealKind;
+  },
+  opts: KeptReadOptions = {},
+): Promise<MealPreview> {
+  return postKept<MealPreview>('/nutrition/meals/preview/answer', input, {
+    timeoutMs: READ_TIMEOUT_MS,
+    label: 'meal answer',
+    ...opts,
   });
-  if (!res.ok) throw Object.assign(new Error(`meal answer failed: ${res.status}`), { status: res.status });
-  return res.json();
 }
 
 /** Log a previewed meal exactly as shown — no second AI pass; the card is what lands. */
@@ -541,16 +551,15 @@ export interface MealPhotoReading {
 export async function readMealPhoto(
   photo: string,
   caption?: string,
-  opts: { signal?: AbortSignal } = {},
+  opts: KeptReadOptions = {},
 ): Promise<MealPhotoReading> {
-  const res = await fetch(`${BASE}/nutrition/photo/read`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({ photo, ...(caption ? { caption } : {}) }),
-    ...(opts.signal ? { signal: opts.signal } : {}),
-  });
-  if (!res.ok) throw Object.assign(new Error(`photo read failed: ${res.status}`), { status: res.status });
-  return res.json();
+  // Kept under a request id (kept-answers.ts): 11–35 s is long enough to switch apps, and the
+  // reading must be there when they come back. `resume` asks after it without sending the photo again.
+  return postKept<MealPhotoReading>(
+    '/nutrition/photo/read',
+    { photo, ...(caption ? { caption } : {}) },
+    { timeoutMs: PHOTO_READ_TIMEOUT_MS, label: 'photo read', ...opts },
+  );
 }
 
 /**
@@ -564,14 +573,11 @@ export async function readMealPhoto(
  */
 export async function previewMealFromReading(
   input: { reading: string; caption?: string; meal?: MealKind },
-  opts: { signal?: AbortSignal } = {},
+  opts: KeptReadOptions = {},
 ): Promise<MealPreview> {
-  const res = await fetch(`${BASE}/nutrition/photo/preview`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify(input),
-    ...(opts.signal ? { signal: opts.signal } : {}),
+  return postKept<MealPreview>('/nutrition/photo/preview', input, {
+    timeoutMs: READ_TIMEOUT_MS,
+    label: 'meal preview',
+    ...opts,
   });
-  if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
-  return res.json();
 }

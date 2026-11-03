@@ -23,6 +23,8 @@ import { mergeItems, reachBackToPin, renameItem } from '../services/meal-correct
 import { findNutritionLog } from '../repos/nutrition.ts';
 import { enrichMeal } from '../services/meal-enrich.ts';
 import { kickFoodSweep } from '../services/food-sweep.ts';
+import { answerKept } from './answers.ts';
+import { readFault, sendReadFault } from './nutrition-faults.ts';
 import {
   BodyValidationError,
   parseBody,
@@ -85,15 +87,19 @@ router.post('/meals', async (req: Request, res: Response) => {
  */
 router.post('/photo/read', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
+  const line = 'failed to read the photo';
   try {
     const body = parseBody(readPhotoBodySchema, req.body);
-    res.json(await readMealPhoto(userId, { photo: body.photo, caption: body.caption, date: body.date }));
+    // Kept under the client's request id (answers.ts): a read takes 11–35 s, long enough to
+    // switch apps, and the answer must be there when they come back.
+    await answerKept(
+      res,
+      { userId, requestId: body.request_id, kind: 'photo_read' },
+      () => readMealPhoto(userId, { photo: body.photo, caption: body.caption, date: body.date }),
+      (err) => readFault(err, line),
+    );
   } catch (err) {
-    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
-    const msg = err instanceof Error ? err.message : '';
-    if (/invalid photo/.test(msg)) return void res.status(400).json({ error: msg });
-    console.error('[POST /nutrition/photo/read]', err);
-    res.status(500).json({ error: 'failed to read the photo' });
+    sendReadFault(res, err, line, '[POST /nutrition/photo/read]');
   }
 });
 
@@ -134,15 +140,17 @@ router.post('/photo/log', async (req: Request, res: Response) => {
  */
 router.post('/photo/preview', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
+  const line = 'failed to work out that meal';
   try {
     const body = parseBody(previewFromReadingBodySchema, req.body);
-    res.json(await previewMealFromReading(userId, body));
+    await answerKept(
+      res,
+      { userId, requestId: body.request_id, kind: 'photo_preview' },
+      () => previewMealFromReading(userId, body),
+      (err) => readFault(err, line),
+    );
   } catch (err) {
-    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
-    const msg = err instanceof Error ? err.message : '';
-    if (/a meal needs/.test(msg)) return void res.status(400).json({ error: msg });
-    console.error('[POST /nutrition/photo/preview]', err);
-    res.status(500).json({ error: 'failed to work out that meal' });
+    sendReadFault(res, err, line, '[POST /nutrition/photo/preview]');
   }
 });
 
@@ -166,15 +174,21 @@ router.post('/water', async (req: Request, res: Response) => {
  */
 router.post('/meals/preview', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
+  const line = 'failed to read that meal';
   try {
     const body = parseBody(previewMealBodySchema, req.body);
     // "Not quite": the same words read again, with the previous answer and the correction.
     const correction = body.correction ? { words: body.correction, previous: body.previous ?? [] } : undefined;
-    res.json(await previewMealParse(userId, body.text, body.meal, correction));
+    // Kept under the client's request id (answers.ts): a read runs 10–150 s, and a phone that
+    // switched apps or locked meanwhile comes back for the answer instead of losing it.
+    await answerKept(
+      res,
+      { userId, requestId: body.request_id, kind: 'meal_preview' },
+      () => previewMealParse(userId, body.text, body.meal, correction),
+      (err) => readFault(err, line),
+    );
   } catch (err) {
-    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
-    console.error('[POST /nutrition/meals/preview]', err);
-    res.status(500).json({ error: 'failed to read that meal' });
+    sendReadFault(res, err, line, '[POST /nutrition/meals/preview]');
   }
 });
 
@@ -186,13 +200,17 @@ router.post('/meals/preview', async (req: Request, res: Response) => {
  */
 router.post('/meals/preview/answer', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
+  const line = 'failed to read that answer';
   try {
     const body = parseBody(previewMealAnswerBodySchema, req.body);
-    res.json(await previewAnsweredPart(userId, body));
+    await answerKept(
+      res,
+      { userId, requestId: body.request_id, kind: 'meal_answer' },
+      () => previewAnsweredPart(userId, body),
+      (err) => readFault(err, line),
+    );
   } catch (err) {
-    if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
-    console.error('[POST /nutrition/meals/preview/answer]', err);
-    res.status(500).json({ error: 'failed to read that answer' });
+    sendReadFault(res, err, line, '[POST /nutrition/meals/preview/answer]');
   }
 });
 

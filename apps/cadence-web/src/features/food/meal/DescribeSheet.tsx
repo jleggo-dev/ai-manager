@@ -13,8 +13,10 @@
  * A read or an add that fails says what happened and what to do, where the person is looking
  * (failureWords.ts); the words stay in the box either way.
  */
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../../lib/api.ts';
+import { newRequestId } from '../../../lib/api/kept-answers.ts';
+import { clearReadInProgress, rememberRead, type ReadInProgress } from '../readInProgress.ts';
 import { CoachFace } from '../../../components/CoachFace.tsx';
 import { GrowingTextarea } from '../../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../../components/MicButton.tsx';
@@ -47,8 +49,10 @@ export const TRY_AGAIN = 'Try again';
 
 export function DescribeSheet({
   meal,
+  date,
   seed = '',
   listening = false,
+  resume,
   busy,
   addFailure,
   onAdd,
@@ -56,9 +60,13 @@ export function DescribeSheet({
   onPhoto,
 }: {
   meal: MealKind;
+  /** The meal's date. With it, a read in flight is remembered for a relaunch (readInProgress.ts). */
+  date?: string;
   /** Words already typed elsewhere — the filter bar's "Tell the coach" hands its phrase over. */
   seed?: string;
   listening?: boolean;
+  /** The read the app was relaunched in the middle of: asked after under its remembered id on open. */
+  resume?: ReadInProgress;
   busy?: boolean;
   /** The drawer's own line for an add that failed (failureWords.ts), shown here when the add was this sheet's. */
   addFailure?: string;
@@ -103,23 +111,45 @@ export function DescribeSheet({
   /** What holds the add — ONE gate, read by the button and by Enter in the box alike. */
   const held = openChoices > 0 || inFlight;
 
-  /** The read; with `correction`, the same words again with what was wrong and the rows as shown. */
-  async function lookUp(correction?: string) {
+  /**
+   * The read; with `correction`, the same words again with what was wrong and the rows as shown.
+   * With `pickUp`, the read the app was relaunched in the middle of: asked after under its
+   * remembered id (readInProgress.ts), sent again only if the server never got it.
+   */
+  async function lookUp(correction?: string, pickUp?: ReadInProgress) {
     if (!words || looking) return;
     setLooking(true);
     setFail(null);
     setAddFailed(false);
+    const previous = pickUp
+      ? pickUp.correction
+      : correction && fresh
+        ? { words: correction, previous: previousRows(fresh) }
+        : undefined;
+    // Remembered for a relaunch while it runs — the connection surviving the app being left is the
+    // read's own business (lib/api/kept-answers.ts). Forgotten once it settles.
+    const requestId = pickUp?.requestId ?? newRequestId();
+    if (date) {
+      rememberRead({ door: 'describe', kind: 'words', meal, date, words, requestId, listening, correction: previous });
+    }
     try {
-      const previous = correction && fresh ? { words: correction, previous: previousRows(fresh) } : undefined;
-      const p = previous ? await previewMeal(words, meal, previous) : await previewMeal(words, meal);
+      const p = await previewMeal(words, meal, previous, { requestId, resume: !!pickUp });
       if (!p.items.length) setFail({ line: NOTHING_READ, retry: false });
       setRead({ for: words, rows: p.items, coach: p.coach, corrected: !!previous });
     } catch (e) {
       setFail(failureWords(e, 'read'));
     } finally {
       setLooking(false);
+      clearReadInProgress();
     }
   }
+
+  // Relaunched mid-read: pick it up, once, on open. Closing the sheet forgets any read in flight.
+  useEffect(() => {
+    if (resume) void lookUp(undefined, resume);
+    return () => clearReadInProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function confirm() {
     if (!fresh?.length || busy || held) return;

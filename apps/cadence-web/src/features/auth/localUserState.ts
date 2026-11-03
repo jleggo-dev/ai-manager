@@ -60,6 +60,9 @@ export const USER_SCOPED_KEYS = [
   // The session someone is in the middle of (features/walkthrough/sessionInProgress.ts). It ALSO
   // stamps its owner; this sweep stops one person's half-done practice reopening for the next.
   'cadence.sessionInProgress',
+  // The meal read someone is in the middle of (features/food/readInProgress.ts) — their words and
+  // the id the answer is kept under. Owner-stamped too; this sweep stops it lingering on disk.
+  'cadence.readInProgress',
 ] as const;
 
 function read(key: string): string | null {
