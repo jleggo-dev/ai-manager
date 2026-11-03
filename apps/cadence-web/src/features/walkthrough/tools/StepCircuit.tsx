@@ -6,6 +6,7 @@ import { YouTubeLink } from './YouTubeLink.tsx';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { HandsFree } from './HandsFree.tsx';
 import { CircuitMoveClock } from './CircuitMoveClock.tsx';
+import { Cue } from '../wt-cue.tsx';
 
 type CircuitLog = Extract<StepLog, { kind: 'circuit' }>;
 const GAP = 10;
@@ -193,13 +194,18 @@ export function StepCircuit({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: TONE.ink2 }}>{ex.name}</div>
-              <div style={targetPill}>
-                {ex.reps != null ? `Target ${ex.reps}` : ex.seconds ? `Target ${ex.seconds} s` : 'Target'}
-              </div>
+              {/* Plain text, no TARGET box — the design ruling of 2026-11-03, same as the step header. */}
+              {(ex.reps != null || ex.seconds) && (
+                <div style={{ fontSize: 15, fontWeight: 900, color: TONE.ink, whiteSpace: 'nowrap' }}>
+                  {ex.reps != null ? `${ex.reps} reps` : `${ex.seconds} s`}
+                </div>
+              )}
               {ex.video_query && (
                 <YouTubeLink query={ex.video_query} label={ex.reps != null ? 'Form' : 'Follow along'} />
               )}
             </div>
+            {/* The coach's words about this move — never drawn before 2026-11-03. Three lines, then "more". */}
+            <Cue text={ex.detail} style={{ marginTop: -4 }} />
             {ex.reps != null ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
                 <button
@@ -340,19 +346,6 @@ const badge: CSSProperties = {
   color: 'white',
   borderRadius: 999,
   padding: '5px 12px',
-};
-const targetPill: CSSProperties = {
-  background: 'oklch(97% 0.012 85)',
-  border: '1px solid oklch(91% 0.015 85)',
-  borderRadius: 999,
-  padding: '5px 10px',
-  fontSize: 10.5,
-  fontWeight: 900,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  color: TONE.sub,
-  whiteSpace: 'nowrap',
-  flex: 'none',
 };
 const miniDial: CSSProperties = {
   width: 50,
