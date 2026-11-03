@@ -16,6 +16,13 @@ import type { CoachTurn } from './useCoachChat.ts';
 
 const RECOVER_ATTEMPTS = 6;
 const RECOVER_DELAY_MS = 800;
+
+/**
+ * What her bubble says when the app reopened on a reply the server said it was writing, and the
+ * reply never landed. Plain words for a real fault — the thread shows the question with no answer,
+ * so saying nothing would read as her ignoring it, and "connection dropped" would be untrue.
+ */
+export const REPLY_LOST = "That reply didn't make it back to me. Say it again and I'll pick it up.";
 /**
  * How long recovery will wait on a reply the server says it is STILL WRITING. This is the
  * backgrounded-phone path: iOS killed our stream mid-turn, the relay drained it to completion
@@ -68,6 +75,47 @@ export async function recoverTurnFromServer(deps: RecoverDeps): Promise<boolean>
     }
     // The quick budget covers blips; only an explicit "still writing" earns more patience.
     if (i >= RECOVER_ATTEMPTS - 1 && !(generating && Date.now() < deadline)) return false;
+  }
+}
+
+/**
+ * The chat hook's one entry point to the healer above: adopt whatever the server has as the thread.
+ * A factory rather than a line in the hook, because the hook sits at its 150-line gate.
+ */
+export function serverRecovery(deps: {
+  wait: (ms: number) => Promise<void>;
+  sessionId: MutableRefObject<string | null>;
+  setTurns: (turns: CoachTurn[]) => void;
+}): () => Promise<boolean> {
+  return () =>
+    recoverTurnFromServer({
+      wait: deps.wait,
+      onRecovered: (sid, next) => {
+        deps.sessionId.current = sid;
+        deps.setTurns(next);
+      },
+    });
+}
+
+/**
+ * The reply the server was still writing when the app reopened on it (useCoachTranscript's
+ * `onGenerating`): her bubble is already up, the composer waits as it does for a live turn, and
+ * the healer's poll brings the reply in. Told as lost in plain words if it never lands — a
+ * question left with no answer would read as her ignoring it.
+ */
+export async function waitForReply(deps: {
+  recover: () => Promise<boolean>;
+  onLost: (line: string) => void;
+  setStreaming: (on: boolean) => void;
+  healer: { begin: () => void; end: () => void };
+}): Promise<void> {
+  deps.setStreaming(true);
+  deps.healer.begin();
+  try {
+    if (!(await deps.recover())) deps.onLost(REPLY_LOST);
+  } finally {
+    deps.setStreaming(false);
+    deps.healer.end();
   }
 }
 

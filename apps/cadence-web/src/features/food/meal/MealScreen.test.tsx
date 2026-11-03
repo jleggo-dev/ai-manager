@@ -633,7 +633,13 @@ describe('"What did you have?" — look it up, then Looks right', () => {
     });
     fireEvent.click(within(sheet).getByRole('button', { name: 'Look it up' }));
     expect(await within(sheet).findByText("Here's what I found")).toBeInTheDocument();
-    expect(previewMeal).toHaveBeenCalledWith('2 eggs and a flat white', 'breakfast');
+    // The fourth argument is the read's own id and whether it is being picked up (kept-answers.ts).
+    expect(previewMeal).toHaveBeenCalledWith(
+      '2 eggs and a flat white',
+      'breakfast',
+      undefined,
+      expect.objectContaining({ resume: false }),
+    );
     expect(within(sheet).getByText('2 large')).toBeInTheDocument();
     // An amount nobody said is a question, never a number.
     expect(within(sheet).getByText('how much?')).toBeInTheDocument();

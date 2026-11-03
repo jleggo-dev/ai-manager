@@ -72,6 +72,36 @@ export async function touchConversation(aiSessionId: string): Promise<void> {
   await sql`update cadence.conversations set updated_at = now() where ai_session_id = ${aiSessionId}`;
 }
 
+/**
+ * A turn is starting: bump updated_at (the idle rule) and mark the turn as in flight from this
+ * moment (0065). The response id follows 5–15 s later; until it does, this is the only sign that
+ * a reply is being written — the sign GET /coach/current gives a phone that left and came back.
+ */
+export async function startTurn(aiSessionId: string): Promise<void> {
+  try {
+    await sql`
+      update cadence.conversations set updated_at = now(), turn_started_at = now()
+      where ai_session_id = ${aiSessionId}`;
+  } catch (err) {
+    // A deploy ahead of 0065 has no column to mark; the idle rule's bump must still land.
+    console.error('[startTurn] falling back to the pre-0065 statement', err);
+    await touchConversation(aiSessionId);
+  }
+}
+
+/** The turn is over — the reply is on file, or the turn failed: nothing is generating now. */
+export async function endTurn(aiSessionId: string): Promise<void> {
+  try {
+    await sql`
+      update cadence.conversations set in_flight_response_id = null, turn_started_at = null
+      where ai_session_id = ${aiSessionId}`;
+  } catch (err) {
+    // Same fallback: the response id must still be cleared, or every turn reads as generating.
+    console.error('[endTurn] falling back to the pre-0065 statement', err);
+    await setInFlightResponse(aiSessionId, null);
+  }
+}
+
 /** Update the rolling summary + token estimate (drives the budget tiers, §4.3). */
 export async function updateConversationContext(
   conversationId: string,

@@ -79,6 +79,9 @@ vi.mock('../services/context-pack.ts', () => ({ buildContextPack: vi.fn() }));
 vi.mock('../services/date-context.ts', () => ({ ensureDateStamped: (...a: unknown[]) => ensureDateStamped(...a) }));
 vi.mock('../services/dev-trace.ts', () => ({ getTrace: vi.fn(), updateTrace: vi.fn() }));
 vi.mock('../services/ai-log.ts', () => ({ logAi: (...a: unknown[]) => logAi(...a), recentAiLog: vi.fn() }));
+/** The turn's two marks on its conversation (0065): set at route entry, cleared when it ends. */
+const startTurn = vi.fn(async (_aiSessionId: string) => {});
+const endTurn = vi.fn(async (_aiSessionId: string) => {});
 vi.mock('../repos/conversations.ts', () => ({
   createConversation: vi.fn(async () => {}),
   countConversationsBefore: vi.fn(async () => 0),
@@ -87,7 +90,8 @@ vi.mock('../repos/conversations.ts', () => ({
   getNotifyOnReply: vi.fn(async () => false),
   setInFlightResponse: vi.fn(async () => {}),
   setNotifyOnReply: vi.fn(async () => {}),
-  touchConversation: vi.fn(async () => {}),
+  startTurn: (id: string) => startTurn(id),
+  endTurn: (id: string) => endTurn(id),
 }));
 vi.mock('../repos/plans.ts', () => ({ getActivePlan: vi.fn(), getFirstPlanCommitAt: vi.fn() }));
 vi.mock('../auth/middleware.ts', () => ({
@@ -269,5 +273,32 @@ describe('after the reply', () => {
     expect(res.status).toBe(200);
     expect(res.body).not.toContain('stream failed');
     expect(logAi.mock.calls.some((c) => (c[1] as { kind?: string })?.kind === 'coach')).toBe(true);
+  });
+});
+
+/**
+ * The turn's two marks on its conversation (0065). A phone that leaves mid-turn comes back and
+ * asks GET /coach/current whether a reply is still being written; the answer used to rest on the
+ * response id alone, which arrives 5–15 s in, so a phone that left early was told "nothing
+ * generating" and then "connection dropped" while the reply was on its way.
+ */
+describe("the turn's marks", () => {
+  it('marks the turn at route entry, before the relay, and clears both marks only after the reply is on file', async () => {
+    await send();
+    expect(startTurn).toHaveBeenCalledWith('sess-1');
+    expect(endTurn).toHaveBeenCalledWith('sess-1');
+    const started = startTurn.mock.invocationCallOrder[0]!;
+    const relayed = relayCoachTurnWithTools.mock.invocationCallOrder[0]!;
+    const recorded = recordCoachReply.mock.invocationCallOrder[0]!;
+    const ended = endTurn.mock.invocationCallOrder[0]!;
+    expect(started).toBeLessThan(relayed);
+    expect(recorded).toBeLessThan(ended);
+  });
+
+  it('a turn that fails clears the marks — nothing is generating after a failure', async () => {
+    relayCoachTurnWithTools.mockRejectedValueOnce(new Error('upstream down'));
+    const res = await send();
+    expect(res.body).toContain('stream failed');
+    expect(endTurn).toHaveBeenCalledWith('sess-1');
   });
 });

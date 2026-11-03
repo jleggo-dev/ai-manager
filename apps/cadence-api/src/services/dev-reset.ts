@@ -48,6 +48,8 @@ export const DEV_CHILD_TABLES = [
   'goals',
   'health_digests',
   'journal_entries',
+  // 0065 — answers kept for a phone that left mid-read (services/kept-answers.ts).
+  'kept_answers',
   'meal_plans',
   'notification_prefs',
   'notifications',

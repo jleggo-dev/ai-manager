@@ -45,6 +45,8 @@ import { findTiles } from './findTiles.ts';
 import { MealChatPanel } from './MealChatPanel.tsx';
 import { MealDoors, type MealDoor } from './MealDoors.tsx';
 import { MealDoorsRow } from './MealDoorsRow.tsx';
+import { describeToReopen, doorToReopen, type Describe } from './reopenDoor.ts';
+import type { ReadInProgress } from '../readInProgress.ts';
 import { MealItemSheet } from './MealItemSheet.tsx';
 import { MealMenu } from './MealMenu.tsx';
 import { MealTitle } from './MealTitle.tsx';
@@ -61,14 +63,16 @@ export interface MealScreenProps {
   meal?: MealKind;
   date?: string;
   openAt?: MealDoor;
+  /**
+   * The read the app was relaunched in the middle of (readInProgress.ts): the drawer opens on
+   * its door with the words back in place, and the door asks after the answer. Outranks `openAt`.
+   */
+  resume?: ReadInProgress;
   onClose: () => void;
   onLogged?: () => void;
   onOpenDay?: () => void;
   onCoach?: (note: string) => void;
 }
-
-/** The pencil (or the mic) — "What did you have?" over the drawer, maybe carrying words already typed. */
-type Describe = { seed?: string; listening?: boolean };
 
 type Sheet =
   { kind: 'amount'; tile: ShelfTile } | { kind: 'servings'; tile: ShelfTile } | { kind: 'item'; index: number };
@@ -77,6 +81,7 @@ export function MealScreen({
   meal: initialMeal,
   date,
   openAt,
+  resume,
   onClose,
   onLogged,
   onOpenDay,
@@ -95,11 +100,10 @@ export function MealScreen({
 
   const [shelf, setShelf] = useState<ShelfKey | null>(null);
   const active: ShelfKey = shelf && shelves.keys.includes(shelf) ? shelf : (shelves.keys[0] ?? 'usual');
-  // A capture tile that already chose typing or voice opens the sheet, not a screen of its own.
-  const [door, setDoor] = useState<MealDoor | null>(openAt?.at === 'chat' ? null : (openAt ?? null));
-  const [describe, setDescribe] = useState<Describe | null>(
-    openAt?.at === 'chat' ? { listening: openAt.listening } : null,
-  );
+  // A read the app was relaunched in the middle of reopens its door; else a capture tile that
+  // already chose typing or voice opens the sheet, not a screen of its own (reopenDoor.ts).
+  const [door, setDoor] = useState<MealDoor | null>(() => doorToReopen(openAt, resume));
+  const [describe, setDescribe] = useState<Describe | null>(() => describeToReopen(openAt, resume));
   const [query, setQuery] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -164,7 +168,7 @@ export function MealScreen({
     // `ms-in-door` lets the host fold its own chrome away while a keyboard-shaped surface is up.
     return (
       <div className="ms ms-in-door">
-        <MealDoors door={door} draft={draft} onSwitch={setDoor} onClose={() => setDoor(null)} />
+        <MealDoors door={door} draft={draft} date={mealDate} onSwitch={setDoor} onClose={() => setDoor(null)} />
       </div>
     );
   }
@@ -247,8 +251,10 @@ export function MealScreen({
       {describe && (
         <DescribeSheet
           meal={kind}
+          date={mealDate}
           seed={describe.seed}
           listening={describe.listening}
+          resume={describe.resume}
           busy={draft.busy}
           addFailure={draft.err}
           onAdd={async (items, raw) => !!(await draft.appendParsed(items, describe.listening ? 'heard' : 'typed', raw))}

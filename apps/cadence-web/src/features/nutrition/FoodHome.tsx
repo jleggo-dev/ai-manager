@@ -11,6 +11,7 @@ import {
 } from '../../lib/query/index.ts';
 import type { MealKind } from '@cadence/shared';
 import { MealScreen } from '../food/meal/MealScreen.tsx';
+import { readReadInProgress, type ReadInProgress } from '../food/readInProgress.ts';
 import { FoodSweepCard } from '../food/sweep/FoodSweepCard.tsx';
 import { FoodSweepSheet } from '../food/sweep/FoodSweepSheet.tsx';
 import { FoodSweepTidy } from '../food/sweep/FoodSweepTidy.tsx';
@@ -84,6 +85,12 @@ export function FoodHome({
   const [nutrients, setNutrients] = useState(false);
   /** The quick log, opened by "Log a meal" or an empty meal slot. */
   const [logMeal, setLogMeal] = useState<MealKind | 'any' | null>(initialLogMeal ? 'any' : null);
+  /**
+   * The read the app was relaunched in the middle of (features/food/readInProgress.ts): the shell
+   * opened straight into the log for it, and the drawer opens on its slot, its date and its door.
+   * Read once, on the first render; the drawer itself forgets the record when the read settles.
+   */
+  const [resumeRead] = useState<ReadInProgress | null>(() => (initialLogMeal ? readReadInProgress() : null));
   // The Sunday sweep's ride-along: fetched once, carried through client state (the pending row
   // clears itself after commit). The card only shows on today's Day read.
   const sweep = useFoodSweep();
@@ -160,7 +167,14 @@ export function FoodHome({
       onLogged?.();
     };
     return (
-      <MealScreen meal={logMeal === 'any' ? undefined : logMeal} onClose={leave} onOpenDay={leave} onCoach={onCoach} />
+      <MealScreen
+        meal={resumeRead?.meal ?? (logMeal === 'any' ? undefined : logMeal)}
+        date={resumeRead?.date}
+        resume={resumeRead ?? undefined}
+        onClose={leave}
+        onOpenDay={leave}
+        onCoach={onCoach}
+      />
     );
   }
 

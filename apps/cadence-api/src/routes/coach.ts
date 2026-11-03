@@ -39,9 +39,10 @@ import {
   getConversationByAiSession,
   getLatestConversation,
   getNotifyOnReply,
+  endTurn,
   setInFlightResponse,
   setNotifyOnReply,
-  touchConversation,
+  startTurn,
 } from '../repos/conversations.ts';
 import { getActivePlan, getFirstPlanCommitAt } from '../repos/plans.ts';
 import { REGISTRY_PACK_SOURCE } from '../services/coach-turns.ts';
@@ -234,20 +235,27 @@ router.get('/current', async (req: Request, res: Response) => {
     // mid-turn polls this on return, and "still generating" means keep waiting — not "give up
     // after five seconds and tell them the connection dropped".
     //
-    // Bounded by age, because the flag is only cleared by the handler that set it: an invocation
-    // that dies mid-turn leaves it set FOREVER, and an unbounded read would then tell every
-    // future recovery in this conversation to keep waiting on a turn that ended days ago. A real
-    // turn takes ~30s, so anything older than this is a corpse, not a reply. (`updated_at` is
-    // stamped by `touchConversation` when the turn is sent, which makes it the turn's start.)
-    const startedMs = new Date(conv.updated_at ?? conv.created_at).getTime();
+    // Two marks, because the response id alone was late: the provider announces it 5–15 s into
+    // the turn, and a phone that left and came back inside that stretch was told nothing was
+    // generating while the reply was on its way. `turn_started_at` (0065) is set at route entry
+    // and cleared with the id, so the whole turn reads as in flight.
+    //
+    // Bounded by age, because the marks are only cleared by the handler that set them: an
+    // invocation that dies mid-turn leaves them set FOREVER, and an unbounded read would then
+    // tell every future recovery in this conversation to keep waiting on a turn that ended days
+    // ago. A real turn takes ~30s, so anything older than this is a corpse, not a reply.
+    // (`turn_started_at` IS the turn's start; `updated_at`, stamped alongside it by `startTurn`,
+    // stands in for rows written before 0065.)
+    const startedMs = new Date(conv.turn_started_at ?? conv.updated_at ?? conv.created_at).getTime();
     const inFlightFresh = Number.isFinite(startedMs) && Date.now() - startedMs < IN_FLIGHT_MAX_MS;
+    const inFlight = conv.in_flight_response_id != null || conv.turn_started_at != null;
     res.json({
       ok: true,
       sessionId: conv.ai_session_id,
       messages,
       stale,
       staleReason,
-      generating: conv.in_flight_response_id != null && inFlightFresh,
+      generating: inFlight && inFlightFresh,
       // The cursor for reading back — where THIS conversation begins, so the next request asks
       // for what came before it without the client having to invent a timestamp.
       startedAt: conv.created_at,
@@ -533,8 +541,11 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
 
   const sessionIdParam = req.params.id as string;
   try {
-    // Message activity bumps the conversation's updated_at (idle-staleness signal). Fire-and-forget.
-    void touchConversation(sessionIdParam).catch(() => {});
+    // Message activity bumps the conversation's updated_at (idle-staleness signal) and marks the
+    // turn as in flight from this moment (0065) — the response id follows only once the provider
+    // announces it, and a phone that left before then must still be told a reply is being
+    // written. Fire-and-forget; awaited nowhere a person is waiting.
+    void startTurn(sessionIdParam).catch(() => {});
     // An arm belongs to ONE turn. Clearing here is what lets the arming route stop guessing whether
     // a turn is running: the client says "notify me" while it can, and a request that arrives with
     // nothing to announce (its turn already torn down behind a socket the client never saw die)
@@ -685,10 +696,11 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
     // while the reply was being written, and clearing it below is what keeps it from firing again.
     const armed = await getNotifyOnReply(sessionIdParam).catch(() => false);
 
-    // Cleared only NOW, after the reply is safely on file. Clearing it first opened the exact
-    // window this bug lived in: a returning client polls, sees `generating: false` with no new
-    // message, and concludes the turn died — while it was still being written down.
-    await setInFlightResponse(sessionIdParam, null).catch(() => {});
+    // Cleared only NOW, after the reply is safely on file — both marks, the response id and the
+    // turn's start. Clearing them first opened the exact window this bug lived in: a returning
+    // client polls, sees `generating: false` with no new message, and concludes the turn died —
+    // while it was still being written down.
+    await endTurn(sessionIdParam).catch(() => {});
     if (armed) await setNotifyOnReply(sessionIdParam, false).catch(() => {});
 
     // writeChunk may have flipped clientAlive on a failed write; also honor stream result.
@@ -733,6 +745,9 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   } catch (err) {
     const aim = AimError.fromUnknown(err);
     console.error('[POST /coach/sessions/:id/messages]', aim.kind, aim.message);
+    // A turn that failed is not generating. Left set, the marks told a returning phone to keep
+    // waiting for up to IN_FLIGHT_MAX_MS on a reply that was never coming.
+    void endTurn(sessionIdParam).catch(() => {});
     if (!res.headersSent) {
       res.status(aim.httpStatus).json({ error: 'stream failed', kind: aim.kind });
     } else {

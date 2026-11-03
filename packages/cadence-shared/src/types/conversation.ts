@@ -15,6 +15,13 @@ export interface Conversation {
    * so AI Admin's own provider_metadata never learns the id (migration 0029).
    */
   in_flight_response_id?: string | null;
+  /**
+   * When the turn now in flight began — set at route entry, before any model work, and cleared
+   * once the reply is on file or the turn fails (migration 0065). `in_flight_response_id` arrives
+   * only once the provider announces an id, 5–15 s in; this marks the stretch before it, so a
+   * phone that left and came back is told "still writing" instead of "nothing generating".
+   */
+  turn_started_at?: string | null;
   created_at: string;
   updated_at?: string; // bumped on message activity — feeds the idle-staleness rule
 }

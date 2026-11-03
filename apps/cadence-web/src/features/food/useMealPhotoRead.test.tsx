@@ -20,6 +20,7 @@ vi.mock('../../lib/api.ts', () => ({
 
 const { useMealPhotoRead, faultCopy, READ_BOUND_MS, NUTRITION_BOUND_MS } = await import('./useMealPhotoRead.ts');
 const { READ_FAILED, NO_FOODS, TOO_LONG, WORK_OUT_FAILED } = await import('./photoReadCopy.ts');
+const { readReadInProgress } = await import('./readInProgress.ts');
 
 const READING = 'A latte and a banana.\n\n1 venti latte\n1 medium banana';
 const PRICED = {
@@ -304,5 +305,96 @@ describe('useMealPhotoRead — faults, by stage, in plain words', () => {
     });
     expect(result.current.error).toBeNull();
     expect(result.current.phase).not.toBe('error');
+  });
+});
+
+/**
+ * The read the app was relaunched in the middle of (readInProgress.ts, owner 2026-11-03). Inside a
+ * dated meal each stage is remembered while it runs — the picture, the words, the id the answer
+ * is kept under — and `resume` asks after whichever stage was running, with the picture and the
+ * reading back in place, instead of sending the photo up again.
+ */
+describe('useMealPhotoRead — a read remembered for a relaunch', () => {
+  const PHOTO = 'data:image/jpeg;base64,xxx';
+  const where = { meal: 'breakfast' as const, date: '2026-11-03', photo: PHOTO };
+  const ID = '3f2c9b1e-4d5a-4c6b-8e7f-1a2b3c4d5e6f';
+
+  it('stage 1 is remembered while it runs (picture and caption) and forgotten once the reading is up', async () => {
+    let release!: (v: unknown) => void;
+    api.readMealPhoto.mockReturnValueOnce(new Promise((r) => (release = r)));
+    const { result } = renderHook(() => useMealPhotoRead(where));
+    let reading: Promise<string>;
+    act(() => {
+      reading = result.current.read(PHOTO, 'a latte');
+    });
+    expect(readReadInProgress()).toMatchObject({ door: 'photo', kind: 'photo_read', words: 'a latte', photo: PHOTO });
+    const { requestId } = readReadInProgress()!;
+    expect(api.readMealPhoto).toHaveBeenCalledWith(
+      PHOTO,
+      'a latte',
+      expect.objectContaining({ requestId, resume: false }),
+    );
+    await act(async () => {
+      release({ photo_ref: 'ref/1.jpg', reading: READING, error: null });
+      await reading;
+    });
+    expect(result.current.phase).toBe('confirming');
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('resuming stage 2 asks after the remembered id with the reading, and keeps the stored photo on the preview', async () => {
+    const { result } = renderHook(() => useMealPhotoRead(where));
+    await act(async () => {
+      await result.current.resume({
+        door: 'photo',
+        kind: 'photo_preview',
+        meal: 'breakfast',
+        date: '2026-11-03',
+        requestId: ID,
+        words: 'a latte',
+        photo: PHOTO,
+        reading: READING,
+        photoRef: 'ref/1.jpg',
+      });
+    });
+    expect(api.readMealPhoto).not.toHaveBeenCalled();
+    expect(api.previewMealFromReading).toHaveBeenCalledWith(
+      { reading: READING, caption: 'a latte', meal: 'breakfast' },
+      expect.objectContaining({ requestId: ID, resume: true }),
+    );
+    expect(result.current.phase).toBe('priced');
+    expect(result.current.reading).toBe(READING);
+    expect(result.current.preview).toMatchObject({ photo_ref: 'ref/1.jpg', photo_reading: READING });
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('resuming stage 1 asks after the remembered id; the photo goes up again only if the server never got it', async () => {
+    const { result } = renderHook(() => useMealPhotoRead(where));
+    await act(async () => {
+      await result.current.resume({
+        door: 'photo',
+        kind: 'photo_read',
+        meal: 'breakfast',
+        date: '2026-11-03',
+        requestId: ID,
+        words: 'a latte',
+        photo: PHOTO,
+      });
+    });
+    expect(api.readMealPhoto).toHaveBeenCalledWith(
+      PHOTO,
+      'a latte',
+      expect.objectContaining({ requestId: ID, resume: true }),
+    );
+    expect(result.current.phase).toBe('confirming');
+    expect(result.current.reading).toBe(READING);
+  });
+
+  it('outside a dated meal nothing is remembered', async () => {
+    const { result } = renderHook(() => useMealPhotoRead());
+    await act(async () => {
+      await result.current.read(PHOTO, 'a latte');
+    });
+    expect(readReadInProgress()).toBeNull();
   });
 });

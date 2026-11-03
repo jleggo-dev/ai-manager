@@ -37,6 +37,13 @@ async function restoreConversation(on: {
   keepAside: (turns: CoachTurn[]) => void;
   none: () => void;
   cursor: (c: CoachHistoryCursor) => void;
+  /**
+   * The server is still writing the reply to the last message. The app was relaunched mid-turn —
+   * a lock long enough for iOS to reclaim the webview — and the reply is on its way: adopt the
+   * thread and wait for it, the way a dropped stream is waited for. Only when the last word on
+   * file is the person's: a reply already there with its mark not yet cleared is simply adopted.
+   */
+  generating: (sessionId: string, turns: CoachTurn[]) => void;
 }): Promise<void> {
   try {
     const c = await getCurrentCoach();
@@ -47,6 +54,8 @@ async function restoreConversation(on: {
     }
     const restored = c.messages.map((m) => ({ role: m.role, text: m.content }));
     if (c.stale) on.keepAside(restored);
+    else if (c.generating === true && restored[restored.length - 1]?.role === 'user')
+      on.generating(c.sessionId, restored);
     else on.adopt(c.sessionId, restored);
   } catch {
     /* keep what is painted; the next send opens fresh */
@@ -59,6 +68,8 @@ export function useCoachTranscript(deps: {
   streaming: boolean;
   /** Runs once the server has answered, however it answered. */
   onSettled: () => void;
+  /** The restore found a reply still being written: the thread is adopted with her empty bubble, and this waits for it. */
+  onGenerating?: (sessionId: string) => void;
 }) {
   /**
    * The conversation, painted from the device before the network is asked anything — so opening
@@ -75,7 +86,7 @@ export function useCoachTranscript(deps: {
   const [cursor, setCursor] = useState<CoachHistoryCursor>({ startedAt: null, hasEarlier: false });
   const [restored, setRestored] = useState(false);
 
-  const { sessionId, streaming, onSettled } = deps;
+  const { sessionId, streaming, onSettled, onGenerating } = deps;
 
   // Reconcile with the server. The cache has already painted; this is the authoritative version
   // arriving behind it.
@@ -84,6 +95,12 @@ export function useCoachTranscript(deps: {
       adopt: (sid, next) => {
         sessionId.current = sid;
         setTurns(next);
+      },
+      generating: (sid, next) => {
+        sessionId.current = sid;
+        // Her bubble, empty, so the dots show: the reply is being written and lands in it.
+        setTurns([...next, { role: 'coach', text: '' }]);
+        onGenerating?.(sid);
       },
       keepAside: (aside) => {
         setEarlierTurns(aside);

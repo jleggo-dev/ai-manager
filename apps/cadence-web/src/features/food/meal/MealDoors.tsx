@@ -10,27 +10,35 @@ import { AddFoodSheet } from '../AddFoodSheet.tsx';
 import { FoodBarcodePanel } from '../FoodBarcodePanel.tsx';
 import { LogByChat } from '../LogByChat.tsx';
 import { PhotoReadPanel } from '../PhotoReadPanel.tsx';
+import type { ReadInProgress } from '../readInProgress.ts';
 import { CookbookShelf } from '../shelf/CookbookShelf.tsx';
 import { DraftStrip } from './DraftStrip.tsx';
 import { foodNeedsAsking } from './draftChips.ts';
 import { MealAddPanel } from './MealAddPanel.tsx';
 import type { MealDraft } from './useMealDraft.ts';
 
+/**
+ * `resume` on the chat and photo doors: the read the app was relaunched in the middle of
+ * (readInProgress.ts) — the door asks after its answer on open instead of starting over.
+ */
 export type MealDoor =
   | { at: 'add'; seed?: string }
-  | { at: 'chat'; listening?: boolean }
-  | { at: 'photo'; photo: string; caption?: string }
+  | { at: 'chat'; listening?: boolean; resume?: ReadInProgress }
+  | { at: 'photo'; photo: string; caption?: string; resume?: ReadInProgress }
   | { at: 'barcode' }
   | { at: 'shelf' };
 
 export function MealDoors({
   door,
   draft,
+  date,
   onSwitch,
   onClose,
 }: {
   door: MealDoor;
   draft: MealDraft;
+  /** The meal's date — with the slot, what a read in flight is remembered under for a relaunch. */
+  date: string;
   onSwitch: (door: MealDoor) => void;
   onClose: () => void;
 }) {
@@ -62,7 +70,9 @@ export function MealDoors({
     return (
       <LogByChat
         meal={kind}
+        date={date}
         listening={door.listening}
+        resume={door.resume}
         mode="draft"
         mealLabel={kind}
         onAppend={async (preview) => {
@@ -81,7 +91,9 @@ export function MealDoors({
       <PhotoReadPanel
         photo={door.photo}
         meal={kind}
+        date={date}
         initialCaption={door.caption}
+        resume={door.resume}
         mode="draft"
         appendDraft={async (items, rawText, photo) => {
           const m = await draft.appendParsed(items, 'assumed', rawText, photo);

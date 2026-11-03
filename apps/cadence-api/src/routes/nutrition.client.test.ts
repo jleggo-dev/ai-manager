@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { serveRoutesToWebClient, type ClientAgainstRoutes } from '../test/client-route.ts';
+import { resetKeptAnswers } from '../test/kept-answers-fake.ts';
 
 const OATS = '6f1c3a52-6a77-4b3e-9a0e-0b6f2a1c9d10';
 const MILK = '0c2d8e9f-1b3a-4c5d-8e7f-9a0b1c2d3e4f';
@@ -20,6 +21,8 @@ const MILK = '0c2d8e9f-1b3a-4c5d-8e7f-9a0b1c2d3e4f';
 let logged: Record<string, unknown>[] = [];
 /** What reached the read: the words, the slot, and a "not quite" correction when one was sent. */
 let reads: Record<string, unknown>[] = [];
+/** Set to hold the read mid-way — the server still working while the client's connection is gone. */
+let holdRead: Promise<void> | null = null;
 let meals: Set<string>;
 
 /** A coach-led read with every field the card is given, as previewMealParse answers it. */
@@ -68,6 +71,7 @@ vi.mock('../auth/middleware.ts', () => ({
 vi.mock('../services/nutrition.ts', () => ({
   previewMealParse: async (_u: string, text: string, meal?: string, correction?: unknown) => {
     reads.push({ text, meal, correction });
+    if (holdRead) await holdRead;
     return coachRead(text);
   },
   logMeal: async (_u: string, input: Record<string, unknown>) => {
@@ -104,6 +108,9 @@ vi.mock('../services/food-described-answer.ts', () => ({
   previewAnsweredPart: async () => ({ ...coachRead('some milk'), items: [coachRead('').items[1]] }),
 }));
 vi.mock('../services/water.ts', () => ({ logWater: async () => null }));
+// The answers kept for a client that left (services/kept-answers.ts), over a Map instead of the table.
+vi.mock('../repos/kept-answers.ts', () => import('../test/kept-answers-fake.ts'));
+vi.mock('../services/background.ts', () => ({ runInBackground: () => {} }));
 vi.mock('../services/meal-corrections.ts', () => ({
   mergeItems: async () => null,
   reachBackToPin: async () => null,
@@ -121,7 +128,12 @@ interface Meal {
 }
 /** The slice of the web client's lib/api/nutrition.ts the food screens use to log. */
 interface WebNutritionApi {
-  previewMeal(text: string, meal?: string, correction?: { words: string; previous: string[] }): Promise<Preview>;
+  previewMeal(
+    text: string,
+    meal?: string,
+    correction?: { words: string; previous: string[] },
+    opts?: { requestId?: string; pollMs?: number },
+  ): Promise<Preview>;
   previewMealAnswer(input: { asked_about: string; answer: string; chosen: boolean; meal?: string }): Promise<Preview>;
   readMealPhoto(photo: string, caption?: string): Promise<{ photo_ref: string; reading: string; error: null }>;
   previewMealFromReading(input: { reading: string; caption?: string; meal?: string }): Promise<Preview>;
@@ -137,13 +149,15 @@ interface WebNutritionApi {
 }
 
 const { default: nutritionRoutes } = await import('./nutrition.ts');
+const { default: answersRoutes } = await import('./answers.ts');
 let served: ClientAgainstRoutes<WebNutritionApi>;
 let web: WebNutritionApi;
 
 beforeAll(async () => {
-  served = await serveRoutesToWebClient<WebNutritionApi>('nutrition.ts', (app) =>
-    app.use('/nutrition', nutritionRoutes),
-  );
+  served = await serveRoutesToWebClient<WebNutritionApi>('nutrition.ts', (app) => {
+    app.use('/nutrition', nutritionRoutes);
+    app.use('/answers', answersRoutes);
+  });
   web = served.web;
 });
 afterAll(() => served.close());
@@ -152,6 +166,8 @@ beforeEach(() => {
   reads = [];
   logged = [];
   meals = new Set();
+  holdRead = null;
+  resetKeptAnswers();
 });
 
 /** What the card's confirm sends: the preview it was handed, its rows as the person left them. */
@@ -238,5 +254,43 @@ describe('the deterministic logs: a saved food, a plate, taking one back', () =>
     const meal = await web.logMealFromFood({ food_id: OATS });
     expect(await web.deleteMeal(meal!.log_id)).toBe(true);
     expect(await web.deleteMeal(meal!.log_id)).toBe(false);
+  });
+});
+
+/**
+ * The phone being left mid-read (owner, 2026-11-03): iOS kills the connection, the server goes on
+ * working. The client's `previewMeal` must come back with the answer the server kept, not with
+ * the dead socket — and the server must have read the meal ONCE. Both halves real: the web
+ * client's own function against the real routes, with only the read itself held by the test.
+ */
+describe('the read survives the phone being left (kept-answers.ts)', () => {
+  it('a POST whose connection dies mid-read still resolves with the answer the server kept, and the read ran once', async () => {
+    let release!: () => void;
+    holdRead = new Promise<void>((r) => (release = r));
+    const viaServer = globalThis.fetch;
+    let killed = false;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      const out = viaServer(url, init);
+      if (!killed && init?.method === 'POST' && url.endsWith('/nutrition/meals/preview')) {
+        // The request has left the device; the socket dies on our side while the server reads on.
+        killed = true;
+        void out.catch(() => {});
+        return Promise.reject(new TypeError('The network connection was lost.'));
+      }
+      return out;
+    });
+    try {
+      const pending = web.previewMeal("a pint of Rickard's Red", 'dinner', undefined, { pollMs: 5 });
+      await vi.waitFor(() => expect(reads).toHaveLength(1));
+      // The server is still reading; the client is asking after the answer, not giving up.
+      await new Promise((r) => setTimeout(r, 25));
+      release();
+      const read = await pending;
+      expect(read.items.map((i) => i.name)).toEqual(['Rolled oats', 'Milk']);
+      expect(reads).toHaveLength(1);
+    } finally {
+      holdRead = null;
+      vi.stubGlobal('fetch', viaServer);
+    }
   });
 });
