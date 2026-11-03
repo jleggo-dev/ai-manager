@@ -12,6 +12,7 @@ import type { FoodSweepProposal, PendingFoodSweep } from '@cadence/shared';
 import { numberWord } from '../bracket/copy.ts';
 import { CoachLine } from './CoachLine.tsx';
 import { noticeLine, S3_FOOTER, saveLine } from './copy.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 export interface FoodSweepSheetProps {
   sweep: PendingFoodSweep;
@@ -96,9 +97,9 @@ export function FoodSweepSheet({ sweep, busy, error, onBack, onCommit, onDismiss
         </div>
         <div className="sw-actions">
           {keptIds.length > 0 && (
-            <button type="button" className="sw-primary" disabled={busy} onClick={() => onCommit(keptIds)}>
+            <CommitButton disabled={busy} onClick={() => onCommit(keptIds)}>
               {`Add the ${numberWord(keptIds.length)} I've kept`}
-            </button>
+            </CommitButton>
           )}
           <button type="button" className="sw-secondary" disabled={busy} onClick={onDismiss}>
             None of these, thanks

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Recipe } from '@cadence/shared';
 import { useRecipes } from '../../../lib/query/index.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 /**
  * The cookbook shelf (canvas S2, meal-logging rework P6) — the LOGGING-side picker behind the
@@ -135,9 +136,9 @@ export function CookbookShelf({
             {typeof pickKcal === 'number' && (
               <div className="cs-pick-kcal">{`${Math.round(pickKcal * n).toLocaleString('en-US')} kcal`}</div>
             )}
-            <button type="button" className="mb-amber-btn" onClick={() => onPick(picking, n)}>
+            <CommitButton size="compact" className="mb-commit" onClick={() => onPick(picking, n)}>
               {n === 1 ? 'Log 1 serving' : `Log ${n} servings`}
-            </button>
+            </CommitButton>
             <button type="button" className="mb-quiet-btn" onClick={() => setPicking(null)}>
               Back
             </button>

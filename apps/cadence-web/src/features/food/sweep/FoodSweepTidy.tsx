@@ -12,6 +12,7 @@ import { numberWordCap } from '../bracket/copy.ts';
 import { CoachLine } from './CoachLine.tsx';
 import { EXTRAS_FOOTNOTE, numbersLine, tidyBubble, tidyButtonLabel, type TidyableProposal } from './copy.ts';
 import type { FoodSweepPhase } from './useFoodSweep.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 export interface FoodSweepTidyProps {
   /** What the commit saved — the ✓ list. */
@@ -131,14 +132,9 @@ export function FoodSweepTidy({
           <div className="sw-actions">
             {first ? (
               <>
-                <button
-                  type="button"
-                  className="sw-primary sw-primary--tidy"
-                  disabled={phase === 'tidying'}
-                  onClick={onTidy}
-                >
+                <CommitButton disabled={phase === 'tidying'} onClick={onTidy}>
                   {tidyButtonLabel(tidyable)}
-                </button>
+                </CommitButton>
                 <button type="button" className="sw-secondary" disabled={phase === 'tidying'} onClick={onSkip}>
                   Leave the past alone
                 </button>

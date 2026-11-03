@@ -18,6 +18,7 @@ import { playChime } from '../walkthrough/tools/chime.ts';
 import { FreeWriteStart, type FreeWriteStartChoice } from './FreeWriteStart.tsx';
 import { FreeWritePaper } from './FreeWritePaper.tsx';
 import { useWriteTimer } from './useWriteTimer.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * The writing page (Journal v2, settled): full-screen, words directly on the cream — no card, no
@@ -152,9 +153,9 @@ export function JournalWrite({
             ⚿ {secret ? 'secret' : ''}
           </button>
           <MicButton value={text} onChange={setText} />
-          <button className="jw-save" disabled={!text.trim() || saving} onClick={() => void keep('typed')}>
+          <CommitButton size="compact" inline disabled={!text.trim() || saving} onClick={() => void keep('typed')}>
             Save
-          </button>
+          </CommitButton>
         </span>
       </div>
 

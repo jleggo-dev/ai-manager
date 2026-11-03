@@ -3,6 +3,7 @@ import { KEPT_LINE, freeWriteDoneLine, freeWriteKeptLine, freeWriteProgress, tim
 import { playChime } from '../walkthrough/tools/chime.ts';
 import { keepJournalEntry } from '../../lib/api.ts';
 import { useWriteTimer } from './useWriteTimer.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * A timed free-write in a **physical journal** (owner, 2026-08-04) — the words go in their
@@ -81,9 +82,9 @@ export function FreeWritePaper({
           ‹
         </button>
         <div className="jw-date">On paper</div>
-        <button className="jw-save" onClick={() => void keep()} disabled={saving}>
+        <CommitButton size="compact" inline onClick={() => void keep()} disabled={saving}>
           {saving ? '…' : 'Save'}
-        </button>
+        </CommitButton>
       </div>
 
       {/* The hairline IS the timer — no clock on screen unless asked for. */}
