@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { StepLog } from '../state.ts';
-import { TONE, RING_C } from './tone.ts';
+import { TONE, RING_C, COMMIT } from './tone.ts';
 import { useHandoff } from './useHandoff.ts';
 
 const GAP = 10;
@@ -247,6 +247,5 @@ const logBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
+  ...COMMIT,
 };

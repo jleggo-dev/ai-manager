@@ -22,7 +22,7 @@ import {
   type IntervalPlan,
   type IntervalSet,
 } from '@cadence/shared';
-import { TONE } from './tone.ts';
+import { TONE, COMMIT } from './tone.ts';
 import { stripSegments } from './intervalRing.ts';
 import { StepperRow } from './IntervalRows.tsx';
 import { formatClock } from './timer.ts';
@@ -387,6 +387,5 @@ const saveBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
+  ...COMMIT,
 };

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StepLog } from '../state.ts';
-import { TONE, RING_C } from './tone.ts';
+import { TONE, RING_C, COMMIT } from './tone.ts';
 import { CHIME_SWITCH, playChime, playTones, unlockAudio } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
@@ -302,7 +302,8 @@ export function StepTimer({
         )}
       </div>
 
-      <button style={isPre ? greyBtn : logBtn} onClick={primary}>
+      {/* Past the target the button logs (commit green); before that it only starts or pauses. */}
+      <button style={isPre ? greyBtn : isOver ? { ...logBtn, ...COMMIT } : logBtn} onClick={primary}>
         {isOver
           ? `Stop · log ${minutesOf(elapsed)} min`
           : phase === 'running'

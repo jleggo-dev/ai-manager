@@ -8,7 +8,7 @@ import {
   sitLogLine,
 } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
-import { TONE, RING_C } from './tone.ts';
+import { TONE, RING_C, COMMIT } from './tone.ts';
 import { playChime } from './chime.ts';
 import { WhatsThis } from './WhatsThis.tsx';
 
@@ -124,7 +124,7 @@ export function StepMeditate({
             </>
           ) : null}
         </div>
-        <button style={primaryBtn} onClick={onDone}>
+        <button style={{ ...primaryBtn, ...COMMIT }} onClick={onDone}>
           Done
         </button>
       </div>
@@ -194,7 +194,8 @@ export function StepMeditate({
       )}
 
       <button
-        style={isPre ? greyBtn : primaryBtn}
+        // "End here" writes the sit, so it wears the commit green; Begin / Sit again only start one.
+        style={isPre ? greyBtn : isRun ? { ...primaryBtn, ...COMMIT } : primaryBtn}
         onClick={(e) => {
           e.stopPropagation(); // never let ending the sit read as a return
           primary();

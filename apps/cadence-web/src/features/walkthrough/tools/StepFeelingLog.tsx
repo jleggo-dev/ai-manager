@@ -11,7 +11,7 @@ import {
   type FeelingRoom,
 } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
-import { TONE } from './tone.ts';
+import { TONE, COMMIT } from './tone.ts';
 
 type FeelingLog = Extract<StepLog, { kind: 'feeling_log' }>;
 
@@ -295,8 +295,7 @@ const primaryBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
+  ...COMMIT,
 };
 const textBtn: CSSProperties = {
   border: 'none',
