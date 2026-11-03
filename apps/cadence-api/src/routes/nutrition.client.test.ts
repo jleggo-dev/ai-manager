@@ -18,6 +18,8 @@ const MILK = '0c2d8e9f-1b3a-4c5d-8e7f-9a0b1c2d3e4f';
 
 /** What reached the log service, and the meals on file. */
 let logged: Record<string, unknown>[] = [];
+/** What reached the read: the words, the slot, and a "not quite" correction when one was sent. */
+let reads: Record<string, unknown>[] = [];
 let meals: Set<string>;
 
 /** A coach-led read with every field the card is given, as previewMealParse answers it. */
@@ -64,7 +66,10 @@ vi.mock('../auth/middleware.ts', () => ({
   },
 }));
 vi.mock('../services/nutrition.ts', () => ({
-  previewMealParse: async (_u: string, text: string) => coachRead(text),
+  previewMealParse: async (_u: string, text: string, meal?: string, correction?: unknown) => {
+    reads.push({ text, meal, correction });
+    return coachRead(text);
+  },
   logMeal: async (_u: string, input: Record<string, unknown>) => {
     if (input.food_id && input.food_id !== OATS) throw new Error('food not found');
     logged.push(input);
@@ -116,7 +121,7 @@ interface Meal {
 }
 /** The slice of the web client's lib/api/nutrition.ts the food screens use to log. */
 interface WebNutritionApi {
-  previewMeal(text: string, meal?: string): Promise<Preview>;
+  previewMeal(text: string, meal?: string, correction?: { words: string; previous: string[] }): Promise<Preview>;
   previewMealAnswer(input: { asked_about: string; answer: string; chosen: boolean; meal?: string }): Promise<Preview>;
   readMealPhoto(photo: string, caption?: string): Promise<{ photo_ref: string; reading: string; error: null }>;
   previewMealFromReading(input: { reading: string; caption?: string; meal?: string }): Promise<Preview>;
@@ -144,6 +149,7 @@ beforeAll(async () => {
 afterAll(() => served.close());
 
 beforeEach(() => {
+  reads = [];
   logged = [];
   meals = new Set();
 });
@@ -170,6 +176,23 @@ describe('a described meal: read, then confirm (MealParseCard)', () => {
     expect(parsed.items[0]).toMatchObject({ food_id: OATS, said: 'a bowl of oats', brand: 'Quaker' });
     expect(parsed.items[1]).not.toHaveProperty('assumption');
     expect(parsed).not.toHaveProperty('coach');
+  });
+
+  it('"not quite": the correction and the rows as shown reach the read as one; the plain read carries none', async () => {
+    await web.previewMeal('a 0.0 guinness', 'dinner');
+    expect(reads.at(-1)).toMatchObject({ text: 'a 0.0 guinness', meal: 'dinner', correction: undefined });
+    const previous = ['Red Robin Guinness (Can), 1 serving'];
+    const read = await web.previewMeal('a 0.0 guinness', 'dinner', { words: 'it was the 0.0 one', previous });
+    expect(read.items).toHaveLength(2);
+    expect(reads.at(-1)).toMatchObject({ correction: { words: 'it was the 0.0 one', previous } });
+  });
+
+  it('a correction past the cap is refused as such (400), never read', async () => {
+    const before = reads.length;
+    await expect(
+      web.previewMeal('a 0.0 guinness', 'dinner', { words: 'w'.repeat(301), previous: [] }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(reads).toHaveLength(before);
   });
 
   it('an answered question row comes back as a priced row the confirm takes', async () => {

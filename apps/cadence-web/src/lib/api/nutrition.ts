@@ -7,7 +7,7 @@ import type {
   MicronutrientKey,
   MicroTargetOverride,
 } from '@cadence/shared';
-import { BASE, headers } from './http.ts';
+import { BASE, headers, timeoutSignal } from './http.ts';
 
 /* ── Nutrition (Observe phase) ─────────────────────────────────── */
 
@@ -257,15 +257,36 @@ export interface MealPreview {
  * Parse the words into an itemized meal WITHOUT logging it — the confirm-first read for a
  * multi-ingredient description, where the quantities in the text ARE the serving sizes.
  */
-export async function previewMeal(text: string, meal?: MealKind): Promise<MealPreview> {
+export async function previewMeal(text: string, meal?: MealKind, correction?: MealCorrection): Promise<MealPreview> {
   const res = await fetch(`${BASE}/nutrition/meals/preview`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ text, ...(meal ? { meal } : {}) }),
+    body: JSON.stringify({
+      text,
+      ...(meal ? { meal } : {}),
+      ...(correction ? { correction: correction.words, previous: correction.previous } : {}),
+    }),
+    signal: timeoutSignal(READ_TIMEOUT_MS),
   });
   if (!res.ok) throw Object.assign(new Error(`meal preview failed: ${res.status}`), { status: res.status });
   return res.json();
 }
+
+/**
+ * "Not quite" — what the person said was wrong with the previous answer, and that answer's rows
+ * as the card showed them, one line each ("Focaccia, 1 piece"). The same words are read again
+ * with both; the rows that come back replace the card's.
+ */
+export interface MealCorrection {
+  words: string;
+  previous: string[];
+}
+
+/**
+ * A read takes up to ~20 s (two model calls and every source); a request that never comes back
+ * is a dead socket, not a slow read, and the person is better told than left waiting.
+ */
+export const READ_TIMEOUT_MS = 90_000;
 
 /**
  * One question row answered — a tapped choice or a typed line. The part's words and the answer
@@ -283,6 +304,7 @@ export async function previewMealAnswer(input: {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(input),
+    signal: timeoutSignal(READ_TIMEOUT_MS),
   });
   if (!res.ok) throw Object.assign(new Error(`meal answer failed: ${res.status}`), { status: res.status });
   return res.json();

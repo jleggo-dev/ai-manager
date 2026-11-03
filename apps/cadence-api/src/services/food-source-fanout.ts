@@ -89,17 +89,51 @@ async function timed<T>(
   }
 }
 
+/** The words of a phrase worth searching on their own: letters, four or more. Longest first, at most two. */
+export function ledgerWords(query: string): string[] {
+  const words = query.split(/\s+/).filter((w) => /^[a-z][a-z'-]{3,}$/i.test(w));
+  if (words.length < 2 && query.split(/\s+/).length < 2) return [];
+  return [...new Set(words.map((w) => w.toLowerCase()))].sort((a, b) => b.length - a.length).slice(0, 2);
+}
+
+/**
+ * The ledger for one phrase, and for its words. The search matches the phrase as a whole (a
+ * substring, or close by trigram), and a whole phrase favours short names: "0.0 guinness" came
+ * back with five chain rows ("Guinness (Can)", "Guinness - 14 oz") and never "Guinness 0,
+ * Non-Alcoholic Draught, less than 0.05% alc./vol." — the words in another order on a long name
+ * (2026-11-02). Searching "guinness" on its own finds it first. So a phrase of two or more words
+ * is searched by its longest words as well, at the same time; the phrase's own rows come first,
+ * a row found twice is reported once, and nothing is ranked or dropped beyond the limit.
+ */
+async function searchLedger(userId: string, query: string): Promise<{ foods: Food[]; widened: boolean }> {
+  const words = ledgerWords(query).filter((w) => w !== query.toLowerCase());
+  const [own, ...more] = await Promise.all([
+    searchFoods(userId, query, LOCAL_LIMIT),
+    ...words.map((w) => searchFoods(userId, w, LOCAL_LIMIT)),
+  ]);
+  if (!words.length) return { foods: own, widened: false };
+  const seen = new Set(own.map((f) => f.food_id));
+  const foods = [...own];
+  for (const f of more.flat()) {
+    if (seen.has(f.food_id) || foods.length >= LOCAL_LIMIT) continue;
+    seen.add(f.food_id);
+    foods.push(f);
+  }
+  return { foods, widened: true };
+}
+
 /** The user's own foods plus everything shared, including the CNF corpus. Free, and always first. */
 async function ledgerRung(userId: string, query: string): Promise<{ foods: Food[]; check: SourceCheck }> {
-  const { value, check } = await timed('ledger', () => searchFoods(userId, query, LOCAL_LIMIT));
-  const foods = value ?? [];
+  const { value, check } = await timed('ledger', () => searchLedger(userId, query));
+  const foods = value?.foods ?? [];
   if (check.status === 'error') return { foods, check };
+  const byWord = value?.widened ? ', by word too' : '';
   return {
     foods,
     check: {
       ...check,
       status: foods.length ? 'hit' : 'miss',
-      detail: foods.length ? `${foods.length} already on file` : 'nothing on file yet',
+      detail: foods.length ? `${foods.length} already on file${byWord}` : `nothing on file yet${byWord}`,
     },
   };
 }

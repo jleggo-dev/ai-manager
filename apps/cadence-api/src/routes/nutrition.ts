@@ -168,7 +168,9 @@ router.post('/meals/preview', async (req: Request, res: Response) => {
   const userId = req.cadenceUserId!;
   try {
     const body = parseBody(previewMealBodySchema, req.body);
-    res.json(await previewMealParse(userId, body.text, body.meal));
+    // "Not quite": the same words read again, with the previous answer and the correction.
+    const correction = body.correction ? { words: body.correction, previous: body.previous ?? [] } : undefined;
+    res.json(await previewMealParse(userId, body.text, body.meal, correction));
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });
     console.error('[POST /nutrition/meals/preview]', err);

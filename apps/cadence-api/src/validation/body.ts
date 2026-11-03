@@ -8,8 +8,12 @@ import { z } from 'zod';
 import {
   ANSWER_MAX_CHARS,
   ASKED_ABOUT_MAX_CHARS,
+  CORRECTION_MAX_CHARS,
   DESCRIPTION_MAX,
   MAX_ATTACHMENTS_PER_MESSAGE,
+  PREVIOUS_ROW_MAX_CHARS,
+  PREVIOUS_ROWS_MAX,
+  UNIT_MAX_CHARS,
   type RepertoireStatus,
 } from '@cadence/shared';
 import { calendarDate } from './calendar-date.ts';
@@ -69,7 +73,7 @@ export const parsedMealSchema = z.object({
         name: z.string().trim().min(1).max(80),
         brand: z.string().trim().max(120).optional(),
         qty: z.number().positive().max(10_000).optional(),
-        unit: z.string().trim().min(1).max(24).optional(),
+        unit: z.string().trim().min(1).max(UNIT_MAX_CHARS).optional(),
         est: z.record(z.string(), z.unknown()).optional(),
         /** The food a coach-led preview linked the row to; the confirm prices from it (food-pricing.ts). */
         food_id: z.string().uuid().optional(),
@@ -95,6 +99,13 @@ export const parsedMealSchema = z.object({
 export const previewMealBodySchema = z.object({
   text: z.string().trim().min(1).max(500),
   meal: mealKindSchema.optional(),
+  /**
+   * "Not quite" (services/food-described-correction.ts): what the person said was wrong with the
+   * previous answer, and that answer's rows as the card showed them, one line each. The same
+   * words are read again with both as the food-check's notes.
+   */
+  correction: z.string().trim().min(1).max(CORRECTION_MAX_CHARS).optional(),
+  previous: z.array(z.string().trim().min(1).max(PREVIOUS_ROW_MAX_CHARS)).max(PREVIOUS_ROWS_MAX).optional(),
 });
 
 /**

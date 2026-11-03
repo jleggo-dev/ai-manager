@@ -30,6 +30,8 @@ import type { SourceCandidate } from './food-source-report.ts';
 import { CandidateBook, partsToLookups } from './food-candidate-book.ts';
 import { previewDescribedMeal, traceLines, type DescribedMealDeps } from './food-described-meal.ts';
 import { rememberedRows, saidPortion } from './food-described-rows.ts';
+import { correctionNotes } from './food-described-correction.ts';
+import type { FoodCheckVars } from './food-check.ts';
 import { phraseKey } from './food-phrases.ts';
 
 const USER = '00000000-0000-4000-a000-00000000d001';
@@ -507,5 +509,59 @@ describe('traceLines — one line per part, from what ran', () => {
       'banana: your foods: 1 rows · USDA skipped · FatSecret failed',
       'zzq: your foods: no match · USDA skipped · FatSecret failed',
     ]);
+  });
+});
+
+describe('"not quite" — a corrected read (food-described-correction.ts)', () => {
+  const phrase = phraseKey('a banana');
+  const memory = { [phrase]: { phrase, food_id: 'f-banana', qty: 1, unit: 'medium', uses: 2 } };
+  const two = item({ said: 'a banana', pick: 'c1', measure: '1 medium (118g)', count: 2 });
+
+  it('skips the memory, hands the previous answer and the correction to the model as notes, and logs it', async () => {
+    const vars: FoodCheckVars[] = [];
+    const { d } = deps({
+      memory,
+      call: async (v) => {
+        vars.push(v);
+        return JSON.stringify({ items: [two], lookups: [] });
+      },
+    });
+    const correction = { words: 'it was two bananas', previous: ['Banana, raw, 1 medium'] };
+    const p = await previewDescribedMeal(USER, 'a banana', 'snack', d, { correction });
+    expect(vars).toHaveLength(1);
+    expect(vars[0]!.notes).toBe(correctionNotes(correction));
+    expect(vars[0]!.said).toBe('a banana');
+    expect(p.items[0]).toMatchObject({ name: 'Banana, raw', qty: 2, basis: 'record' });
+    expect(d.log).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ correction }) }));
+  });
+
+  it('near-miss: the same words with no correction come from the memory, with no call', async () => {
+    const { d, calls } = deps({ memory });
+    const p = await previewDescribedMeal(USER, 'a banana', 'snack', d);
+    expect(calls).toHaveLength(0);
+    expect(p.items[0]).toMatchObject({ basis: 'remembered' });
+  });
+});
+
+describe('a part the model says is not a food', () => {
+  it('gets no row and is said in not_read with the reason, in their words', async () => {
+    const { d } = deps({
+      reply: [
+        item({ said: 'a banana', pick: 'c1', measure: '1 medium (118g)', count: 1 }),
+        item({ said: 'From a random cafe', assumption: 'not a food: it says where the meal came from' }),
+      ],
+    });
+    const p = await previewDescribedMeal(USER, 'a banana. From a random cafe', 'lunch', d);
+    expect(p.items).toHaveLength(1);
+    expect(p.items[0]).toMatchObject({ name: 'Banana, raw', basis: 'record' });
+    expect(p.coach.not_read).toEqual(['"From a random cafe" not read — not a food: it says where the meal came from']);
+    expect(d.log).toHaveBeenCalledWith(expect.objectContaining({ meta: expect.objectContaining({ left_out: 1 }) }));
+  });
+
+  it('near-miss: a part with no record and no estimate but a name is still a row that says why', async () => {
+    const { d } = deps({ reply: [item({ said: 'a zzq thing', name: 'zzq thing' })] });
+    const p = await previewDescribedMeal(USER, 'a zzq thing', 'lunch', d);
+    expect(p.items[0]).toMatchObject({ basis: 'none', problem: 'no record fits and no estimate was given' });
+    expect(p.coach.not_read).toEqual([]);
   });
 });

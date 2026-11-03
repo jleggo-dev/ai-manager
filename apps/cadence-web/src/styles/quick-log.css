@@ -200,9 +200,12 @@
   border-radius: 14px;
   padding: 10px 12px;
 }
+/* The words keep at least a third of the row: a long amount chip ("1 thick slice (approx 4-1/2" x
+   2-1/2" x 3/8")", USDA's own label) squeezed the name and the macros into a one-letter column
+   (2026-11-02). The chip wraps instead. */
 .ms-ds-row-w {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 36%;
 }
 .ms-ds-row-n {
   font-size: 12.5px;
@@ -218,7 +221,7 @@
 }
 .ms-ds-row-m {
   margin-top: 3px;
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 900;
   color: oklch(52% 0.02 120);
   font-variant-numeric: tabular-nums;
@@ -232,7 +235,9 @@
   font-size: 10.5px;
   font-weight: 900;
   color: oklch(40% 0.02 150);
-  white-space: nowrap;
+  max-width: 40%;
+  text-align: center;
+  line-height: 1.25;
 }
 .ms-ds-amt.is-ask {
   background: oklch(95% 0.05 80);

@@ -3,7 +3,7 @@
  * did the reading — a table, because each branch is one wrong `?.` away from the other.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('../../components/MicButton.tsx', () => ({ MicButton: () => <button type="button">mic</button> }));
 vi.mock('./MealParseCard.tsx', () => ({ MealParseCard: () => <div>the card</div> }));
@@ -11,8 +11,8 @@ vi.mock('../plan/occurrence/format.ts', () => ({ downscalePhoto: async () => 'da
 const api = vi.hoisted(() => ({ previewMeal: vi.fn() }));
 vi.mock('../../lib/api.ts', () => api);
 
-const { LogByChat } = await import('./LogByChat.tsx');
-const { NOT_REACHED_CARD, READING } = await import('./coachReadCopy.ts');
+const { LogByChat, TRY_AGAIN } = await import('./LogByChat.tsx');
+const { ANOTHER_GO_CARD, NOT_REACHED_CARD, READING } = await import('./coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,
@@ -54,15 +54,16 @@ describe('LogByChat — the line above the card says who read it', () => {
     expect(screen.getByText(text)).toBeInTheDocument();
   });
 
-  it('the trace renders only from what ran: present → "Checked …", empty → nothing', async () => {
+  it('the trace renders only from what ran: present → one line with the part behind it, empty → nothing', async () => {
     await readOut({
       ...base,
       coach: { reached: true, calls: 1, checked: ['banana: your foods: 1 rows · USDA skipped'] },
     });
-    expect(screen.getByText('Checked banana: your foods: 1 rows · USDA skipped.')).toBeInTheDocument();
+    expect(screen.getByText('1 part looked up · 1 call')).toBeInTheDocument();
+    expect(screen.getByText('banana: your foods: 1 rows · USDA skipped')).toBeInTheDocument();
     cleanup();
     await readOut({ ...base, coach: { reached: true, calls: 1, checked: [] } });
-    expect(screen.queryByText(/^Checked/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/looked up/)).not.toBeInTheDocument();
   });
 
   it('says what it is doing while it reads', () => {
@@ -93,5 +94,38 @@ describe('LogByChat — the camera', () => {
   it('no onPhoto, no camera', () => {
     render(<LogByChat meal="dinner" onLogged={() => {}} onBack={() => {}} />);
     expect(screen.queryByRole('button', { name: 'Add a photo' })).toBeNull();
+  });
+});
+
+/** A second message while a card is up is "not quite" (owner, 2026-11-02), never a fresh read of it alone. */
+describe('LogByChat — a second message is "not quite"', () => {
+  it('goes back with the same words and the card as shown, and the card that comes back replaces it', async () => {
+    await readOut({ ...base, coach: { reached: true, calls: 1, checked: [] } });
+    api.previewMeal.mockResolvedValueOnce({
+      ...base,
+      items: [{ name: 'Banana, raw', qty: 2, unit: 'medium', est: { kcal: 210 } }],
+      coach: { reached: true, calls: 1, checked: [] },
+    });
+    fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'it was two' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
+    await waitFor(() =>
+      expect(api.previewMeal).toHaveBeenLastCalledWith('a banana', 'snack', {
+        words: 'it was two',
+        previous: ['Banana, raw, 1 medium'],
+      }),
+    );
+    expect(await screen.findByText(ANOTHER_GO_CARD)).toBeInTheDocument();
+    expect(screen.getByText('it was two')).toBeInTheDocument();
+    expect(screen.getByText('a banana')).toBeInTheDocument();
+  });
+
+  it('a failed read says what happened in the thread, keeps the words, and offers Try again', async () => {
+    api.previewMeal.mockRejectedValueOnce(Object.assign(new Error('500'), { status: 500 }));
+    render(<LogByChat meal="snack" onLogged={() => {}} onBack={() => {}} />);
+    fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'a banana' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/my side/);
+    expect(screen.getByLabelText('What did you have?')).toHaveValue('a banana');
+    expect(screen.getByRole('button', { name: TRY_AGAIN })).toBeEnabled();
   });
 });

@@ -12,8 +12,10 @@ vi.mock('../../plan/occurrence/format.ts', () => ({ downscalePhoto: async () => 
 const api = vi.hoisted(() => ({ previewMeal: vi.fn(), previewMealAnswer: vi.fn() }));
 vi.mock('../../../lib/api.ts', () => api);
 
-const { DescribeSheet } = await import('./DescribeSheet.tsx');
-const { NOT_REACHED, NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
+const { DescribeSheet, TRY_AGAIN } = await import('./DescribeSheet.tsx');
+const { ANOTHER_GO, NOT_REACHED, NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
+const { NOT_QUITE, WHATS_OFF } = await import('../NotQuiteField.tsx');
+const { THATS_IT } = await import('../OwnAnswerField.tsx');
 const { CHECK_FAILED, CHECKING } = await import('../MealQuestionChoices.tsx');
 const { COULD_NOT_SETTLE } = await import('../MealAskedRow.tsx');
 
@@ -57,12 +59,13 @@ describe('DescribeSheet — who read it, and what the rows say', () => {
     expect(screen.queryByText(/Tap a row/)).not.toBeInTheDocument();
   });
 
-  it('the trace renders only from what ran', async () => {
+  it('the trace renders only from what ran: one line, the part behind it; nothing when nothing ran', async () => {
     await lookUp({ ...base, coach: { reached: true, calls: 1, checked: ['banana: your foods: 1 rows'] } });
-    expect(screen.getByText('Checked banana: your foods: 1 rows.')).toBeInTheDocument();
+    expect(screen.getByText('1 part looked up · 1 call')).toBeInTheDocument();
+    expect(screen.getByText('banana: your foods: 1 rows')).toBeInTheDocument();
     cleanup();
     await lookUp({ ...base, coach: { reached: true, calls: 1, checked: [] } });
-    expect(screen.queryByText(/^Checked/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/looked up/)).not.toBeInTheDocument();
   });
 
   it('a question row that arrives WITH a number is still left out of the total', async () => {
@@ -77,7 +80,7 @@ describe('DescribeSheet — who read it, and what the rows say', () => {
   it('not reached, with a trace: the notice and the trace both show', async () => {
     await lookUp({ ...base, coach: { reached: false, calls: 1, checked: ['banana: your foods: 1 rows'] } });
     expect(screen.getByText(NOT_REACHED)).toBeInTheDocument();
-    expect(screen.getByText('Checked banana: your foods: 1 rows.')).toBeInTheDocument();
+    expect(screen.getByText('1 part looked up · 1 call')).toBeInTheDocument();
   });
 
   it('a row waiting on her question shows the question, asks the amount, and is not in the total', async () => {
@@ -306,5 +309,90 @@ describe('DescribeSheet — the hold and the answer, by the key as by the button
     await screen.findByText('Honey');
     expect(names()).toEqual(['Drop Banana, raw', 'Drop Milk, whole', 'Drop Honey', 'Drop Toast']);
     expect(screen.getByRole('button', { name: /Looks right · 355 kcal/ })).toBeEnabled();
+  });
+});
+
+/**
+ * A read or an add that fails says what happened and what to do, where the person is looking
+ * (owner, 2026-11-02: the grey one-liner was "almost impossible to see" and said nothing). The
+ * words stay in the box; the branch is failureWords.ts's table, pinned here at the sheet.
+ */
+describe('DescribeSheet — when it fails, it says what happened and what to do', () => {
+  it('a network failure says offline, keeps the words, and Try again reads them again', async () => {
+    api.previewMeal.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    render(<DescribeSheet meal="snack" seed="a banana" onAdd={async () => true} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/offline/);
+    expect(screen.getByRole('textbox', { name: 'What did you have?' })).toHaveValue('a banana');
+    api.previewMeal.mockResolvedValueOnce(base);
+    fireEvent.click(screen.getByRole('button', { name: TRY_AGAIN }));
+    expect(await screen.findByText('Banana, raw')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a refused read (400) says so and offers no retry — the same words would be refused again', async () => {
+    api.previewMeal.mockRejectedValueOnce(Object.assign(new Error('400'), { status: 400 }));
+    render(<DescribeSheet meal="snack" seed="a banana" onAdd={async () => true} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/as written/);
+    expect(screen.queryByRole('button', { name: TRY_AGAIN })).not.toBeInTheDocument();
+  });
+
+  it("an add that did not land says so on the sheet, in the drawer's own words, and the sheet stays open", async () => {
+    const onClose = vi.fn();
+    api.previewMeal.mockResolvedValueOnce(base);
+    render(
+      <DescribeSheet
+        meal="snack"
+        seed="a banana"
+        addFailure="Your meal would not take one of those rows as written."
+        onAdd={async () => false}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    await screen.findByText('Banana, raw');
+    fireEvent.click(screen.getByRole('button', { name: /Looks right/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/would not take one of those rows/);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Banana, raw')).toBeInTheDocument();
+  });
+});
+
+/** "Not quite?" (owner, 2026-11-02): what is wrong goes back with the same words and the rows as shown. */
+describe('DescribeSheet — "not quite"', () => {
+  it('sends the correction with the rows as shown; the rows that come back take their place', async () => {
+    const redRobin = { name: 'Guinness (Can)', brand: 'Red Robin', qty: 1, unit: 'serving', est: { kcal: 160 } };
+    api.previewMeal.mockResolvedValueOnce({
+      ...base,
+      items: [redRobin],
+      coach: { reached: true, calls: 1, checked: [] },
+    });
+    render(<DescribeSheet meal="snack" seed="a 0.0 guinness" onAdd={async () => true} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    await screen.findByText('Red Robin Guinness (Can)');
+    fireEvent.click(screen.getByRole('button', { name: NOT_QUITE }));
+    fireEvent.change(screen.getByLabelText(WHATS_OFF), { target: { value: 'it was the 0.0 one' } });
+    api.previewMeal.mockResolvedValueOnce({
+      ...base,
+      items: [{ name: 'Guinness 0, Non-Alcoholic Draught', qty: 1, unit: 'can', est: { kcal: 70 } }],
+      coach: { reached: true, calls: 1, checked: [] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: THATS_IT }));
+    await waitFor(() =>
+      expect(api.previewMeal).toHaveBeenLastCalledWith('a 0.0 guinness', 'snack', {
+        words: 'it was the 0.0 one',
+        previous: ['Red Robin Guinness (Can), 1 serving'],
+      }),
+    );
+    expect(await screen.findByText('Guinness 0, Non-Alcoholic Draught')).toBeInTheDocument();
+    expect(screen.queryByText('Red Robin Guinness (Can)')).not.toBeInTheDocument();
+    expect(screen.getByText(ANOTHER_GO)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Looks right · 70 kcal/ })).toBeInTheDocument();
+  });
+
+  it('near-miss: the first read carries no correction', async () => {
+    await lookUp(base);
+    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack');
   });
 });

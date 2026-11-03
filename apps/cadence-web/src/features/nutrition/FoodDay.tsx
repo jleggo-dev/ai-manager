@@ -130,6 +130,14 @@ export function FoodDay({
                   <b>{fmt(left)}</b>
                   <span>KCAL LEFT</span>
                 </>
+              ) : scored ? (
+                // Past the target the ring said "2,210 KCAL EATEN" and left the person to subtract
+                // (owner, 2026-11-02: "doesn't indicate how much we're over by"). Count what
+                // happened, plainly: how far over, the mirror of how much is left.
+                <>
+                  <b>{fmt(eaten - targetKcal)}</b>
+                  <span>KCAL OVER</span>
+                </>
               ) : (
                 <>
                   <b>{fmt(eaten)}</b>

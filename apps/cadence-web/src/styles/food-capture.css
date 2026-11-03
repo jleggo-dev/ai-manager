@@ -1022,3 +1022,78 @@ select.fd-pick {
   line-height: 1.5;
   color: oklch(52% 0.02 120);
 }
+
+/* ── The coach's work, drawn like a tool call (CoachTrace) ───────────────────────────────────
+   One line says what ran; the parts' own lines sit behind a tap. What was not read stays in the
+   open. The row counts were a paragraph on the card until 2026-11-02 (owner: "I'm not okay with
+   that being a summary like somehow it's meaningful information"). */
+.ct {
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: oklch(50% 0.02 120);
+}
+.ct-work summary {
+  cursor: pointer;
+  list-style: none;
+}
+.ct-work summary::-webkit-details-marker {
+  display: none;
+}
+.ct-work summary::after {
+  content: ' · details';
+  font-weight: 800;
+  color: oklch(42% 0.1 150);
+}
+.ct-work[open] summary::after {
+  content: ' · less';
+}
+.ct-work ul {
+  margin: 4px 0 0;
+  padding-left: 14px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ct-left {
+  margin-top: 4px;
+}
+/* ── A read, an answer or an add that failed ─────────────────────────────────────────────────
+   Said where the person is looking, in a size they can read, with the next step beside it. The
+   grey one-liner under the shelf was "almost impossible to see" and said nothing about why or
+   what to do (owner, 2026-11-02). */
+.food-fail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 20px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: oklch(96% 0.04 70);
+  border: 1px solid oklch(86% 0.08 70);
+  color: oklch(36% 0.06 60);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.food-fail span {
+  flex: 1;
+  min-width: 0;
+}
+.food-fail button {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: oklch(42% 0.1 150);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+.fc-thread .food-fail {
+  margin: 0;
+}
+/* "Not quite?" under a read's rows (NotQuiteField): one chip, then the one-line field. */
+.fa-notquite {
+  margin: 4px 0 2px;
+}

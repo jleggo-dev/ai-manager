@@ -4,7 +4,8 @@
  * and a per-item food asked for in grams is refused rather than guessed.
  */
 import { describe, expect, it } from 'vitest';
-import type { Food } from '@cadence/shared';
+import { UNIT_MAX_CHARS, type Food } from '@cadence/shared';
+import { parsedMealSchema } from '../validation/body.ts';
 import { priceFood } from './food-pricing-portion.ts';
 import { portionForPick } from './food-pick-portion.ts';
 import { mapUsdaPortions } from './food-sources/usda-map.ts';
@@ -113,5 +114,31 @@ describe('portionForPick', () => {
       reads_back: true,
     });
     expect(portionForPick(spanakopita, { label: '1 serving (90g)', grams: 90 }, 1)).toMatchObject({ reads_back: true });
+  });
+});
+
+describe('the unit a pick writes is one the confirm will take', () => {
+  it('a USDA label as long as its description stays within the cap, and the confirm schema accepts the row', () => {
+    // The label USDA gives sliced roast beef. The read offered it as the unit; at a 24-character cap
+    // the confirm refused the row and the sheet said "Couldn't reach your meal" (2026-11-02).
+    const label = '1 thick slice (approx 4-1/2" x 2-1/2" x 3/8")';
+    const beef: typeof banana = {
+      base_unit: 'g',
+      macros_per_base: { kcal: 190, protein_g: 28, carbs_g: 0, fat_g: 8 },
+      servings: [{ label, unit: label, amount_g: 57 }],
+      default_serving: 0,
+    };
+    const p = portionForPick(beef, { label, grams: 57 }, 1)!;
+    expect(p.unit.length).toBeLessThanOrEqual(UNIT_MAX_CHARS);
+    const row = { name: 'Beef, roast, deli', qty: p.qty, unit: p.unit, est: p.est };
+    const parsed = parsedMealSchema.safeParse({
+      meal: 'lunch',
+      items: [row],
+      macros: null,
+      confidence: null,
+      flags: {},
+      raw_text: 'an inch of roast beef',
+    });
+    expect(parsed.success).toBe(true);
   });
 });

@@ -135,6 +135,21 @@ describe('FoodHome', () => {
     expect(screen.getByText('60 g')).toBeTruthy(); // protein, no denominator
   });
 
+  it('past the target the ring says how far over, not just what was eaten (owner, 2026-11-02)', () => {
+    const { container } = mount(
+      day({
+        totals: { kcal: 2210, protein_g: 83, carbs_g: 133, fat_g: 99 },
+        targets: { kcal: 2150, protein_g: 160, carbs_g: 220, fat_g: 70 },
+        left: { kcal: 0 },
+      }),
+    );
+    expect(container.querySelector('.nring-c b')?.textContent).toBe('60');
+    expect(screen.getByText('KCAL OVER')).toBeTruthy();
+    expect(screen.queryByText('KCAL EATEN')).toBeNull();
+    expect(screen.queryByText('KCAL LEFT')).toBeNull();
+    expect(screen.getByText('2,210 of 2,150 kcal')).toBeTruthy();
+  });
+
   it('scores once targets exist: kcal left, "x of y kcal", denominators', () => {
     mount(
       day({
