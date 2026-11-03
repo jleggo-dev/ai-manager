@@ -19,6 +19,8 @@
  *       USER_ID=… MODELS=gpt-5.4-mini CASES=real-banana node --import tsx apps/cadence-api/scripts/eval-food-check.ts
  *       MODE=single SKIP_FLOOR=1 USER_ID=… node --import tsx apps/cadence-api/scripts/eval-food-check.ts
  *       USER_ID=… MODELS=gpt-5.4-mini npm run eval:food-check -- --prompt-from-config
+ *       USER_ID=… MODELS=gpt-5.4-mini CASES=real-rickards-pint npm run eval:food-check -- --prompt-from-config --web
+ *         (--web: a second-round lookup with a maker named goes to the web, as production does; pins private foods on USER_ID)
  *
  * `--prompt-from-config` (or PROMPT_FROM_CONFIG=1) runs the SHIPPED shape: the e2e job is given the
  * config's own `food-check` promptTemplate, variables, strict schema and formatting rules, and each
@@ -52,6 +54,7 @@ const { toCandidate } = await import('../src/services/food-source-report.ts');
 const { searchFatSecretFoods } = await import('../src/services/food-sources/fatsecret.ts');
 const { refreshFatSecretFood } = await import('../src/services/food-sources/fatsecret-enrich.ts');
 const { wideLookup } = await import('../src/services/food-candidate-sources.ts');
+const { webLookup } = await import('../src/services/food-web-lookup.ts');
 const { priceParsedMeal } = await import('../src/services/food-pricing.ts');
 const { parseMealResult } = await import('../src/services/nutrition-parse.ts');
 const { withAim } = await import('../src/ai/aim.ts');
@@ -97,6 +100,8 @@ const MODE: 'rounds' | 'single' | 'config' = PROMPT_FROM_CONFIG
     ? 'single'
     : 'rounds';
 const skipFloor = process.env.SKIP_FLOOR === '1' || PROMPT_FROM_CONFIG;
+/** `--web` (or WEB=1), config mode only: a second-round lookup with a maker named goes to the web, as production does. Billed, and it pins private foods on USER_ID. */
+const WEB = process.argv.includes('--web') || process.env.WEB === '1';
 /** The shipped job, read once: its prompt is what `config` mode runs and its schema what the e2e job gets. */
 const shippedJob = (() => {
   const cfg = JSON.parse(fs.readFileSync(path.join(root, 'config/ai-admin/ai-admin.config.json'), 'utf8')) as {
@@ -304,7 +309,7 @@ async function modelFor(model: string, jobId: string, c: FoodCheckCase): Promise
   };
   const meal =
     MODE === 'config'
-      ? await runMealConfig(c, { run: runVars, lookup: lookupProd })
+      ? await runMealConfig(c, { run: runVars, lookup: lookupProd, web: WEB ? webLookup(userId) : undefined })
       : MODE === 'single'
         ? await runMealSingle(c, { run, lookup, lookupWide })
         : await runMeal(c, { run, lookup });

@@ -27,7 +27,7 @@ import {
   type CandidateBook,
   type MealPartLookup,
 } from './food-candidate-book.ts';
-import type { FoodCheckItem, FoodCheckOutcome, FoodCheckVars } from './food-check.ts';
+import type { FoodCheckItem, FoodCheckOutcome, FoodCheckVars, WebLookupFn } from './food-check.ts';
 import { phraseKey } from './food-phrases.ts';
 import { portionForPick } from './food-pick-portion.ts';
 import { priceFood } from './food-pricing-portion.ts';
@@ -62,6 +62,8 @@ export interface DescribedMealItem extends MealItem {
 
 export interface DescribedMealDeps {
   lookup: BookLookupFn;
+  /** The web, for a second-round lookup with a maker named (food-web-lookup.ts). Never the first fill. */
+  web?: WebLookupFn;
   call: (vars: FoodCheckVars) => Promise<string>;
   foods: (ids: string[]) => Promise<Food[]>;
   recall: (keys: string[]) => Promise<Map<string, FoodPhraseRow>>;
@@ -87,6 +89,10 @@ export function describedTotals(items: DescribedMealItem[]): ParsedMealResult['m
 
 /** Where a record's numbers came from, in the person's words. */
 export function sourceLabel(food: Pick<Food, 'owner_user_id' | 'source'>, userId: string): string {
+  // A researched or photographed food is pinned as the person's own, so where it came from is
+  // said before whose it is — "your saved food" would hide that the web, or a label, answered.
+  if (food.source === 'research') return 'a web lookup';
+  if (food.source === 'label_photo') return 'a photographed label';
   if (food.owner_user_id === userId) return 'your saved food';
   switch (food.source) {
     case 'usda':
@@ -97,10 +103,6 @@ export function sourceLabel(food: Pick<Food, 'owner_user_id' | 'source'>, userId
       return 'FatSecret';
     case 'off':
       return 'Open Food Facts';
-    case 'research':
-      return 'a web lookup';
-    case 'label_photo':
-      return 'a photographed label';
     default:
       return 'the shared food file';
   }

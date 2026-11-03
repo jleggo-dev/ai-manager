@@ -12,7 +12,8 @@
  *      USDA, FatSecret's top rows — and the answers are one book.
  *   3. One call to the food-check model (food-check.ts) with the words, the slot and the book.
  *      It picks a record and one of its measures, states an assumption, or asks one question.
- *      At most one more call, and the second offers no lookups.
+ *      At most one more call, and the second offers no lookups. A lookup it asks for with a
+ *      maker named goes to the web as well (food-web-lookup.ts) — the one place that rung runs.
  *   4. Each pick is checked against the book and priced by the store (food-pick-portion.ts →
  *      priceFood). The model never writes a calorie: an id it was not shown counts nothing, a
  *      labelled estimate is counted as such, and a row with an open question is not counted
@@ -38,7 +39,7 @@ import { readMealSlot, type MealKind } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { getFoodsByIds } from '../repos/foods.ts';
 import { logAi } from './ai-log.ts';
-import { CandidateBook, addLookups, describedParts, type MealPartLookup } from './food-candidate-book.ts';
+import { CandidateBook, addLookups, cutAtWord, describedParts, type MealPartLookup } from './food-candidate-book.ts';
 import { wideLookup } from './food-candidate-sources.ts';
 import { FOOD_CHECK_JOB, foodCheckRounds, type FoodCheckOutcome } from './food-check.ts';
 import { correctionNotes, type MealCorrection } from './food-described-correction.ts';
@@ -53,6 +54,7 @@ import {
 } from './food-described-rows.ts';
 import { phraseKey, recallPhrases } from './food-phrases.ts';
 import { priceParsedMeal } from './food-pricing.ts';
+import { webLookup } from './food-web-lookup.ts';
 import { mealFlags } from './meal-flags.ts';
 import { isMeal, parseMealResult, usageSlot, type ParsedMealResult } from './nutrition-parse.ts';
 
@@ -115,6 +117,7 @@ export async function previewByParseMeal(
 export function productionDeps(userId: string): DescribedMealDeps {
   return {
     lookup: wideLookup(userId),
+    web: webLookup(userId),
     call: async (vars) => {
       const res = await runJobBySlug(userId, FOOD_CHECK_JOB, { ...vars });
       return res.formatted ?? res.raw ?? '';
@@ -126,7 +129,14 @@ export function productionDeps(userId: string): DescribedMealDeps {
   };
 }
 
-const SOURCE_WORDS: Record<string, string> = { ledger: 'your foods', usda: 'USDA', fatsecret: 'FatSecret' };
+const SOURCE_WORDS: Record<string, string> = {
+  ledger: 'your foods',
+  usda: 'USDA',
+  fatsecret: 'FatSecret',
+  research: 'the web',
+};
+/** The most of a rung's reason for failing that one trace line carries. */
+const FAIL_DETAIL_MAX = 100;
 
 /** The trace, true to what ran: one line per part from the fan-out's own report. */
 export function traceLines(book: Pick<CandidateBook, 'sections'>, remembered: MealPartLookup[]): string[] {
@@ -135,7 +145,8 @@ export function traceLines(book: Pick<CandidateBook, 'sections'>, remembered: Me
     const parts = s.checked.map((c) => {
       const who = SOURCE_WORDS[c.source] ?? c.source;
       if (c.status === 'skipped') return `${who} skipped`;
-      if (c.status === 'error') return `${who} failed`;
+      if (c.status === 'error')
+        return c.detail ? `${who} failed: ${cutAtWord(c.detail, FAIL_DETAIL_MAX)}` : `${who} failed`;
       return c.detail ? `${who}: ${c.detail}` : who;
     });
     lines.push(`${s.lookup.q}: ${parts.join(' · ') || 'nothing checked'}`);
@@ -228,7 +239,7 @@ export async function readParts(
     try {
       outcome = await foodCheckRounds(
         { meal, said: pendingWords, book, notes: parts.notes ?? '' },
-        { call: deps.call, lookup: deps.lookup },
+        { call: deps.call, lookup: deps.lookup, web: deps.web },
       );
       failure = outcome.error;
     } catch (e) {
@@ -255,6 +266,7 @@ export async function readParts(
         calls,
         parts: lookups.length,
         remembered: remembered.size,
+        web: outcome?.web.length ?? 0,
         not_read: not_read.length,
         left_out: leftOut.length,
         records: book.entries.size,

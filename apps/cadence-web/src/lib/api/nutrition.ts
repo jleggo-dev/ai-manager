@@ -283,10 +283,12 @@ export interface MealCorrection {
 }
 
 /**
- * A read takes up to ~20 s (two model calls and every source); a request that never comes back
- * is a dead socket, not a slow read, and the person is better told than left waiting.
+ * A read takes up to ~20 s (two model calls and every source), and up to a minute more when the
+ * second round sends a maker-named part to the web (the API's food-web-lookup.ts waits 60 s on
+ * it); a request past that is a dead socket, not a slow read, and the person is better told than
+ * left waiting.
  */
-export const READ_TIMEOUT_MS = 90_000;
+export const READ_TIMEOUT_MS = 150_000;
 
 /**
  * One question row answered — a tapped choice or a typed line. The part's words and the answer

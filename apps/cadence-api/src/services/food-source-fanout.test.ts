@@ -264,7 +264,11 @@ describe('the ledger is searched by its words as well as the phrase', () => {
     ['guinness', []],
     ['2 eggs', ['eggs']],
     ['an egg', []],
-  ])('ledgerWords(%j) → %j: letters of four or more, longest first, at most two', (q, words) => {
+    // A measure word is not a food: "pint" on its own found seven pinto-bean rows (2026-11-03).
+    ['pint of Rickards red', ['rickards']],
+    ['a large glass of milk', ['milk']],
+    ['two slices of sourdough', ['sourdough']],
+  ])('ledgerWords(%j) → %j: letters of four or more, not a measure word, longest first, at most two', (q, words) => {
     expect(ledgerWords(q)).toEqual(words);
   });
 });

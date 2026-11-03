@@ -157,6 +157,10 @@ describe('food-check job config', () => {
     expect(template).toContain('A zero in their words ("0.0", "zero") is part of the food\'s name, never an amount.');
     expect(template).toContain("Never take a record's smallest measure because the amount was loose.");
     expect(template).toContain('A record from a restaurant or chain names a place they did not say');
+    // 2026-11-03: a chain's row is not a fit for a maker-named food — the second round's web lookup needs the ask.
+    expect(template).toContain(
+      "When they named a maker and every record naming it has a restaurant or chain in brackets, that is the restaurant's menu row of it",
+    );
     expect(template).toContain(
       'A part that names no food (where it came from, a remark) gets pick null, name null, estimate null',
     );

@@ -41,8 +41,8 @@ export type ReadStage = 'read' | 'nutrition';
 
 /** Stage 1 measured 11–35s; a slow model is not a bug, a minute and a half is a hang. */
 export const READ_BOUND_MS = 90_000;
-/** Stage 2 measured 4–14s typed, longer with the extra lookup round and FatSecret on the line. */
-export const NUTRITION_BOUND_MS = 120_000;
+/** Stage 2 measured 4–14s typed, longer with the extra lookup round and FatSecret on the line, and up to a minute more when that round sends a maker-named part to the web. */
+export const NUTRITION_BOUND_MS = 150_000;
 
 // By name, not `instanceof Error`: a DOMException is not an Error in every runtime the tests use.
 const nameOf = (e: unknown): string | undefined =>
