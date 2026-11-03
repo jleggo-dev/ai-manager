@@ -72,9 +72,9 @@ describe('StepTimer — an open-ended effort', () => {
   it('carries no footnote explaining what the clock will do (owner, 2026-11-03)', () => {
     for (const props of [{ openEnded: true }, { openEnded: false }, { switchSides: true }]) {
       cleanup();
-      render(<StepTimer seconds={60} chime {...props} nextTitle="Cool down" onLog={() => {}} onDone={() => {}} />);
+      render(<StepTimer seconds={60} chime {...props} onLog={() => {}} onDone={() => {}} />);
       expect(screen.queryByText(/keeps counting/)).toBeNull();
-      expect(screen.queryByText(/moves to Cool down/)).toBeNull();
+      expect(screen.queryByText(/moves to|moves on/)).toBeNull();
       expect(screen.queryByText(/Pausing keeps/)).toBeNull();
       expect(screen.queryByText(/Chimes halfway/)).toBeNull();
     }

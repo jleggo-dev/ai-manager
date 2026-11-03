@@ -61,9 +61,6 @@ export function StepTimer({
   openEnded?: boolean;
   switchSides?: boolean;
   title?: string;
-  /** Still passed by the shell; nothing draws it since the footnote went (2026-11-03). Dropping
-   *  it from the shell is a one-line follow-up in Walkthrough.tsx. */
-  nextTitle?: string;
   log?: TimerLog;
   /** A clock that was running when the app was last seen (sessionInProgress.ts) — the timer opens
    *  already running from that instant, caught up, instead of idle at its last pause. */

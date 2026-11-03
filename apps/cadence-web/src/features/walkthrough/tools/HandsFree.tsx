@@ -72,7 +72,7 @@ function title(state: HandsFreeState, live: boolean, unavailable: boolean): stri
 
 function subLine(state: HandsFreeState, on: boolean, unavailable: boolean): string {
   if (unavailable) return 'Permission denied or unsupported — the buttons still work';
-  if (!on) return 'Off — tap to control the timer by voice';
+  if (!on) return 'Off'; // the state alone; what a tap does is not explained (owner, 2026-11-03)
   // Restart is the one word that can throw away a run someone is four rounds into.
   if (state.status === 'confirm') return 'Say “restart” again to confirm';
   // Built from what this surface actually accepts — a plain countdown must not advertise "skip".

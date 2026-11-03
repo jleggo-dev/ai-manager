@@ -256,7 +256,7 @@ export function Walkthrough({
                 position — and the new step opened with the old step's finished clock: 0:00 left,
                 "Resume" (2026-09-06). */}
             <div key={step.id} style={{ marginTop: 18 }}>
-              {renderTool(step, logs, setLog, next, steps[idx + 1]?.title, {
+              {renderTool(step, logs, setLog, next, {
                 resume: clock?.stepId === step.id ? clock : null,
                 set: (c) => setClock(c ? { stepId: step.id, ...c } : null),
               })}
@@ -335,7 +335,6 @@ function renderTool(
   logs: StepLogs,
   setLog: (id: string, l: StepLog) => void,
   onAdvance: () => void,
-  nextTitle?: string,
   clock?: { resume: TimerClock | null; set: (c: TimerClock | null) => void },
 ): ReactNode {
   const t = step.tool;
@@ -360,7 +359,6 @@ function renderTool(
           openEnded={t.open_ended ?? false}
           switchSides={t.switch_sides ?? false}
           title={step.title}
-          nextTitle={nextTitle}
           log={log?.kind === 'timer' ? log : undefined}
           resumeClock={clock?.resume}
           onClock={clock?.set}
