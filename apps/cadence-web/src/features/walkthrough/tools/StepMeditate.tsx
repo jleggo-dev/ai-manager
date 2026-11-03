@@ -36,7 +36,6 @@ export function StepMeditate({
   seconds,
   bells,
   intervalMin,
-  title,
   log,
   onLog,
   onDone,
@@ -44,7 +43,6 @@ export function StepMeditate({
   seconds: number;
   bells: MeditateBells;
   intervalMin: number;
-  title?: string;
   log?: MeditateLog;
   onLog: (l: MeditateLog) => void;
   onDone: () => void;
@@ -177,9 +175,10 @@ export function StepMeditate({
       {isPre && (
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={caps}>Get settled</div>
-          {/* Offered once, here, and never explained again. */}
+          {/* The practice, said once. The gesture is not explained here (owner, 2026-11-03: no text
+              that explains the UI); the "I came back" pill on the running card shows it. */}
           <div style={{ fontSize: 11.5, lineHeight: 1.4, color: 'oklch(48% 0.02 150)' }}>
-            If you notice you&apos;ve drifted, tap anywhere — that&apos;s the practice, not a mistake.
+            Noticing you&apos;ve drifted is the practice, not a mistake.
           </div>
         </div>
       )}
@@ -213,18 +212,8 @@ export function StepMeditate({
       {/* Not while sitting — the point is to stop reading. */}
       {!isRun && !isPre && <WhatsThis text={MEDITATE_HOW} />}
 
-      {!isRun && (
-        <div style={footnote}>
-          {title ? `${title} · ` : ''}
-          {minutes} min
-          {bells === 'none'
-            ? ', no bells'
-            : bells === 'interval'
-              ? `, a bell every ${intervalMin} min`
-              : ', a bell to start and end'}
-          . Stopping early keeps the time you sat.
-        </div>
-      )}
+      {/* No footnote under the card ("10 min, a bell to start and end. Stopping early keeps the
+          time you sat."): it explained the UI (owner, 2026-11-03), as the timer's did (#482). */}
     </div>
   );
 }
@@ -304,11 +293,4 @@ const greyBtn: CSSProperties = {
   cursor: 'pointer',
   background: 'linear-gradient(180deg, oklch(96% 0.008 85) 0%, oklch(93% 0.01 85) 46%)',
   boxShadow: '0 5px 0 oklch(87% 0.015 85)',
-};
-const footnote: CSSProperties = {
-  borderTop: '1px solid oklch(93% 0.012 85)',
-  paddingTop: 12,
-  fontSize: 11.5,
-  lineHeight: 1.4,
-  color: 'oklch(48% 0.02 150)',
 };

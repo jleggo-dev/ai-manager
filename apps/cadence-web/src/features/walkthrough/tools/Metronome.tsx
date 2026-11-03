@@ -116,18 +116,18 @@ export function Metronome({
             </button>
           </div>
 
-          <div style={{ ...S.caption, textAlign: 'center' }}>
-            {m.nudged ? (
+          {/* Only the way back is drawn here. "Tap four beats to set it by ear" explained the
+              Tap tempo button (owner, 2026-11-03: no text that explains the UI). */}
+          {m.nudged && (
+            <div style={{ ...S.caption, textAlign: 'center' }}>
               <button
                 style={{ ...S.caption, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                 onClick={m.reset}
               >
                 ↺ Back to {spec.bpm}
               </button>
-            ) : (
-              'Tap four beats to set it by ear'
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
