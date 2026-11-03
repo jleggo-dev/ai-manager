@@ -9494,3 +9494,11 @@ file by name, size and owner and reaches for its own tools to open it, then says
 directly read the internal contents… in native Excel format". Neither road converts Excel. It
 stays out until the provider reads it; a converter of our own (sheet → CSV text, spliced like
 a text file) is the slice if it is wanted before then.
+
+## Walkthrough v3 — swap a move, timed sets, rearrange the session, a checker for her setups (owner, 2026-11-02)
+
+From a real gym session: no way to swap a move or add weight, farmer carries played as "1 rep",
+a circuit move tagged TIMER with no clock, no chime on intervals, cues cut at 200 characters,
+and no way to alternate sets the way the owner trains. Six phases, five rulings, findings with
+evidence: **[`WALKTHROUGH-V3-PLAN.md`](WALKTHROUGH-V3-PLAN.md)**. Design brief for Claude Design:
+[`design/walkthrough-v3-brief.md`](design/walkthrough-v3-brief.md).
