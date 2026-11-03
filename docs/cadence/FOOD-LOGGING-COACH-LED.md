@@ -1010,7 +1010,9 @@ said so and the Perkins row stood. Once the row is pinned, every later read of t
 in one call — five of five, both models — which is the point: the lookup is paid once. The research
 job's own answers varied across four calls ("Rickard's Red Beer" by Molson's, by Molson Coors, once
 with the restaurant in its name, once refused); that job's prompt is a separate matter. Whether the
-food-check should run on the model that asks is the owner's next call.
+food-check should run on the model that asks was the owner's next call, and it was made the same
+day: **ruling 1 amended — claude-sonnet-5-5 primary, gpt-5.4-mini failover** (the profile's
+description in the config carries the reason; `repoint-profile.ts` moved the live pointers).
 
 The first eval run showed why the model had not been asking: the book for "one pint of Rickards
 red" held the Perkins row and seven pinto-bean rows, because the by-word ledger search (the
