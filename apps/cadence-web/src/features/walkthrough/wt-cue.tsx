@@ -42,12 +42,7 @@ export function Cue({ text, style }: { text?: string | null; style?: CSSProperti
         {cue}
       </div>
       {long && (
-        <button
-          type="button"
-          style={moreBtn}
-          aria-expanded={open}
-          onClick={() => setOpenFor(open ? null : cue)}
-        >
+        <button type="button" style={moreBtn} aria-expanded={open} onClick={() => setOpenFor(open ? null : cue)}>
           {open ? 'less' : 'more'}
         </button>
       )}

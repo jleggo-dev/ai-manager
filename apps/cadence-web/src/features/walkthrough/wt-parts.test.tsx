@@ -18,7 +18,7 @@ const step = (tool: WalkthroughStep['tool'], extra: Partial<WalkthroughStep> = {
   ...extra,
 });
 
-describe('targetText — the prescription in the log line\'s grammar', () => {
+describe("targetText — the prescription in the log line's grammar", () => {
   it.each<[string, WalkthroughStep['tool'], string]>([
     ['reps with load and sets', { kind: 'reps', reps: 12, load: 'bodyweight', sets: 2 }, '12 × bodyweight · 2 sets'],
     ['reps, no load', { kind: 'reps', reps: 10, sets: 3 }, '10 · 3 sets'],

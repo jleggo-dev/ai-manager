@@ -58,7 +58,7 @@ describe('Cue — three lines, then "more"', () => {
     expect(screen.getByRole('button', { name: 'more' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('the next step\'s cue starts folded even if this one was opened', () => {
+  it("the next step's cue starts folded even if this one was opened", () => {
     const { rerender } = render(<Cue text={LONG} />);
     fireEvent.click(screen.getByRole('button', { name: 'more' }));
     rerender(<Cue text={`${LONG} And again.`} />);
