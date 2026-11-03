@@ -9,6 +9,7 @@ import {
 } from '@cadence/shared';
 import { searchFoods, getFoodById, type FoodSummary } from '../../lib/api.ts';
 import { KITCHEN_SLOTS, SLOT_LABEL, dayLabel } from './kitchenPlan.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -290,8 +291,8 @@ export function MealComposer({
         </div>
       </section>
 
-      <button
-        type="button"
+      <CommitButton
+        size="compact"
         className="fa-log"
         disabled={items.length === 0 || !day}
         onClick={() => onSave(day, slot, { name: name.trim() || undefined, items })}
@@ -299,7 +300,7 @@ export function MealComposer({
         {items.length === 0
           ? 'Add something first'
           : `Save & put on ${dayLabel(day)} ${SLOT_LABEL[slot].toLowerCase()}`}
-      </button>
+      </CommitButton>
       <button type="button" className="lockbtn ghost" onClick={onCancel}>
         Back
       </button>

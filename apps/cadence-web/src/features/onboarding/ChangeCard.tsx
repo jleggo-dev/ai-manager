@@ -7,6 +7,7 @@ import {
   type WeekDay,
 } from '../../lib/api.ts';
 import { WeekStrip } from '../plan/week-changes/WeekStrip.tsx';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * "Here's the one change — apply it?"
@@ -108,9 +109,9 @@ export function ChangeCard({
             <li key={i}>{l}</li>
           ))}
         </ul>
-        <button type="button" className="cfm-build" onClick={() => onShowChanges()}>
+        <CommitButton size="compact" className="cfm-build" onClick={() => onShowChanges()}>
           Show me
-        </button>
+        </CommitButton>
         <button type="button" className="cfm-more" onClick={() => void dismiss()}>
           Not now
         </button>
@@ -148,9 +149,14 @@ export function ChangeCard({
       ) : (
         <>
           {state === 'failed' && <div className="chg-err">{failure ?? 'That didn’t take — try again?'}</div>}
-          <button type="button" className="cfm-build" onClick={() => void apply()} disabled={state === 'applying'}>
+          <CommitButton
+            size="compact"
+            className="cfm-build"
+            onClick={() => void apply()}
+            disabled={state === 'applying'}
+          >
             {state === 'applying' ? 'Changing…' : 'Apply this'}
-          </button>
+          </CommitButton>
           <button type="button" className="cfm-more" onClick={() => void dismiss()}>
             Not now
           </button>

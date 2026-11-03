@@ -38,6 +38,11 @@
      migration is its own reviewed pass. These two are exact because the MARK must be. */
   --sun: #d85a30;
   --dusk: #3e5c76;
+  /* The commit green (owner ruling 2026-11-02: orange opens a door, green commits — and what is
+     committed and happened is green). Drawn by styles/commit-button.css and the done marks. */
+  --commit-top: oklch(60% 0.1 152);
+  --commit-bottom: oklch(52% 0.09 152);
+  --commit-edge: oklch(39% 0.08 152);
   --display: 'Plus Jakarta Sans', sans-serif;
   --body: 'Plus Jakarta Sans', Inter, sans-serif;
   --mono: 'Space Mono', monospace;
@@ -1399,7 +1404,7 @@ html[data-native] .sheet-body {
 /* Done is green — the same green as the commit buttons (owner ruling 2026-11-02: orange opens a
    door, green commits; what's committed and happened is green). */
 .occ-done .occ-check {
-  background: linear-gradient(180deg, oklch(60% 0.1 152), oklch(52% 0.09 152));
+  background: linear-gradient(180deg, var(--commit-top), var(--commit-bottom));
   border-color: transparent;
 }
 .occ-skip .occ-check {
@@ -4277,8 +4282,8 @@ html[data-native] .sheet-body {
   margin-top: 10px;
 }
 .ss-start {
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 5px 0 oklch(39% 0.08 152);
+  background: linear-gradient(180deg, var(--commit-top) 0%, var(--commit-bottom) 46%);
+  box-shadow: 0 5px 0 var(--commit-edge);
 }
 .ss-less,
 .ss-retry {
@@ -4431,23 +4436,6 @@ html[data-native] .sheet-body {
   border-color: oklch(78% 0.05 152);
 }
 /* Tone commit + ghost back */
-.mc-log {
-  width: 100%;
-  border: none;
-  border-radius: 16px;
-  padding: 14px;
-  font-size: 15px;
-  font-weight: 900;
-  color: oklch(29% 0.06 55);
-  background: oklch(79% 0.16 70);
-  box-shadow: 0 4px 0 oklch(63% 0.15 68);
-  cursor: pointer;
-}
-.mc-log:disabled {
-  opacity: 0.5;
-  box-shadow: none;
-  cursor: default;
-}
 .mc-back {
   background: none;
   border: none;
@@ -5064,20 +5052,6 @@ html[data-native] .sheet-body {
 }
 .ld-log {
   flex: 0 0 auto;
-  border: none;
-  border-radius: 12px;
-  padding: 0 18px;
-  font-size: 14px;
-  font-weight: 900;
-  color: #fff;
-  cursor: pointer;
-  background: linear-gradient(180deg, oklch(60% 0.1 152), oklch(52% 0.09 152));
-  box-shadow: 0 4px 0 oklch(39% 0.08 152);
-}
-.ld-log:disabled {
-  opacity: 0.5;
-  cursor: default;
-  box-shadow: none;
 }
 
 /* ── Quick add · screen 2, "the tense" (Activity Builder 2A, 2026-09-01) ──
@@ -6863,28 +6837,16 @@ html[data-native] .sheet-body {
   min-width: 0;
 }
 .fh-log {
-  display: flex;
-  align-items: center;
   gap: 12px;
-  border: none;
-  cursor: pointer;
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  border-radius: 16px;
-  padding: 12px 15px;
-  box-shadow: 0 3px 0 oklch(39% 0.08 152);
 }
 .fh-log span {
   flex: 1;
   text-align: left;
-  font-size: 14.5px;
-  font-weight: 900;
-  color: #fff;
 }
 .fh-log i {
   font-style: normal;
   font-size: 17px;
   font-weight: 800;
-  color: #fff;
   opacity: 0.85;
 }
 .fh-standing {

@@ -6,6 +6,7 @@ import { NutritionInsightCard } from './NutritionInsightCard.tsx';
 import { NutritionRing } from './NutritionRing.tsx';
 import { WaterRow } from './WaterRow.tsx';
 import type { KitchenView } from './FoodKitchen.tsx';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
@@ -169,7 +170,7 @@ export function FoodDay({
 
       {isToday && (
         <>
-          <button className="fh-log" onClick={() => onLog()}>
+          <CommitButton className="fh-log" onClick={() => onLog()}>
             <svg
               width="22"
               height="22"
@@ -186,7 +187,7 @@ export function FoodDay({
             </svg>
             <span>Log a meal</span>
             <i aria-hidden>›</i>
-          </button>
+          </CommitButton>
 
           {hasWeek ? (
             <div className="fh-standing">

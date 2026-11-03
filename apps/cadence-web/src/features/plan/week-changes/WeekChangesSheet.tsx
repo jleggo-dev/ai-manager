@@ -5,6 +5,7 @@ import { WeekStrip } from './WeekStrip.tsx';
 import { WeekView } from './WeekView.tsx';
 import { useSheetDetent, type Detent } from './useSheetDetent.ts';
 import { weekAsToggled } from './weekDays.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 /**
  * The Changes sheet: what the coach's pending change does, then — one drag or tap away — the week
@@ -102,8 +103,8 @@ export function WeekChangesSheet({
         {state === 'ready' && (
           <div className="wkc-foot">
             {applyState === 'failed' && <div className="wkc-err">{applyError ?? 'That didn’t take — try again?'}</div>}
-            <button
-              type="button"
+            <CommitButton
+              size="compact"
               className="cfm-build"
               onClick={() => void onApply()}
               disabled={applyState === 'applying'}
@@ -113,7 +114,7 @@ export function WeekChangesSheet({
                 : enabledCount > 0
                   ? `Apply ${enabledCount} change${enabledCount === 1 ? '' : 's'}`
                   : 'Keep my plan as it is'}
-            </button>
+            </CommitButton>
           </div>
         )}
       </div>

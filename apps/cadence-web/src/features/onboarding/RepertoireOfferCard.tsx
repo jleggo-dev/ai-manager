@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clearRepertoireOffer, getRepertoireOffer, type RepertoireOffer } from '../../lib/api/repertoire-offer.ts';
 import { SeedReview } from '../repertoire/SeedReview.tsx';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * "Want me to lay them out?" — the coach's door onto the seed review (design frame 1e, P7).
@@ -137,9 +138,9 @@ export function RepertoireOfferCard({
     <div className="cfm chg">
       <div className="chg-t">{offer.collection}</div>
       <div className="cfm-mute">{OFFER_LINE}</div>
-      <button type="button" className="cfm-build" onClick={() => setView('review')}>
+      <CommitButton size="compact" className="cfm-build" onClick={() => setView('review')}>
         Show me the list
-      </button>
+      </CommitButton>
       <button type="button" className="cfm-more" onClick={notNow}>
         Not now
       </button>

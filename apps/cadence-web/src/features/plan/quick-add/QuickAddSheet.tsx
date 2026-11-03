@@ -11,6 +11,7 @@ import { QuickAddPill } from './QuickAddPill.tsx';
 import { QuickAddTense } from './QuickAddTense.tsx';
 import { useRoutinePlay } from './useRoutinePlay.tsx';
 import type { BuilderSeed } from './builderSeed.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 /** Screen 1's noun, carried to screen 2 (Activity Builder 2A) — everything QuickAddTense needs to
  *  know which area it's logging into and what to call the thing. */
@@ -302,9 +303,15 @@ export function QuickAddSheet({
                 }}
                 disabled={busy}
               />
-              <button className="ld-log" onClick={() => void freeLog()} disabled={!text.trim() || busy}>
+              <CommitButton
+                size="compact"
+                inline
+                className="ld-log"
+                onClick={() => void freeLog()}
+                disabled={!text.trim() || busy}
+              >
                 Log
-              </button>
+              </CommitButton>
             </div>
             {freeNote && <div className="ld-empty">{freeNote}</div>}
           </>

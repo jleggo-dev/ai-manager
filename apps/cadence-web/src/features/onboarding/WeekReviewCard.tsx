@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dismissPendingWeekReview, getPendingWeekReview } from '../../lib/api.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /** "Aug 16" — a plain short date, the same shape ConfirmCard and the meal-plan day labels use. */
 function shortDate(iso: string): string {
@@ -57,9 +58,9 @@ export function WeekReviewCard({ onOpen }: { onOpen?: () => void }) {
       <div className="cfm-mute">
         {shortDate(review.from)}–{shortDate(review.to)} · built from your log
       </div>
-      <button type="button" className="cfm-build" onClick={() => onOpen?.()}>
+      <CommitButton size="compact" className="cfm-build" onClick={() => onOpen?.()}>
         Open
-      </button>
+      </CommitButton>
       <button type="button" className="cfm-more" onClick={() => void dismiss()}>
         Not now
       </button>

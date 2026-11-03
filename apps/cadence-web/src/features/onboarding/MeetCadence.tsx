@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import { useEnsureCoachFace } from '../coach/useEnsureCoachFace.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * Meeting the coach — and being told she's AI, before she asks anything.
@@ -60,9 +61,9 @@ export function MeetCadence({
             <button className="meetc-leave-go" onClick={onLeave}>
               Start over
             </button>
-            <button className="meetc-leave-stay" onClick={() => setConfirming(false)}>
+            <CommitButton size="compact" className="meetc-leave-stay" onClick={() => setConfirming(false)}>
               Keep going
-            </button>
+            </CommitButton>
           </div>
         </div>
       )}

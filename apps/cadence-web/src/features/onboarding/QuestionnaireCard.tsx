@@ -7,6 +7,7 @@ import {
   type QuestionnaireQuestion,
 } from '@cadence/shared';
 import { clearQuestionnaire, getQuestionnaire } from '../../lib/api/questionnaire.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * "A few questions" — the card the coach's `send_questionnaire` puts up.
@@ -163,9 +164,9 @@ export function QuestionnaireCard({
           onChange={(next) => setAnswers((a) => ({ ...a, [q.id]: next }))}
         />
       ))}
-      <button type="button" className="cfm-build" onClick={send} disabled={!complete}>
+      <CommitButton size="compact" className="cfm-build" onClick={send} disabled={!complete}>
         Send
-      </button>
+      </CommitButton>
       <button type="button" className="cfm-more" onClick={notNow}>
         Not now
       </button>

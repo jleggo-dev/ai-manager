@@ -9,6 +9,7 @@ import {
 import { sendSessionFeedback } from '../../lib/api.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
 import type { SessionOutcome } from './sessionOutcome.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * The post-session ask — one question, three chips, and Cadence's answer to whichever one you tap.
@@ -87,9 +88,9 @@ export function SessionFeedbackCard({
       )}
 
       <div className="sfb-actions">
-        <button className="sfb-done" onClick={onDone}>
+        <CommitButton size="compact" className="sfb-done" onClick={onDone}>
           Done
-        </button>
+        </CommitButton>
         {onTalk && (
           <button className="sfb-talk" onClick={onTalk}>
             Talk to me

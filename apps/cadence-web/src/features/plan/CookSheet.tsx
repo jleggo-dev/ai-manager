@@ -4,6 +4,7 @@ import { getCurrentMealPlan, getRecipeById, setOccurrence } from '../../lib/api.
 import { RecipeLogConfirm } from '../food/RecipeLogConfirm.tsx';
 import { useOccurrenceDetail } from './occurrence/useOccurrenceDetail.ts';
 import { CoachUnreachable } from './occurrence/CoachUnreachable.tsx';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const dishFromTitle = (title: string): string => title.replace(/^\s*cook\s+/i, '').trim() || 'dinner';
 
@@ -162,9 +163,9 @@ export function CookSheet({
                       Back
                     </button>
                   )}
-                  <button className="mc-log" onClick={() => setStep((s) => s + 1)}>
+                  <CommitButton className="mc-log" onClick={() => setStep((s) => s + 1)}>
                     {step === steps.length - 1 ? 'Done — plate it up' : 'Next step'}
-                  </button>
+                  </CommitButton>
                 </div>
               </div>
             ) : (
@@ -177,13 +178,13 @@ export function CookSheet({
                   </div>
                 )}
                 {err && <div className="mc-err">{err}</div>}
-                <button
+                <CommitButton
                   className="mc-log"
                   disabled={busy}
                   onClick={() => (recipe ? setConfirming(true) : void markCookedOnly())}
                 >
                   {busy ? 'Logging…' : recipe ? `Log ${recipe.name}` : 'Mark it cooked'}
-                </button>
+                </CommitButton>
                 {steps.length > 0 && !busy && (
                   <button className="ck-back" onClick={() => setStep((s) => Math.max(0, s - 1))}>
                     Back to steps

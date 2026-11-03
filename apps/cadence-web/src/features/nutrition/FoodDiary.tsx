@@ -14,6 +14,7 @@ import {
   type DiaryPartGroup,
   type DiaryRow,
 } from './foodDiaryRows.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
@@ -168,9 +169,14 @@ function RenameSheet({
           aria-label="What do you call this?"
           placeholder="What do you call this?"
         />
-        <button className="fa-log" disabled={busy || !name.trim()} onClick={() => onSave(name.trim())}>
+        <CommitButton
+          size="compact"
+          className="fa-log"
+          disabled={busy || !name.trim()}
+          onClick={() => onSave(name.trim())}
+        >
           {busy ? 'Saving…' : 'Save the name'}
-        </button>
+        </CommitButton>
         <button className="lockbtn ghost" onClick={onClose}>
           Back
         </button>
@@ -249,9 +255,9 @@ function YieldSheet({
             </button>
           </span>
         </div>
-        <button className="fa-log" disabled={busy} onClick={() => onSave(made, ate)}>
+        <CommitButton size="compact" className="fa-log" disabled={busy} onClick={() => onSave(made, ate)}>
           {busy ? 'Saving…' : 'Save it'}
-        </button>
+        </CommitButton>
         <button className="lockbtn ghost" onClick={onClose}>
           Back
         </button>

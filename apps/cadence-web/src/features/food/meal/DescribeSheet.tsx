@@ -24,6 +24,7 @@ import { REASKS_MAX, reReadAnswer, type AnswerResult } from '../reReadAnswer.ts'
 import { settleButton } from '../settleWords.ts';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 /** A row of the read, with how many times an answer brought it back as a question (never on the wire). */
 type Row = MealPreview['items'][number] & { reasks?: number };
@@ -226,14 +227,13 @@ export function DescribeSheet({
               onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, words))}
             />
           )}
-          <button
-            type="button"
+          <CommitButton
             className="ms-ds-go"
             disabled={!words || looking || busy || (ready && held)}
             onClick={() => void (ready ? confirm() : lookUp())}
           >
             {label}
-          </button>
+          </CommitButton>
         </div>
       </div>
     </>
