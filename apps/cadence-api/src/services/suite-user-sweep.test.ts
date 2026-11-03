@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -10,15 +10,25 @@ dotenv.config({ path: path.join(repoRoot, 'apps/cadence-api/.env') });
 const HAS_DB = !!(process.env.CADENCE_DATABASE_URL || process.env.CADENCE_DB_PASSWORD);
 const d = HAS_DB ? describe : describe.skip;
 
+// The first storage purge is the first thing `resetUserData` does after the row exists; wrapping it
+// lets one test look at the row at that moment. The wrapper calls the real purge otherwise.
+vi.mock('./meal-photos.ts', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./meal-photos.ts')>();
+  return { ...mod, purgeMealPhotos: vi.fn(mod.purgeMealPhotos) };
+});
+
 /**
  * `npm run cleanup:test-data` runs right after a merge, while main's CI runs the DB suites against
  * the same database. On 2026-10-31 the sweep deleted a running suite's user twice and main went red
- * on a clean merge. A user a run is using must survive; one left behind by a finished or crashed
- * run must not.
+ * on a clean merge. On 2026-11-03 it did it again through the gap between its freshness check and
+ * its delete (main red at 61de4c83). A user a run is using must survive; one left behind by a
+ * finished or crashed run must not.
  */
 const LIVE = testUserId('5e01');
 const IDLE = testUserId('5e02');
 const REUSED = testUserId('5e03');
+const RACED = testUserId('5e04');
+const TOUCHED = testUserId('5e05');
 
 let sql: (typeof import('../db/sql.ts'))['sql'];
 let ensureUser: (typeof import('./dev-reset.ts'))['ensureUser'];
@@ -42,7 +52,7 @@ d('sweepSuiteUsers — leaves a live run alone (DB)', () => {
   }, 30_000);
 
   afterAll(async () => {
-    for (const id of [LIVE, IDLE, REUSED]) {
+    for (const id of [LIVE, IDLE, REUSED, RACED, TOUCHED]) {
       await resetUserData(id);
       await sql`delete from cadence.users where id = ${id}`;
     }
@@ -73,5 +83,37 @@ d('sweepSuiteUsers — leaves a live run alone (DB)', () => {
 
     expect(await exists(REUSED)).toBe(true);
     expect(swept).not.toContain(REUSED);
+  });
+
+  it('keeps a row a run picks up between the listing and the delete (the 2026-11-03 gap)', async () => {
+    await ensureUser(RACED);
+    await age(RACED, 600);
+
+    // Listed idle — then the new run's first beforeEach lands before the sweep reaches the row.
+    const { swept } = await sweepSuiteUsers(undefined, [RACED], {
+      beforeDelete: async (id) => {
+        if (id === RACED) await resetUserData(RACED);
+      },
+    });
+
+    expect(await exists(RACED)).toBe(true);
+    expect(swept).not.toContain(RACED);
+  });
+
+  it('resetUserData makes the row fresh before its wipe begins, not after', async () => {
+    await ensureUser(TOUCHED);
+    await age(TOUCHED, 600);
+    const { purgeMealPhotos } = await import('./meal-photos.ts');
+    let freshAtFirstPurge: boolean | null = null;
+    vi.mocked(purgeMealPhotos).mockImplementationOnce(async (id: string) => {
+      const [row] = await sql<{ fresh: boolean }[]>`
+        select updated_at > now() - make_interval(mins => 1) as fresh from cadence.users where id = ${id}`;
+      freshAtFirstPurge = row?.fresh ?? null;
+    });
+
+    await resetUserData(TOUCHED);
+
+    // The wipe takes a second or two; a sweep that checks during it must already see a live row.
+    expect(freshAtFirstPurge).toBe(true);
   });
 });

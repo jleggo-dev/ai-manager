@@ -114,6 +114,12 @@ export async function resetUserData(userId: string): Promise<void> {
   // The id is interpolated into CHILD_DELETES, so this is the injection gate, not a tidiness check.
   if (!UUID.test(userId)) throw new Error('resetUserData: userId must be a UUID');
   await ensureUser(userId);
+  // Touched FIRST, not last. The users row is the sweep's liveness signal (`suite-user-sweep.ts`):
+  // a row touched in the last hour is a run's, and is left alone. With the bump only in the final
+  // update below, a reused per-process id looked idle for the whole wipe — the sweep deleted a CI
+  // run's user mid-test on 2026-11-03 (main red at 61de4c83). `ensureUser` itself must not bump it:
+  // it runs on every authenticated request and `updated_at` keys the context-pack cache.
+  await touchUser(userId);
   // Meal photos live in Storage, not a table — purge them too (the start-over promise:
   // "erases everything"). Best-effort: a storage hiccup must never block the data wipe.
   try {
@@ -166,4 +172,9 @@ export async function resetUserData(userId: string): Promise<void> {
   } catch (e) {
     console.warn('[reset] pending_questionnaire not cleared — migration 0057 may not be applied:', e);
   }
+}
+
+/** Mark the users row as touched now. Its one job is liveness: a row a run is using is never idle. */
+export async function touchUser(userId: string): Promise<void> {
+  await sql`update cadence.users set updated_at = now() where id = ${userId}`;
 }
