@@ -5,9 +5,9 @@ profile, the candidate book as a service, the described-meal doors wired through
 coach's `log_meal` runs the same read and logs through the card's confirm path; step 4: the photo
 door's confirmed reading goes through the same read, onto the same card), and the same day
 **a question row is answered with buttons in her words**; on 2026-11-03 **the first evening's
-wrong reads were traced and fixed, and the card gained "not quite"** — see "Suggested build
-order" and the five "What was built" sections at the end. Rulings 2, 3, 4 and 6 are still the
-owner's, and so is the web lookup in the second round (the Rickard's case, below)._
+wrong reads were traced and fixed, the card gained "not quite"**, and **the web lookup joined
+the second round for a maker-named food** (owner ruling, same day) — see "Suggested build order"
+and the five "What was built" sections at the end. Rulings 2, 3, 4 and 6 are still the owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -984,8 +984,36 @@ table test.
 n=1).** Before the ledger-by-word change the 0.0 Guinness still came back as "no record fits"
 because the right row was never in the book; see the run in the PR for the numbers after.
 
-**Open for the owner.** The web lookup in the second round. "Rickard's Red" has no record but a
-chain's menu row; the only way to a plain "Rickard's Red, 473 ml" is the web rung
-(`research-food`, 7–90 s a part, pinned as a private food). Run it only in the one round where
-the model asked for more lookups and named a maker — or not at all. Cost is seconds of the
-person's attention on exactly the meals that already took two calls.
+**Ruled (owner, 2026-11-03): the web lookup runs in the second round only, for a lookup with a
+maker named.** "Rickard's Red" has no record but a chain's menu row; the only way to a plain
+"Rickard's Red Beer, 1 pint" is the web rung (`research-food`). A live probe the same day found it
+in 9 s with the maker given (47 kcal per 100 ml, a pint measure, Molson's) and refused without it,
+so the maker is the trigger. Built as `food-web-lookup.ts` plus the round loop in `food-check.ts`:
+when the first call asks for lookups, the ones with a brand — the first two, `WEB_LOOKUPS_PER_MEAL`
+— go to the web beside the sources, and the third says "the web skipped" in its line. The web's
+row is pinned as the person's private food before it is shown (only a stored record can be picked,
+and the ledger then answers these words for free next time) and goes first in its section, so the
+book's budget never hides the row she asked for. Each waits at most 60 s (`WEB_IN_READ_MS`); past
+that the line says so and a late answer is still pinned. The line says found, nothing (the job's
+own reason) or failed (what broke) — never an empty result for a fault — and the row's label on
+the card is "a web lookup". The first fill never goes to the web, whatever the words. The open
+round rule (`ROUND_RULE_OPEN`, code, so no job sync) tells her a brand sends the lookup to the web
+and when to name one: only a chain's rows, or none, for a maker-named food. The client's read
+timeout rose from 90 s to 150 s on the typed, spoken and photo doors to cover the wait. The eval
+runs it as production does with `--web` on `--prompt-from-config`.
+
+Measured the same day on `real-rickards-pint`, first sight (nothing pinned): gpt-5.4-mini asked for
+the second round in one of five reads and picked the Perkins row in one call in the other four;
+claude-sonnet-5-5 asked in two of two. When the web answered, its row was shown first and Sonnet
+took it, saying why; when the research job refused (confidence 0.30, below its 0.4 floor) the line
+said so and the Perkins row stood. Once the row is pinned, every later read of those words picks it
+in one call — five of five, both models — which is the point: the lookup is paid once. The research
+job's own answers varied across four calls ("Rickard's Red Beer" by Molson's, by Molson Coors, once
+with the restaurant in its name, once refused); that job's prompt is a separate matter. Whether the
+food-check should run on the model that asks is the owner's next call.
+
+The first eval run showed why the model had not been asking: the book for "one pint of Rickards
+red" held the Perkins row and seven pinto-bean rows, because the by-word ledger search (the
+morning's own change) had searched "pint" on its own. A measure word is no longer searched by
+itself (`MEASURE_WORDS`, food-source-fanout.ts), and the round rule names the condition the model
+can check — a restaurant or chain in the record's brackets — instead of "a chain's row".

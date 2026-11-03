@@ -10,13 +10,16 @@
  *   - call 1 may ask for more lookups once — for a part the split got wrong, a typo, a part
  *     missed. Those lookups are made and the book grows.
  *   - call 2 is the last. Its prompt offers no lookups, and any it asks for are not made.
+ *   - a lookup of that round with a maker named goes to the web as well (food-web-lookup.ts),
+ *     at most WEB_LOOKUPS_PER_MEAL of them: the one place the slow rung runs (owner, 2026-11-03).
  *   - a pick that is not in the book, or a measure the record does not offer, goes back once as
  *     evidence (TOOL-HARNESS.md: a guard reports, it does not silently veto). After the last
  *     call the row becomes the model's estimate if it gave one, or an open row that counts nothing.
  * At most FOOD_CHECK_MAX_CALLS calls per meal, whatever the model does.
  *
- * Pure apart from its two deps: `call` runs the job with the template's variables (production:
- * runJobBySlug; the eval: the same variables through an e2e job), `lookup` answers a lookup.
+ * Pure apart from its deps: `call` runs the job with the template's variables (production:
+ * runJobBySlug; the eval: the same variables through an e2e job), `lookup` answers a lookup, and
+ * `web`, when given, answers a second-round lookup from the web.
  */
 import { QUESTION_CHOICES_MAX, QUESTION_CHOICE_MAX_CHARS } from '@cadence/shared';
 import {
@@ -28,16 +31,20 @@ import {
   type BookLookupFn,
   type CandidateBook,
 } from './food-candidate-book.ts';
+import type { FanOutResult, SourceCheck } from './food-source-fanout.ts';
+import type { SourceCandidate } from './food-source-report.ts';
 
 export const FOOD_CHECK_JOB = 'food-check';
 /** Model calls per meal, at most. The second is the last, and it offers no lookups. */
 export const FOOD_CHECK_MAX_CALLS = 2;
 /** Lookups the first call may ask for. */
 export const MAX_LOOKUPS = 8;
+/** Of those, the ones with a maker named that also go to the web — at most this many a meal. */
+export const WEB_LOOKUPS_PER_MEAL = 2;
 
 /** The `round_rule` the prompt carries on a call that may still ask for lookups. */
 export const ROUND_RULE_OPEN =
-  'Lookups: only if a part of the meal has no fitting record in <book> because the words were split wrongly, a typo, or a part was missed, put up to 8 entries in lookups and leave items empty. Put the plain food name in q. Put a brand only if they named one. Otherwise leave lookups empty and answer with items now.';
+  "Lookups: put up to 8 entries in lookups and leave items empty when a part of the meal has no fitting record in <book> — the words were split wrongly, a typo, a part was missed — and when they named a maker and every record naming it has a restaurant or chain in brackets: that is the restaurant's menu row of it, not the maker's own, which is not on file yet. Then ask with the food in q and that maker in brand; a lookup with a brand is also made on the web, which takes longer and is where the maker's own numbers are. Put the plain food name in q. Put a brand only if they named one. Otherwise leave lookups empty and answer with items now.";
 /** The `round_rule` on the last call. No lookups are offered, and none asked for are made. */
 export const ROUND_RULE_LAST =
   'This is your last reply. Answer with items now, from the records in <book>. Leave lookups empty: no more lookups will be made. A part with no fitting record gets pick null and an estimate.';
@@ -84,9 +91,18 @@ export interface FoodCheckVars {
   notes: string;
 }
 
+/** What the web answers for one lookup: rows that can be picked (stored), and its line in the trace. */
+export interface WebRows {
+  rows: SourceCandidate[];
+  check: SourceCheck;
+}
+export type WebLookupFn = (lookup: BookLookup) => Promise<WebRows>;
+
 export interface FoodCheckDeps {
   call: (vars: FoodCheckVars) => Promise<string>;
   lookup: BookLookupFn;
+  /** The web, for a second-round lookup with a maker named. Absent: no lookup goes to the web. */
+  web?: WebLookupFn;
 }
 
 export interface FoodCheckOutcome {
@@ -96,6 +112,8 @@ export interface FoodCheckOutcome {
   calls: number;
   /** The extra lookups the model asked for and got. */
   lookups: BookLookup[];
+  /** Of those, the ones that went to the web as well. */
+  web: BookLookup[];
   /** Set when no usable reply came back. The caller falls back; the meal never vanishes. */
   error: string | null;
 }
@@ -218,6 +236,51 @@ export function guardNotes(items: FoodCheckItem[], problems: Map<number, string>
   return ['Your previous reply had problems. Fix them and answer again with items:', ...lines].join('\n');
 }
 
+/** The lookups of a round that go to the web too: those with a maker named, the first WEB_LOOKUPS_PER_MEAL of them. */
+export function webbed(lookups: BookLookup[]): Set<BookLookup> {
+  return new Set(lookups.filter((l) => !!l.brand).slice(0, WEB_LOOKUPS_PER_MEAL));
+}
+
+const webCheck = (status: SourceCheck['status'], detail: string): SourceCheck => ({
+  source: 'research',
+  status,
+  ms: 0,
+  detail,
+});
+
+/**
+ * The web's rows go first in the section. The book shows the first SHOW_PER_LOOKUP rows of a
+ * lookup and ranks nothing, and the free sources answered these words in the first fill already,
+ * so the row the web found — the one she asked for — must not be the ninth and unseen.
+ */
+export function withWebRows(base: FanOutResult, web: WebRows): FanOutResult {
+  const key = (c: SourceCandidate): string => `${c.source}|${c.food_id ?? c.name}`;
+  const have = new Set(web.rows.map(key));
+  return {
+    ...base,
+    candidates: [...web.rows, ...base.candidates.filter((c) => !have.has(key(c)))],
+    sources_checked: [...base.sources_checked, web.check],
+  };
+}
+
+/** One second-round lookup: the sources, and the web too when this lookup is one of the webbed. */
+async function lookupAndWeb(l: BookLookup, deps: FoodCheckDeps, go: boolean): Promise<FanOutResult> {
+  if (!deps.web || !l.brand) return deps.lookup(l);
+  if (!go) {
+    const base = await deps.lookup(l);
+    const skipped = webCheck('skipped', `at most ${WEB_LOOKUPS_PER_MEAL} web lookups a meal`);
+    return { ...base, sources_checked: [...base.sources_checked, skipped] };
+  }
+  const [base, web] = await Promise.all([
+    deps.lookup(l),
+    deps.web(l).catch((e: unknown): WebRows => ({
+      rows: [],
+      check: webCheck('error', e instanceof Error ? e.message : String(e)),
+    })),
+  ]);
+  return withWebRows(base, web);
+}
+
 /**
  * Run the check over a book already filled for every part. The book grows only if the first
  * call asks for lookups; the second call sees the grown book and is the last.
@@ -226,7 +289,7 @@ export async function foodCheckRounds(
   input: { meal: string; said: string; book: CandidateBook; notes?: string },
   deps: FoodCheckDeps,
 ): Promise<FoodCheckOutcome> {
-  const out: FoodCheckOutcome = { items: [], problems: new Map(), calls: 0, lookups: [], error: null };
+  const out: FoodCheckOutcome = { items: [], problems: new Map(), calls: 0, lookups: [], web: [], error: null };
   let previous: FoodCheckItem[] = [];
   let problems = new Map<number, string>();
   let lookedUp = false;
@@ -253,7 +316,9 @@ export async function foodCheckRounds(
     if (!last && !lookedUp && reply.lookups.length) {
       lookedUp = true;
       out.lookups.push(...reply.lookups);
-      await addLookups(input.book, reply.lookups, deps.lookup);
+      const toWeb = deps.web ? webbed(reply.lookups) : new Set<BookLookup>();
+      out.web.push(...toWeb);
+      await addLookups(input.book, reply.lookups, (l) => lookupAndWeb(l, deps, toWeb.has(l)));
       continue;
     }
     if (!reply.items.length) {

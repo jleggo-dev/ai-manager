@@ -89,9 +89,57 @@ async function timed<T>(
   }
 }
 
-/** The words of a phrase worth searching on their own: letters, four or more. Longest first, at most two. */
+/**
+ * Words that say how much, not what: searched on their own they find other foods ("pint" found
+ * seven pinto-bean rows for "pint of Rickards red", 2026-11-03, and crowded the real row out).
+ */
+const MEASURE_WORDS = new Set([
+  'pint',
+  'pints',
+  'cups',
+  'glass',
+  'glasses',
+  'bottle',
+  'bottles',
+  'bowl',
+  'bowls',
+  'slice',
+  'slices',
+  'piece',
+  'pieces',
+  'serving',
+  'servings',
+  'small',
+  'large',
+  'medium',
+  'half',
+  'quarter',
+  'handful',
+  'scoop',
+  'scoops',
+  'tbsp',
+  'tsp',
+  'tablespoon',
+  'tablespoons',
+  'teaspoon',
+  'teaspoons',
+  'ounce',
+  'ounces',
+  'gram',
+  'grams',
+  'litre',
+  'liter',
+  'litres',
+  'liters',
+  'some',
+  'with',
+  'from',
+  'about',
+]);
+
+/** The words of a phrase worth searching on their own: letters, four or more, not a measure word. Longest first, at most two. */
 export function ledgerWords(query: string): string[] {
-  const words = query.split(/\s+/).filter((w) => /^[a-z][a-z'-]{3,}$/i.test(w));
+  const words = query.split(/\s+/).filter((w) => /^[a-z][a-z'-]{3,}$/i.test(w) && !MEASURE_WORDS.has(w.toLowerCase()));
   if (words.length < 2 && query.split(/\s+/).length < 2) return [];
   return [...new Set(words.map((w) => w.toLowerCase()))].sort((a, b) => b.length - a.length).slice(0, 2);
 }

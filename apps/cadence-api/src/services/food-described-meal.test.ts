@@ -499,16 +499,89 @@ describe('when she cannot be reached', () => {
 });
 
 describe('traceLines — one line per part, from what ran', () => {
-  it('names each rung by its outcome; a skipped rung says skipped, never its reason', () => {
+  it('names each rung by its outcome; a skipped rung says skipped, never its reason; a failed one says what broke', () => {
     const book = new CandidateBook();
     book.add({ q: 'banana', measure: null, brand: null }, fanOut('banana'));
     book.add({ q: 'zzq', measure: null, brand: null }, fanOut('zzq'));
     const lines = traceLines(book, partsToLookups('Starbucks venti latte'));
     expect(lines).toEqual([
       'Starbucks venti latte: picked before, no lookup needed',
-      'banana: your foods: 1 rows · USDA skipped · FatSecret failed',
-      'zzq: your foods: no match · USDA skipped · FatSecret failed',
+      'banana: your foods: 1 rows · USDA skipped · FatSecret failed: timeout',
+      'zzq: your foods: no match · USDA skipped · FatSecret failed: timeout',
     ]);
+  });
+});
+
+describe('the web in the second round (food-web-lookup.ts; owner 2026-11-03)', () => {
+  const rickards = food({
+    food_id: 'f-rickards',
+    owner_user_id: USER,
+    visibility: 'private',
+    name: "Rickard's Red Beer",
+    brand: "Molson's",
+    source: 'research',
+    base_unit: 'ml',
+    macros_per_base: { kcal: 46.8, protein_g: 0 },
+    servings: [{ label: '1 pint (473 ml)', unit: '1 pint (473 ml)', amount_g: 473 }],
+  });
+  const hit = {
+    rows: [{ ...asCandidate(rickards), source: 'research' as const }],
+    check: {
+      source: 'research' as const,
+      status: 'hit' as const,
+      ms: 9000,
+      detail: 'found "Rickard\'s Red Beer (Molson\'s)", kept as your private food',
+    },
+  };
+  const maker = { q: 'red beer', measure: null, brand: "Rickard's" };
+
+  it('the first fill never asks the web; the second round does, the row is priced from the pinned food, and the trace says what the web found', async () => {
+    const web = vi.fn(async () => hit);
+    let n = 0;
+    const { d } = deps({
+      web,
+      foods: async (ids) => [...FOODS, rickards].filter((f) => ids.includes(f.food_id)),
+      call: async () => {
+        n += 1;
+        if (n === 1) return JSON.stringify({ items: [], lookups: [maker] });
+        return JSON.stringify({
+          items: [item({ said: "a pint of Rickard's Red", pick: 'c1', measure: '1 pint (473 ml)', count: 1 })],
+          lookups: [],
+        });
+      },
+    });
+    const p = await previewDescribedMeal(USER, "a pint of Rickard's Red", 'other', d);
+    // Called once, for the lookup she asked for — never for the first fill of the same maker-named part.
+    expect(web).toHaveBeenCalledTimes(1);
+    expect(web).toHaveBeenCalledWith(maker);
+    expect(p.items[0]).toMatchObject({
+      name: "Rickard's Red Beer",
+      food_id: 'f-rickards',
+      basis: 'record',
+      source_label: 'a web lookup',
+    });
+    expect(p.items[0]?.est?.kcal).toBeCloseTo(221, 0);
+    expect(p.coach.calls).toBe(2);
+    expect(p.coach.checked).toHaveLength(2);
+    expect(p.coach.checked[0]).toMatch(/^.+: your foods: no match · USDA skipped · FatSecret failed: timeout$/);
+    expect(p.coach.checked[1]).toBe(
+      'red beer: your foods: no match · USDA skipped · FatSecret failed: timeout · the web: found "Rickard\'s Red Beer (Molson\'s)", kept as your private food',
+    );
+    expect(d.log).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: expect.objectContaining({ web: 1, calls: 2 }) }),
+    );
+  });
+
+  it('near-miss: a read settled on the first call never touches the web, maker or not', async () => {
+    const web = vi.fn(async () => hit);
+    const { d } = deps({
+      web,
+      reply: [item({ said: 'Starbucks venti latte', pick: 'c1', measure: '1 venti', count: 1 })],
+    });
+    const p = await previewDescribedMeal(USER, 'Starbucks venti latte', 'other', d);
+    expect(web).not.toHaveBeenCalled();
+    expect(p.coach.calls).toBe(1);
+    expect(d.log).toHaveBeenCalledWith(expect.objectContaining({ meta: expect.objectContaining({ web: 0 }) }));
   });
 });
 

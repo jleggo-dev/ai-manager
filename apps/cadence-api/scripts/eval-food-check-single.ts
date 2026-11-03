@@ -28,7 +28,7 @@ import {
   partsToLookups,
   type BookLookupFn,
 } from '../src/services/food-candidate-book.ts';
-import { foodCheckRounds, type FoodCheckVars } from '../src/services/food-check.ts';
+import { foodCheckRounds, type FoodCheckVars, type WebLookupFn } from '../src/services/food-check.ts';
 import type { FoodCheckCase } from './eval-food-check-cases.ts';
 import {
   CandidateBook,
@@ -139,6 +139,8 @@ export interface ConfigDeps {
   run: (vars: FoodCheckVars) => Promise<RoundRun>;
   /** The production lookup: the fan-out plus FatSecret's top rows (food-candidate-sources.ts). */
   lookup: BookLookupFn;
+  /** The production web rung for a second-round lookup with a maker named (food-web-lookup.ts); off unless asked. */
+  web?: WebLookupFn;
 }
 
 /**
@@ -161,6 +163,7 @@ export async function runMealConfig(c: FoodCheckCase, deps: ConfigDeps): Promise
           return r.raw;
         },
         lookup: deps.lookup,
+        web: deps.web,
       },
     );
     out.lookups.push(...outcome.lookups);
