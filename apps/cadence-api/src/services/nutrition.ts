@@ -51,6 +51,7 @@ import { priceParsedMeal } from './food-pricing.ts';
 import { totalsFromItems } from './meal-corrections.ts';
 import { enrichFlags } from './meal-enrich.ts';
 import { expireOverdueMeals } from './meal-draft.ts';
+import type { MealCorrection } from './food-described-correction.ts';
 import { previewDescribedMeal, type DescribedMealPreview } from './food-described-meal.ts';
 import { confirmedPickRows, learnDescribedMeal } from './food-phrases.ts';
 
@@ -95,8 +96,9 @@ export async function previewMealParse(
   userId: string,
   text: string,
   mealHint?: MealKind,
+  correction?: MealCorrection,
 ): Promise<DescribedMealPreview> {
-  return previewDescribedMeal(userId, text, mealHint);
+  return previewDescribedMeal(userId, text, mealHint, undefined, { correction });
 }
 
 /** A previewed parse, confirmed by the user — logged verbatim, no second AI pass. */

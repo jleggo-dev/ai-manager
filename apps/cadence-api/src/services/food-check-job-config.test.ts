@@ -142,15 +142,24 @@ describe('food-check job config', () => {
     expect(template).toContain('{{guard_notes}}');
   });
 
-  it("the photo reader's notes: declared, not required, defined in one sentence of facts (owner, 2026-11-01)", () => {
+  it("the notes: declared, not required, defined in sentences of facts — the photo reader's, or a correction's (owner, 2026-11-01 / 2026-11-02)", () => {
     const notes = job?.config.variables?.find((v) => v.name === 'notes');
     expect(notes).toBeDefined();
     expect(notes?.required).toBeUndefined();
     expect(template).toContain(
-      'When the meal came as a photo, <notes> holds what the photo reader could and could not tell about it (empty for a typed meal); a doubt there is a reason to ask one question or to state an assumption for that part.',
+      '<notes> is empty for a typed meal. When the meal came as a photo, it holds what the photo reader could and could not tell about it; a doubt there is a reason to ask one question or to state an assumption for that part. When the person said a previous answer was wrong, it holds that answer and their correction: fix what they named, keep the rest, and a food the correction names counts as said.',
     );
     // Facts, not picks: the sentence says what the notes are, never which answer to prefer.
     expect(template).not.toMatch(/notes[^.]*\b(prefer|choose|pick|assume the)\b/i);
+  });
+
+  it('keeps the rules of 2026-11-02: zero is a name, a loose amount is grams, a chain row names a place, a remark is not a food', () => {
+    expect(template).toContain('A zero in their words ("0.0", "zero") is part of the food\'s name, never an amount.');
+    expect(template).toContain("Never take a record's smallest measure because the amount was loose.");
+    expect(template).toContain('A record from a restaurant or chain names a place they did not say');
+    expect(template).toContain(
+      'A part that names no food (where it came from, a remark) gets pick null, name null, estimate null',
+    );
   });
 
   it('keeps the rules the guards rely on', () => {

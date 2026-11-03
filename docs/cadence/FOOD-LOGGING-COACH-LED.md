@@ -4,8 +4,10 @@ _Status: build steps 2, 3 and 4 SHIPPED 2026-11-01 (step 2: the `food-check` job
 profile, the candidate book as a service, the described-meal doors wired through it; step 3: the
 coach's `log_meal` runs the same read and logs through the card's confirm path; step 4: the photo
 door's confirmed reading goes through the same read, onto the same card), and the same day
-**a question row is answered with buttons in her words** — see "Suggested build order" and the
-four "What was built" sections at the end. Rulings 2, 3, 4 and 6 are still the owner's._
+**a question row is answered with buttons in her words**; on 2026-11-03 **the first evening's
+wrong reads were traced and fixed, and the card gained "not quite"** — see "Suggested build
+order" and the five "What was built" sections at the end. Rulings 2, 3, 4 and 6 are still the
+owner's, and so is the web lookup in the second round (the Rickard's case, below)._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -901,3 +903,89 @@ toast", "an apple" as "n apple", "almonds" as "lmonds" — because the number wo
 "a bit of". The table in `food-candidate-book.test.ts` now carries those near-misses. A phrase the
 memory learned under a broken key ("vocado toast") misses once and is learned again on the next
 confirm; no migration.
+
+## What was built (the first evening's wrong reads, 2026-11-03)
+
+The owner logged three meals on 2026-11-02 and sent the screens (#471). Every wrong read was
+traced in `cadence.ai_log` before anything was changed; each cause has its own fix and its own
+table test.
+
+**What the logs showed.**
+
+- _"one 0.0 guinness" became "Red Robin Guinness (Can), 0.0 servings" (shown as 1)._ The split
+  peeled "0.0" off as the amount, so the lookup was "guinness at 0.0"; the model took 0.0 as the
+  count, and `checkPick` read a count of zero as one in silence. The person's own "Guinness 0,
+  Non-Alcoholic Draught" was on file and never shown: the ledger search matches the phrase as a
+  whole, and "0.0 guinness" matches five short chain names ("Guinness (Can)") by trigram and not
+  one long name with the words in another order.
+- _"an inch of roast beef, sliced on it" became one deli slice, 23 kcal; the whole sandwich and a
+  pint 415 kcal._ Sentences were not parts ("sliced on it. Pickled eggplant" was one food,
+  "mayo. I also had one pint of Rickards red" another), the first part was cut at 80 characters
+  mid-word ("roast bee"), and a loose amount became the record's smallest measure.
+- _"Couldn't reach your meal just now."_ The read offered USDA's own label as the row's unit —
+  `1 thick slice (approx 4-1/2" x 2-1/2" x 3/8")`, 46 characters — and the confirm's schema
+  refused any unit over 24. The sheet's add failed with a line that said nothing of the kind.
+- _"Couldn't look that up just now."_ No row in `ai_log` and no server trace for that request:
+  it never completed on the server — on LTE, most likely the connection. The line said neither
+  what happened nor what to do, in 12-point grey under the shelf.
+- _"Rickards red" became "Perkins Restaurant Rickard's Red Beer"._ The only record anywhere for
+  the words is a chain's menu row (FatSecret); USDA's "beer, regular" rows were in the book too.
+  The per-100 g number is right; the label is not what was drunk.
+
+**What changed (server).**
+
+- The split (`food-candidate-book.ts`): a sentence end is a separator (a full stop before a
+  capital, a digit, or the end — not a decimal, not "oz." or "Dr."); "I had / I also had / then
+  I ate" comes off the front of a part; a dash hanging off a part ("sandwich-") comes off; a
+  long part is cut at a word. Zero is never an amount: "0.0 guinness" stays whole.
+- `checkPick` refuses a count of zero or less with the reason, so the guard round tells the
+  model instead of reading it as one.
+- The ledger rung (`food-source-fanout.ts`) searches a phrase of two or more words by its
+  longest words as well, at the same time; the phrase's rows come first, a row found twice is
+  reported once, the limit holds. The trace line says "by word too".
+- The row's unit cap is one shared number, `UNIT_MAX_CHARS` (80), on the confirm and on the
+  draft's append; `food-pick-portion.test.ts` proves USDA's long label passes the confirm schema.
+- A part the model says is not a food ("From a random cafe") gets no row: it is said in
+  `coach.not_read` in their words with the model's reason, so the card and the coach both say it.
+- The prompt (`food-check`, synced before merge): count is more than zero and a zero in their
+  words is part of the name; a loose amount ("an inch of", "some", "a handful") is worked out in
+  grams and said in `assumption`, a thickness of sliced meat is a stack, never the smallest
+  measure; a chain's row names a place they did not say; a remark is not a food; "0.0", "0%" or
+  "zero" with a beer names the non-alcoholic one; `<notes>` carries a correction as well as the
+  photo reader's doubts.
+- "Not quite" (`food-described-correction.ts`): `POST /nutrition/meals/preview` takes
+  `correction` (what was wrong, `CORRECTION_MAX_CHARS` 300) and `previous` (the card's rows as
+  lines, `PREVIOUS_ROWS_MAX` 12 × `PREVIOUS_ROW_MAX_CHARS` 160). The same words are read again
+  with both as the food-check's notes; the phrase memory is skipped on that read (a remembered
+  row is exactly what a correction may be about); the correction rides on the `ai_log` row.
+
+**What changed (card).**
+
+- "Not quite?" under the rows on the "What did you have?" sheet (`NotQuiteField`): one line, and
+  the rows that come back take these rows' place under "Here's another go at it." On the chat
+  door a second message while a card is up IS the correction — it goes back with the same words
+  and the card's rows, never as a fresh read of the second message alone.
+- A read, an answer or an add that fails says what happened and what to do, in a box the person
+  can read, with "Try again" where trying again can work (`failureWords.ts`, a table): offline
+  ("You're offline, so I couldn't look that up. Your words are kept here."), timed out (the
+  preview fetches now carry a 90 s timeout, so a dead socket is told, not waited on), refused
+  (400: "I couldn't take that as written" — no retry), signed out, the meal gone, or ours. The
+  drawer's own line uses the same table; the sheet shows the drawer's reason when its add fails.
+- The retrieval summary ("Checked fried chicken wings: your foods: 8 already on file · USDA: 10
+  imported · FatSecret: 5 rows; …") is gone from the card. Her work is drawn like a tool call
+  (`CoachTrace`): one line — "2 parts looked up · 1 picked before · 1 call" — with each part's
+  own line behind a tap, on every door. What was not read stays in the open.
+- A long amount chip no longer squeezes the row's words into a one-letter column (the words keep
+  a third of the row; the chip wraps); the row's small print went from 8.5 to 10 pt.
+- The Day ring past the target says "60 KCAL OVER" where it said "2,210 KCAL EATEN".
+
+**Eval (`real-guinness-zero`, `real-rickards-pint`, `real-wings-guinness`,
+`real-sandwich-prose` added to `eval-food-check-cases.ts`; `--prompt-from-config`, gpt-5.4-mini,
+n=1).** Before the ledger-by-word change the 0.0 Guinness still came back as "no record fits"
+because the right row was never in the book; see the run in the PR for the numbers after.
+
+**Open for the owner.** The web lookup in the second round. "Rickard's Red" has no record but a
+chain's menu row; the only way to a plain "Rickard's Red, 473 ml" is the web rung
+(`research-food`, 7–90 s a part, pinned as a private food). Run it only in the one round where
+the model asked for more lookups and named a maker — or not at all. Cost is seconds of the
+person's attention on exactly the meals that already took two calls.

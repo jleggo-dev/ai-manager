@@ -27,7 +27,7 @@ import {
   type CandidateBook,
   type MealPartLookup,
 } from './food-candidate-book.ts';
-import type { FoodCheckOutcome, FoodCheckVars } from './food-check.ts';
+import type { FoodCheckItem, FoodCheckOutcome, FoodCheckVars } from './food-check.ts';
 import { phraseKey } from './food-phrases.ts';
 import { portionForPick } from './food-pick-portion.ts';
 import { priceFood } from './food-pricing-portion.ts';
@@ -164,6 +164,20 @@ export async function rememberedRows(
     }
   }
   return out;
+}
+
+/**
+ * The model's answer for a part that is not a food — "from a random cafe", a remark: no pick, no
+ * estimate, no question, and no name (the prompt's rule). Such a part gets no row; the read says
+ * it in `not_read`, in their words, so nothing is dropped in silence.
+ */
+export function notFood(item: FoodCheckItem): boolean {
+  return !item.pick && !item.estimate && !item.question && item.name === null;
+}
+
+/** The `not_read` line for one such part: their words, then the model's reason. */
+export function notFoodLine(item: FoodCheckItem, row: Pick<DescribedMealItem, 'name'>): string {
+  return `"${item.said || row.name}" not read — ${item.assumption ?? 'not a food'}`;
 }
 
 /**

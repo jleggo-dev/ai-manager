@@ -260,4 +260,63 @@ export const FOOD_CHECK_CASES: FoodCheckCase[] = [
     proteinTol: 0.35,
     why: 'baked in skin, 114 g',
   },
+  // ── The owner's dinners and lunches of 2026-11-02, as dictated — the reads that went wrong ───
+  {
+    id: 'real-guinness-zero',
+    kind: 'real',
+    meal: 'dinner',
+    text: 'one 0.0 guinness',
+    kcal: 60,
+    protein_g: 1,
+    kcalTol: 0.5,
+    proteinTol: 2,
+    why:
+      'Guinness 0.0 non-alcoholic: 52 kcal per 330 ml can, 70 per 440 ml; FatSecret lists "Guinness Non Alcoholic ' +
+      'Draught" at 60 per serving. The 2026-11-02 read peeled "0.0" off as the amount and logged a Red Robin ' +
+      'Guinness (Can), 160 kcal, "0.0 servings" shown as 1.',
+  },
+  {
+    id: 'real-rickards-pint',
+    kind: 'real',
+    meal: 'dinner',
+    text: 'one pint of Rickards red',
+    kcal: 220,
+    protein_g: 1.5,
+    kcalTol: 0.3,
+    proteinTol: 2,
+    why:
+      "Rickard's Red, 5.2%, ~42 kcal per 100 ml: a 473 ml pint ≈ 200, an imperial 568 ml pint ≈ 240. The only " +
+      'FatSecret row for the words is a restaurant menu row (Perkins, 160 per serving) — the read took it as the pint.',
+  },
+  {
+    id: 'real-wings-guinness',
+    kind: 'real',
+    meal: 'dinner',
+    text: '1lb fried chicken wings no sauce and one 0.0 guinness',
+    kcal: 1380,
+    protein_g: 110,
+    kcalTol: 0.3,
+    proteinTol: 0.35,
+    why:
+      'fried wings with skin, no coating: ~290 kcal and 24 g protein per 100 g, 454 g ≈ 1,320 kcal · the 0.0 ' +
+      'Guinness ≈ 60. Two parts: the second must stay "0.0 guinness", not "guinness at 0.0".',
+  },
+  {
+    id: 'real-sandwich-prose',
+    kind: 'real',
+    meal: 'lunch',
+    text:
+      'I had a sandwich on a square not rectangle focaccia having an inch of roast beef, sliced on it. Pickled ' +
+      'eggplant, red pepper, and some mayo. I also had one pint of Rickards red.',
+    kcal: 820,
+    protein_g: 45,
+    kcalTol: 0.35,
+    proteinTol: 0.4,
+    flag: ['inch', 'some'],
+    why:
+      'square focaccia ~120 g ≈ 300 kcal, 8 g P · an inch of sliced roast beef on a sandwich ≈ 150 g ≈ 200 kcal, ' +
+      '30 g P · pickled eggplant 30 g ≈ 15 · red pepper 30 g ≈ 10 · some mayo 15 g ≈ 100 · the pint ≈ 220. The ' +
+      '2026-11-02 read took the beef as ONE deli slice (23 kcal) and the whole meal as 415: sentences were not ' +
+      'parts, and a loose amount became the smallest measure.',
+  },
 ];

@@ -26,3 +26,8 @@ export const NOT_REACHED_ANSWER =
 
 /** The line above the confirm card when she read it. */
 export const FOUND_CARD = "Here's what I found — an amount you gave I've kept; anything you didn't, I'll ask.";
+
+/** The line above the card after "not quite": the same read again, with their correction. */
+export const ANOTHER_GO = "Here's another go at it.";
+/** The confirm card's version, with the same hint as FOUND_CARD. */
+export const ANOTHER_GO_CARD = "Here's another go at it — an amount you gave I've kept; anything you didn't, I'll ask.";

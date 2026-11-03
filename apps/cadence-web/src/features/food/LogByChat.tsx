@@ -6,10 +6,15 @@ import { downscalePhoto } from '../plan/occurrence/format.ts';
 import { MealParseCard } from './MealParseCard.tsx';
 import { CoachReadLine } from './CoachReadLine.tsx';
 import { READING } from './coachReadCopy.ts';
+import { failureWords, type FailureWords } from './failureWords.ts';
+import { previousRows } from './previousRows.ts';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 
 /** Lines before the composer stops growing and scrolls — a whole meal, dictated, fits. */
 const COMPOSER_MAX_ROWS = 10;
+/** When the read came back with no rows at all: a read, not a failure, so no retry button. */
+export const NOTHING_READ = "I couldn't pick anything out of that — try naming the foods.";
+export const TRY_AGAIN = 'Try again';
 
 /**
  * Log by chat (design 05c) — and by voice, because **they are one screen**. The mic never leaves
@@ -22,6 +27,11 @@ const COMPOSER_MAX_ROWS = 10;
  * The thread keeps its newest line in view on its own: it is a scroller now (the sheet hosting
  * it takes the whole height, food-capture.css), so a long card or a second message would
  * otherwise land below the fold with the composer above it.
+ *
+ * A second message while a card is up is "not quite" (owner, 2026-11-02): it goes back with the
+ * SAME words and the card's rows as a correction, and the card that comes back replaces this one.
+ * It used to start a fresh read of the second message alone, so "it was two cups" read as a meal
+ * of two cups of nothing. A read that fails says what happened and what to do (failureWords.ts).
  */
 export function LogByChat({
   meal,
@@ -54,32 +64,40 @@ export function LogByChat({
 }) {
   const [text, setText] = useState('');
   const [said, setSaid] = useState<string | null>(null);
+  /** What they said was wrong with the card, when the card is a re-read. */
+  const [correction, setCorrection] = useState<string | null>(null);
   const [preview, setPreview] = useState<MealPreview | null>(null);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
+  const [fail, setFail] = useState<FailureWords | null>(null);
   const thread = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = thread.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [said, busy, preview, err]);
+  }, [said, correction, busy, preview, fail]);
 
   async function read() {
     const q = text.trim();
     if (!q || busy) return;
+    // With a card up, the message is about the card: the same words go back with it.
+    const correcting = preview && said ? { words: q, previous: previousRows(preview.items) } : null;
     setBusy(true);
-    setErr('');
-    setSaid(q);
+    setFail(null);
+    if (correcting) setCorrection(q);
+    else {
+      setSaid(q);
+      setCorrection(null);
+    }
     try {
-      const p = await previewMeal(q, meal);
+      const p = correcting ? await previewMeal(said!, meal, correcting) : await previewMeal(q, meal);
       if (!p.items.length) {
-        setErr("I couldn't pick anything out of that — try naming the foods.");
+        setFail({ line: NOTHING_READ, retry: false });
         return;
       }
       setPreview(p);
       setText('');
-    } catch {
-      setErr("Couldn't read that just now — try again in a moment.");
+    } catch (e) {
+      setFail(failureWords(e, 'read'));
     } finally {
       setBusy(false);
     }
@@ -97,13 +115,14 @@ export function LogByChat({
 
       <div className="fc-thread" ref={thread}>
         {said && <div className="fc-said">{said}</div>}
+        {correction && <div className="fc-said">{correction}</div>}
         {busy && (
           <div className="fc-heard" role="status">
             {READING}
           </div>
         )}
         {/* Who read it, and her work as it happened — the same line the photo door shows. */}
-        {preview && !busy && <CoachReadLine coach={preview.coach} />}
+        {preview && !busy && <CoachReadLine coach={preview.coach} corrected={!!correction} />}
         {preview && (
           <MealParseCard
             preview={preview}
@@ -115,7 +134,16 @@ export function LogByChat({
             onCancel={() => setPreview(null)}
           />
         )}
-        {err && <div className="food-empty">{err}</div>}
+        {fail && (
+          <div className="food-fail" role="alert">
+            <span>{fail.line}</span>
+            {fail.retry && (
+              <button type="button" disabled={busy} onClick={() => void read()}>
+                {TRY_AGAIN}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* The composer is always here, mic included — that is what makes voice and chat one screen. */}
@@ -126,7 +154,9 @@ export function LogByChat({
           disabled={busy}
           maxRows={COMPOSER_MAX_ROWS}
           ariaLabel="What did you have?"
-          placeholder={preview ? 'Or just say the amount…' : 'What did you have? The whole meal is fine.'}
+          placeholder={
+            preview ? "Not quite? Say what's off, or just the amount…" : 'What did you have? The whole meal is fine.'
+          }
           onSubmit={() => void read()}
         />
         {/* The buttons sit on their own row under the field so the words keep the full width. */}

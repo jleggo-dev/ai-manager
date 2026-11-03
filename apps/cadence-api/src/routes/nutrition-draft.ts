@@ -10,6 +10,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+import { UNIT_MAX_CHARS } from '@cadence/shared';
 import { requireCadenceUser } from '../auth/middleware.ts';
 import { BodyValidationError, parseBody, mealKindSchema } from '../validation/body.ts';
 import { calendarDate } from '../validation/calendar-date.ts';
@@ -66,7 +67,7 @@ const parsedItemSchema = z.object({
   name: z.string().trim().min(1).max(120),
   brand: z.string().trim().max(120).optional(),
   qty: z.number().positive().max(10_000).optional(),
-  unit: z.string().trim().min(1).max(24).optional(),
+  unit: z.string().trim().min(1).max(UNIT_MAX_CHARS).optional(),
   est: z.record(z.string(), z.unknown()).optional(),
   food_id: z.string().uuid().optional(),
   said: z.string().trim().max(200).optional(),

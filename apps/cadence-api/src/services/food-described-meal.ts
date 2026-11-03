@@ -41,8 +41,11 @@ import { logAi } from './ai-log.ts';
 import { CandidateBook, addLookups, describedParts, type MealPartLookup } from './food-candidate-book.ts';
 import { wideLookup } from './food-candidate-sources.ts';
 import { FOOD_CHECK_JOB, foodCheckRounds, type FoodCheckOutcome } from './food-check.ts';
+import { correctionNotes, type MealCorrection } from './food-described-correction.ts';
 import {
   describedTotals,
+  notFood,
+  notFoodLine,
   rememberedRows,
   rowsFromOutcome,
   type DescribedMealDeps,
@@ -149,13 +152,15 @@ export const DESCRIBED_WORDS_MAX = 500;
  * lines, meal-photo-read.ts); the split caps the parts at MAX_PARTS either way. `notes` is what
  * the photo reader could and could not tell, handed to the food-check call as its `notes`
  * variable so a doubt there can become her question or her stated assumption; empty for words.
+ * `correction` is "not quite" (food-described-correction.ts): the previous answer and what was
+ * wrong with it become the notes instead, and the phrase memory is skipped for that read.
  */
 export async function previewDescribedMeal(
   userId: string,
   text: string,
   mealHint?: MealKind,
   deps: DescribedMealDeps = productionDeps(userId),
-  opts: { maxChars?: number; notes?: string } = {},
+  opts: { maxChars?: number; notes?: string; correction?: MealCorrection } = {},
 ): Promise<DescribedMealPreview> {
   const trimmed = text.trim().slice(0, opts.maxChars ?? DESCRIBED_WORDS_MAX);
   if (!trimmed) throw new Error('a meal needs words');
@@ -163,7 +168,12 @@ export async function previewDescribedMeal(
   const meal: MealKind = mealHint && isMeal(mealHint) ? mealHint : (named.slot ?? 'other');
   // The slot phrase is not food: the parts are split from the words without it.
   const { lookups, not_read } = describedParts(named.rest);
-  return readParts(userId, { text: trimmed, meal, mealHint, lookups, not_read, notes: opts.notes }, deps);
+  const notes = opts.correction ? correctionNotes(opts.correction) : opts.notes;
+  return readParts(
+    userId,
+    { text: trimmed, meal, mealHint, lookups, not_read, notes, correction: opts.correction },
+    deps,
+  );
 }
 
 /** What the read is given once the parts are known. */
@@ -180,6 +190,8 @@ export interface PartsToRead {
   answered?: { asked_about: string; answer: string; words: string; chosen: boolean };
   /** What the photo reader could and could not tell, for the food-check's `notes`; empty for words and for an answer. */
   notes?: string;
+  /** Set on a "not quite" read: the memory is skipped and the correction rides on the log. */
+  correction?: MealCorrection;
 }
 
 /**
@@ -195,7 +207,10 @@ export async function readParts(
   const { text: trimmed, meal, mealHint, lookups, not_read } = parts;
   const started = Date.now();
 
-  const remembered = await rememberedRows(lookups, userId, deps);
+  // A correction may be about a remembered row, so a corrected read asks the model about every part.
+  const remembered = parts.correction
+    ? new Map<number, DescribedMealItem>()
+    : await rememberedRows(lookups, userId, deps);
   const pending = lookups.filter((_, i) => !remembered.has(i));
   const rememberedLookups = lookups.filter((_, i) => remembered.has(i));
   const rememberedKeys = new Set(rememberedLookups.map((l) => phraseKey(l.said)));
@@ -223,9 +238,17 @@ export async function readParts(
 
   const calls = outcome?.calls ?? 0;
   const checked = traceLines(book, rememberedLookups);
+  // A part the model says is not a food ("from a random cafe") is left out of the rows and said
+  // in not_read, in their words — never a row with no number, and never dropped in silence.
+  const leftOut: string[] = [];
   const log = (reached: boolean, items: DescribedMealItem[]): void =>
     deps.log({
-      input: { text: trimmed, meal_hint: mealHint ?? null, ...(parts.answered ? { answered: parts.answered } : {}) },
+      input: {
+        text: trimmed,
+        meal_hint: mealHint ?? null,
+        ...(parts.answered ? { answered: parts.answered } : {}),
+        ...(parts.correction ? { correction: parts.correction } : {}),
+      },
       output: { items: outcome?.items ?? [], lookups: outcome?.lookups ?? [] },
       meta: {
         reached,
@@ -233,6 +256,7 @@ export async function readParts(
         parts: lookups.length,
         remembered: remembered.size,
         not_read: not_read.length,
+        left_out: leftOut.length,
         records: book.entries.size,
         problems: outcome ? [...outcome.problems.values()] : [],
         bases: items.map((i) => i.basis),
@@ -267,10 +291,21 @@ export async function readParts(
   // The items pair with the pending parts by position when the model answered one per part; a
   // question row then carries the person's words for its part, not the model's echo.
   const saidByIndex = outcome && outcome.items.length === pending.length ? pending.map((p) => p.said) : undefined;
-  const hers = (outcome ? await rowsFromOutcome(outcome, book, userId, deps, saidByIndex) : []).filter(
-    (r) => !r.said || !rememberedKeys.has(phraseKey(r.said)),
-  );
+  const rows = outcome ? await rowsFromOutcome(outcome, book, userId, deps, saidByIndex) : [];
+  const hers = rows.filter((r, i) => {
+    const item = outcome!.items[i]!;
+    if (notFood(item)) {
+      leftOut.push(notFoodLine(item, r));
+      return false;
+    }
+    return !r.said || !rememberedKeys.has(phraseKey(r.said));
+  });
   const items = [...remembered.values(), ...hers];
   log(true, items);
-  return { ...base, items, macros: describedTotals(items), coach: { reached: true, calls, checked, not_read } };
+  return {
+    ...base,
+    items,
+    macros: describedTotals(items),
+    coach: { reached: true, calls, checked, not_read: [...not_read, ...leftOut] },
+  };
 }

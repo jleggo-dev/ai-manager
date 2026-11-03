@@ -24,7 +24,7 @@ const isUsdaConfigured = vi.hoisted(() => vi.fn(() => true));
 vi.mock('./food-sources/usda.ts', () => ({ isUsdaConfigured }));
 vi.mock('./food-sources/fatsecret-enrich.ts', () => ({ matchFatSecret }));
 
-const { fanOutFoodSources } = await import('./food-source-fanout.ts');
+const { fanOutFoodSources, ledgerWords } = await import('./food-source-fanout.ts');
 
 const food = (over: Partial<Food> = {}): Food =>
   ({
@@ -209,5 +209,62 @@ describe('the trace never claims a source it did not call', () => {
     const r = await fanOutFoodSources('u1', { query: 'shallots' });
     expect(check(r, 'usda')?.status).toBe('miss');
     expect(enrichFoodsWithUsda).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the ledger is searched by its words as well as the phrase', () => {
+  it('"0.0 guinness" as a phrase finds five chain rows; "guinness" alone finds the Non-Alcoholic row too, and the trace says so', async () => {
+    const chain = (n: number) => food({ food_id: `fs-${n}`, source: 'fatsecret', name: `Guinness (${n})` });
+    const guinness = food({
+      food_id: 'off-g',
+      source: 'off',
+      name: 'Guinness 0, Non-Alcoholic Draught, less than 0.05% alc./vol.',
+    });
+    searchFoods.mockImplementation(async (_u: string, q: string) =>
+      q === 'guinness' ? [guinness, chain(1), chain(2)] : [chain(1), chain(2), chain(3), chain(4), chain(5)],
+    );
+    const r = await fanOutFoodSources('u1', { query: '0.0 guinness' });
+    expect(searchFoods.mock.calls.map((c) => c[1])).toEqual(['0.0 guinness', 'guinness']);
+    // The phrase's rows first, then what the word found that they did not; nothing twice.
+    expect(r.candidates.map((c) => c.food_id)).toEqual(['fs-1', 'fs-2', 'fs-3', 'fs-4', 'fs-5', 'off-g']);
+    expect(check(r, 'ledger')?.detail).toBe('6 already on file, by word too');
+  });
+
+  it('a one-word query is never widened; nothing on file says so', async () => {
+    searchFoods.mockResolvedValue([]);
+    const r = await fanOutFoodSources('u1', { query: 'guinness' });
+    expect(searchFoods).toHaveBeenCalledTimes(1);
+    expect(check(r, 'ledger')?.detail).toBe('nothing on file yet');
+  });
+
+  it('the limit holds: a phrase that fills it leaves no room for its words', async () => {
+    searchFoods.mockImplementation(async (_u: string, q: string) =>
+      q === 'roast beef'
+        ? Array.from({ length: 8 }, (_, i) => food({ food_id: `p-${i}` }))
+        : [food({ food_id: 'w-1' })],
+    );
+    const r = await fanOutFoodSources('u1', { query: 'roast beef' });
+    expect(r.candidates).toHaveLength(8);
+    expect(r.candidates.map((c) => c.food_id)).not.toContain('w-1');
+  });
+
+  it("the phrase's own rows come first, and a row found twice is reported once", async () => {
+    const own = food({ food_id: 'own-1', name: 'roast beef, deli' });
+    searchFoods.mockImplementation(async (_u: string, q: string) =>
+      q === 'roast beef' ? [own] : q === 'roast' ? [own, food({ food_id: 'f-roast' })] : [food({ food_id: 'f-beef' })],
+    );
+    const r = await fanOutFoodSources('u1', { query: 'roast beef' });
+    expect(r.candidates.map((c) => c.food_id)).toEqual(['own-1', 'f-roast', 'f-beef']);
+  });
+
+  it.each([
+    ['0.0 guinness', ['guinness']],
+    ['roast beef', ['roast', 'beef']],
+    ['fried chicken wings no sauce', ['chicken', 'fried']],
+    ['guinness', []],
+    ['2 eggs', ['eggs']],
+    ['an egg', []],
+  ])('ledgerWords(%j) → %j: letters of four or more, longest first, at most two', (q, words) => {
+    expect(ledgerWords(q)).toEqual(words);
   });
 });

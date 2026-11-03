@@ -19,6 +19,7 @@ import {
   SHOW_PER_LOOKUP,
   addLookups,
   checkPick,
+  cutAtWord,
   matchBookMeasure,
   partsToLookups,
   splitMealParts,
@@ -61,6 +62,29 @@ describe('splitMealParts — separators a person actually types', () => {
     ['Starbucks venti latte', ['Starbucks venti latte']],
     ['a sandwich', ['a sandwich']],
     ['peanut butter & jam on toast', ['peanut butter', 'jam on toast']],
+    // Sentences are parts: dictation writes "…inch. Eggplant pickles. Some mayo." (2026-11-02, the
+    // read took "sliced on it. Pickled eggplant" as one food and "mayo. I also had one pint" as another).
+    [
+      'roast beef maybe a 1/2 inch. Eggplant pickles. Some mayo. Red pepper.',
+      ['roast beef maybe a 1/2 inch', 'Eggplant pickles', 'Some mayo', 'Red pepper'],
+    ],
+    ['150ml milk. 1 shot espresso', ['150ml milk', '1 shot espresso']],
+    // "I had" says they ate it, not what it was; the dash hanging off "sandwich-" is not food either.
+    [
+      'I had a sandwich on focaccia, sliced on it. Pickled eggplant. I also had one pint of Rickards red.',
+      ['a sandwich on focaccia', 'sliced on it', 'Pickled eggplant', 'one pint of Rickards red'],
+    ],
+    ['Square foccacia sandwich- with roast beef', ['Square foccacia sandwich', 'roast beef']],
+    ['then I ate an apple', ['an apple']],
+    // Near-misses: a decimal, an abbreviation, a lowercase continuation and a word that merely
+    // starts with a verb are not sentence ends and not "I had".
+    ['one 0.0 guinness', ['one 0.0 guinness']],
+    ['1.5 c milk', ['1.5 c milk']],
+    ['2 oz. Cheddar', ['2 oz. Cheddar']],
+    ['a Dr. Pepper', ['a Dr. Pepper']],
+    ['some mayo. red pepper', ['some mayo. red pepper']],
+    ["hadji's hummus", ["hadji's hummus"]],
+    ['I had', ['I had']],
   ])('%j → %j', (text, parts) => {
     expect(splitMealParts(text)).toEqual(parts);
   });
@@ -113,12 +137,33 @@ describe('stripAmount — the amount comes off, the food stays', () => {
     // A longer number phrase is taken whole, not as "a" + the rest.
     ['a few eggs', 'eggs', null],
     ['a splash of milk', 'milk', null],
+    // Zero is never an amount: "0.0 guinness" names the non-alcoholic one (2026-11-02, looked up
+    // as "guinness at 0.0" and logged as 0.0 servings of a Red Robin row). A non-zero decimal still is.
+    ['0.0 guinness', '0.0 guinness', null],
+    ['0 guinness', '0 guinness', null],
+    ['one 0.0 guinness', '0.0 guinness', null],
+    ['0.5 cup oats', 'oats', '0.5 cup'],
   ])('%j → q %j, measure %j', (part, q, measure) => {
     expect(stripAmount(part)).toEqual({ q, measure });
   });
 
   it('never strips a part down to nothing', () => {
     expect(stripAmount('2 large')).toEqual({ q: '2 large', measure: null });
+  });
+});
+
+describe('cutAtWord — a long part is cut at a word, never through one', () => {
+  it('cuts at the last space inside the limit ("roast bee" was looked up as a typo, 2026-11-02)', () => {
+    const prose = 'I had a sandwich on a square not rectangle focaccia having an inch of sliced roast beef';
+    expect(cutAtWord(prose, 80)).toBe('I had a sandwich on a square not rectangle focaccia having an inch of sliced');
+    expect(cutAtWord('a banana', 80)).toBe('a banana');
+    expect(cutAtWord('a'.repeat(90), 80)).toBe('a'.repeat(80));
+  });
+  it('the lookup for a long part is cut the same way', () => {
+    const [l] = partsToLookups(
+      'a sandwich on a square not rectangle focaccia having an inch of thinly sliced roast beef',
+    );
+    expect(l?.q).toBe('sandwich on a square not rectangle focaccia having an inch of thinly sliced');
   });
 });
 
@@ -441,9 +486,13 @@ describe('checkPick — only what was shown, only measures the record offers', (
   it('grams are always offered', () => {
     expect(checkPick({ pick: 'c1', measure: 'g', count: 80 }, book)).toMatchObject({ ok: true, grams: 80 });
   });
-  it('a missing or bad count reads as one', () => {
+  it('a missing count reads as one; zero or less is refused with the reason (2026-11-02: "0.0 servings" shown as 1)', () => {
     expect(checkPick({ pick: 'c1', measure: '1 medium', count: null }, book)).toMatchObject({ ok: true, grams: 118 });
-    expect(checkPick({ pick: 'c1', measure: '1 medium', count: -3 }, book)).toMatchObject({ ok: true, grams: 118 });
+    for (const count of [0, -3]) {
+      const r = checkPick({ pick: 'c1', measure: '1 medium', count }, book);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.problem).toMatch(/count -?\d+ is not an amount/);
+    }
   });
   it.each([
     [{ pick: 'c9', measure: '1 medium', count: 1 }, /not an id in the book/],

@@ -63,6 +63,21 @@ export const QUESTION_CHOICE_MAX_CHARS = 40;
  */
 export const ANSWER_MAX_CHARS = 120;
 export const ASKED_ABOUT_MAX_CHARS = 200;
+/**
+ * The caps on "not quite" (POST /nutrition/meals/preview with `correction`): what the person
+ * typed about the previous answer, and the lines of that answer the card hands back with it
+ * (one per row, "name, amount"), so the re-read knows what it is correcting.
+ */
+export const CORRECTION_MAX_CHARS = 300;
+export const PREVIOUS_ROW_MAX_CHARS = 160;
+export const PREVIOUS_ROWS_MAX = 12;
+/**
+ * A row's unit, at most — the confirm's and the draft's own cap on `unit` (validation/body.ts,
+ * routes/nutrition-draft.ts). A record's measure label is a unit ("1 thick slice (approx 4-1/2"
+ * x 2-1/2" x 3/8")" is USDA's), so the cap fits one; at 24 the read offered a unit its own
+ * confirm then refused, and the card said "Couldn't reach your meal" (2026-11-02).
+ */
+export const UNIT_MAX_CHARS = 80;
 
 /** True when a value off the wire names a real food source. */
 export function isFoodSource(value: unknown): value is FoodSource {

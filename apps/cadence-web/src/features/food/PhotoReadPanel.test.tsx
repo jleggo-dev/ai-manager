@@ -173,7 +173,8 @@ describe('PhotoReadPanel', () => {
     expect(screen.getByRole('button', { name: 'Banana, raw' })).toBeTruthy();
     expect(screen.getByText('~355 kcal')).toBeTruthy();
     expect(screen.getByText(FOUND_CARD)).toBeTruthy();
-    expect(screen.getByText('Checked venti Starbucks latte: your foods: 1 rows; banana: USDA: 1 rows.')).toBeTruthy();
+    expect(screen.getByText('2 parts looked up · 1 call')).toBeTruthy();
+    expect(screen.getByText('venti Starbucks latte: your foods: 1 rows')).toBeTruthy();
     expect(api.logPreviewedMeal).not.toHaveBeenCalled();
   });
 
@@ -226,7 +227,7 @@ describe('PhotoReadPanel — the line above the card says who read it (the chat 
     const { user } = setup();
     await toCard(user);
     expect(screen.getByText(text)).toBeTruthy();
-    expect(screen.queryByText(/^Checked/)).toBeNull();
+    expect(screen.queryByText(/looked up/)).toBeNull();
   });
 
   it('not reached WITH a trace → the notice and the trace, both', async () => {
@@ -237,22 +238,23 @@ describe('PhotoReadPanel — the line above the card says who read it (the chat 
     const { user } = setup();
     await toCard(user);
     expect(screen.getByText(NOT_REACHED_CARD)).toBeTruthy();
-    expect(screen.getByText('Checked banana: your foods: 1 rows.')).toBeTruthy();
+    expect(screen.getByText('1 part looked up · 1 call')).toBeTruthy();
   });
 
-  it('the trace renders only from what ran: present → "Checked …", empty → nothing', async () => {
+  it('the trace renders only from what ran: present → one line with the part behind it, empty → nothing', async () => {
     api.previewMealFromReading.mockResolvedValue({
       ...PRICED,
       coach: { reached: true, calls: 1, checked: ['banana: your foods: 1 rows · USDA skipped'] },
     });
     const { user } = setup();
     await toCard(user);
-    expect(screen.getByText('Checked banana: your foods: 1 rows · USDA skipped.')).toBeTruthy();
+    expect(screen.getByText('1 part looked up · 1 call')).toBeTruthy();
+    expect(screen.getByText('banana: your foods: 1 rows · USDA skipped')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Back' }));
     api.previewMealFromReading.mockResolvedValue({ ...PRICED, coach: { reached: true, calls: 1, checked: [] } });
     await user.click(screen.getByRole('button', { name: /work out the nutrition/i }));
     await screen.findByRole('region', { name: 'Confirm meal log' });
-    expect(screen.queryByText(/^Checked/)).toBeNull();
+    expect(screen.queryByText(/looked up/)).toBeNull();
   });
 
   it('a line that was not read is said, in their words; nothing left out → nothing said', async () => {

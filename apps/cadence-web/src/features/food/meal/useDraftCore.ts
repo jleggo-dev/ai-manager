@@ -8,6 +8,7 @@
  * closed meal takes adds directly, the server no longer refuses one, and a retry that can never
  * fire is a rule the next reader would build on. Any failure now surfaces plainly, once.
  */
+import { ADD_FAILED, failureWords } from '../failureWords.ts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MealKind } from '@cadence/shared';
 import { getOpenMeal, openMealDraft, type Meal, type MealPartOp } from '../../../lib/api/meal-draft.ts';
@@ -16,7 +17,8 @@ import { addToPart, groupIndexes, removeFromPart, renamePart, ungroup, type Part
 /** Which door an item came through — display-only tags on the meal's rows. */
 export type DoorTag = 'searched' | 'scanned' | 'heard' | 'typed' | 'assumed';
 
-export const CANT = "Couldn't reach your meal just now — try again in a moment.";
+/** The drawer's line for an add that failed on our side; a failure the client can tell apart says more (failureWords.ts). */
+export const CANT = ADD_FAILED;
 /** Contract: closes_at = opened_at + 3h (MEAL-LOGGING.md), so the opened clock derives from it. */
 export const WINDOW_MS = 3 * 60 * 60 * 1000;
 
@@ -138,8 +140,9 @@ export function useDraftCore(initialMeal?: MealKind, date?: string) {
         const updated = await withDraft(fn);
         reconcile(my, updated);
         return updated;
-      } catch {
-        setErr(CANT);
+      } catch (e) {
+        // Offline, timed out, refused, signed out, gone, or ours — each in its own words.
+        setErr(failureWords(e, 'add').line);
         return null;
       } finally {
         setPending((p) => p - 1);

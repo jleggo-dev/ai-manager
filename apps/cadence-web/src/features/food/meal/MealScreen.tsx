@@ -213,7 +213,11 @@ export function MealScreen({
           onEnd={searching ? undefined : shelves.more[active]}
         />
       )}
-      {draft.err && <div className="food-empty ms-err">{draft.err}</div>}
+      {draft.err && (
+        <div className="food-fail ms-err" role="alert">
+          <span>{draft.err}</span>
+        </div>
+      )}
       <CartBar
         kind={kind}
         chips={cart.chips}
@@ -246,6 +250,7 @@ export function MealScreen({
           seed={describe.seed}
           listening={describe.listening}
           busy={draft.busy}
+          addFailure={draft.err}
           onAdd={async (items, raw) => !!(await draft.appendParsed(items, describe.listening ? 'heard' : 'typed', raw))}
           onClose={() => setDescribe(null)}
           onPhoto={(photo, caption) => {

@@ -62,6 +62,39 @@ const CUT_NOTE_RESERVE = 110;
 
 const SEPARATORS = /\s*(?:,|;|\n|\+|&|\band\b|\bwith\b|\bplus\b)\s*/i;
 /**
+ * A sentence end is a separator too: a full stop followed by a new sentence (a capital or a
+ * digit, which is how dictation writes "…inch. Eggplant pickles. Some mayo.") or by the end. Not
+ * the dot in a decimal ("0.0 guinness", "1.5 c milk"), not one after an abbreviation ("2 oz.
+ * cheddar", "Dr. Pepper"). Without this, "sliced on it. Pickled eggplant" was one part and
+ * "mayo. I also had one pint of Rickards red" another (2026-11-02).
+ */
+const SENTENCE_END =
+  /(?<!\d)(?<!\b(?:[Dd]r|[Mm]rs?|[Ss]t|[Oo]z|[Tt]bsp|[Tt]sp|[Ll]bs?|[Pp]cs?))\.(?=\s+[A-Z0-9]|\s*$)/g;
+/**
+ * Words in front of a part that say they ate it rather than what it was: "I had a banana",
+ * "I also had one pint", "then I ate". Taken off once; a part that is only those words is kept
+ * as written. A word that merely starts the same ("hadji's hummus") is not touched: the verb
+ * must end at a space.
+ */
+const SAID_LEAD =
+  /^(?:(?:and|then|also)\s+)?(?:i\s+)?(?:(?:also|then|just)\s+)?(?:had|ate|drank|got|have|having|took)\s+/i;
+/** Punctuation that hangs off a part after the split — "sandwich-", "mayo." — and is not food. */
+const PART_EDGE = /^[\s.\-–—:;]+|[\s.\-–—:;]+$/g;
+/** Their words for a part, cut at a word: a cut mid-word ("roast bee") is looked up as a typo (2026-11-02). */
+export function cutAtWord(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const atSpace = cut.replace(/\s+\S*$/, '');
+  return atSpace.length ? atSpace : cut;
+}
+/** One part as written, less the "I had" in front — the words that go to the lookup and the card. */
+function partWords(raw: string): string {
+  const part = raw.replace(PART_EDGE, '');
+  const lead = SAID_LEAD.exec(part)?.[0] ?? '';
+  const rest = part.slice(lead.length).replace(PART_EDGE, '');
+  return rest || part;
+}
+/**
  * The amount in front of a part. The number WORDS end on a word boundary and the longer ones come
  * first: without that, "a" matched the first letter of "avocado", "apple" and "almonds" ("vocado
  * toast" was looked up, 2026-11-01), and "a few eggs" read as the food "few eggs".
@@ -72,10 +105,7 @@ const MEASURE_WORD = /\d|cup|tbsp|tsp|oz|ml|g\b|slice|shot|scoop|handful|small|m
 
 /** Every part, in order, as the person wrote them — no cap. Never empty for non-blank text. */
 function splitAllParts(text: string): string[] {
-  const parts = text
-    .split(SEPARATORS)
-    .map((p) => p.replace(/^[\s.]+|[\s.]+$/g, ''))
-    .filter(Boolean);
+  const parts = text.replace(SENTENCE_END, '\n').split(SEPARATORS).map(partWords).filter(Boolean);
   return parts.length ? parts : [text.trim()].filter(Boolean);
 }
 
@@ -90,6 +120,10 @@ export function stripAmount(part: string): { q: string; measure: string | null }
   const prefix = m?.[0] ?? '';
   const q = part.slice(prefix.length).trim();
   if (!q) return { q: part.trim(), measure: null };
+  // Nobody eats zero of anything: a leading "0.0" or "0" is the food's name ("0.0 guinness" is
+  // the non-alcoholic one), not an amount. Read as one, it looked the beer up as "guinness at
+  // 0.0" and the model took 0.0 servings of a Red Robin row (2026-11-02).
+  if (/^\d/.test(prefix) && parseFloat(prefix) === 0) return { q: part.trim(), measure: null };
   const measure = prefix.replace(/\bof\s*$/i, '').trim();
   return { q, measure: measure && MEASURE_WORD.test(measure) ? measure : null };
 }
@@ -127,7 +161,7 @@ export function describedParts(text: string): DescribedParts {
   for (const part of kept) {
     const said = part.slice(0, SAID_MAX);
     const { q, measure } = stripAmount(said);
-    const lookup: MealPartLookup = { said, q: q.slice(0, 80), measure, brand: null };
+    const lookup: MealPartLookup = { said, q: cutAtWord(q, 80), measure, brand: null };
     const k = lookup.q.toLowerCase();
     const seen = byKey.get(k);
     if (seen) seen.times += 1;
@@ -401,7 +435,12 @@ export function checkPick(input: PickInput, book: Pick<CandidateBook, 'entries' 
     };
   }
   if (!entry.food_id) return { ok: false, problem: `${entry.id} is not a stored record and cannot be logged` };
-  const count = typeof input.count === 'number' && input.count > 0 && Number.isFinite(input.count) ? input.count : 1;
+  // A count of zero or less is not an amount. It was read as one, in silence: "0.0 guinness"
+  // became "0.0 servings" on the card, shown as 1 (2026-11-02). The model is told instead.
+  if (typeof input.count === 'number' && !(input.count > 0)) {
+    return { ok: false, problem: `count ${input.count} is not an amount; say how many of the measure, more than zero` };
+  }
+  const count = typeof input.count === 'number' && Number.isFinite(input.count) ? input.count : 1;
   const want = norm(input.measure ?? '');
   if (GRAMS.has(want)) return { ok: true, entry, measure: { label: 'g', grams: 1 }, count, grams: count };
   const measure = matchBookMeasure(entry.measures, want);
