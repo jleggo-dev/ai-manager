@@ -121,22 +121,48 @@ the check found back to her. Never correct it silently (see Phase 3).
   rows". The v2 brief made straight vs circuit "the coach's choice, not a user toggle"; point 4
   reverses that.
 
-## Rulings needed (one at a time, in this order)
+## Rulings (owner, 2026-11-03) — all six given in one sitting
 
-- **R1 — timed sets = `timer` + `sets`, not a new tool kind.** _Recommended._ The Oct 5 dead hang
-  (`timer`, `sets: 3`, `duration_min: 0.5`) is already in this shape and would start working. Add
-  `rest_sec` and `load` to it. The catalog is filled in when the session is built, so changing it
-  needs no job sync.
-- **R2 — the person may change the structure (alternate / spread / reorder).** This reverses v2's
-  "coach's choice". The owner's message implies yes; it goes on record here.
-- **R3 — swaps are written by the coach when she builds the session.** 2–3 alternatives per
-  strength or cardio item, so a swap needs no wait. The cost is more output on every session, plus
-  a prompt change (→ sync-jobs). The alternative is a call on tap, which is the slow path the owner
-  doesn't want.
-- **R4 — the repair round.** At most ONE extra round. If her second attempt still has findings,
+- **R1 — timed sets = `timer` + `sets`, not a new tool kind.** RULED: yes (option A). Add
+  `rest_sec` and `load` to the timer step. The Oct 5 dead hang (`timer`, `sets: 3`,
+  `duration_min: 0.5`) is already in this shape and starts working. The catalog is filled in when
+  the session is built, so no job sync. Still open inside it, an owner choice rather than a ruling:
+  whether rest between sets is drawn. Start undrawn (tap Start for the next set) and store
+  `rest_sec` anyway, so a rest clock can come later without a schema change.
+- **R2 — the person may change the structure (alternate / spread / reorder).** RULED: yes. This
+  reverses v2's "coach's choice"; the owner's reason is that she has not been keeping fatiguing
+  moves apart on her own, so the person gets the control. Two paths, both wanted: the
+  deterministic Rearrange sheet (Phase 6), AND an agentic one where the person asks the coach to
+  rearrange **this session**, in place, with no whole-week replan to review and accept. The
+  agentic path needs a small per-session job (one session in, the same session reordered out),
+  not `revise_session`; it sits beside 5f's single-item alternative call.
+- **R3 — swaps are written by the coach when she builds the session.** RULED: yes, 2–3
+  alternatives per strength or cardio item at build time (more output per build, prompt change →
+  sync-jobs). Owner's addition: once activities are maintained and grouped (a pattern or group on
+  the activity — hinge, push, pull, carry…), the alternatives list can be filled
+  **deterministically** from the person's own activities in the same group, with the coach's
+  picks on top. That grouping is a design input for 5f, not built yet.
+- **R4 — the repair round.** RULED, reframed: a repair loop is a normal harness pattern and gets
+  built the way good harnesses build it, not capped at one round as a principle. A bounded loop
+  with a stop condition: each round must shrink the findings; stop when clean, when the findings
+  stop shrinking, or at the cap. The cap is a tuning number (start at 3), never unbounded. On stop
   the session ships as it is and the findings are logged, so nobody gets stuck.
-- **R5 — where a learned structure lives.** _Recommended:_ `activity.how_to` through the existing
-  `rework`, which every future session already reads. The person confirms first.
+- **R5 — where a learned structure lives.** RULED: no schema. `activity.how_to` through the
+  existing `rework`, the free text every future session already reads. Per change (Every time /
+  Just today), the person confirms first.
+- **R6 — the chime is heard no matter what screen you're on.** RULED: yes. (Raised by #477's
+  locked-screen check; the interval chime only sounded while the player was on screen.) It
+  implies three pieces, in this order: (1) keep the screen awake during an interval or timer run,
+  extending the 2026-11-01 "screen on only while the metronome clicks" ruling to every running
+  clock; (2) the running clock lives at app level, not inside the walkthrough screen, so leaving
+  the screen or switching tab does not unmount it and the chime still plays; (3) for a phone
+  locked by hand or in a pocket, local notifications for the next boundaries, inside the iOS
+  64-slot budget shared with plan reminders, rebooked on every pause, skip or edit. (1) and (2)
+  cover the gym floor; (3) is the pocket tier behind them.
+- **No text that explains the UI** (ruled 2026-11-03 in the header parcel, extended the same day):
+  every tool, not only the ones Phase 1 touched. StepMeditate's "tap anywhere" half and its
+  footnote, HandsFree's "tap to control the timer by voice", and Metronome's "Tap four beats to
+  set it by ear" caption go the way the timer's footnote went (#482).
 
 ## Phase 1 — bug fixes, no design needed (one PR, can start now)
 
