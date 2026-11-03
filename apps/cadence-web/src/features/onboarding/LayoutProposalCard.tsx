@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { WidgetKind, WidgetSpec } from '@cadence/shared';
 import { commitProgressLayoutDraft, dismissProgressLayoutDraft } from '../../lib/api.ts';
 import { queryKeys, useProgressLayoutDraft } from '../../lib/query/index.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /** What a section is called when the coach didn't give it a warm title (`spec.title` is the
  *  ordinary case — "Your runs", not "dated_sessions"). One plain noun per kind, house-style. */
@@ -95,9 +96,14 @@ export function LayoutProposalCard({ onConfirmed }: { onConfirmed?: (receiptText
         ))}
       </ul>
       {state === 'failed' && <div className="chg-err">That didn&rsquo;t take — try again?</div>}
-      <button type="button" className="cfm-build" onClick={() => void confirm()} disabled={state === 'committing'}>
+      <CommitButton
+        size="compact"
+        className="cfm-build"
+        onClick={() => void confirm()}
+        disabled={state === 'committing'}
+      >
         {state === 'committing' ? 'Setting…' : 'Set my page this way'}
-      </button>
+      </CommitButton>
       <button type="button" className="cfm-more" onClick={() => void dismiss()}>
         Not now
       </button>

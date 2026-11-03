@@ -5,6 +5,7 @@ import { useInvalidateNutritionDay } from '../../lib/query/index.ts';
 import { GLASS_ML } from '../nutrition/WaterRow.tsx';
 import { macroLineProteinFirst } from './amounts.ts';
 import { waterCreditLine } from './waterCredit.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -203,9 +204,14 @@ export function DrinkComposer({ onLogged, onBack }: { onLogged: (meal: Meal | nu
       {ml > 0 && <p className="fd-note">{waterCreditLine(ml)}</p>}
       {err && <div className="food-empty">{err}</div>}
 
-      <button type="button" className="fa-log" disabled={busy || (!items.length && ml <= 0)} onClick={() => void log()}>
+      <CommitButton
+        size="compact"
+        className="fa-log"
+        disabled={busy || (!items.length && ml <= 0)}
+        onClick={() => void log()}
+      >
         {busy ? 'Writing it down…' : 'Log the drink'}
-      </button>
+      </CommitButton>
     </div>
   );
 }

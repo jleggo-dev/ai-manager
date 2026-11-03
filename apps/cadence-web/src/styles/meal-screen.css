@@ -490,34 +490,8 @@ span.ms-cart-chip-w {
   font-size: 12px;
   color: var(--dawn-4);
 }
-/* The one button. Green is complete in this app (owner, 2026-09-06); the canvas agrees. */
-.ms-log {
-  width: 100%;
-  border: 0;
-  border-radius: 16px;
-  padding: 14px;
-  text-align: center;
-  font-size: 15px;
-  font-weight: 900;
-  color: #fff;
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 3px 0 oklch(39% 0.08 152);
-  cursor: pointer;
-}
-.ms-log:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.ms-log:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 oklch(39% 0.08 152);
-}
-@media (prefers-reduced-motion: reduce) {
-  .ms-log:active:not(:disabled) {
-    transform: none;
-  }
-}
-
+/* The one button is components/CommitButton.tsx (styles/commit-button.css). Green is complete in
+   this app (owner, 2026-09-06); the canvas agrees. */
 /* ── The amount sheet (1b) — only when the default isn't right ─────────────── */
 .ms-amount {
   display: flex;

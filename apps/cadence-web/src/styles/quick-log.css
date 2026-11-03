@@ -282,20 +282,6 @@
    wear until a lookup came back read as "not yet" (owner, 2026-10-31). Only an empty box dims it. */
 .ms-ds-go {
   flex: 1;
-  border: 0;
-  border-radius: 16px;
-  padding: 14px;
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 3px 0 oklch(39% 0.08 152);
-  color: #fff;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 900;
-  cursor: pointer;
-}
-.ms-ds-go:disabled {
-  opacity: 0.55;
-  cursor: default;
 }
 
 /* ── The meal chat — a second panel inside the drawer ───────────────────────── */

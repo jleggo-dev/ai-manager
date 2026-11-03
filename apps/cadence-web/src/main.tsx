@@ -51,6 +51,9 @@ import './styles/photo-button.css';
 // The Changes sheet's two heights, week strip and week view (.wkc-sheet.full/.wks-*/.wkv-*) —
 // features/plan/week-changes/. Leans on styles.css's `.sheet-*` and `.wkc-*`, so it loads after.
 import './styles/week-changes.css';
+// The green commit button (components/CommitButton.tsx). LAST, so no older sheet's leftover rule
+// of the same weight can repaint it.
+import './styles/commit-button.css';
 import { App } from './App.tsx';
 import { createAppQueryClient, persistBootCache, seedBootCache } from './lib/query/index.ts';
 import { warmApi } from './lib/api.ts';

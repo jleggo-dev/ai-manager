@@ -4,6 +4,7 @@ import { FoodMacroCard } from './FoodMacroCard.tsx';
 import { compoundLabel } from './servingPicker.ts';
 import { UnitSheet } from './UnitSheet.tsx';
 import type { MealKind } from '../../lib/api.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -145,9 +146,7 @@ export function AddFoodSheet({
       {/* The one button, at the bottom and green like Done (owner, 2026-10-31: a word up in the
           header read as a label, not the thing to press). */}
       <div className="fd-foot">
-        <button
-          type="button"
-          className="ms-log"
+        <CommitButton
           disabled={busy}
           onClick={() =>
             mode === 'draft' && onAdd
@@ -156,7 +155,7 @@ export function AddFoodSheet({
           }
         >
           {mode === 'draft' ? `Add to ${mealLabel ?? meal}` : busy ? 'Logging…' : 'Log'}
-        </button>
+        </CommitButton>
       </div>
 
       {unitOpen && (

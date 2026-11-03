@@ -6,6 +6,7 @@ import { CoachReadLine } from './CoachReadLine.tsx';
 import { HERE_IS, READ_FAILED } from './photoReadCopy.ts';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 import { MicButton } from '../../components/MicButton.tsx';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /** The photo door's add to the open meal: the rows, the words read, and the photo with its reading. */
 export type AppendDraft = (
@@ -185,25 +186,25 @@ export function PhotoReadPanel({
       {r.phase !== 'priced' && (
         <div className="fl-photo-foot">
           {r.phase === 'idle' && (
-            <button type="button" className="fa-log" onClick={() => void r.read(photo, said)}>
+            <CommitButton size="compact" className="fa-log" onClick={() => void r.read(photo, said)}>
               Have a look at this
-            </button>
+            </CommitButton>
           )}
           {r.phase === 'confirming' && (
             <>
               {hasReading ? (
-                <button type="button" className="fa-log" onClick={() => void r.commit({ caption: said, meal })}>
+                <CommitButton size="compact" className="fa-log" onClick={() => void r.commit({ caption: said, meal })}>
                   Work out the nutrition
-                </button>
+                </CommitButton>
               ) : (
                 fallbackLabel && (
-                  <button
-                    type="button"
+                  <CommitButton
+                    size="compact"
                     className="fa-log"
                     onClick={() => void r.commit({ caption: said, meal, reading: '' })}
                   >
                     {fallbackLabel}
-                  </button>
+                  </CommitButton>
                 )
               )}
               {r.readFailed && (
@@ -216,13 +217,13 @@ export function PhotoReadPanel({
           {r.phase === 'error' && r.failedAt === 'read' && (
             <>
               {fallbackLabel && (
-                <button
-                  type="button"
+                <CommitButton
+                  size="compact"
                   className="fa-log"
                   onClick={() => void r.commit({ caption: said, meal, reading: '' })}
                 >
                   {fallbackLabel}
-                </button>
+                </CommitButton>
               )}
               <button type="button" className="lockbtn ghost" onClick={() => void r.read(photo, said)}>
                 Try reading it again
@@ -232,9 +233,9 @@ export function PhotoReadPanel({
           {r.phase === 'error' && r.failedAt === 'nutrition' && (
             <>
               {/* Their corrections are kept: back to the box as they left it, not to a fresh read. */}
-              <button type="button" className="fa-log" onClick={r.unprice}>
+              <CommitButton size="compact" className="fa-log" onClick={r.unprice}>
                 Back to the reading
-              </button>
+              </CommitButton>
               {!hasReading && fallbackLabel && (
                 <button
                   type="button"

@@ -132,7 +132,7 @@
   background: var(--ink);
   border-radius: 12px;
   box-shadow:
-    0 0 0 3px oklch(60% 0.1 152),
+    0 0 0 3px var(--commit-top),
     0 0 18px oklch(60% 0.1 152 / 0.6);
   animation: guide-pulse 1.6s ease-in-out infinite;
 }
@@ -140,12 +140,12 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 3px oklch(60% 0.1 152),
+      0 0 0 3px var(--commit-top),
       0 0 18px oklch(60% 0.1 152 / 0.6);
   }
   50% {
     box-shadow:
-      0 0 0 5px oklch(60% 0.1 152),
+      0 0 0 5px var(--commit-top),
       0 0 26px oklch(60% 0.1 152 / 0.85);
   }
 }

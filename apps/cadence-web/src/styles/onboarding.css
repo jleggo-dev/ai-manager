@@ -459,16 +459,7 @@
    composer — so it can be offered as many times as a plan needs building, and typing a correction
    is always still possible. `margin-top` because it is the card's conclusion, not another row. */
 .cfm-build {
-  width: 100%;
   margin-top: 3px;
-  border: none;
-  border-radius: 14px;
-  padding: 13px;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 4px 0 oklch(39% 0.08 152);
 }
 
 /* ── "Cadence is working" ──────────────────────────────────────────────────────────── */
@@ -972,6 +963,8 @@
 .meetc-leave-go,
 .meetc-leave-stay {
   flex: 1;
+}
+.meetc-leave-go {
   border-radius: 13px;
   padding: 11px;
   font-size: 13px;
@@ -984,12 +977,6 @@
   background: none;
   border: 1.5px solid oklch(88% 0.02 85);
   color: var(--danger);
-}
-.meetc-leave-stay {
-  border: none;
-  color: #fff;
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 3px 0 oklch(39% 0.08 152);
 }
 
 /* Cadence's face on the Apple Health card — every line on it is her talking, and a card that
@@ -1079,7 +1066,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: oklch(60% 0.1 152);
+  background: var(--commit-top);
 }
 .chg-err {
   font-size: 12.5px;
@@ -1126,11 +1113,6 @@
 .qn-field:focus-visible {
   outline: none;
   border-color: var(--forest);
-}
-.cfm-build:disabled {
-  opacity: 0.45;
-  box-shadow: none;
-  cursor: default;
 }
 
 /**

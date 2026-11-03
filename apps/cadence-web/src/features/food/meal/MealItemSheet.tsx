@@ -8,6 +8,7 @@
 import type { MealItem } from '@cadence/shared';
 import { FoodMacroCard } from '../FoodMacroCard.tsx';
 import type { DoorTag } from './useDraftCore.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -81,9 +82,9 @@ export function MealItemSheet({
           >
             Take it out
           </button>
-          <button type="button" className="fa-log" onClick={onClose}>
+          <CommitButton size="compact" className="fa-log" onClick={onClose}>
             Done
-          </button>
+          </CommitButton>
         </div>
       </div>
     </div>

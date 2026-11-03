@@ -264,13 +264,13 @@
   height: 84px;
   border-radius: 50%;
   /* Done is green, as the commit buttons (owner ruling 2026-11-02). */
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
+  background: linear-gradient(180deg, var(--commit-top) 0%, var(--commit-bottom) 46%);
   color: #fff;
   font-size: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 0 oklch(39% 0.08 152);
+  box-shadow: 0 6px 0 var(--commit-edge);
   animation: pop 0.5s ease;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -388,14 +388,6 @@
 }
 .sfb-done {
   flex: 1;
-  border: none;
-  border-radius: 14px;
-  padding: 12px;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(180deg, oklch(60% 0.1 152) 0%, oklch(52% 0.09 152) 46%);
-  box-shadow: 0 4px 0 oklch(39% 0.08 152);
 }
 .sfb-talk {
   flex: 1;
@@ -437,7 +429,9 @@
 .sfb-mind .sfb-reply p {
   color: oklch(88% 0.03 85);
 }
-.sfb-mind .sfb-done {
+/* Mind sessions keep their own quiet button on the dark surface — pressed included. */
+.sfb-mind .sfb-done,
+.sfb-mind .sfb-done:active:not(:disabled) {
   background: oklch(96% 0.015 85);
   color: oklch(28% 0.04 262);
   box-shadow: none;

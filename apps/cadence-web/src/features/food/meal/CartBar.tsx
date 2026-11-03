@@ -11,6 +11,7 @@
 import type { Macros, MealKind } from '@cadence/shared';
 import { fmtKcal } from '../bracket/copy.ts';
 import type { CartChip } from './cartModel.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 export function CartBar({
   kind,
@@ -68,13 +69,13 @@ export function CartBar({
         </div>
       )}
       {logged ? (
-        <button type="button" className="ms-log" disabled={busy} onClick={onDone}>
+        <CommitButton disabled={busy} onClick={onDone}>
           Done
-        </button>
+        </CommitButton>
       ) : (
-        <button type="button" className="ms-log" disabled={busy || askedCount > 0} onClick={onLog}>
+        <CommitButton disabled={busy || askedCount > 0} onClick={onLog}>
           {busy ? 'Logging…' : `Log ${kind} · ${fmtKcal(total.kcal)} kcal`}
-        </button>
+        </CommitButton>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import { macroLineProteinFirst } from '../../food/amounts.ts';
 import { draftBrand, draftName, type FoodDraft } from '../../food/foodDraft.ts';
 import { compoundLabel, orderServingIndices } from '../../food/servingPicker.ts';
 import type { DraftPortion } from './useMealCapture.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 /** The shape both draft kinds share for the serving math. */
 function foodShape(draft: FoodDraft): Pick<Food, 'base_unit' | 'macros_per_base' | 'servings' | 'default_serving'> {
@@ -181,24 +182,22 @@ export function MealDraftCard({
 
       <div className="mc-actions">
         {plateMode ? (
-          <button
-            type="button"
+          <CommitButton
             className="mc-log"
             disabled={busy || (isNew && !name.trim())}
             onClick={() => onAddAnother?.({ servingIndex, quantity, meal, name, brand })}
           >
             {busy ? 'Adding…' : 'Add to plate'}
-          </button>
+          </CommitButton>
         ) : (
           <>
-            <button
-              type="button"
+            <CommitButton
               className="mc-log"
               disabled={busy || (isNew && !name.trim())}
               onClick={() => onLog({ servingIndex, quantity, meal, name, brand })}
             >
               {busy ? 'Writing it down…' : `Looks right — log ${meal}`}
-            </button>
+            </CommitButton>
             {onAddAnother && (
               <button
                 type="button"

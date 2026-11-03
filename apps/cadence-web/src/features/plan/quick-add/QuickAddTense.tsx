@@ -24,6 +24,7 @@ import { StartFromScreen } from './StartFromScreen.tsx';
 import { healthPullFacts, healthPullSourceLabel, pullableWorkouts } from './healthPull.ts';
 import { HealthPullRow } from './HealthPullRow.tsx';
 import { RoutineRow, UserRoutineRow } from './RoutineRows.tsx';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 const DURATION_CHIPS = [15, 30, 45] as const;
 /** `getWorkoutHistory(days, limit)` — one day (today only matters here) is enough window; 8 rows
@@ -332,13 +333,15 @@ export function QuickAddTense({
               if (e.key === 'Enter') void logMinutes(parseFloat(custom));
             }}
           />
-          <button
+          <CommitButton
+            size="compact"
+            inline
             className="ld-log"
             disabled={busy || !custom.trim()}
             onClick={() => void logMinutes(parseFloat(custom))}
           >
             Log it
-          </button>
+          </CommitButton>
         </div>
         <div className="ld2-or">or say what happened</div>
         <div className="ld-free" style={{ marginTop: 0 }}>
@@ -352,9 +355,15 @@ export function QuickAddTense({
               if (e.key === 'Enter') void logFree();
             }}
           />
-          <button className="ld-log" disabled={busy || !freeText.trim()} onClick={() => void logFree()}>
+          <CommitButton
+            size="compact"
+            inline
+            className="ld-log"
+            disabled={busy || !freeText.trim()}
+            onClick={() => void logFree()}
+          >
             Log
-          </button>
+          </CommitButton>
         </div>
         {note && <div className="ld-empty">{note}</div>}
         {onSteer && (

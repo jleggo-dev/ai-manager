@@ -3,6 +3,7 @@ import { correctMealItem } from '../../lib/api.ts';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 import type { DiaryRow } from './foodDiaryRows.ts';
 import { itemNutrients, NO_NUMBERS } from './itemNutrients.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /**
  * One logged food, opened — brief 05, and the answer to the brief's closing question.
@@ -127,7 +128,8 @@ export function MealItemSheet({
               onChange={(e) => setBrand(e.target.value)}
               placeholder="Couche-Tard"
             />
-            <button
+            <CommitButton
+              size="compact"
               className="fa-log"
               disabled={busy || !name.trim()}
               onClick={() =>
@@ -135,7 +137,7 @@ export function MealItemSheet({
               }
             >
               {busy ? 'Saving…' : 'Save the name'}
-            </button>
+            </CommitButton>
           </div>
         )}
 
@@ -162,9 +164,14 @@ export function MealItemSheet({
             <p className="mis-note">
               This comes off the meal and the day’s numbers come down with it. Nothing else changes.
             </p>
-            <button className="fa-log" disabled={busy} onClick={() => void run({ op: 'drop', index: row.index! })}>
+            <CommitButton
+              size="compact"
+              className="fa-log"
+              disabled={busy}
+              onClick={() => void run({ op: 'drop', index: row.index! })}
+            >
               {busy ? 'Removing…' : `Take “${row.name}” off`}
-            </button>
+            </CommitButton>
           </div>
         )}
 

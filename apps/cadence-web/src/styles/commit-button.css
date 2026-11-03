@@ -1,0 +1,52 @@
+/* ── The commit button — green, tactile, the one way to say "do it" ──────────────────────────
+ * Owner ruling 2026-11-02: orange opens a door (.cta), green commits the thing you just did —
+ * Log, Save, Done, Apply. Every green button is components/CommitButton.tsx with this rule; a
+ * screen's own class on it may set layout (flex, margin, width) and never the look. Colours are
+ * the --commit-* tokens in styles.css :root, shared with the green "done" marks.
+ *
+ * Loaded LAST in main.tsx so a leftover same-specificity rule in an older sheet cannot repaint it.
+ */
+.commit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(180deg, var(--commit-top) 0%, var(--commit-bottom) 46%);
+  box-shadow: 0 3px 0 var(--commit-edge);
+  cursor: pointer;
+}
+/* Inside a card or panel. */
+.commit-btn--compact {
+  border-radius: 12px;
+  padding: 11px;
+  font-size: 13px;
+}
+/* Hugs its label, beside other content in a row. */
+.commit-btn--inline {
+  width: auto;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+.commit-btn:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: default;
+}
+.commit-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--commit-edge);
+}
+@media (prefers-reduced-motion: reduce) {
+  .commit-btn:active:not(:disabled) {
+    transform: none;
+  }
+}

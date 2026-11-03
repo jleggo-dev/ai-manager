@@ -10,6 +10,7 @@ import { MealItemEdit } from './MealItemEdit.tsx';
 import { NOT_REACHED_ANSWER } from './coachReadCopy.ts';
 import { settleButton, settleChip } from './settleWords.ts';
 import { useMealAmounts } from './useMealAmounts.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 const countLine = (n: number): string =>
   n === 1 ? 'One thing' : n === 2 ? 'Two things' : n === 3 ? 'Three things' : `${n} things`;
@@ -199,7 +200,12 @@ export function MealParseCard({
       {err && <div className="food-empty">{err}</div>}
 
       <div className="food-confirm-actions">
-        <button type="button" className="fa-log" disabled={busy || answering || held} onClick={() => void confirm()}>
+        <CommitButton
+          size="compact"
+          className="fa-log"
+          disabled={busy || answering || held}
+          onClick={() => void confirm()}
+        >
           {busy
             ? 'Writing it down…'
             : held
@@ -207,7 +213,7 @@ export function MealParseCard({
               : draft
                 ? `Add to ${mealLabel ?? meal}`
                 : `Log to ${meal}`}
-        </button>
+        </CommitButton>
         {onAddAnother && (
           <button type="button" className="mc-addanother" disabled={busy} onClick={onAddAnother}>
             ＋ Add something I forgot

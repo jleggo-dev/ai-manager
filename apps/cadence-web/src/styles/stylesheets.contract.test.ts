@@ -31,6 +31,7 @@ const SHEETS = [
   'src/styles/sweep.css',
   'src/styles/photo-button.css',
   'src/styles/week-changes.css',
+  'src/styles/commit-button.css',
   'src/styles/skeleton.css',
   'src/styles/repertoire-item.css',
   'src/styles/seed-review.css',

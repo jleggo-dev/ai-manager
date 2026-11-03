@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AvailabilityWindow, Baseline, Constraint, Goal, TimeOfDay } from '@cadence/shared';
 import { getReview, type ReviewData } from '../../lib/api.ts';
+import { CommitButton } from '../../components/CommitButton.tsx';
 
 /** How availability reads in the UI. "Flexible" is a real answer, not a missing one. */
 const TIME_OF_DAY_LABELS: Record<TimeOfDay, string> = {
@@ -263,9 +264,9 @@ export function ConfirmCard({
         + Did I miss something? Tell me
       </button>
       {onBuild && (
-        <button type="button" className="cfm-build" onClick={onBuild}>
+        <CommitButton size="compact" className="cfm-build" onClick={onBuild}>
           {buildLabel}
-        </button>
+        </CommitButton>
       )}
     </div>
   );
