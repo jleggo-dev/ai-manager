@@ -615,3 +615,90 @@ describe("the first-open gate counts the USER's day, not the server's", () => {
     expect((await reviseSession('u1', 'o1', 'x')).status).toBe('not_revisable');
   });
 });
+
+/**
+ * The repair loop (walkthrough v3, R4) under the generator: a session the checker finds something
+ * in goes back to the coach with the findings in `check_findings`; what ships and what is logged
+ * follow session-repair.ts, whose branches are table-tested there. Here: the wiring.
+ */
+describe('prescribe repair loop', () => {
+  beforeEach(() => {
+    vi.mocked(setOccurrenceSessionIfEmpty).mockClear().mockResolvedValue(true);
+  });
+
+  const CARRY_AS_REPS = JSON.stringify({
+    blocks: [
+      {
+        label: 'Main',
+        items: [{ name: 'Farmer carries', tool: 'reps', sets: 4, reps: 1, detail: 'about 40-45 seconds of walking' }],
+      },
+    ],
+    note: 'first',
+  });
+  const CARRY_AS_TIMED_SETS = JSON.stringify({
+    blocks: [{ label: 'Main', items: [{ name: 'Farmer carries', tool: 'timer', sets: 4, duration_min: 0.75 }] }],
+    note: 'repaired',
+  });
+
+  it('a finding sends the session back once with the fact in check_findings, and the clean answer ships', async () => {
+    vi.mocked(runJobBySlug)
+      .mockResolvedValueOnce({ raw: CARRY_AS_REPS } as never)
+      .mockResolvedValueOnce({ raw: CARRY_AS_TIMED_SETS } as never);
+    const occ = await getOccurrenceDetail('u1', 'o1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+    const first = vi.mocked(runJobBySlug).mock.calls[0]?.[2] as Record<string, string>;
+    const second = vi.mocked(runJobBySlug).mock.calls[1]?.[2] as Record<string, string>;
+    expect(first.check_findings).toBe('');
+    expect(second.check_findings).toContain("(question) block 1 item 1 'Farmer carries': tool reps, reps 1, sets 4");
+    expect(second.check_findings).toContain("its detail says '40-45 seconds of walking'");
+    // Everything else she was told the first time rides again unchanged.
+    expect(second.activity).toBe(first.activity);
+    expect(occ?.session?.note).toBe('repaired');
+    expect(occ?.session?.blocks[0]?.items[0]?.tool).toBe('timer');
+  });
+
+  it('a clean first answer is never sent back', async () => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: CARRY_AS_TIMED_SETS } as never);
+    await getOccurrenceDetail('u1', 'o1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(1);
+  });
+
+  it('when the findings do not shrink the loop stops and the session ships as it is', async () => {
+    vi.mocked(runJobBySlug).mockResolvedValue({ raw: CARRY_AS_REPS } as never);
+    const occ = await getOccurrenceDetail('u1', 'o1');
+    expect(runJobBySlug).toHaveBeenCalledTimes(2);
+    expect(occ?.session?.blocks[0]?.items[0]?.tool).toBe('reps');
+  });
+
+  it('a repair round that fails outright keeps the first session instead of throwing', async () => {
+    vi.mocked(runJobBySlug)
+      .mockResolvedValueOnce({ raw: CARRY_AS_REPS } as never)
+      .mockRejectedValueOnce(Object.assign(new Error('→ 400: variables invalid'), { status: 400 }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const occ = await getOccurrenceDetail('u1', 'o1');
+    warn.mockRestore();
+    expect(occ?.session?.note).toBe('first');
+    expect(setOccurrenceSessionIfEmpty).toHaveBeenCalledTimes(1);
+  });
+
+  it('every round and the stop reason reach the ai log', async () => {
+    const { logAi } = await import('./ai-log.ts');
+    vi.mocked(logAi).mockClear();
+    vi.mocked(runJobBySlug)
+      .mockResolvedValueOnce({ raw: CARRY_AS_REPS } as never)
+      .mockResolvedValueOnce({ raw: CARRY_AS_TIMED_SETS } as never);
+    await getOccurrenceDetail('u1', 'o1');
+    const entry = vi.mocked(logAi).mock.calls.find((c) => c[1].kind === 'prescribe_session')?.[1] as {
+      meta: {
+        check: { stop: string; first: number; last: number; rounds: Array<{ round: number; findings: unknown[] }> };
+      };
+    };
+    expect(entry.meta.check.stop).toBe('clean');
+    expect(entry.meta.check.first).toBe(1);
+    expect(entry.meta.check.last).toBe(0);
+    expect(entry.meta.check.rounds.map((r) => [r.round, r.findings.length])).toEqual([
+      [1, 1],
+      [2, 0],
+    ]);
+  });
+});

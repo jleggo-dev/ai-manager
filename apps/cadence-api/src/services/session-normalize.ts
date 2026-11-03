@@ -4,7 +4,11 @@
  * can be unit-tested without the AI Admin seam.
  */
 import {
+  BLOCK_LABEL_MAX,
   BLOCK_MODE_KINDS,
+  ITEM_DETAIL_MAX,
+  ITEM_LOAD_MAX,
+  ITEM_NAME_MAX,
   SESSION_TOOL_KINDS,
   clampCycles,
   clampIntervalMinutes,
@@ -27,14 +31,11 @@ const MAX_BLOCKS = 6;
 const MAX_ITEMS = 12;
 
 /**
- * Text limits for a stored session, in characters. The prescribe-session prompt in
- * config/ai-admin/ai-admin.config.json tells the coach the same numbers as facts, and
- * prescribe-session-set-flow-facts.test.ts pins the two together — change both at once.
+ * The text limits live in @cadence/shared (session-limits.ts) so the checker reports against the
+ * same numbers this file cuts to. Re-exported here because session-log.ts and the tests read them
+ * from this module.
  */
-export const ITEM_NAME_MAX = 120;
-export const ITEM_LOAD_MAX = 80;
-export const ITEM_DETAIL_MAX = 600;
-export const BLOCK_LABEL_MAX = 40;
+export { BLOCK_LABEL_MAX, ITEM_DETAIL_MAX, ITEM_LOAD_MAX, ITEM_NAME_MAX };
 
 /**
  * Trim a string field and bound its length. Text at or under `max` comes back untouched. Longer
