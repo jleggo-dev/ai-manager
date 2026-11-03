@@ -1045,9 +1045,10 @@ The two refusals are the open question now, not the restaurant. Canada exempts b
 labelling, so the brewer publishes no numbers; told to put confidence below 0.4 when it "cannot
 find all four from a credible source", the model rated FatSecret's pint 0.30 and the Perkins menu
 row 0.35 — while in both it kept the restaurant out of the name and brand and took only the
-numbers, as the new rule says. Four calls is a count, not a rate. The ruling owed: let a menu or
-store listing count as a credible source for the numbers when the maker publishes none (one prompt
-line), or keep the floor as it is and accept that such a beer reaches the web and comes back empty.
+numbers, as the new rule says. Four calls is a count, not a rate. **Ruled (owner, 2026-11-03): keep
+the floor.** A menu or store listing does not become a credible source because the maker publishes
+none; a beer with no label may reach the web and come back empty, and the line says so. The prompt
+gets no line for it.
 
 The first eval run showed why the model had not been asking: the book for "one pint of Rickards
 red" held the Perkins row and seven pinto-bean rows, because the by-word ledger search (the
