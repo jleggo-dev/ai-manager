@@ -51,13 +51,6 @@ export const chimeOnStyle: CSSProperties = {
   border: '1.5px solid oklch(86% 0.04 66)',
   color: TONE.chipInk,
 };
-export const footnote: CSSProperties = {
-  borderTop: '1px solid oklch(93% 0.012 85)',
-  paddingTop: 12,
-  fontSize: 11.5,
-  lineHeight: 1.4,
-  color: 'oklch(48% 0.02 150)',
-};
 /** The halfway / time's-up cue — big enough to read from the floor. */
 export const banner: CSSProperties = {
   padding: '8px 16px',
