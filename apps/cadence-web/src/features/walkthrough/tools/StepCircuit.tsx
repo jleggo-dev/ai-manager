@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { CircuitExercise, WalkthroughStep } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
-import { TONE, RING_C } from './tone.ts';
+import { TONE, RING_C, COMMIT } from './tone.ts';
 import { YouTubeLink } from './YouTubeLink.tsx';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { HandsFree } from './HandsFree.tsx';
@@ -370,8 +370,7 @@ const logBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
+  ...COMMIT,
 };
 const toolPill: CSSProperties = {
   background: 'oklch(97% 0.012 85)',

@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { freeWriteDoneLine, freeWriteProgress, timeLeftLabel } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
-import { TONE } from './tone.ts';
+import { TONE, COMMIT } from './tone.ts';
 import { MicButton } from '../../../components/MicButton.tsx';
 import { useWriteTimer } from '../../journal/useWriteTimer.ts';
 import { playChime } from './chime.ts';
@@ -149,8 +149,7 @@ const logBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
+  ...COMMIT,
 };
 const noteInput: CSSProperties = {
   border: '1px solid oklch(90% 0.015 95)',

@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { type WalkthroughStep, intervalShorthand, intervalTotalMinutes } from '@cadence/shared';
 import { type StepLog, logLine } from './state.ts';
-import { TONE } from './tools/tone.ts';
+import { TONE, COMMIT } from './tools/tone.ts';
 
 /* ── Shared derivations (kept out of the component files so react-refresh stays happy) ── */
 
@@ -140,8 +140,7 @@ export const greenBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, oklch(60% 0.10 152) 0%, ${TONE.green} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.greenEdge}`,
+  ...COMMIT,
 };
 export const outlineBtn: CSSProperties = {
   border: '1.5px solid oklch(84% 0.03 85)',

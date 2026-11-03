@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { type BreathPattern, breathFullness, cycleSeconds, patternCounts, phaseAt } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
-import { TONE } from './tone.ts';
+import { TONE, COMMIT } from './tone.ts';
 import { playChime } from './chime.ts';
 import { useBreathClock } from './useBreathClock.ts';
 import { useHandoff } from './useHandoff.ts';
@@ -167,7 +167,8 @@ export function StepBreathing({
         ))}
       </div>
 
-      <button style={isPre ? greyBtn : primaryBtn} onClick={primary}>
+      {/* "Stop here" writes the rounds done, so it wears the commit green; Begin / Go again stay amber. */}
+      <button style={isPre ? greyBtn : isRun ? { ...primaryBtn, ...COMMIT } : primaryBtn} onClick={primary}>
         {isRun ? 'Stop here' : isPre ? 'Skip the count · start now' : roundsDone > 0 ? 'Go again' : 'Begin'}
       </button>
 

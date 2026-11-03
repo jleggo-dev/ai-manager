@@ -1,7 +1,9 @@
 /**
- * The walkthrough's "do" tone — the single colour that means "this records something" (design 1A).
- * The v2 handoff commits to one warm amber for every tool so the coloured button is always the log.
- * (Task-tone theming per time-of-day is a later refinement; the design's screens are all this tone.)
+ * The walkthrough's amber — the colour of the thing that is IN PROGRESS: the running ring, the
+ * current set chip, a Start / Pause / Resume button. It used to be the log button's colour too
+ * (v2 handoff: "the coloured button is always the log"); the owner ruled 2026-11-03 that a button
+ * which WRITES wears the design system's commit green instead (`COMMIT`, below), so amber now
+ * means one thing. Task-tone theming per time-of-day is still a later refinement.
  */
 export const TONE = {
   deep: 'oklch(63% 0.15 68)',
@@ -68,4 +70,14 @@ export const INTERVAL_KIND = {
     headInk: 'oklch(38% 0.02 150)',
     headSub: 'oklch(52% 0.02 120)',
   },
+} as const;
+
+/**
+ * The commit face: the design system's green CommitButton (Log · Save · Done · Apply). Spread it
+ * over a button that writes something — logs a set, saves a sheet, marks a step done, stops a
+ * clock AND logs the time. A button that only starts or pauses keeps the amber above.
+ */
+export const COMMIT = {
+  background: `linear-gradient(180deg, oklch(60% 0.1 152) 0%, ${TONE.green} 46%)`,
+  boxShadow: `0 5px 0 ${TONE.greenEdge}`,
 } as const;

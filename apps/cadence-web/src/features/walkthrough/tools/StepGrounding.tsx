@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { type GroundingSpec, groundingLogLine } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
-import { TONE } from './tone.ts';
+import { TONE, COMMIT } from './tone.ts';
 import { playChime } from './chime.ts';
 import { WhatsThis } from './WhatsThis.tsx';
 
@@ -271,8 +271,7 @@ const forwardBtn: CSSProperties = {
   fontWeight: 900,
   color: 'white',
   cursor: 'pointer',
-  background: `linear-gradient(180deg, ${TONE.fillA} 0%, ${TONE.fillB} 46%)`,
-  boxShadow: `0 5px 0 ${TONE.deep}`,
+  ...COMMIT,
 };
 const outlineBtn: CSSProperties = {
   border: '1.5px solid oklch(88% 0.02 85)',
