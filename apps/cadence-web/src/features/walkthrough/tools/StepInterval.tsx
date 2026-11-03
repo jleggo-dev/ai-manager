@@ -97,8 +97,9 @@ export function StepInterval({
   // The edit sheet's changes apply to TODAY's occurrence only — the coach's plan stays the thing
   // "tap to reset" restores, and tomorrow's prescription is still the coach's call.
   const [plan, setPlan] = useState<IntervalPlan>(prescribed);
-  // Coming back to a step you left mid-workout resumes where you were, paused — the same promise
-  // the shell makes everywhere else ("Back and Next only move you — nothing is logged or lost").
+  // Coming back to a step you left mid-workout resumes where you were, paused: Back and Next only
+  // move you, and nothing is logged or lost on the way (the shell keeps that promise without
+  // saying it on screen — owner ruling 2026-11-03, no text that explains the UI).
   const [status, setStatus] = useState<Status>(() =>
     log ? (log.roundsDone >= log.totalRounds ? 'done' : 'paused') : 'idle',
   );
@@ -284,7 +285,6 @@ export function StepInterval({
           tabIndex={0}
           aria-label={status === 'live' ? 'Pause' : 'Start'}
           onKeyDown={(e) => e.key === 'Enter' && startOrPause()}
-          title="Tap anywhere on the ring to pause / resume"
         >
           <svg width={RING_PX} height={RING_PX} viewBox="0 0 128 128" style={{ position: 'absolute' }} aria-hidden>
             {isPre ? (

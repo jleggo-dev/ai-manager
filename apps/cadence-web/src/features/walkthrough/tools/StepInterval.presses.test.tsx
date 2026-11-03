@@ -71,6 +71,15 @@ describe('StepInterval — Pause logs the run actually done, not the prescriptio
     expect(onDone).not.toHaveBeenCalled();
   });
 
+  it('the ring carries no tooltip explaining itself — no text that explains the UI (owner, 2026-11-03)', () => {
+    const { container } = render(
+      <StepInterval step={INTERVAL_STEP} plan={quickPlan()} onLog={() => {}} onDone={() => {}} />,
+    );
+    fireEvent.click(screen.getByText(/^Start/));
+    expect(container.querySelector('[title]')).toBeNull();
+    expect(screen.queryByText(/Tap anywhere/)).toBeNull();
+  });
+
   it('after a pause, the primary button reads Resume and picks the clock back up without the pre-roll', () => {
     render(<StepInterval step={INTERVAL_STEP} plan={quickPlan()} onLog={() => {}} onDone={() => {}} />);
 
