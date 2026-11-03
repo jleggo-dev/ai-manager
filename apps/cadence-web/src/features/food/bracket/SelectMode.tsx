@@ -11,6 +11,7 @@ import { useState } from 'react';
 import type { MealItem } from '@cadence/shared';
 import { sumEst } from './partModel.ts';
 import { fmtKcal, macroLine, numberWord } from './copy.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 export interface SelectModeProps {
   mode: 'group' | 'takeOut';
@@ -108,9 +109,9 @@ export function SelectMode({
           <span className="mb-select-tally">{`${n} selected · ${fmtKcal(total.kcal)} kcal`}</span>
           {macros && <span className="mb-select-macros">{macros}</span>}
         </div>
-        <button type="button" className="mb-amber-btn" disabled={disabled} onClick={() => onConfirm(chosen)}>
+        <CommitButton size="compact" className="mb-commit" disabled={disabled} onClick={() => onConfirm(chosen)}>
           {confirmLabel}
-        </button>
+        </CommitButton>
       </div>
     </div>
   );

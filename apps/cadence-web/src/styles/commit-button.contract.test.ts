@@ -58,3 +58,29 @@ describe('the commit green', () => {
     expect(imports.at(-1)).toBe('styles/commit-button.css');
   });
 });
+
+/**
+ * Owner ruling 2026-11-03: amber means in progress. Six screens drew their Save and Log buttons in
+ * it anyway. A stylesheet rule that fills something amber has to be named here; a new button
+ * should be CommitButton (green) or .cta (orange), not another row in this list.
+ */
+const AMBER_FILL = /oklch\(\s*(79% 0\.16 70|71% 0\.16 68)\s*\)/;
+const AMBER_RULES = [
+  '.ck-pip.is-on', // the step you are on
+  '.fa-chip.is-on', // the choice currently selected
+  '.mc-seg-on', // the choice currently selected
+  '.ss-disc-meal', // a picture in the sheet's head, not a button
+];
+
+describe('amber', () => {
+  it('fills only what is in progress or selected, never a button', () => {
+    const src = srcDir();
+    const selectors = cssFiles(src).flatMap((file) => {
+      const css = readStyle(relative(join(src, '..'), file)).replace(/\/\*[\s\S]*?\*\//g, '');
+      return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((rule) => AMBER_FILL.test(rule[2] ?? ''))
+        .map((rule) => (rule[1] ?? '').trim());
+    });
+    expect(selectors.sort()).toEqual(AMBER_RULES);
+  });
+});

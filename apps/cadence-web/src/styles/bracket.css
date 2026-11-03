@@ -405,23 +405,9 @@ button.mb-pill {
 }
 
 /* ── Buttons the canvas repeats everywhere ─────────────────────────────────── */
-.mb-amber-btn {
+/* Layout only: the look is CommitButton's. */
+.mb-commit {
   flex: 1;
-  background: oklch(79% 0.16 70);
-  border: 0;
-  border-radius: 14px;
-  padding: 12px;
-  text-align: center;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 900;
-  color: oklch(29% 0.06 55);
-  box-shadow: 0 4px 0 oklch(63% 0.15 68);
-  cursor: pointer;
-}
-.mb-amber-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .mb-quiet-btn {
   background: #fff;

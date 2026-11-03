@@ -224,23 +224,6 @@
   gap: 8px;
   padding-top: 10px;
 }
-.sw-primary {
-  background: oklch(79% 0.16 70);
-  border-radius: 15px;
-  padding: 14px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 900;
-  color: oklch(29% 0.06 55);
-  box-shadow: 0 5px 0 oklch(63% 0.15 68);
-}
-.sw-primary--tidy {
-  background: oklch(45% 0.09 152);
-  color: white;
-  font-size: 13.5px;
-  box-shadow: 0 4px 0 oklch(34% 0.08 152);
-}
-.sw-primary:disabled,
 .sw-secondary:disabled {
   opacity: 0.55;
 }

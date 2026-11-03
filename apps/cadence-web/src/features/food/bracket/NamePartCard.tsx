@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import type { Macros } from '@cadence/shared';
 import { fmtKcal, macroLine, numberWord, numberWordCap } from './copy.ts';
+import { CommitButton } from '../../../components/CommitButton.tsx';
 
 export interface NamePartCardProps {
   variant?: 'name' | 'offer';
@@ -115,9 +116,9 @@ export function NamePartCard(props: NamePartCardProps) {
         </div>
         {nameField}
         <div className="mb-btn-row">
-          <button type="button" className="mb-amber-btn" onClick={props.onSave}>
+          <CommitButton size="compact" className="mb-commit" onClick={props.onSave}>
             Yes, together
-          </button>
+          </CommitButton>
           <button type="button" className="mb-quiet-btn mb-quiet-btn--snug" onClick={props.onCancel}>
             Leave them
           </button>
@@ -195,9 +196,9 @@ export function NamePartCard(props: NamePartCardProps) {
         </div>
       </div>
       <div className="mb-btn-row">
-        <button type="button" className="mb-amber-btn" onClick={props.onSave}>
+        <CommitButton size="compact" className="mb-commit" onClick={props.onSave}>
           Save it
-        </button>
+        </CommitButton>
         <button type="button" className="mb-quiet-btn mb-quiet-btn--snug" onClick={props.onCancel}>
           No thanks
         </button>

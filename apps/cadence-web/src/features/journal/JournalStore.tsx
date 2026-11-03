@@ -114,7 +114,7 @@ export function JournalStore({ onClose }: { onClose: () => void }) {
       )}
       {exportFailed && <div className="jw-failed">That didn&rsquo;t download. Try again?</div>}
 
-      <button className="js-write" onClick={() => setWriting(true)}>
+      <button className="cta js-write" onClick={() => setWriting(true)}>
         ＋ Write
       </button>
     </div>
