@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MetronomeSpec, Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/shared';
 import { StepReps } from './tools/StepReps.tsx';
 import { StepTimer, type TimerClock } from './tools/StepTimer.tsx';
@@ -88,6 +88,14 @@ export function Walkthrough({
 
   const step = steps[idx];
   const left = minutesLeft(steps, idx, visited);
+
+  // The step body is the one thing that scrolls. A long step read to the bottom used to hand its
+  // scroll position to the next step, which then opened with its title and tool off the top
+  // (owner, gym session 2026-11-02). Every step change starts at the top.
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (body.current) body.current.scrollTop = 0;
+  }, [idx]);
 
   const go = (i: number) => {
     if (i !== idx) setClock(null);
@@ -212,6 +220,8 @@ export function Walkthrough({
       </div>
 
       <div
+        ref={body}
+        data-step-body
         style={{ marginTop: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}
       >
         {step.tool.kind === 'circuit' ? (
@@ -266,41 +276,38 @@ export function Walkthrough({
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
-        <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: 'oklch(52% 0.04 62)' }}>
-          Back and Next only move you — nothing is logged or lost.
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+      {/* No line explaining the buttons here: the owner ruled out text that covers for the UI
+          (2026-11-03). Moving still logs nothing — that is in the component note at the top. */}
+      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+        <button
+          style={{ ...navBtn, width: 62, flex: 'none' }}
+          onClick={prev}
+          disabled={idx === 0}
+          aria-label="Previous step"
+        >
+          ‹
+        </button>
+        <button style={{ ...navBtn, flex: 1 }} onClick={() => setAllSteps(true)}>
+          <span style={{ fontSize: 13, fontWeight: 900, color: 'oklch(32% 0.02 150)' }}>All steps</span>
+        </button>
+        {step.tool.kind === 'circuit' ? (
           <button
-            style={{ ...navBtn, width: 62, flex: 'none' }}
-            onClick={prev}
-            disabled={idx === 0}
-            aria-label="Previous step"
+            style={{
+              ...navBtn,
+              flex: 'none',
+              padding: '0 12px',
+              border: '1px solid oklch(84% 0.05 66)',
+              whiteSpace: 'nowrap',
+            }}
+            onClick={next}
           >
-            ‹
+            <span style={{ fontSize: 12.5, fontWeight: 900, color: TONE.chipInk }}>Skip circuit&nbsp;›</span>
           </button>
-          <button style={{ ...navBtn, flex: 1 }} onClick={() => setAllSteps(true)}>
-            <span style={{ fontSize: 13, fontWeight: 900, color: 'oklch(32% 0.02 150)' }}>All steps</span>
+        ) : (
+          <button style={{ ...navBtn, width: 62, flex: 'none' }} onClick={next} aria-label="Next step">
+            ›
           </button>
-          {step.tool.kind === 'circuit' ? (
-            <button
-              style={{
-                ...navBtn,
-                flex: 'none',
-                padding: '0 12px',
-                border: '1px solid oklch(84% 0.05 66)',
-                whiteSpace: 'nowrap',
-              }}
-              onClick={next}
-            >
-              <span style={{ fontSize: 12.5, fontWeight: 900, color: TONE.chipInk }}>Skip circuit&nbsp;›</span>
-            </button>
-          ) : (
-            <button style={{ ...navBtn, width: 62, flex: 'none' }} onClick={next} aria-label="Next step">
-              ›
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {allSteps && (

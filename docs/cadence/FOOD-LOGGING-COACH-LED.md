@@ -6,8 +6,9 @@ coach's `log_meal` runs the same read and logs through the card's confirm path; 
 door's confirmed reading goes through the same read, onto the same card), and the same day
 **a question row is answered with buttons in her words**; on 2026-11-03 **the first evening's
 wrong reads were traced and fixed, the card gained "not quite"**, and **the web lookup joined
-the second round for a maker-named food** (owner ruling, same day) — see "Suggested build order"
-and the five "What was built" sections at the end. Rulings 2, 3, 4 and 6 are still the owner's._
+the second round for a maker-named food** (owner ruling, same day), and later that day **the
+book shows each source's first rows** — see "Suggested build order" and the six "What was built"
+sections at the end. Rulings 2, 3, 4 and 6 are still the owner's._
 
 ## The ruling this serves (owner, 2026-10-29)
 
@@ -1010,7 +1011,9 @@ said so and the Perkins row stood. Once the row is pinned, every later read of t
 in one call — five of five, both models — which is the point: the lookup is paid once. The research
 job's own answers varied across four calls ("Rickard's Red Beer" by Molson's, by Molson Coors, once
 with the restaurant in its name, once refused); that job's prompt is a separate matter. Whether the
-food-check should run on the model that asks is the owner's next call.
+food-check should run on the model that asks was the owner's next call, and it was made the same
+day: **ruling 1 amended — claude-sonnet-5-5 primary, gpt-5.4-mini failover** (the profile's
+description in the config carries the reason; `repoint-profile.ts` moved the live pointers).
 
 **The research job answers the maker (2026-11-03, the same evening).** The four `research-food`
 calls above answered four ways because its prompt let a restaurant land in the answer: "Rickard's
@@ -1055,3 +1058,90 @@ red" held the Perkins row and seven pinto-bean rows, because the by-word ledger 
 morning's own change) had searched "pint" on its own. A measure word is no longer searched by
 itself (`MEASURE_WORDS`, food-source-fanout.ts), and the round rule names the condition the model
 can check — a restaurant or chain in the record's brackets — instead of "a chain's row".
+
+## What was built (each source's first rows in the book, 2026-11-03)
+
+**What was found.** The book took the first eight candidates of a lookup in the order the
+fan-out lists them: the ledger's rows, then USDA's, then FatSecret's. The ledger holds the CNF
+corpus and every row USDA and FatSecret ever imported, so it answers nearly every lookup with
+eight rows — and then no USDA or FatSecret row of that lookup was ever shown. Seen first on the
+book for "one pint of Rickards red" while the web rung was built (#478): eight ledger rows, none of
+USDA's beer rows, none of FatSecret's. Measured over the eval's 24 meals (41 distinct lookups, the
+production lookup, no model calls): in 38 of the 41 the model saw ledger rows only, and FatSecret's
+five rows — each a billed fetch — were fetched and never shown. A second thing came out of the
+same count: FatSecret's rows come back stored, so a row the ledger already holds comes back a
+second time as FatSecret's fresh copy, the same `food_id` and the same numbers under another
+label. 151 of the fan-out's rows over those 41 lookups were such copies.
+
+**What changed (`food-candidate-book.ts`).** Nothing is ranked and nothing is scored; the book
+still shows eight rows a lookup and the choosing is still the model's.
+
+- `dealBySource`: a lookup's rows are dealt round-robin by source — the first row of every
+  source, then the second — in the order the sources first appear, each source in its own order.
+  The ledger's phrase rows stay ahead of its by-word rows (that order is the fan-out's,
+  `searchLedger`); the web's row, which `withWebRows` puts in front of the result, is its source's
+  first row and the first dealt, so it is still the first line of its section.
+- `distinctRecords`: each stored record once, the first occurrence keeping its place and its
+  label; a transient record (a web find not yet stored) once per source, name and brand. Without
+  it the deal handed the copies half the slots: for "one 0.0 guinness" three of the eight went to
+  FatSecret's copies of chain rows the ledger already showed, and the person's own "Guinness 0,
+  Non-Alcoholic Draught" — the by-word row #473 had put in the book — fell out of the eight. All
+  five of FatSecret's rows for that lookup were copies; with them gone the eight are what they
+  were before this change.
+- `add()` shows the first `SHOW_PER_LOOKUP` of the deal of the distinct rows. `text()`'s budget
+  cut, which already dealt lines round-robin by part, now keeps each source's first rows in a
+  cut part too, not one source's first three.
+- Table tests (`food-candidate-book.test.ts`): the deal, the dedup, a single-source result
+  unchanged, a record seen twice keeping its first id, the web's row first, the budget cut, and the
+  Guinness shape. The fan-out, the trace and the prompt are unchanged; no job sync.
+
+**What the model reads now** (the same 41 lookups): in 15 all five FatSecret rows were copies and
+the eight are the ledger's eight as before; in the rest the ledger keeps four to seven of the
+eight and FatSecret's fresh rows and USDA's rows take the others (ledger 6 · FatSecret 2 is the
+common shape; with USDA answering, ledger 4 · USDA 3 · FatSecret 1). 22 of the 41 lookups now
+show a record the old slice hid. The rendered book did not grow: 116,131 characters over the 24
+meals' books before, 115,403 after (the same eight rows a lookup; a FatSecret or USDA line is
+about as long as a ledger line).
+
+### Eval results — run 7, each source's first rows (2026-11-03)
+
+`--prompt-from-config`, gpt-5.4-mini, n = 1, all 24 meals (the 20 of runs 1–6 and the four of
+2026-11-03). Two shapes were run: the deal alone, and the deal with each record once — the shape
+shipped. The bar is run 6 on the 20 meals plus the four meals' first run in #473; the prompt grew
+in #473 (count above zero, loose amounts, a chain's row, a remark is not a food) and no token
+numbers were recorded for that run, so the token columns compare across two prompts.
+
+| Shape                                      |       Right |     kcal ok | Made-up ids | Settled in one call | Failed | Avg s | Prompt tokens / call (avg · median) | Largest call |
+| ------------------------------------------ | ----------: | ----------: | ----------: | ------------------: | -----: | ----: | ----------------------------------: | -----------: |
+| Before — run 6 (20 meals) + #473 (4 meals) | 19/20 + 3/4 | 19/20 + 3/4 |           0 |            17 of 20 |      0 |   6.4 |                       4,857 · 4,724 |        7,729 |
+| The deal alone                             |       18/24 |       19/24 |           0 |            20 of 24 |      1 |   8.7 |                       6,387 · 5,946 |        9,506 |
+| **The deal, each record once (shipped)**   |   **20/24** |   **21/24** |       **0** |        **22 of 24** |  **0** |   7.3 |                       6,149 · 5,902 |        9,547 |
+
+Reading it:
+
+- **The deal alone lost the Guinness.** Its one failed meal was `real-guinness-zero`: the book held
+  the chain rows twice and the Non-Alcoholic row not at all, and the model answered with no items.
+  With each record once it picks "Guinness 0, Non-Alcoholic Draught, 1 can (440 ml)" in one call.
+- **20/24 against a composite 22/24, at n = 1.** The misses: `pair-coconut-canned`, which every run
+  has missed the same way (142 kcal against a 110-kcal yardstick); `real-sandwich-prose`, missed
+  the same way as in #473 (an inch of roast beef read as 56 g); `pair-sweet-potato`, where the
+  model took a FatSecret row the deal newly shows — "Baked Sweetpotato (Peel Eaten), 1 medium
+  (2" dia × 5" long, raw)", 165 kcal — over the ledger's 103-kcal medium, a choice between two
+  records for one word rather than a wrong read; and `pair-latte-small`, where it took a ledger
+  row shown before this change too ("Cafe Latte", 1 serving, 60 kcal). Two meals moved, both
+  within what a single run of this eval moves (runs 4 to 6 ranged 17 to 19 of 20 on the same shape).
+- **Prompt tokens rose about a quarter against run 6, and the book is not the cause.** The books
+  of the 24 meals are 1% smaller in characters than before (above), so the rise is the prompt
+  itself since #473 — which that run did not measure — and one token column cannot be compared
+  across the two prompts. The deal alone and the shipped shape, run the same day on the same
+  prompt, sit within 4% of each other. The median call sits under 6,000 tokens.
+- **No made-up id in 54 calls** across the two shapes.
+
+**Open for the owner, one point.** The ledger's by-word rows (#473: "guinness" searched on its own
+when "0.0 guinness" found only chain names) are the ledger's tail, and the deal cuts a source's
+tail first when the other sources have fresh rows. Today the dedup covers it — FatSecret's rows for
+a food the ledger already knows are copies — but a lookup where the phrase fills five or more
+ledger slots with chain rows AND FatSecret has three or more fresh rows would hide the by-word row
+again. The fix, if wanted, is to deal the by-word rows as their own voice beside the phrase's
+(their first row always within the top four), at the cost of a phrase slot. Not built; the eval
+would need another run.

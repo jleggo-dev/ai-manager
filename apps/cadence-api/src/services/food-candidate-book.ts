@@ -10,7 +10,10 @@
  *
  * What the book holds, per record: an id of this meal's own (`c1`, `c2`…), where it came from,
  * its per-gram numbers, the measures it offers with their grams, and the guards' notes. What it
- * refuses to do: rank, drop, or pick. A record with no usable calories is marked incomplete and
+ * refuses to do: rank, drop, or pick. A lookup's rows are dealt round-robin by source before the
+ * first SHOW_PER_LOOKUP are kept (`dealBySource`), so eight ledger rows never hide USDA's first
+ * or FatSecret's; a stored record that two sources both returned is shown once
+ * (`distinctRecords`). A record with no usable calories is marked incomplete and
  * left in — the model is told, not protected (run 2 picked a zero-kcal "Cafe Latte" once). A
  * record kept per item (a pinned estimate, "1 serving = 1") is printed per its own measure, not as
  * "per 100 g" of a count — that read 25,000 kcal and raised a false disagreement.
@@ -201,7 +204,7 @@ export interface BookSection {
   disagreements: string[];
   /** The section's first line: what was looked up. */
   head: string;
-  /** One line per record, in the order the sources returned them. */
+  /** One line per record, dealt round-robin by source (`dealBySource`), each source in its own order. */
   lines: string[];
   /** Records held back the last time the book was rendered, because of the budget. */
   omitted: number;
@@ -244,6 +247,47 @@ function entryOf(id: string, c: SourceCandidate): BookEntry {
   };
 }
 
+/**
+ * A lookup's rows with each stored record once. FatSecret's top rows are fetched in full and
+ * stored, so a row the ledger already holds comes back a second time as FatSecret's fresh copy:
+ * the same `food_id`, the same numbers, under another source label. Shown twice it tells the model
+ * nothing and takes a slot — in the first eval of the deal below (2026-11-03) 71 of 314 rows shown
+ * were such copies, and for "one 0.0 guinness" three of the eight slots went to them while the
+ * Non-Alcoholic row went unshown. The first occurrence keeps its place and its label; a transient
+ * record (no `food_id`: a web find not yet stored) is kept once per source, name and brand.
+ */
+export function distinctRecords(candidates: SourceCandidate[]): SourceCandidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((c) => {
+    const key = c.food_id ? `id|${c.food_id}` : `${c.source}|${c.name}|${c.brand ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * A lookup's rows dealt round-robin by source — the first row of every source, then the second —
+ * in the order the sources first appear, each source in its own order. The first SHOW_PER_LOOKUP
+ * of the result then hold every source's first rows and not one source's first eight: on
+ * 2026-11-03 the ledger answered "one pint of Rickards red" with eight rows and the book never
+ * showed USDA's beer rows or FatSecret's. Nothing is ranked. A source's own order stands (the
+ * ledger's phrase rows stay ahead of its by-word rows, food-source-fanout.ts), and a row put in
+ * front of the result (the web's, `withWebRows` in food-check.ts) is its source's first row and
+ * the first dealt, so it still comes first.
+ */
+export function dealBySource(candidates: SourceCandidate[]): SourceCandidate[] {
+  const bySource = new Map<FoodSourceName, SourceCandidate[]>();
+  for (const c of candidates) bySource.set(c.source, [...(bySource.get(c.source) ?? []), c]);
+  const columns = [...bySource.values()];
+  const most = columns.reduce((n, col) => Math.max(n, col.length), 0);
+  const dealt: SourceCandidate[] = [];
+  for (let r = 0; r < most; r += 1) {
+    for (const col of columns) if (r < col.length) dealt.push(col[r]!);
+  }
+  return dealt;
+}
+
 /** Appends FatSecret's top rows to a fan-out result, so she sees every latte and not the first. */
 export function withFatSecretRows(base: FanOutResult, rows: SourceCandidate[]): FanOutResult {
   const have = new Set(base.candidates.map((c) => `${c.source}|${c.food_id ?? c.name}`));
@@ -270,10 +314,14 @@ export class CandidateBook {
     return entry;
   }
 
-  /** Add one lookup's answer. Nothing is ranked or dropped; the first SHOW_PER_LOOKUP are shown. */
+  /**
+   * Add one lookup's answer. Nothing is ranked or dropped: each stored record once, the rows
+   * dealt round-robin by source, and the first SHOW_PER_LOOKUP of the deal shown — so every
+   * source's first rows are, and no slot goes to a record already on the page.
+   */
   add(lookup: BookLookup, r: FanOutResult): BookSection {
     const head = `Lookup "${lookup.q}"${lookup.brand ? ` brand ${lookup.brand}` : ''}${lookup.measure ? ` at ${lookup.measure}` : ''}:`;
-    const shown = r.candidates.slice(0, SHOW_PER_LOOKUP);
+    const shown = dealBySource(distinctRecords(r.candidates)).slice(0, SHOW_PER_LOOKUP);
     const entries = shown.map((c) => ({ c, e: this.register(c) }));
     const lines = entries.map(({ c, e }) => recordLine(c, e));
     const section: BookSection = {

@@ -2,7 +2,8 @@
  * The food-check: one call to a small model with the words, the slot and the candidate book; it
  * picks, assumes, or asks (docs/cadence/FOOD-LOGGING-COACH-LED.md, owner 2026-10-29). The job is
  * `food-check` in config/ai-admin/ai-admin.config.json, on its own profile (`cadence-food-check`:
- * gpt-5.4-mini, claude-sonnet-5-5 failover — ruling 1, confirmed by eval run 2).
+ * claude-sonnet-5-5, gpt-5.4-mini failover — ruling 1 as amended 2026-11-03: the web round is
+ * reached only by a model that asks for it, and the small model asked 1 in 5).
  *
  * The SHAPE bounds it, not the wording. Run 2's eggs plate: told "this is your last reply" while
  * lookups were still on offer, every model asked for more anyway; with the offer removed from the
@@ -249,9 +250,11 @@ const webCheck = (status: SourceCheck['status'], detail: string): SourceCheck =>
 });
 
 /**
- * The web's rows go first in the section. The book shows the first SHOW_PER_LOOKUP rows of a
- * lookup and ranks nothing, and the free sources answered these words in the first fill already,
- * so the row the web found — the one she asked for — must not be the ninth and unseen.
+ * The web's rows go first in the section. The book ranks nothing: it deals a lookup's rows
+ * round-robin by source, in the order the sources first appear, and shows the first
+ * SHOW_PER_LOOKUP of the deal (`dealBySource`). A row in front of the result is its source's first
+ * and the first dealt, so the row the web found — the one she asked for — is the first line of
+ * its section and never the ninth and unseen; `food-candidate-book.test.ts` pins that.
  */
 export function withWebRows(base: FanOutResult, web: WebRows): FanOutResult {
   const key = (c: SourceCandidate): string => `${c.source}|${c.food_id ?? c.name}`;

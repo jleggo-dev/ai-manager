@@ -8,7 +8,7 @@ import { useWallClock } from './useWallClock.ts';
 import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
 import { endTimerActivity, pauseTimerActivity, startTimerActivity } from './timerLiveActivity.ts';
 import { HandsFree } from './HandsFree.tsx';
-import { card, logBtn, greyBtn, secBtn, chimeOnStyle, footnote, banner, doneRow, minutesInput } from './timerStyles.ts';
+import { card, logBtn, greyBtn, secBtn, chimeOnStyle, banner, doneRow, minutesInput } from './timerStyles.ts';
 
 type TimerLog = Extract<StepLog, { kind: 'timer' }>;
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -50,7 +50,6 @@ export function StepTimer({
   openEnded = false,
   switchSides = false,
   title,
-  nextTitle,
   log,
   resumeClock,
   onClock,
@@ -62,6 +61,8 @@ export function StepTimer({
   openEnded?: boolean;
   switchSides?: boolean;
   title?: string;
+  /** Still passed by the shell; nothing draws it since the footnote went (2026-11-03). Dropping
+   *  it from the shell is a one-line follow-up in Walkthrough.tsx. */
   nextTitle?: string;
   log?: TimerLog;
   /** A clock that was running when the app was last seen (sessionInProgress.ts) — the timer opens
@@ -297,9 +298,9 @@ export function StepTimer({
           </div>
         )}
         {showSwitch && <div style={banner}>Switch sides</div>}
-        {isOver && (
-          <div style={{ ...banner, background: 'oklch(96% 0.035 62)' }}>Time&apos;s up — keep going or stop</div>
-        )}
+        {/* The state only. What to do next is the button's job ("Stop · log 7 min") and the clock's
+            ("+0:12 past 5:00"); spelling it out here explained the UI (owner ruling 2026-11-03). */}
+        {isOver && <div style={{ ...banner, background: 'oklch(96% 0.035 62)' }}>Time&apos;s up</div>}
       </div>
 
       {/* Past the target the button logs (commit green); before that it only starts or pauses. */}
@@ -354,13 +355,10 @@ export function StepTimer({
       )}
 
       <HandsFree state={voice} on={voiceOn} onToggle={() => setVoiceOn((v) => !v)} />
-
-      <div style={footnote}>
-        {openEnded
-          ? `Chimes at ${minutesOf(seconds)} min and keeps counting — stop it when you're done and it logs the time you actually did${nextTitle ? `, then moves to ${nextTitle}` : ''}.`
-          : `Logs ${minutesOf(seconds)} min and ${nextTitle ? `moves to ${nextTitle} on its own` : 'moves on'} when it ends.`}
-        {switchSides ? ' Chimes halfway to switch sides.' : ''} Pausing keeps the time you&apos;ve done.
-      </div>
+      {/* No footnote under the card. The one that stood here ("Logs 5 min and moves to … on its
+          own when it ends. Pausing keeps the time you've done.") explained the UI, which the
+          owner ruled out on 2026-11-03: the button says what a tap does, the clock says where
+          you are, and the hand-off at the end shows itself. */}
     </div>
   );
 }

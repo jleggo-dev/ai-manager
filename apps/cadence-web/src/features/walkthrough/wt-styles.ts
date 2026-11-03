@@ -5,8 +5,10 @@ import { TONE, COMMIT } from './tools/tone.ts';
 
 /* ── Shared derivations (kept out of the component files so react-refresh stays happy) ── */
 
-/** The prescription, stated once, in the same grammar as the log line ("15 × light band · 2 sets"). */
-export function targetChip(step: WalkthroughStep): string {
+/** The prescription, stated once, in the same grammar as the log line ("15 × light band · 2 sets").
+ *  Plain text in the header (design ruling 2026-11-03: no TARGET box) and the right-hand word in the
+ *  all-steps list. */
+export function targetText(step: WalkthroughStep): string {
   const t = step.tool;
   if (t.kind === 'reps') {
     const head = [t.reps != null ? String(t.reps) : '', t.load ? `× ${t.load}` : ''].filter(Boolean).join(' ');
@@ -15,7 +17,7 @@ export function targetChip(step: WalkthroughStep): string {
   if (t.kind === 'timer') return `${Math.round(t.seconds / 60) || 1} min`;
   if (t.kind === 'checkoff') return t.label ?? '';
   // The unit IS the prescription here — there's no target number, just what to type it in.
-  // Absent unit degrades honestly: the chip disappears rather than showing a blank label.
+  // Absent unit degrades honestly: the target line disappears rather than showing a blank label.
   if (t.kind === 'measure') return t.unit;
   return '';
 }
@@ -102,15 +104,6 @@ export const navBtn: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-};
-export const chip: CSSProperties = {
-  background: 'oklch(100% 0 0 / 0.7)',
-  border: '1px solid oklch(86% 0.04 66)',
-  borderRadius: 12,
-  padding: '7px 11px',
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: 6,
 };
 export const sheet: CSSProperties = {
   position: 'absolute',

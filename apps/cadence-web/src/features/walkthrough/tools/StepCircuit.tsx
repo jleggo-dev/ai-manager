@@ -5,19 +5,22 @@ import { TONE, RING_C, COMMIT } from './tone.ts';
 import { YouTubeLink } from './YouTubeLink.tsx';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { HandsFree } from './HandsFree.tsx';
+import { CircuitMoveClock } from './CircuitMoveClock.tsx';
 
 type CircuitLog = Extract<StepLog, { kind: 'circuit' }>;
 const GAP = 10;
-/** A circuit has no clock, so there is nothing to start, pause or skip — the only thing voice can
- *  usefully do is what the thumb does: log the move you just finished and move on. */
+/** Voice does one thing on a circuit, what the thumb does: log the move you just finished and move
+ *  on. A timed move's countdown is started by a tap, not a word — "start" is not offered here. */
 const CIRCUIT_COMMANDS: HandsFreeCommand[] = ['next'];
 const ordinal = (i: number) => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'][i] ?? `${i + 1}th`;
 
 /**
  * Circuit tool (walkthrough v2, design B) — one cohesive nested player, three bands: (1) a rounds
- * ring header ("Round 2 of 3 · move 1 of 4"); (2) the current move's own tool (a reps dial or a
- * timed-hold target); (3) the tone primary that logs + advances, over the rotation list. The ring
- * belongs to the ROUNDS; completed rounds fill deep, the current round fills pro-rata by moves done.
+ * ring header ("Round 2 of 3 · move 1 of 4"); (2) the current move's own tool (a reps dial, or a
+ * countdown for a timed move — `CircuitMoveClock`, which logs the move by the same path as the
+ * button when it reaches zero); (3) the green primary that logs + advances, over the rotation list.
+ * The ring belongs to the ROUNDS; completed rounds fill deep, the current round fills pro-rata by
+ * moves done.
  * "Skip circuit" (the shell's nav) leaves the loop, not the workout. Captures rounds done.
  */
 export function StepCircuit({
@@ -239,10 +242,12 @@ export function StepCircuit({
                   +
                 </button>
               </div>
+            ) : ex.seconds ? (
+              // Keyed per move: each timed move gets a fresh clock, and the clock that ran out
+              // unmounts (cancelling its hand-off) the moment the circuit moves on.
+              <CircuitMoveClock key={`${round}-${pos}`} seconds={ex.seconds} onElapsed={logMove} />
             ) : (
-              <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 800, color: TONE.sub }}>
-                {ex.seconds ? `${ex.seconds}s hold — self-timed` : 'do the move'}
-              </div>
+              <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 800, color: TONE.sub }}>do the move</div>
             )}
           </div>
         )}

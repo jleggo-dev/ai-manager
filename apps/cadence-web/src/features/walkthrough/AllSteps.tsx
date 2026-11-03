@@ -2,7 +2,7 @@ import type { WalkthroughStep } from '@cadence/shared';
 import { type StepLogs, stepStatus, minutesLeft } from './state.ts';
 import { StatusDisc } from './wt-parts.tsx';
 import { TONE } from './tools/tone.ts';
-import { sheet, grab, greenBtn, outlineBtn, targetChip, rowReceipt } from './wt-styles.ts';
+import { sheet, grab, greenBtn, outlineBtn, targetText, rowReceipt } from './wt-styles.ts';
 
 /**
  * The All-steps sheet (design C) — one of three ways back, all pure navigation. Jump to any step;
@@ -45,9 +45,6 @@ export function AllSteps({
           <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', color: TONE.sub }}>
             {done} DONE · {skipped} SKIPPED · {left} MIN LEFT
           </div>
-        </div>
-        <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'oklch(45% 0.02 150)', marginTop: 6 }}>
-          Jump anywhere. Looking around changes nothing — only the tools log.
         </div>
         <div
           style={{
@@ -98,7 +95,7 @@ export function AllSteps({
                   </div>
                 </div>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: TONE.sub }}>
-                  {targetChip(s) || `${s.minutes} min`}
+                  {targetText(s) || `${s.minutes} min`}
                 </div>
               </div>
             );

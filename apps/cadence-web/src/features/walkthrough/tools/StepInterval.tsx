@@ -31,7 +31,7 @@ import {
   secBtn,
   stage,
 } from './intervalStyles.ts';
-import { CHIME_DONE, CHIME_RECOVER, CHIME_WORK, playTones } from './chime.ts';
+import { CHIME_DONE, CHIME_RECOVER, CHIME_WORK, playTones, unlockAudio } from './chime.ts';
 import { formatClock } from './timer.ts';
 import { ringSegments } from './intervalRing.ts';
 import { useIntervalClock } from './useIntervalClock.ts';
@@ -97,8 +97,9 @@ export function StepInterval({
   // The edit sheet's changes apply to TODAY's occurrence only — the coach's plan stays the thing
   // "tap to reset" restores, and tomorrow's prescription is still the coach's call.
   const [plan, setPlan] = useState<IntervalPlan>(prescribed);
-  // Coming back to a step you left mid-workout resumes where you were, paused — the same promise
-  // the shell makes everywhere else ("Back and Next only move you — nothing is logged or lost").
+  // Coming back to a step you left mid-workout resumes where you were, paused: Back and Next only
+  // move you, and nothing is logged or lost on the way (the shell keeps that promise without
+  // saying it on screen — owner ruling 2026-11-03, no text that explains the UI).
   const [status, setStatus] = useState<Status>(() =>
     log ? (log.roundsDone >= log.totalRounds ? 'done' : 'paused') : 'idle',
   );
@@ -184,6 +185,11 @@ export function StepInterval({
   useEffect(() => () => onChrome?.(null), [onChrome]);
 
   function startOrPause() {
+    // Inside the tap, every time: the chimes this run will play — the first one five seconds from
+    // now at the end of the pre-roll, the rest minutes later with no finger near the phone — are
+    // only allowed to sound if the audio was opened by a gesture. StepTimer does the same; this
+    // player didn't, so on iOS the whole run was silent (owner's gym session, 2026-11-02).
+    unlockAudio();
     if (status === 'live') {
       pause();
       setStatus('paused');
@@ -208,6 +214,7 @@ export function StepInterval({
   }
 
   function restart() {
+    unlockAudio(); // a restart is a tap that leads to a run, so it opens the audio like Start does
     // Restart inside the 600 ms hand-off means stay here — don't move on to the next step.
     handoff.cancel();
     finished.current = false;
@@ -278,7 +285,6 @@ export function StepInterval({
           tabIndex={0}
           aria-label={status === 'live' ? 'Pause' : 'Start'}
           onKeyDown={(e) => e.key === 'Enter' && startOrPause()}
-          title="Tap anywhere on the ring to pause / resume"
         >
           <svg width={RING_PX} height={RING_PX} viewBox="0 0 128 128" style={{ position: 'absolute' }} aria-hidden>
             {isPre ? (

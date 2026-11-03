@@ -146,6 +146,21 @@ const ROWS: Row[] = [
     'amber',
   ],
   [
+    'circuit: Start the clock on a timed move',
+    () =>
+      render(
+        <StepCircuit
+          step={STEP}
+          rounds={1}
+          exercises={[{ name: 'Plank', seconds: 30 }]}
+          onLog={vi.fn()}
+          onAdvance={vi.fn()}
+        />,
+      ),
+    'Start · 0:30',
+    'amber',
+  ],
+  [
     'meditate: Begin',
     () => render(<StepMeditate seconds={600} bells="none" intervalMin={0} onLog={vi.fn()} onDone={vi.fn()} />),
     'Begin · 10 min',

@@ -3,7 +3,14 @@
  * Bounds + video_query URL strip are a security/UX backstop against model-invented links.
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeSession } from './session-normalize.ts';
+import {
+  BLOCK_LABEL_MAX,
+  ITEM_DETAIL_MAX,
+  ITEM_LOAD_MAX,
+  ITEM_NAME_MAX,
+  normalizeSession,
+  str,
+} from './session-normalize.ts';
 
 describe('normalizeSession', () => {
   it('returns null when raw is null or blocks is missing', () => {
@@ -293,5 +300,85 @@ describe('the metronome survives normalize, bounded', () => {
     const item = one({ metronome_bpm: 'allegro' });
     expect(item.name).toBe('Scales');
     expect(item.metronome_bpm).toBeUndefined();
+  });
+});
+
+/**
+ * The text cut (walkthrough v3, step 1b). A bare `slice(0, 200)` left the cue under a move reading
+ * "…If the 40 lb feels easy for" — 353 of 1,319 stored items had a detail cut mid-word, 33 a load.
+ * The rows are positives AND near-misses: at the limit is untouched, one over is cut at a word.
+ */
+describe('str — a long text field is cut at a word and ends with an ellipsis', () => {
+  // Ten words of four letters: "aaaa bbbb cccc ..." — 49 characters, every word boundary known.
+  const words = ['aaaa', 'bbbb', 'cccc', 'dddd', 'eeee', 'ffff', 'gggg', 'hhhh', 'iiii', 'jjjj'];
+  const sentence = words.join(' ');
+
+  it.each([
+    ['under the limit is untouched', 'aaaa bbbb', 20, 'aaaa bbbb'],
+    ['exactly at the limit is untouched, byte for byte', 'aaaa bbbb', 9, 'aaaa bbbb'],
+    ['one over: cut at the last space before the limit, plus the ellipsis', 'aaaa bbbb c', 10, 'aaaa bbbb…'],
+    ['one over, mid-word: the broken word goes, not just its tail', 'aaaa bbbbbb', 10, 'aaaa…'],
+    ['a long sentence keeps whole words only', sentence, 24, 'aaaa bbbb cccc dddd…'],
+    ['the space the cut lands on is not kept', 'aaaa bbbb  cccc', 12, 'aaaa bbbb…'],
+    [
+      'a single word longer than the limit is cut hard, still with the ellipsis',
+      'a'.repeat(700),
+      600,
+      `${'a'.repeat(599)}…`,
+    ],
+    ['leading and trailing whitespace are trimmed before the length is judged', '  aaaa bbbb  ', 9, 'aaaa bbbb'],
+  ])('%s', (_name, input, max, expected) => {
+    expect(str(input, max)).toBe(expected);
+  });
+
+  it('never returns more than the limit, and never stops mid-word unless one word is the whole cut', () => {
+    for (let max = 5; max < sentence.length; max++) {
+      const out = str(sentence, max)!;
+      expect(out.length).toBeLessThanOrEqual(max);
+      expect(out.endsWith('…')).toBe(true);
+      // Everything before the ellipsis is a run of whole words from the front of the sentence.
+      expect(sentence.startsWith(out.slice(0, -1))).toBe(true);
+      expect(sentence.charAt(out.length - 1)).toBe(' ');
+    }
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['a number', 42],
+    ['an object', { text: 'aaaa' }],
+    ['an empty string', ''],
+    ['whitespace only', '   \n\t '],
+  ])("keeps today's behaviour for %s: undefined", (_name, input) => {
+    expect(str(input, 600)).toBeUndefined();
+  });
+
+  it('applies the item limits through normalizeSession: detail 600, load 80, name 120, label 40', () => {
+    const longDetail = `${'word '.repeat(130)}end`; // 653 chars
+    const longLoad = `${'kg '.repeat(30)}end`; // 93 chars
+    const session = normalizeSession({
+      blocks: [
+        {
+          label: 'x'.repeat(50),
+          items: [{ name: `${'name '.repeat(30)}end`, load: longLoad, detail: longDetail }],
+        },
+      ],
+    });
+    const item = session!.blocks[0]!.items[0]!;
+    expect(item.detail!.length).toBeLessThanOrEqual(ITEM_DETAIL_MAX);
+    expect(item.detail!.length).toBeGreaterThan(590);
+    expect(item.detail).toMatch(/word…$/);
+    expect(item.load!.length).toBeLessThanOrEqual(ITEM_LOAD_MAX);
+    expect(item.load).toMatch(/kg…$/);
+    expect(item.name!.length).toBeLessThanOrEqual(ITEM_NAME_MAX);
+    expect(item.name).toMatch(/name…$/);
+    expect(session!.blocks[0]!.label.length).toBeLessThanOrEqual(BLOCK_LABEL_MAX);
+  });
+
+  it('a detail that fit under the old 200 cap and the new 600 one is stored as written', () => {
+    const cue =
+      'Brace hard, sit back between the heels. If the 40 lb feels easy for all three sets, go to 50 next time.';
+    const session = normalizeSession({ blocks: [{ label: 'Main', items: [{ name: 'Goblet squat', detail: cue }] }] });
+    expect(session!.blocks[0]!.items[0]!.detail).toBe(cue);
   });
 });

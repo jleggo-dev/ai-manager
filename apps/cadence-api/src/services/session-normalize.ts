@@ -25,8 +25,35 @@ import {
 const MAX_BLOCKS = 6;
 const MAX_ITEMS = 12;
 
-export const str = (v: unknown, max = 200): string | undefined =>
-  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
+/**
+ * Text limits for a stored session, in characters. The prescribe-session prompt in
+ * config/ai-admin/ai-admin.config.json tells the coach the same numbers as facts, and
+ * prescribe-session-set-flow-facts.test.ts pins the two together — change both at once.
+ */
+export const ITEM_NAME_MAX = 120;
+export const ITEM_LOAD_MAX = 80;
+export const ITEM_DETAIL_MAX = 600;
+export const BLOCK_LABEL_MAX = 40;
+
+/**
+ * Trim a string field and bound its length. Text at or under `max` comes back untouched. Longer
+ * text is cut at the last word boundary that fits and ends with "…" (one character), so the result
+ * is never longer than `max` and never stops mid-word — the cue under a move once read
+ * "…If the 40 lb feels easy for" because this used to be a bare slice. A single word longer than
+ * the limit is cut hard, still with the "…". Empty, whitespace-only and non-string input → undefined.
+ */
+export const str = (v: unknown, max = ITEM_DETAIL_MAX): string | undefined => {
+  if (typeof v !== 'string') return undefined;
+  const text = v.trim();
+  if (!text) return undefined;
+  if (text.length <= max) return text;
+  // Leave one character of room for the ellipsis.
+  const kept = text.slice(0, max - 1);
+  // The character after the kept part decides whether the kept part ends on a whole word.
+  const endsOnWord = /\s/.test(text.charAt(max - 1));
+  const atWord = endsOnWord ? kept.trimEnd() : kept.replace(/\s*\S*$/, '');
+  return `${atWord || kept}…`;
+};
 
 export const num = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
@@ -130,7 +157,7 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
         .slice(0, MAX_ITEMS)
         .map((it): SessionItem | null => {
           const i = it as Record<string, unknown>;
-          const name = str(i.name, 120);
+          const name = str(i.name, ITEM_NAME_MAX);
           if (!name) return null;
           const vq = str(i.video_query, 80);
           const breathPattern = breathPatternOf(i.breath_pattern);
@@ -138,10 +165,10 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             name,
             sets: num(i.sets),
             reps: num(i.reps),
-            load: str(i.load, 40),
+            load: str(i.load, ITEM_LOAD_MAX),
             duration_min: num(i.duration_min),
             distance_km: num(i.distance_km),
-            detail: str(i.detail, 200),
+            detail: str(i.detail, ITEM_DETAIL_MAX),
             video_query: vq && !/https?:|youtube\.com|youtu\.be|www\./i.test(vq) ? vq : null,
             tool: toolOf(i.tool),
             breath_pattern: breathPattern,
@@ -164,7 +191,7 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
         })
         .filter((i): i is SessionItem => i !== null);
       if (items.length === 0) return null;
-      const block: SessionBlock = { label: str(blk.label, 40) ?? 'Session', items };
+      const block: SessionBlock = { label: str(blk.label, BLOCK_LABEL_MAX) ?? 'Session', items };
       const mode = modeOf(blk.mode);
       if (mode) block.mode = mode;
       // Rounds only mean something for a circuit; cap so a bad number can't balloon the player.
