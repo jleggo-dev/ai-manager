@@ -65,7 +65,8 @@ const PAIR: WalkthroughStep[] = [
   { id: 's1', title: 'Bench press', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 8 }, skippable: true },
   { id: 's2', title: 'Dumbbell row', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 10 }, skippable: true },
 ];
-const mountRearrange = () => render(<RearrangeSheet steps={PAIR} shape={defaultShape(PAIR)} onDone={vi.fn()} onClose={vi.fn()} />);
+const mountRearrange = () =>
+  render(<RearrangeSheet steps={PAIR} shape={defaultShape(PAIR)} onDone={vi.fn()} onClose={vi.fn()} />);
 
 const ROWS: Row[] = [
   // Writes → commit green.

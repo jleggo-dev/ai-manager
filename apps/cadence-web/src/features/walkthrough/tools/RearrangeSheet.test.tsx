@@ -15,14 +15,22 @@ const steps: WalkthroughStep[] = [
   { id: 's2', title: 'Farmer carry', minutes: 6, tool: { kind: 'timer', seconds: 45, sets: 3 }, skippable: true },
   { id: 's3', title: 'Hip thrust', minutes: 4, tool: { kind: 'reps', sets: 3, reps: 12 }, skippable: true },
   { id: 's4', title: 'Dead hang', minutes: 3, tool: { kind: 'timer', seconds: 45, sets: 3 }, skippable: true },
-  { id: 's5', title: 'Abs circuit', minutes: 8, tool: { kind: 'circuit', rounds: 3, exercises: [{ name: 'Plank', seconds: 30 }] }, skippable: true },
+  {
+    id: 's5',
+    title: 'Abs circuit',
+    minutes: 8,
+    tool: { kind: 'circuit', rounds: 3, exercises: [{ name: 'Plank', seconds: 30 }] },
+    skippable: true,
+  },
 ];
 
 const press = (label: string | RegExp) => fireEvent.click(screen.getByRole('button', { name: label }));
 const pick = (title: string) => fireEvent.click(screen.getByRole('checkbox', { name: `Pick ${title}` }));
 const sheet = () => within(screen.getByRole('dialog', { name: 'Rearrange' }));
 const pillsOf = (title: string) => {
-  const row = screen.getByText(title).closest('[data-row]') ?? screen.getByText(title).parentElement?.parentElement?.parentElement;
+  const row =
+    screen.getByText(title).closest('[data-row]') ??
+    screen.getByText(title).parentElement?.parentElement?.parentElement;
   return within(row as HTMLElement)
     .getAllByText(/^(Pull-up 5|Hang 45 s|Carry|Thrust|Pull-up|Hang|Carry 45 s|Thrust 12|1 moves × 3 rounds)$/)
     .map((el) => el.textContent);
@@ -129,7 +137,17 @@ describe('Rearrange — pick, preview, Combine', () => {
 function layRowsOut() {
   const rows = screen.getAllByRole('dialog')[0]!.querySelectorAll<HTMLElement>('[data-row]');
   rows.forEach((el, i) => {
-    el.getBoundingClientRect = () => ({ top: i * 68, bottom: i * 68 + 60, left: 0, right: 375, width: 375, height: 60, x: 0, y: i * 68, toJSON: () => ({}) });
+    el.getBoundingClientRect = () => ({
+      top: i * 68,
+      bottom: i * 68 + 60,
+      left: 0,
+      right: 375,
+      width: 375,
+      height: 60,
+      x: 0,
+      y: i * 68,
+      toJSON: () => ({}),
+    });
   });
 }
 
@@ -171,6 +189,12 @@ describe('Rearrange — the drags', () => {
     fireEvent.pointerMove(handle, { clientX: 340, clientY: 235, pointerId: 3 });
     fireEvent.pointerUp(handle, { clientX: 340, clientY: 235, pointerId: 3 });
     press('Done');
-    expect((onDone.mock.calls[0]![0] as PlayedShape).map((g) => g.turns[0]!.stepId)).toEqual(['s1', 's2', 's3', 's4', 's5']);
+    expect((onDone.mock.calls[0]![0] as PlayedShape).map((g) => g.turns[0]!.stepId)).toEqual([
+      's1',
+      's2',
+      's3',
+      's4',
+      's5',
+    ]);
   });
 });

@@ -9,8 +9,35 @@ import { rowFrame as row, pillBase as pill } from './rearrange-styles.ts';
  * pick circle 22 in a 44 hit area; handle 44 × 44.
  */
 
-export function Pill({ label, alt, timed, done, current, hole, style }: { label: string; alt?: boolean; timed?: boolean; done?: boolean; current?: boolean; hole?: boolean; style?: CSSProperties }) {
-  if (hole) return <span style={{ ...pill, width: 86, boxSizing: 'border-box', border: '1.5px dashed #dcd2bc', background: 'transparent' }} />;
+export function Pill({
+  label,
+  alt,
+  timed,
+  done,
+  current,
+  hole,
+  style,
+}: {
+  label: string;
+  alt?: boolean;
+  timed?: boolean;
+  done?: boolean;
+  current?: boolean;
+  hole?: boolean;
+  style?: CSSProperties;
+}) {
+  if (hole)
+    return (
+      <span
+        style={{
+          ...pill,
+          width: 86,
+          boxSizing: 'border-box',
+          border: '1.5px dashed #dcd2bc',
+          background: 'transparent',
+        }}
+      />
+    );
   const look: CSSProperties = done
     ? { background: 'oklch(52% 0.09 152)', color: 'white' }
     : alt
@@ -19,7 +46,9 @@ export function Pill({ label, alt, timed, done, current, hole, style }: { label:
         ? { background: 'oklch(94% 0.045 74)', color: 'oklch(36% 0.08 62)' }
         : { background: '#f1ebdd' };
   return (
-    <span style={{ ...pill, ...look, ...(current ? { boxShadow: 'inset 0 0 0 1.5px oklch(79% 0.16 70)' } : {}), ...style }}>
+    <span
+      style={{ ...pill, ...look, ...(current ? { boxShadow: 'inset 0 0 0 1.5px oklch(79% 0.16 70)' } : {}), ...style }}
+    >
       {done ? `✓ ${label}` : label}
     </span>
   );
@@ -43,9 +72,22 @@ export function PickCircle({ picked, onToggle, label }: { picked: boolean; onTog
   );
 }
 
-export function DragHandle({ label, color = '#8b8d91', onPointerDown }: { label: string; color?: string; onPointerDown?: (e: React.PointerEvent) => void }) {
+export function DragHandle({
+  label,
+  color = '#8b8d91',
+  onPointerDown,
+}: {
+  label: string;
+  color?: string;
+  onPointerDown?: (e: React.PointerEvent) => void;
+}) {
   return (
-    <span aria-label={label} role="button" onPointerDown={onPointerDown} style={{ ...handle, color, touchAction: 'none' }}>
+    <span
+      aria-label={label}
+      role="button"
+      onPointerDown={onPointerDown}
+      style={{ ...handle, color, touchAction: 'none' }}
+    >
       <Lines size={20} />
     </span>
   );
@@ -53,7 +95,16 @@ export function DragHandle({ label, color = '#8b8d91', onPointerDown }: { label:
 
 export function Lines({ size }: { size: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" aria-hidden>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      aria-hidden
+    >
       <path d="M5 8h14M5 12h14M5 16h14" />
     </svg>
   );
@@ -88,7 +139,15 @@ export function Toast({ words, onUndo }: { words: string; onUndo: () => void }) 
   );
 }
 
-export function RowFrame({ children, look, style }: { children: ReactNode; look: 'plain' | 'picked' | 'combined' | 'current' | 'done'; style?: CSSProperties }) {
+export function RowFrame({
+  children,
+  look,
+  style,
+}: {
+  children: ReactNode;
+  look: 'plain' | 'picked' | 'combined' | 'current' | 'done';
+  style?: CSSProperties;
+}) {
   const border =
     look === 'picked'
       ? '2.5px dashed #2c5545'
@@ -99,16 +158,59 @@ export function RowFrame({ children, look, style }: { children: ReactNode; look:
           : look === 'done'
             ? '1px solid transparent'
             : '1px solid #eae2d0';
-  const background = look === 'picked' ? 'oklch(97% 0.02 152)' : look === 'combined' ? 'oklch(97.5% 0.015 152)' : look === 'done' ? '#f1ebdd' : 'white';
+  const background =
+    look === 'picked'
+      ? 'oklch(97% 0.02 152)'
+      : look === 'combined'
+        ? 'oklch(97.5% 0.015 152)'
+        : look === 'done'
+          ? '#f1ebdd'
+          : 'white';
   return <div style={{ ...row, border, background, ...style }}>{children}</div>;
 }
 
+const pickHit: CSSProperties = {
+  width: 44,
+  height: 44,
+  border: 'none',
+  background: 'transparent',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  cursor: 'pointer',
+  flex: 'none',
+};
 
+const handle: CSSProperties = {
+  width: 44,
+  height: 44,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flex: 'none',
+  cursor: 'grab',
+};
 
-const pickHit: CSSProperties = { width: 44, height: 44, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, cursor: 'pointer', flex: 'none' };
+const toast: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '8px 8px 8px 12px',
+  borderRadius: 14,
+  background: '#2c5545',
+  color: 'white',
+};
 
-const handle: CSSProperties = { width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', cursor: 'grab' };
-
-const toast: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 8px 12px', borderRadius: 14, background: '#2c5545', color: 'white' };
-
-const toastUndo: CSSProperties = { height: 40, padding: '0 12px', border: 'none', borderRadius: 10, background: 'oklch(100% 0 0 / 0.16)', fontSize: 13, fontWeight: 900, color: 'white', cursor: 'pointer', fontFamily: 'inherit' };
+const toastUndo: CSSProperties = {
+  height: 40,
+  padding: '0 12px',
+  border: 'none',
+  borderRadius: 10,
+  background: 'oklch(100% 0 0 / 0.16)',
+  fontSize: 13,
+  fontWeight: 900,
+  color: 'white',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};

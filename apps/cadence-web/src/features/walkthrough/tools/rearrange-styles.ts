@@ -2,7 +2,14 @@ import type { CSSProperties } from 'react';
 
 /** The Rearrange sheet's and All steps' shared styles (Redlines: row r 14 · padding 10 12; pill
  *  h 30 · r 999 · padding 0 11; meta Space Mono 11.5 #5c5f63). */
-export const rowFrame: CSSProperties = { borderRadius: 14, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8, boxSizing: 'border-box' };
+export const rowFrame: CSSProperties = {
+  borderRadius: 14,
+  padding: '10px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  boxSizing: 'border-box',
+};
 export const pillBase: CSSProperties = {
   height: 30,
   padding: '0 11px',

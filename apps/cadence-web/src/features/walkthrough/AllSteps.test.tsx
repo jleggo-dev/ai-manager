@@ -6,7 +6,15 @@
  */
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { type PlayedShape, type WalkthroughStep, applyShape, combine, defaultShape, moveTurnOut, normalizeShape } from '@cadence/shared';
+import {
+  type PlayedShape,
+  type WalkthroughStep,
+  applyShape,
+  combine,
+  defaultShape,
+  moveTurnOut,
+  normalizeShape,
+} from '@cadence/shared';
 import { AllSteps } from './AllSteps.tsx';
 import type { StepLogs } from './state.ts';
 
@@ -26,7 +34,20 @@ function mount(shape: PlayedShape, logs: StepLogs = {}, idx = 1, extra: Partial<
   const onRearrange = vi.fn();
   const onSplit = vi.fn();
   render(
-    <AllSteps steps={played} shape={groups} stepOf={stepOf} logs={logs} idx={idx} visited={new Set([0, idx])} onClose={() => {}} onJump={onJump} onReview={() => {}} onRearrange={onRearrange} onSplit={onSplit} {...extra} />,
+    <AllSteps
+      steps={played}
+      shape={groups}
+      stepOf={stepOf}
+      logs={logs}
+      idx={idx}
+      visited={new Set([0, idx])}
+      onClose={() => {}}
+      onJump={onJump}
+      onReview={() => {}}
+      onRearrange={onRearrange}
+      onSplit={onSplit}
+      {...extra}
+    />,
   );
   return { onJump, onRearrange, onSplit, played };
 }
@@ -37,13 +58,29 @@ afterEach(cleanup);
 describe('All steps — rows per shape', () => {
   it.each<[string, () => PlayedShape, string[]]>([
     ['as prescribed', () => defaultShape(steps), ['Warm-up', 'Pull-ups', 'Bench press', 'Dumbbell row', 'Dead hang']],
-    ['presses and rows alternating', () => combine(defaultShape(steps), 'g3', 'g4', 'alternate'), ['Warm-up', 'Pull-ups', 'Bench press + dumbbell row', 'Dead hang']],
-    ['the hangs spread', () => moveTurnOut(moveTurnOut(defaultShape(steps), 'g5', 0, 1), 'g5', 0, 4), ['Warm-up', 'Dead hang', 'Pull-ups', 'Bench press', 'Dead hang', 'Dumbbell row', 'Dead hang']],
+    [
+      'presses and rows alternating',
+      () => combine(defaultShape(steps), 'g3', 'g4', 'alternate'),
+      ['Warm-up', 'Pull-ups', 'Bench press + dumbbell row', 'Dead hang'],
+    ],
+    [
+      'the hangs spread',
+      () => moveTurnOut(moveTurnOut(defaultShape(steps), 'g5', 0, 1), 'g5', 0, 4),
+      ['Warm-up', 'Dead hang', 'Pull-ups', 'Bench press', 'Dead hang', 'Dumbbell row', 'Dead hang'],
+    ],
   ])('%s', (_n, shape, titles) => {
     mount(shape());
     const sheet = within(screen.getByRole('dialog', { name: 'All steps' }));
-    expect(sheet.getAllByText(/^(Warm-up|Pull-ups|Bench press|Dumbbell row|Dead hang|Bench press \+ dumbbell row)$/).map((el) => el.textContent)).toEqual(titles);
-    expect(sheet.getByText(`${titles.length} STEPS · 29 MIN LEFT`.replace('29', String(expectedLeft(shape(), titles.length))))).toBeInTheDocument();
+    expect(
+      sheet
+        .getAllByText(/^(Warm-up|Pull-ups|Bench press|Dumbbell row|Dead hang|Bench press \+ dumbbell row)$/)
+        .map((el) => el.textContent),
+    ).toEqual(titles);
+    expect(
+      sheet.getByText(
+        `${titles.length} STEPS · 29 MIN LEFT`.replace('29', String(expectedLeft(shape(), titles.length))),
+      ),
+    ).toBeInTheDocument();
   });
 
   it('pills: a set each; a combined group’s pills by short name; meta counts sets', () => {
@@ -51,7 +88,14 @@ describe('All steps — rows per shape', () => {
     expect(row('Pull-ups').getAllByText('Pull-up 5')).toHaveLength(3);
     expect(row('Pull-ups').getByText('3 sets')).toBeInTheDocument();
     const pair = row('Bench press + dumbbell row');
-    expect(pair.getAllByText(/^(Bench|Row)$/).map((el) => el.textContent)).toEqual(['Bench', 'Row', 'Bench', 'Row', 'Bench', 'Row']);
+    expect(pair.getAllByText(/^(Bench|Row)$/).map((el) => el.textContent)).toEqual([
+      'Bench',
+      'Row',
+      'Bench',
+      'Row',
+      'Bench',
+      'Row',
+    ]);
     expect(pair.getByText('6 sets')).toBeInTheDocument();
     expect(pair.getByRole('button', { name: 'Split' })).toBeInTheDocument();
     expect(row('Dead hang').getAllByText('Hang 45 s')).toHaveLength(3);
@@ -69,7 +113,15 @@ describe('All steps — rows per shape', () => {
 
   it('a combined group’s logged turns show in its pills', () => {
     const shape = combine(defaultShape(steps), 'g3', 'g4', 'alternate');
-    const logs: StepLogs = { g6: { kind: 'group', mode: 'alternate', turns: { 's3:0': { value: 8 }, 's4:0': { value: 10 } }, done: { turns: 2, rounds: 1 }, total: { turns: 6, rounds: 3 } } };
+    const logs: StepLogs = {
+      g6: {
+        kind: 'group',
+        mode: 'alternate',
+        turns: { 's3:0': { value: 8 }, 's4:0': { value: 10 } },
+        done: { turns: 2, rounds: 1 },
+        total: { turns: 6, rounds: 3 },
+      },
+    };
     mount(shape, logs);
     const pair = row('Bench press + dumbbell row');
     expect(pair.getByText('✓ 8')).toBeInTheDocument();

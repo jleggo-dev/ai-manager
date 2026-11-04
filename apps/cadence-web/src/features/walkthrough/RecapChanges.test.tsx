@@ -15,14 +15,26 @@ vi.mock('../../lib/api.ts', () => ({ keepHowTo: (...a: unknown[]) => keepHowTo(.
 const { RecapChanges } = await import('./RecapChanges.tsx');
 
 const CHANGES: StructureChange[] = [
-  { kind: 'alternate', key: 'alternate:s3+s4', words: 'Bench press + dumbbell row, alternating', sentence: 'alternate bench press and dumbbell row', pills: ['Bench', 'Row', 'Bench', 'Row'], rounds: 3 },
+  {
+    kind: 'alternate',
+    key: 'alternate:s3+s4',
+    words: 'Bench press + dumbbell row, alternating',
+    sentence: 'alternate bench press and dumbbell row',
+    pills: ['Bench', 'Row', 'Bench', 'Row'],
+    rounds: 3,
+  },
   { kind: 'spread', key: 'spread:s5', words: 'Dead hang, one set at a time', sentence: 'dead hang one set at a time' },
   { kind: 'swap', key: 'swap:s7', words: 'Glute bridge → hip thrust', sentence: 'hip thrust instead of glute bridge' },
 ];
 
 beforeEach(() => {
   keepHowTo.mockReset();
-  keepHowTo.mockResolvedValue({ ok: true, kept: true, how_to: 'alternate bench press and dumbbell row', activity: 'Obstacle strength' });
+  keepHowTo.mockResolvedValue({
+    ok: true,
+    kept: true,
+    how_to: 'alternate bench press and dumbbell row',
+    activity: 'Obstacle strength',
+  });
 });
 afterEach(cleanup);
 
@@ -50,7 +62,9 @@ describe('RecapChanges', () => {
   it('Every time writes that change’s sentence once and shows it as a fact; the other rows keep their buttons', async () => {
     render(<RecapChanges changes={CHANGES} occurrenceId="o1" />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Every time' })[0]!);
-    await waitFor(() => expect(screen.getByText('Every time · alternate bench press and dumbbell row')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Every time · alternate bench press and dumbbell row')).toBeInTheDocument(),
+    );
     expect(keepHowTo).toHaveBeenCalledTimes(1);
     expect(keepHowTo).toHaveBeenCalledWith('o1', 'alternate bench press and dumbbell row');
     expect(screen.getAllByRole('button', { name: 'Every time' })).toHaveLength(2);

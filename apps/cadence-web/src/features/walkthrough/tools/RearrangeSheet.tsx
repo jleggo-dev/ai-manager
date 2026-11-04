@@ -33,7 +33,17 @@ import { useRearrangeDrag, type Drag } from './useRearrangeDrag.ts';
  * back, and until then every change is on an undo stack (played-shape.ts). Nothing is marked
  * "moved".
  */
-export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: readonly WalkthroughStep[]; shape: PlayedShape; onDone: (shape: PlayedShape) => void; onClose: () => void }) {
+export function RearrangeSheet({
+  steps,
+  shape,
+  onDone,
+  onClose,
+}: {
+  steps: readonly WalkthroughStep[];
+  shape: PlayedShape;
+  onDone: (shape: PlayedShape) => void;
+  onClose: () => void;
+}) {
   const [history, setHistory] = useState(() => historyOf(shape));
   const [picked, setPicked] = useState<string[]>([]);
   const [mode, setMode] = useState<CombineMode>('alternate');
@@ -71,11 +81,30 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
   return (
     <>
       <div style={sheetScrim} onClick={onClose} aria-hidden />
-      <div role="dialog" aria-label="Rearrange" style={{ ...sheetFrame, height: '96.5%', maxHeight: '96.5%', gap: 0, padding: '10px 0 0' }}>
+      <div
+        role="dialog"
+        aria-label="Rearrange"
+        style={{ ...sheetFrame, height: '96.5%', maxHeight: '96.5%', gap: 0, padding: '10px 0 0' }}
+      >
         <div style={sheetGrab} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 18px 0' }}>
-          <button type="button" onClick={undo} disabled={!canUndo(history)} style={{ ...undoBtn, color: canUndo(history) ? '#2c2f33' : '#5c5f63' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo(history)}
+            style={{ ...undoBtn, color: canUndo(history) ? '#2c2f33' : '#5c5f63' }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.7}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
               <path d="M9 14L4 9l5-5" />
               <path d="M4 9h10a6 6 0 010 12h-3" />
             </svg>
@@ -87,7 +116,17 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px 0', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '12px 14px 0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            position: 'relative',
+          }}
+        >
           <Gap active={drag.gap === 0} />
           {groups.map((g, i) => {
             const pickedHere = picked.includes(g.id);
@@ -96,7 +135,8 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
             const words = groupWords(shown, stepOf);
             const pills = groupPills(shown, stepOf);
             const lifting = drag.drag?.kind === 'turn' && drag.drag.groupId === g.id ? drag.drag.turnIndex : null;
-            const meta = lifting != null ? `${shown.turns.length - 1} set${shown.turns.length - 1 === 1 ? '' : 's'}` : words.meta;
+            const meta =
+              lifting != null ? `${shown.turns.length - 1} set${shown.turns.length - 1 === 1 ? '' : 's'}` : words.meta;
             const look = preview && g.id === a ? 'picked' : isCombined(g) ? 'combined' : 'plain';
             const rearrangeable = distinctSteps(g).every((id) => {
               const s = stepOf(id);
@@ -105,15 +145,44 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
             return (
               <div key={g.id}>
                 <div ref={drag.rowRef(i)} data-row>
-                  <RowFrame look={look} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: look === 'picked' ? '10px 12px 12px' : '8px 6px 10px 12px' }}>
-                    {look !== 'picked' && (rearrangeable ? <PickCircle picked={pickedHere} onToggle={() => toggle(g.id)} label={`Pick ${words.title}`} /> : <span style={{ width: 44, flex: 'none' }} />)}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, paddingTop: look === 'picked' ? 0 : 8 }}>
+                  <RowFrame
+                    look={look}
+                    style={{
+                      flexDirection: 'row',
+                      gap: 10,
+                      alignItems: 'flex-start',
+                      padding: look === 'picked' ? '10px 12px 12px' : '8px 6px 10px 12px',
+                    }}
+                  >
+                    {look !== 'picked' &&
+                      (rearrangeable ? (
+                        <PickCircle picked={pickedHere} onToggle={() => toggle(g.id)} label={`Pick ${words.title}`} />
+                      ) : (
+                        <span style={{ width: 44, flex: 'none' }} />
+                      ))}
+                    <div
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        paddingTop: look === 'picked' ? 0 : 8,
+                      }}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <span style={rowTitle}>{words.title}</span>
                         <span style={{ display: 'flex', alignItems: 'center' }}>
                           <span style={rowMeta}>{meta}</span>
                           {isCombined(g) && look !== 'picked' && (
-                            <button type="button" style={splitBtn} onClick={() => { setToast(null); setPicked([]); apply(split(groups, g.id)); }}>
+                            <button
+                              type="button"
+                              style={splitBtn}
+                              onClick={() => {
+                                setToast(null);
+                                setPicked([]);
+                                apply(split(groups, g.id));
+                              }}
+                            >
                               Split
                             </button>
                           )}
@@ -124,14 +193,32 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
                           lifting === ti ? (
                             <Pill key={p.key} label="" hole />
                           ) : (
-                            <span key={p.key} onPointerDown={look === 'picked' ? undefined : (e) => drag.startTurn(e, g.id, ti, p.label)} style={{ touchAction: 'none', display: 'inline-flex' }} aria-label={`Drag ${p.label}`}>
-                              <Pill label={p.label} alt={p.alt} timed={p.timed} style={look === 'picked' && !p.alt ? { background: 'white' } : undefined} />
+                            <span
+                              key={p.key}
+                              onPointerDown={
+                                look === 'picked' ? undefined : (e) => drag.startTurn(e, g.id, ti, p.label)
+                              }
+                              style={{ touchAction: 'none', display: 'inline-flex' }}
+                              aria-label={`Drag ${p.label}`}
+                            >
+                              <Pill
+                                label={p.label}
+                                alt={p.alt}
+                                timed={p.timed}
+                                style={look === 'picked' && !p.alt ? { background: 'white' } : undefined}
+                              />
                             </span>
                           ),
                         )}
                       </div>
                     </div>
-                    {look !== 'picked' && <DragHandle label={`Drag ${words.title}`} color={isCombined(g) ? '#2c5545' : undefined} onPointerDown={(e) => drag.startGroup(e, g.id)} />}
+                    {look !== 'picked' && (
+                      <DragHandle
+                        label={`Drag ${words.title}`}
+                        color={isCombined(g) ? '#2c5545' : undefined}
+                        onPointerDown={(e) => drag.startGroup(e, g.id)}
+                      />
+                    )}
                   </RowFrame>
                 </div>
                 <div style={{ marginTop: 8 }}>
@@ -154,7 +241,14 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
               <>
                 <div role="radiogroup" aria-label="How to combine" style={well}>
                   {(['alternate', 'sequence'] as const).map((m) => (
-                    <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)} style={{ ...toggleBtn, ...(mode === m ? toggleOn : {}) }}>
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={mode === m}
+                      onClick={() => setMode(m)}
+                      style={{ ...toggleBtn, ...(mode === m ? toggleOn : {}) }}
+                    >
                       {m === 'alternate' ? 'Alternate' : 'Sequence'}
                     </button>
                   ))}
@@ -173,13 +267,70 @@ export function RearrangeSheet({ steps, shape, onDone, onClose }: { steps: reado
   );
 }
 
-const undoBtn: CSSProperties = { height: 44, padding: '0 4px', border: 'none', background: 'transparent', fontSize: 14, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'inherit' };
-const doneBtn: CSSProperties = { height: 44, padding: '0 14px', borderRadius: 999, border: 'none', background: '#2c5545', fontSize: 14, fontWeight: 900, color: 'white', cursor: 'pointer', fontFamily: 'inherit' };
-const tray: CSSProperties = { padding: '12px 14px 26px', borderTop: '1px solid #eae2d0', display: 'flex', flexDirection: 'column', gap: 8, boxShadow: '0 -10px 20px -14px rgba(44,40,32,0.3)', background: '#fbf9f4' };
+const undoBtn: CSSProperties = {
+  height: 44,
+  padding: '0 4px',
+  border: 'none',
+  background: 'transparent',
+  fontSize: 14,
+  fontWeight: 800,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
+const doneBtn: CSSProperties = {
+  height: 44,
+  padding: '0 14px',
+  borderRadius: 999,
+  border: 'none',
+  background: '#2c5545',
+  fontSize: 14,
+  fontWeight: 900,
+  color: 'white',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
+const tray: CSSProperties = {
+  padding: '12px 14px 26px',
+  borderTop: '1px solid #eae2d0',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 8,
+  boxShadow: '0 -10px 20px -14px rgba(44,40,32,0.3)',
+  background: '#fbf9f4',
+};
 const well: CSSProperties = { display: 'flex', padding: 4, borderRadius: 14, background: '#f1ebdd', gap: 4 };
-const toggleBtn: CSSProperties = { flex: 1, height: 44, border: 'none', borderRadius: 11, background: 'transparent', fontSize: 14, fontWeight: 800, color: '#5c5f63', cursor: 'pointer', fontFamily: 'inherit' };
-const toggleOn: CSSProperties = { background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', fontWeight: 900, color: '#2c5545' };
-const combineBtn: CSSProperties = { height: 52, border: 'none', borderRadius: 16, fontSize: 15, fontWeight: 900, color: 'white', cursor: 'pointer', fontFamily: 'inherit', ...COMMIT };
+const toggleBtn: CSSProperties = {
+  flex: 1,
+  height: 44,
+  border: 'none',
+  borderRadius: 11,
+  background: 'transparent',
+  fontSize: 14,
+  fontWeight: 800,
+  color: '#5c5f63',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
+const toggleOn: CSSProperties = {
+  background: 'white',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+  fontWeight: 900,
+  color: '#2c5545',
+};
+const combineBtn: CSSProperties = {
+  height: 52,
+  border: 'none',
+  borderRadius: 16,
+  fontSize: 15,
+  fontWeight: 900,
+  color: 'white',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  ...COMMIT,
+};
 const lifted: CSSProperties = {
   position: 'fixed',
   height: 40,

@@ -44,7 +44,11 @@ export function AllSteps({
   return (
     <>
       <div style={sheetScrim} onClick={onClose} aria-hidden />
-      <div role="dialog" aria-label="All steps" style={{ ...sheetFrame, height: '96.5%', maxHeight: '96.5%', gap: 0, padding: '10px 0 0' }}>
+      <div
+        role="dialog"
+        aria-label="All steps"
+        style={{ ...sheetFrame, height: '96.5%', maxHeight: '96.5%', gap: 0, padding: '10px 0 0' }}
+      >
         <div style={sheetGrab} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px 0' }}>
           <div>
@@ -59,7 +63,16 @@ export function AllSteps({
             </button>
           )}
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '12px 16px 0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
           {steps.map((s, i) => {
             const group = shape[i];
             const st = stepStatus(i, idx, visited, s, logs[s.id]);
@@ -75,10 +88,16 @@ export function AllSteps({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <span style={rowTitle}>
                       {words.title}
-                      {s.swapped_from && <div style={{ fontSize: 11, fontWeight: 700, color: '#5c5f63' }}>Swapped from {s.swapped_from}</div>}
+                      {s.swapped_from && (
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#5c5f63' }}>
+                          Swapped from {s.swapped_from}
+                        </div>
+                      )}
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ ...rowMeta, ...(cur ? { color: 'oklch(40% 0.08 62)' } : {}) }}>{cur ? 'here now' : done ? 'done' : words.meta}</span>
+                      <span style={{ ...rowMeta, ...(cur ? { color: 'oklch(40% 0.08 62)' } : {}) }}>
+                        {cur ? 'here now' : done ? 'done' : words.meta}
+                      </span>
                       {combined && onSplit && group && (
                         <button
                           type="button"
@@ -125,7 +144,11 @@ export function AllSteps({
 }
 
 /** What each pill reads once its set is logged: "5", "45 s", a minute count for a whole step. */
-function loggedLabels(step: PlayedStep, log: StepLog | undefined, stepOf: (id: string) => WalkthroughStep | undefined): (string | null)[] {
+function loggedLabels(
+  step: PlayedStep,
+  log: StepLog | undefined,
+  stepOf: (id: string) => WalkthroughStep | undefined,
+): (string | null)[] {
   if (!log) return [];
   if (log.kind === 'reps') return log.sets.map((r) => String(r));
   if (log.kind === 'timed_sets') return log.sets.map((s) => secondsText(s));

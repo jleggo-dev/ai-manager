@@ -45,7 +45,9 @@ export function usePlayedSession(base: readonly WalkthroughStep[], resume?: Sess
   /** The index, in the steps as played, of the step holding `turn` — where to land after a rearrange. */
   const indexOfTurn = (list: PlayedStep[], turn: Turn | undefined): number => {
     if (!turn) return 0;
-    const i = list.findIndex((s) => (s.play ? s.play.turns.some((t) => t.stepId === turn.stepId && t.set === turn.set) : s.id === turn.stepId));
+    const i = list.findIndex((s) =>
+      s.play ? s.play.turns.some((t) => t.stepId === turn.stepId && t.set === turn.set) : s.id === turn.stepId,
+    );
     return Math.max(0, i);
   };
 

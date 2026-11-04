@@ -35,8 +35,20 @@ const wt: WalkthroughData = {
   total_min: 24,
   steps: [
     { id: 's1', title: 'Pull-ups', minutes: 6, tool: { kind: 'reps', sets: 2, reps: 5 }, skippable: true },
-    { id: 's2', title: 'Bench press', minutes: 6, tool: { kind: 'reps', sets: 2, reps: 8, load: '95 lb' }, skippable: true },
-    { id: 's3', title: 'Dumbbell row', minutes: 6, tool: { kind: 'reps', sets: 2, reps: 10, load: '40 lb' }, skippable: true },
+    {
+      id: 's2',
+      title: 'Bench press',
+      minutes: 6,
+      tool: { kind: 'reps', sets: 2, reps: 8, load: '95 lb' },
+      skippable: true,
+    },
+    {
+      id: 's3',
+      title: 'Dumbbell row',
+      minutes: 6,
+      tool: { kind: 'reps', sets: 2, reps: 10, load: '40 lb' },
+      skippable: true,
+    },
     { id: 's4', title: 'Dead hang', minutes: 6, tool: { kind: 'timer', seconds: 45, sets: 2 }, skippable: true },
   ],
 };
@@ -45,7 +57,16 @@ const press = (label: string | RegExp) => fireEvent.click(screen.getByRole('butt
 const pick = (title: string) => fireEvent.click(screen.getByRole('checkbox', { name: `Pick ${title}` }));
 const mount = (extra: Partial<Parameters<typeof Walkthrough>[0]> = {}) => {
   const onComplete = vi.fn();
-  renderWithQuery(<Walkthrough walkthrough={wt} title="Obstacle strength" occurrenceId="o1" onClose={() => {}} onComplete={onComplete} {...extra} />);
+  renderWithQuery(
+    <Walkthrough
+      walkthrough={wt}
+      title="Obstacle strength"
+      occurrenceId="o1"
+      onClose={() => {}}
+      onComplete={onComplete}
+      {...extra}
+    />,
+  );
   return { onComplete };
 };
 /** All steps → Rearrange → pick the presses and the rows → Combine → Done. */
@@ -61,7 +82,12 @@ function alternatePressesAndRows() {
 beforeEach(() => {
   localStorage.clear();
   keepHowTo.mockReset();
-  keepHowTo.mockResolvedValue({ ok: true, kept: true, how_to: 'alternate bench press and dumbbell row', activity: 'Obstacle strength' });
+  keepHowTo.mockResolvedValue({
+    ok: true,
+    kept: true,
+    how_to: 'alternate bench press and dumbbell row',
+    activity: 'Obstacle strength',
+  });
 });
 afterEach(cleanup);
 
@@ -108,7 +134,9 @@ describe('Rearrange — through the shell', () => {
     press('All steps');
     press('Review & finish ›');
     press('Every time');
-    await waitFor(() => expect(screen.getByText('Every time · alternate bench press and dumbbell row')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Every time · alternate bench press and dumbbell row')).toBeInTheDocument(),
+    );
     expect(keepHowTo).toHaveBeenCalledTimes(1);
     expect(keepHowTo).toHaveBeenCalledWith('o1', 'alternate bench press and dumbbell row');
     expect(screen.queryByRole('button', { name: 'Every time' })).toBeNull();

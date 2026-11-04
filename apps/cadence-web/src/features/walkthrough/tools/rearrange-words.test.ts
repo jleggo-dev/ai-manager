@@ -10,10 +10,31 @@ import { gapForY } from './useRearrangeDrag.ts';
 const steps: WalkthroughStep[] = [
   { id: 's1', title: 'Warm-up', minutes: 6, tool: { kind: 'read' }, skippable: true },
   { id: 's2', title: 'Pull-ups', minutes: 6, tool: { kind: 'reps', sets: 3, reps: 5 }, skippable: true },
-  { id: 's3', title: 'Bench press', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 8, load: '95 lb' }, skippable: true },
+  {
+    id: 's3',
+    title: 'Bench press',
+    minutes: 9,
+    tool: { kind: 'reps', sets: 3, reps: 8, load: '95 lb' },
+    skippable: true,
+  },
   { id: 's4', title: 'Dumbbell row', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 10 }, skippable: true },
   { id: 's5', title: 'Dead hang', minutes: 3, tool: { kind: 'timer', seconds: 45, sets: 3 }, skippable: true },
-  { id: 's6', title: 'Abs circuit', minutes: 8, tool: { kind: 'circuit', rounds: 3, exercises: [{ name: 'Plank', seconds: 30 }, { name: 'Dead bug', reps: 8 }, { name: 'Side plank', seconds: 20 }, { name: 'Hollow hold', seconds: 20 }] }, skippable: true },
+  {
+    id: 's6',
+    title: 'Abs circuit',
+    minutes: 8,
+    tool: {
+      kind: 'circuit',
+      rounds: 3,
+      exercises: [
+        { name: 'Plank', seconds: 30 },
+        { name: 'Dead bug', reps: 8 },
+        { name: 'Side plank', seconds: 20 },
+        { name: 'Hollow hold', seconds: 20 },
+      ],
+    },
+    skippable: true,
+  },
 ];
 const stepOf = (id: string) => steps.find((s) => s.id === id);
 const base = defaultShape(steps);
@@ -51,7 +72,11 @@ describe('combineToast', () => {
   it.each([
     [['Farmer carry', 'Hip thrust'], 'alternate', 'Farmer carry and hip thrust now alternate.'],
     [['Bench press', 'Dumbbell row'], 'sequence', 'Bench press and dumbbell row now run in sequence.'],
-    [['Pull-ups', 'Bench press', 'Dumbbell row'], 'alternate', 'Pull-ups and bench press and dumbbell row now alternate.'],
+    [
+      ['Pull-ups', 'Bench press', 'Dumbbell row'],
+      'alternate',
+      'Pull-ups and bench press and dumbbell row now alternate.',
+    ],
   ] as const)('%s', (titles, mode, expected) => {
     expect(combineToast(titles, mode)).toBe(expected);
   });

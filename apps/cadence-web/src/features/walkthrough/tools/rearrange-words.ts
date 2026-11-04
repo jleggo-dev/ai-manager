@@ -1,4 +1,13 @@
-import { type CombineMode, type PlayedGroup, type WalkthroughStep, distinctSteps, groupMeta, groupTitle, pillLabel, shortNames } from '@cadence/shared';
+import {
+  type CombineMode,
+  type PlayedGroup,
+  type WalkthroughStep,
+  distinctSteps,
+  groupMeta,
+  groupTitle,
+  pillLabel,
+  shortNames,
+} from '@cadence/shared';
 
 /**
  * The words of a group row (walkthrough v3 Phase 6): what each pill says, the row's title and
@@ -8,7 +17,10 @@ import { type CombineMode, type PlayedGroup, type WalkthroughStep, distinctSteps
 
 /** The pills of a group: one per turn, in the order you'll do them. A combined group's pills are
  *  the members' short names; a plain group's carry the set's number ("Pull-up 5", "Hang 45 s"). */
-export function groupPills(group: PlayedGroup, stepOf: (id: string) => WalkthroughStep | undefined): { key: string; label: string; alt: boolean; timed: boolean }[] {
+export function groupPills(
+  group: PlayedGroup,
+  stepOf: (id: string) => WalkthroughStep | undefined,
+): { key: string; label: string; alt: boolean; timed: boolean }[] {
   const ids = distinctSteps(group);
   const names = shortNames(ids.map((id) => stepOf(id)?.title ?? id));
   return group.turns.map((t) => {
@@ -24,7 +36,10 @@ export function groupPills(group: PlayedGroup, stepOf: (id: string) => Walkthrou
 }
 
 /** The row's title and meta: "Pull-ups · 3 sets", "Bench press + dumbbell row · 6 sets". */
-export function groupWords(group: PlayedGroup, stepOf: (id: string) => WalkthroughStep | undefined): { title: string; meta: string } {
+export function groupWords(
+  group: PlayedGroup,
+  stepOf: (id: string) => WalkthroughStep | undefined,
+): { title: string; meta: string } {
   const ids = distinctSteps(group);
   const steps = ids.map(stepOf);
   const one = steps.length === 1 ? steps[0] : undefined;

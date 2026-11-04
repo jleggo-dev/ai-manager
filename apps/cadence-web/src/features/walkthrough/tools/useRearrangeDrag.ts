@@ -6,7 +6,9 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
  * works one-handed on a phone: press, move, and the gap nearest the finger opens; release drops
  * it there. Pure arithmetic over the rows' boxes, so `gapForY` has a table test of its own.
  */
-export type Drag = { kind: 'group'; groupId: string; y: number } | { kind: 'turn'; groupId: string; turnIndex: number; label: string; x: number; y: number };
+export type Drag =
+  | { kind: 'group'; groupId: string; y: number }
+  | { kind: 'turn'; groupId: string; turnIndex: number; label: string; x: number; y: number };
 
 /**
  * Which gap (0..n, between the rows as they stand) a point is nearest: above a row's middle is the
@@ -27,10 +29,12 @@ export function useRearrangeDrag(onDrop: (drag: Drag, gap: number) => void) {
   const live = useRef<{ drag: Drag; gap: number | null } | null>(null);
 
   const measure = () =>
-    rows.current.filter((el): el is HTMLElement => !!el).map((el) => {
-      const b = el.getBoundingClientRect();
-      return { top: b.top, bottom: b.bottom };
-    });
+    rows.current
+      .filter((el): el is HTMLElement => !!el)
+      .map((el) => {
+        const b = el.getBoundingClientRect();
+        return { top: b.top, bottom: b.bottom };
+      });
 
   function begin(e: ReactPointerEvent, start: Drag) {
     e.preventDefault();
@@ -41,7 +45,11 @@ export function useRearrangeDrag(onDrop: (drag: Drag, gap: number) => void) {
     setGap(null);
     const move = (ev: PointerEvent) => {
       if (!live.current) return;
-      const next: Drag = { ...live.current.drag, y: ev.clientY, ...('x' in live.current.drag ? { x: ev.clientX } : {}) } as Drag;
+      const next: Drag = {
+        ...live.current.drag,
+        y: ev.clientY,
+        ...('x' in live.current.drag ? { x: ev.clientX } : {}),
+      } as Drag;
       const g = gapForY(measure(), ev.clientY);
       live.current = { drag: next, gap: g };
       setDrag(next);

@@ -73,7 +73,12 @@ export function Walkthrough({
   const { changes, change, prescribed, shape, steps, stepOf, turnLogs } = played;
   // The Change sheet, open for one move: a step, one move inside a circuit, or the step a
   // rearranged turn belongs to; starting on the sheet or straight on the weight control.
-  const [changing, setChanging] = useState<{ key: string; stepId?: string; moveIndex?: number; start: 'change' | 'weight' } | null>(null);
+  const [changing, setChanging] = useState<{
+    key: string;
+    stepId?: string;
+    moveIndex?: number;
+    start: 'change' | 'weight';
+  } | null>(null);
   const [idx, setIdx] = useState(resume?.idx ?? 0);
   const [visited, setVisited] = useState<ReadonlySet<number>>(() => new Set(resume?.visited ?? [0]));
   const [logs, setLogs] = useState<StepLogs>(resume?.logs ?? {});
@@ -93,7 +98,21 @@ export function Walkthrough({
 
   useRememberSession(
     occurrenceId
-      ? { occurrenceId, title, area, walkthrough, idx, visited: [...visited], logs, tempos, phase, clock, changes, shape, turnLogs }
+      ? {
+          occurrenceId,
+          title,
+          area,
+          walkthrough,
+          idx,
+          visited: [...visited],
+          logs,
+          tempos,
+          phase,
+          clock,
+          changes,
+          shape,
+          turnLogs,
+        }
       : null,
   );
   const close = () => {
@@ -165,7 +184,13 @@ export function Walkthrough({
     for (const s of view.steps) {
       const log = view.logs[s.id];
       if (log?.kind !== 'journal' || !log.note.trim()) continue;
-      void keepJournalEntry({ bank: log.bank, prompt: log.prompt, body: log.note, secret: log.secret, mode: 'typed' }).catch(() => undefined);
+      void keepJournalEntry({
+        bank: log.bank,
+        prompt: log.prompt,
+        body: log.note,
+        secret: log.secret,
+        mode: 'typed',
+      }).catch(() => undefined);
     }
     // The settled tempos go with it: the piece remembers what they actually play it at, and the
     // coach can see it next time she prescribes. Best-effort like the journal write above — the
@@ -182,7 +207,16 @@ export function Walkthrough({
   if (steps.length === 0 || !step) return null;
 
   if (phase === 'done') {
-    return <WalkthroughDone steps={view.steps} logs={view.logs} title={title} occurrenceId={occurrenceId} onFinish={finish} onTalk={onTalk} />;
+    return (
+      <WalkthroughDone
+        steps={view.steps}
+        logs={view.logs}
+        title={title}
+        occurrenceId={occurrenceId}
+        onFinish={finish}
+        onTalk={onTalk}
+      />
+    );
   }
 
   if (phase === 'recap') {
@@ -208,19 +242,40 @@ export function Walkthrough({
   const skipsCircuit = step.tool.kind === 'circuit' && (!step.play || step.play.names.length > 1);
 
   return (
-    <div style={{ ...overlay, background: chrome?.tint ?? overlay.background, transition: 'background 0.7s ease' }} role="dialog" aria-label="Task walkthrough">
+    <div
+      style={{ ...overlay, background: chrome?.tint ?? overlay.background, transition: 'background 0.7s ease' }}
+      role="dialog"
+      aria-label="Task walkthrough"
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button style={closeBtn} onClick={close} aria-label="Close">
           ✕
         </button>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: chrome?.ink ?? 'oklch(38% 0.05 60)' }}>{shortTitle(title)}</div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', color: chrome?.sub ?? 'oklch(52% 0.04 62)' }}>{walkthrough.total_min} MIN TOTAL</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: chrome?.ink ?? 'oklch(38% 0.05 60)' }}>
+              {shortTitle(title)}
+            </div>
+            <div
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                color: chrome?.sub ?? 'oklch(52% 0.04 62)',
+              }}
+            >
+              {walkthrough.total_min} MIN TOTAL
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 3 }}>
             {steps.map((s, i) => (
-              <Pip key={s.id} onClick={() => go(i)} flex={Math.max(2, s.minutes)} status={stepStatus(i, safeIdx, visited, s, logsView[s.id])} fraction={stepFraction(s, logsView[s.id])} />
+              <Pip
+                key={s.id}
+                onClick={() => go(i)}
+                flex={Math.max(2, s.minutes)}
+                status={stepStatus(i, safeIdx, visited, s, logsView[s.id])}
+                fraction={stepFraction(s, logsView[s.id])}
+              />
             ))}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -232,7 +287,11 @@ export function Walkthrough({
         </div>
       </div>
 
-      <div ref={body} data-step-body style={{ marginTop: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <div
+        ref={body}
+        data-step-body
+        style={{ marginTop: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}
+      >
         {step.play ? (
           // A rearranged group — a set on its own, or two moves alternating — plays one turn at a
           // time; Change opens for the turn's own step.
@@ -252,8 +311,12 @@ export function Walkthrough({
             step={step}
             rounds={step.tool.rounds}
             exercises={step.tool.exercises}
-            workingLoads={Object.fromEntries(step.tool.exercises.map((_, i) => [i, workingLoad(changes, changeKey(step.id, i))]).filter(([, l]) => l))}
-            log={logs[step.id]?.kind === 'circuit' ? (logs[step.id] as Extract<StepLog, { kind: 'circuit' }>) : undefined}
+            workingLoads={Object.fromEntries(
+              step.tool.exercises.map((_, i) => [i, workingLoad(changes, changeKey(step.id, i))]).filter(([, l]) => l),
+            )}
+            log={
+              logs[step.id]?.kind === 'circuit' ? (logs[step.id] as Extract<StepLog, { kind: 'circuit' }>) : undefined
+            }
             onLog={(l) => setLog(step.id, l)}
             onAdvance={next}
             onChange={(i) => setChanging({ key: changeKey(step.id, i), moveIndex: i, start: 'change' })}
@@ -265,7 +328,9 @@ export function Walkthrough({
           <StepInterval
             step={step}
             plan={step.tool.plan}
-            log={logs[step.id]?.kind === 'interval' ? (logs[step.id] as Extract<StepLog, { kind: 'interval' }>) : undefined}
+            log={
+              logs[step.id]?.kind === 'interval' ? (logs[step.id] as Extract<StepLog, { kind: 'interval' }>) : undefined
+            }
             onLog={(l) => setLog(step.id, l)}
             onDone={next}
             onChrome={setChrome}
@@ -275,7 +340,11 @@ export function Walkthrough({
             <StepHeader
               step={step}
               workingLoad={workingLoad(changes, step.id)}
-              onChange={takesLoad(step.tool) || step.alternatives ? () => setChanging({ key: step.id, start: 'change' }) : undefined}
+              onChange={
+                takesLoad(step.tool) || step.alternatives
+                  ? () => setChanging({ key: step.id, start: 'change' })
+                  : undefined
+              }
               onUndoSwap={() => change(step.id, (c) => ({ ...c, swap: undefined }))}
             />
             {/* Keyed by step so each step gets its OWN tool instance. Without the key React reused
@@ -283,12 +352,26 @@ export function Walkthrough({
                 position — and the new step opened with the old step's finished clock: 0:00 left,
                 "Resume" (2026-09-06). */}
             <div key={step.id} style={{ marginTop: 18 }}>
-              {renderTool(step, logs, setLog, next, { resume: clock?.stepId === step.id ? clock : null, set: (c) => setClock(c ? { stepId: step.id, ...c } : null) }, workingLoad(changes, step.id))}
+              {renderTool(
+                step,
+                logs,
+                setLog,
+                next,
+                {
+                  resume: clock?.stepId === step.id ? clock : null,
+                  set: (c) => setClock(c ? { stepId: step.id, ...c } : null),
+                },
+                workingLoad(changes, step.id),
+              )}
             </div>
             {/* Once a weight is on the move, one quiet button reopens the weight control for the set
                 in hand (design A, board 2). Logged sets keep the load they were logged at. */}
             {workingLoad(changes, step.id) && (
-              <button type="button" style={changeWeightBtn} onClick={() => setChanging({ key: step.id, start: 'weight' })}>
+              <button
+                type="button"
+                style={changeWeightBtn}
+                onClick={() => setChanging({ key: step.id, start: 'weight' })}
+              >
                 Change weight
               </button>
             )}
@@ -297,7 +380,12 @@ export function Walkthrough({
                 might want it. Circuits and intervals are the two that own their whole body and so
                 sit outside this branch; neither is a step anyone practises an instrument to. On a
                 practice-area step the slot also offers one where the coach attached none. */}
-            <MetronomeSlot key={`m-${step.id}`} step={step} area={area} onSettle={(t) => setTempos((all) => ({ ...all, [step.title]: t }))} />
+            <MetronomeSlot
+              key={`m-${step.id}`}
+              step={step}
+              area={area}
+              onSettle={(t) => setTempos((all) => ({ ...all, [step.title]: t }))}
+            />
           </>
         )}
       </div>
@@ -305,14 +393,28 @@ export function Walkthrough({
       {/* No line explaining the buttons here: the owner ruled out text that covers for the UI
           (2026-11-03). Moving still logs nothing — that is in the component note at the top. */}
       <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-        <button style={{ ...navBtn, width: 62, flex: 'none' }} onClick={prev} disabled={safeIdx === 0} aria-label="Previous step">
+        <button
+          style={{ ...navBtn, width: 62, flex: 'none' }}
+          onClick={prev}
+          disabled={safeIdx === 0}
+          aria-label="Previous step"
+        >
           ‹
         </button>
         <button style={{ ...navBtn, flex: 1 }} onClick={() => setAllSteps(true)}>
           <span style={{ fontSize: 13, fontWeight: 900, color: 'oklch(32% 0.02 150)' }}>All steps</span>
         </button>
         {skipsCircuit ? (
-          <button style={{ ...navBtn, flex: 'none', padding: '0 12px', border: '1px solid oklch(84% 0.05 66)', whiteSpace: 'nowrap' }} onClick={next}>
+          <button
+            style={{
+              ...navBtn,
+              flex: 'none',
+              padding: '0 12px',
+              border: '1px solid oklch(84% 0.05 66)',
+              whiteSpace: 'nowrap',
+            }}
+            onClick={next}
+          >
             <span style={{ fontSize: 12.5, fontWeight: 900, color: TONE.chipInk }}>Skip circuit&nbsp;›</span>
           </button>
         ) : (
@@ -350,7 +452,9 @@ export function Walkthrough({
           onSplit={(id) => played.splitGroup(id)}
         />
       )}
-      {rearranging && <RearrangeSheet steps={prescribed} shape={shape} onDone={rearranged} onClose={() => setRearranging(false)} />}
+      {rearranging && (
+        <RearrangeSheet steps={prescribed} shape={shape} onDone={rearranged} onClose={() => setRearranging(false)} />
+      )}
     </div>
   );
 }

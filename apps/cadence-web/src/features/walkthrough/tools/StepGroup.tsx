@@ -87,7 +87,9 @@ export function StepGroup({
             <SwappedPill from={member.swapped_from} onUndo={() => onUndoSwap(member.id)} />
           </div>
         )}
-        <div style={{ fontSize: 21, fontWeight: 800, color: TONE.ink2, marginTop: combined ? 3 : 0 }}>{member.title}</div>
+        <div style={{ fontSize: 21, fontWeight: 800, color: TONE.ink2, marginTop: combined ? 3 : 0 }}>
+          {member.title}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
           {target.value != null && (
             <span style={{ fontSize: 14, fontWeight: 900, color: TONE.ink, marginRight: 2, whiteSpace: 'nowrap' }}>
@@ -123,10 +125,24 @@ export function StepGroup({
                   border: `1.5px solid ${current ? TONE.fillA : done ? DONE_EDGE : 'transparent'}`,
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: current ? 900 : 800, color: done ? DONE_INK : current ? 'oklch(38% 0.06 62)' : 'oklch(40% 0.02 150)' }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: current ? 900 : 800,
+                    color: done ? DONE_INK : current ? 'oklch(38% 0.06 62)' : 'oklch(40% 0.02 150)',
+                  }}
+                >
                   {chip.name}
                 </div>
-                <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', color: done ? DONE_INK : current ? 'oklch(50% 0.04 62)' : 'oklch(55% 0.015 85)' }}>
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 900,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: done ? DONE_INK : current ? 'oklch(50% 0.04 62)' : 'oklch(55% 0.015 85)',
+                  }}
+                >
                   {chip.round}
                 </div>
               </button>
@@ -151,7 +167,13 @@ export function StepGroup({
             }}
           />
         ) : (
-          <TurnReps target={target.value} load={load} logged={logged?.value} onLog={log} allDone={allDone && picked == null} />
+          <TurnReps
+            target={target.value}
+            load={load}
+            logged={logged?.value}
+            onLog={log}
+            allDone={allDone && picked == null}
+          />
         )}
       </div>
     </>
@@ -176,17 +198,36 @@ function TurnReps({
   const reps = dial ?? logged ?? target ?? 10;
   return (
     <div style={card}>
-      <div style={{ position: 'relative', height: 128, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        style={{ position: 'relative', height: 128, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          <div style={{ fontFamily: 'var(--display), serif', fontWeight: 600, fontSize: 46, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: TONE.ink }}>
+          <div
+            style={{
+              fontFamily: 'var(--display), serif',
+              fontWeight: 600,
+              fontSize: 46,
+              lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
+              color: TONE.ink,
+            }}
+          >
             {reps}
           </div>
           <div style={eyebrow}>{load ? `reps · ${load}` : 'reps'}</div>
         </div>
-        <button onClick={() => setDial(Math.max(0, reps - 1))} style={{ ...dialBtn, left: 6 }} aria-label="one fewer rep">
+        <button
+          onClick={() => setDial(Math.max(0, reps - 1))}
+          style={{ ...dialBtn, left: 6 }}
+          aria-label="one fewer rep"
+        >
           −
         </button>
-        <button onClick={() => setDial(Math.min(99, reps + 1))} style={{ ...dialBtn, right: 6 }} aria-label="one more rep">
+        <button
+          onClick={() => setDial(Math.min(99, reps + 1))}
+          style={{ ...dialBtn, right: 6 }}
+          aria-label="one more rep"
+        >
           +
         </button>
       </div>
