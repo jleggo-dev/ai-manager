@@ -165,6 +165,9 @@ the check found back to her. Never correct it silently (see Phase 3).
   locked by hand or in a pocket, local notifications for the next boundaries, inside the iOS
   64-slot budget shared with plan reminders, rebooked on every pause, skip or edit. (1) and (2)
   cover the gym floor; (3) is the pocket tier behind them.
+  **Addendum (owner, 2026-11-03):** a sit and the breath pacer do not hold the screen by default
+  — their bells ring as notifications with the screen dark — and whether the screen stays on
+  during a sit is a per-device setting (Phase 7a).
 - **No text that explains the UI** (ruled 2026-11-03 in the header parcel, extended the same day):
   every tool, not only the ones Phase 1 touched. StepMeditate's "tap anywhere" half and its
   footnote, HandsFree's "tap to control the timer by voice", and Metronome's "Tap four beats to
@@ -237,7 +240,7 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 - [x] **3a. `checkSession()` in `@cadence/shared`** (`session-check.ts`, PR: the session checker,
       2026-11-03). It returns findings, never fixes. Each finding is `{ rule, blockIndex, itemIndex,
-      item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
+  item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
       each with a table of positives (the stored shapes) and near-misses:
   - `timer_no_time` (error): a timer with no `duration_min`;
   - `one_rep_sets` (question): `reps` ≤ 1 with `sets` ≥ 2 — the carry; the cue's time is quoted
@@ -361,6 +364,75 @@ the check found back to her. Never correct it silently (see Phase 3).
   - After 6a; can run alongside 6a′. Target the same ~20 s as 5f, shown with the same
     "asking · ~20 s" row, never blocking.
 
+## Phase 7 — the chime on any screen (after R6; no design needed)
+
+R6, as ruled: the chime is heard no matter what screen you are on. Three pieces, in order. (1) and
+(2) cover the gym floor; (3) is the pocket tier behind them. Facts from the code today (2026-11-03):
+the metronome is the only clock that holds the screen (`useMetronome.ts` →
+`capabilities.keepAwake`, which is `isIdleTimerDisabled` on iOS and the browser wake lock on the
+web); every tool keeps time by the wall clock (`useWallClock`, `useIntervalClock`), so a clock that
+was left is caught up on return — but its chime effect lives in the tool's render, so a chime
+scheduled while the tool is unmounted never plays; the interval player deliberately resumes
+**paused** when you come back to its step (`StepInterval.tsx`, the comment near line 100); and the
+notification plumbing books exactly ONE fixed-moment alarm (`LocalNotificationsCapability.
+scheduleAlarm`, reserved id `TIMER_ALARM_ID`, which `sync` / `cancelAll` step around), with the
+body "… is up — keep going or stop the clock." (#477's locked-screen check has the full costing.)
+
+- [ ] **7a. The screen stays awake while a clock you watch runs.** One hook,
+      `useKeepAwakeWhile(running)`, extracted from `useMetronome` (which keeps its behaviour), used
+      by every clock the person looks at: `StepTimer`, `StepTimedSets`, `StepInterval`,
+      `CircuitMoveClock`. Held from Start, released on pause, stop, finish and unmount. Not a
+      setting: the ruling says the screen stays on, and a phone pocketed mid-run is 7c's case.
+  - **A sit and the breath pacer are different (owner, 2026-11-03):** keep-awake holds the
+    screen _lit_, and a person sitting with their eyes closed did not ask for a lamp for twenty
+    minutes. Their bells happen at known moments, so they ring through 7c's notifications with
+    the screen dark. Whether the screen stays on anyway is a **per-device setting** — it is about
+    this phone's screen, so it lives in the phone's own preferences, not the API, and needs no
+    migration. One row in the Settings Room's device group (`SettingsDeviceGroup.tsx`):
+    **"Screen during a sit"** — _goes dark_ (default) / _stays on_, with the plain line "The bells
+    still ring either way." The hook reads it for `StepMeditate` and `StepBreathing` only.
+  - Table tests: one row per watched tool (`keepAwake.set(true)` on Start, `set(false)` on each
+    way out); the sit and the pacer never hold the screen on the default, and do on _stays on_;
+    the setting round-trips the preferences store and reads _goes dark_ when nothing is stored.
+  - Left out on purpose, one line to widen it later: a long timer in a pocket (a 20-minute zone-2
+    run) has the same battery argument; 7c's notification covers the chime, and one switch people
+    can explain beats two.
+- [ ] **7b. The running clock lives at app level.** A clock store mounted at the App root (beside
+      what `sessionInProgress.ts` already snapshots as `RunningClock`): the tool **registers** its
+      clock (started at, base, target, which chime, and for intervals the plan so `positionAt`
+      can find the boundaries), and the store, not the tool, schedules and plays the chimes
+      (`playChime` / `playTones`). The tool only paints what the store tells it. Then:
+  - leaving the walkthrough screen or switching tab does not unmount the clock, and its chime
+    plays;
+  - the interval player stops resuming paused: a run you left keeps running, and coming back
+    shows it caught up (position is already a pure function of elapsed time);
+  - an interim pill on the other screens — the clock and a tap back to the step — so a running
+    clock is never invisible. No design round for it; plain, one line.
+  - Tests: a running timer survives a route change and chimes on time with the walkthrough
+    unmounted (fake timers); a left interval is running on return; the pill shows and returns;
+    `sessionInProgress` round-trips the registered clock.
+  - What this does NOT cover: iOS suspends the webview when the app is backgrounded or the phone
+    is locked, app-level or not. That is 7a's job while the app is in front, and 7c's otherwise.
+- [ ] **7c. The pocket tier: notifications for the next boundaries.** For a phone locked by hand
+      or in a pocket, the OS fires the chime. Replace the single reserved alarm id with a reserved
+      **range** (`sync` / `cancelAll` taught to step around it), and book the next **K** boundaries
+      of the running clock (K small — start at 8 — inside the iOS 64-slot budget shared with plan
+      reminders): work / recover / done for an interval, the target for a timer or a timed set,
+      the halfway chime for switch-sides. Rebook all of them on every pause, resume, skip, restart
+      and edit; cancel on stop and finish. The body names the boundary ("Recover · 30 s", "Work",
+      "Time's up"); the sound is the system default unless two short sound files are bundled in
+      the iOS app for the work/recover direction — a separate, later call.
+  - Tests: boundaries booked from the plan, never more than K; rebooked on pause/resume; all
+    cancelled on finish; the ids never collide with plan reminders (`local-notifications-sync`).
+- [ ] **7d. Device check — the only proof.** None of this can be shown in jsdom or the browser
+      pane. Four checks on the phone after the rebuild: (a) start an interval, switch to the Plan
+      tab, hear the work/recover chimes; (b) start a timer, lock the phone, hear the target; (c)
+      pocket the phone mid-interval, hear the boundaries; (d) come back from each and see the clock
+      caught up, not paused.
+- Order inside the phase: 7a and 7b are one parcel (both touch every clock tool); 7c follows,
+  since it reads the boundaries from 7b's store. No API, no job sync, no migration; one phone
+  rebuild at the end.
+
 ## Order and parallelism
 
 - **Now:** Phase 1 (one PR) and Phase 4 (design) at the same time.
@@ -368,4 +440,7 @@ the check found back to her. Never correct it silently (see Phase 3).
   session building, so whichever lands second rebases.
 - **After design (the canvas is complete as of 2026-11-03):** Phase 5, then Phase 6. Phase 6 uses
   5a's log shape; 6e (the rearrange job) needs 6a's shape and can run alongside 6a′.
+- **Any time after Phase 2 (done):** Phase 7 (7a+7b as one parcel, then 7c). It touches every
+  clock tool, so it must not run alongside Phase 5's player changes — whichever starts second
+  rebases.
 - **Owner-only steps, per PR:** API deploy, phone rebuild, sync-jobs (3b, 5c), cleanup.
