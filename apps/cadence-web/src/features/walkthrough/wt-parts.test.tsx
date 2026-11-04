@@ -3,11 +3,11 @@
  * beside it, and there is no TARGET label or box. `targetText` is the one source of that text (the
  * header and the all-steps list both read it), so its grammar is pinned per tool kind.
  */
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import type { WalkthroughStep } from '@cadence/shared';
 import { StepHeader } from './wt-parts.tsx';
-import { targetText } from './wt-styles.ts';
+import { rowReceipt, targetText } from './wt-styles.ts';
 
 const step = (tool: WalkthroughStep['tool'], extra: Partial<WalkthroughStep> = {}): WalkthroughStep => ({
   id: 's1',
@@ -66,5 +66,81 @@ describe('StepHeader — plain target, Form beside it, no TARGET box', () => {
   it('a long cue folds with "more"', () => {
     render(<StepHeader step={step({ kind: 'read' }, { body: 'Brace, sit back, stand tall. '.repeat(8) })} />);
     expect(screen.getByRole('button', { name: 'more' })).toBeInTheDocument();
+  });
+});
+
+describe('StepHeader — Change this move (walkthrough v3 Phase 5)', () => {
+  it('draws the Change button beside the target, before the Form link, only when asked to', () => {
+    const onChange = vi.fn();
+    render(
+      <StepHeader
+        step={step({ kind: 'reps', reps: 12, load: 'bodyweight', sets: 2 }, { video_query: 'goblet squat form' })}
+        onChange={onChange}
+      />,
+    );
+    const target = screen.getByText('12 × bodyweight · 2 sets');
+    const change = screen.getByRole('button', { name: 'Change' });
+    const form = screen.getByRole('link', { name: 'Form' });
+    expect(change.parentElement).toBe(target.parentElement);
+    expect([...target.parentElement!.children].indexOf(change)).toBeLessThan(
+      [...target.parentElement!.children].indexOf(form),
+    );
+    fireEvent.click(change);
+    expect(onChange).toHaveBeenCalled();
+    cleanup();
+    render(<StepHeader step={step({ kind: 'reps', reps: 12, sets: 2 })} />);
+    expect(screen.queryByRole('button', { name: 'Change' })).toBeNull();
+  });
+
+  it("the weight the person added shows in the target in place of the plan's", () => {
+    render(<StepHeader step={step({ kind: 'reps', reps: 12, load: 'bodyweight', sets: 2 })} workingLoad="15 lb" />);
+    expect(screen.getByText('12 × 15 lb · 2 sets')).toBeInTheDocument();
+    expect(screen.queryByText(/bodyweight/)).toBeNull();
+  });
+
+  it('a swapped step carries "Swapped from … · Undo" above its title; Undo calls back', () => {
+    const onUndoSwap = vi.fn();
+    render(
+      <StepHeader
+        step={{
+          ...step({ kind: 'reps', reps: 12, load: '40 lb', sets: 2 }),
+          title: 'Kettlebell hip thrust',
+          swapped_from: 'Glute bridge',
+        }}
+        onUndoSwap={onUndoSwap}
+      />,
+    );
+    expect(screen.getByText('Swapped from Glute bridge')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(onUndoSwap).toHaveBeenCalled();
+  });
+});
+
+describe('rowReceipt — a swapped step never reads as a skip', () => {
+  const thrust = {
+    ...step({ kind: 'reps', reps: 12, load: '40 lb', sets: 2 }),
+    title: 'Kettlebell hip thrust',
+    swapped_from: 'Glute bridge',
+  };
+  it.each<[string, Parameters<typeof rowReceipt>, string]>([
+    [
+      'logged',
+      [thrust, { kind: 'reps', sets: [12, 12], load: '40 lb' }, false, 'logged'],
+      '2×12 @ 40 lb · swapped from Glute bridge',
+    ],
+    ['here now', [thrust, undefined, true, 'current'], 'Swapped from Glute bridge · Here now'],
+    [
+      'passed over',
+      [thrust, undefined, false, 'skipped'],
+      'Swapped from Glute bridge · Passed over · you can still do it',
+    ],
+    ['not reached', [thrust, undefined, false, 'untouched'], 'Swapped from Glute bridge · 2 × 12'],
+    [
+      'an unswapped step is unchanged',
+      [step({ kind: 'reps', reps: 12, sets: 2 }), undefined, false, 'skipped'],
+      'Passed over · you can still do it',
+    ],
+  ])('%s', (_name, args, expected) => {
+    expect(rowReceipt(...args)).toBe(expected);
   });
 });

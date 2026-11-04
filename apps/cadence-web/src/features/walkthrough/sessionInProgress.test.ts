@@ -38,6 +38,7 @@ const SNAP: SessionSnapshot = {
   tempos: { Écossaise: { bpm: 72, meter: 3 } },
   phase: 'step',
   clock: { stepId: 's2', startedAt: 1_000, base: 0 },
+  changes: {},
 };
 
 beforeEach(() => {
@@ -50,6 +51,28 @@ describe('sessionInProgress', () => {
   it('reads back exactly what was written — step, logs, tempo and the running clock', () => {
     writeSessionInProgress(SNAP);
     expect(readSessionInProgress()).toEqual(SNAP);
+  });
+
+  it('round-trips a swap and per-set loads; a snapshot written before changes existed reads back with none', () => {
+    const changed: SessionSnapshot = {
+      ...SNAP,
+      logs: { s1: { kind: 'reps', sets: [12, 12], load: 'bodyweight', loads: ['15 lb', '20 lb'] } },
+      changes: {
+        s1: {
+          swap: { name: 'Kettlebell hip thrust', sets: 2, reps: 12, load: '40 lb', equipment: ['Bench'] },
+          load: '20 lb',
+        },
+      },
+    };
+    writeSessionInProgress(changed);
+    expect(readSessionInProgress()).toEqual(changed);
+    const { changes: _c, ...older } = changed;
+    void _c;
+    localStorage.setItem(
+      SESSION_IN_PROGRESS_KEY,
+      JSON.stringify({ ...older, v: SESSION_IN_PROGRESS_VERSION, owner: 'u1', at: Date.now() }),
+    );
+    expect(readSessionInProgress()?.changes).toEqual({});
   });
 
   it('clear forgets it', () => {

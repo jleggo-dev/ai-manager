@@ -12,6 +12,9 @@ export interface LoggedChip {
   label: string;
   /** Off the target — a colour change on the number, never a warning. */
   off: boolean;
+  /** A second line under the number — the load this set was lifted at ("15 lb"), when weights are
+   *  in play on the step (walkthrough v3 Phase 5). */
+  sub?: string;
 }
 
 export function SetChips({
@@ -22,8 +25,9 @@ export function SetChips({
 }: {
   count: number;
   logged: LoggedChip[];
-  /** The set in hand: its index and, when something is on it, what the chip shows. */
-  current: { index: number; label?: string } | null;
+  /** The set in hand: its index and, when something is on it, what the chip shows; `sub` is the
+   *  load it will be logged at. */
+  current: { index: number; label?: string; sub?: string } | null;
   onEdit?: (index: number) => void;
 }) {
   return (
@@ -57,6 +61,11 @@ export function SetChips({
             >
               {done ? done.label : live ? live : isCurrent ? '·' : '—'}
             </div>
+            {(done?.sub || (isCurrent && current?.sub)) && (
+              <div style={{ fontSize: 11, fontWeight: 800, color: done ? DONE_INK : 'oklch(55% 0.015 85)' }}>
+                {done ? done.sub : current?.sub}
+              </div>
+            )}
             <div
               style={{
                 fontSize: 9,

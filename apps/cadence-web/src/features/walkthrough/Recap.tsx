@@ -129,7 +129,14 @@ export function Recap({
                       boxSizing: 'border-box',
                     }}
                   />
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 800, color: 'oklch(32% 0.02 150)' }}>{s.title}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 800, color: 'oklch(32% 0.02 150)' }}>
+                    {s.title}
+                    {s.swapped_from && (
+                      <div style={{ fontSize: 11, fontWeight: 700, color: TONE.sub }}>
+                        Swapped from {s.swapped_from}
+                      </div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: TONE.sub }}>{s.minutes} min</div>
                 </div>
                 <div style={{ display: 'flex', gap: 7 }}>

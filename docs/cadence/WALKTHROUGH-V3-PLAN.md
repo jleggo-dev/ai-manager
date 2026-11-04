@@ -302,21 +302,23 @@ the check found back to her. Never correct it silently (see Phase 3).
       it. No reason field anywhere (pinned by `prescribe-session-alternatives.test.ts`). Capped
       at 3, bounded in `session-alternatives.ts`, carried onto `WalkthroughStep` and
       `CircuitExercise`. **sync-jobs owed.**
-- [ ] **5d. The Change sheet (design A).**
-  - Add weight: its own control, with − / + in 2.5 lb steps (in the person's units), a decimal
-    field, and jump chips for suggestion / last time / bodyweight.
-  - Or swap for…: her alternatives plus history ("Last … · date", or New).
-  - Something else: see 5f.
-  - Swapped pill with Undo.
-  - Change weight scoped to the current set.
-  - On reps steps, timed sets and circuit moves.
+- [x] **5d. The Change sheet (design A).** (PR: Change this move — the sheet and the player.) One
+      Change button beside the target (`change-parts.tsx`) opens `tools/ChangeSheet.tsx`; Add weight
+      opens `tools/WeightSheet.tsx` (− / + by 2.5 lb or 1 kg from the resolved `body_weight` unit, a
+      decimal field, Jump to chips only where there is a reason, green "Use 7.5 lb"); swap rows from
+      the item's alternatives with the equipment chip and "Last … · date" or New from 5b;
+      Something else asks 5f and lands a row above itself, a fault is one plain line. What the person
+      changed lives in `changes.ts` (keyed by step, or step:move for a circuit), is applied to the
+      steps shown and remembered by `sessionInProgress`. The Swapped pill undoes; Change weight is the
+      set in hand only. Reps steps, timed sets and circuit moves.
 - [x] **5f. "Something else": a single-item alternative job.** `alternative-item` in the AI Admin
       config (pinned gpt-class profile, strict schema), behind `POST /plan/alternative-item`
       (`services/alternative-item.ts`): one item plus equipment, constraints and that item's last
       logs in, ONE alternative out, inside a 25 s budget or a 503 the sheet says in words. Never
       `revise_session`. **sync-jobs creates the job.**
-- [ ] **5e. Show swaps.** A swap reads as "swapped X for Y" in All steps, the Recap and the log
-      line, never as a skip. The coach sees swaps in `recent_logs`.
+- [x] **5e. Show swaps.** The steps shown are the swapped ones, so All steps, the Recap and the
+      summary the coach gets say "Kettlebell hip thrust 2×12 @ 40 lb · swapped from glute bridge";
+      a swapped move that was passed over still says "Swapped from …". Never a skip.
 
 ## Phase 6 — rearrange the session (after R2 + R5 + design C)
 

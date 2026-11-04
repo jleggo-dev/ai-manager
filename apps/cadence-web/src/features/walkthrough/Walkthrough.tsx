@@ -1,24 +1,26 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { MetronomeSpec, Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/shared';
-import { StepReps } from './tools/StepReps.tsx';
-import { StepTimer, type TimerClock } from './tools/StepTimer.tsx';
-import { StepTimedSets } from './tools/StepTimedSets.tsx';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import type {
+  MetronomeSpec,
+  SessionItemAlternative,
+  StepTool,
+  Walkthrough as WalkthroughData,
+  WalkthroughStep,
+} from '@cadence/shared';
 import { StepCircuit } from './tools/StepCircuit.tsx';
 import { StepInterval, type StepChrome } from './tools/StepInterval.tsx';
-import { StepBreathing } from './tools/StepBreathing.tsx';
-import { StepMeditate } from './tools/StepMeditate.tsx';
-import { StepGrounding } from './tools/StepGrounding.tsx';
-import { StepFeelingLog } from './tools/StepFeelingLog.tsx';
-import { StepMeasure } from './tools/StepMeasure.tsx';
-import { StepCheckoff, StepJournal } from './tools/SimpleTools.tsx';
 import { MetronomeSlot, type StepArea } from './tools/MetronomeSlot.tsx';
+import { ChangeFlow, type ChangeTarget } from './tools/ChangeFlow.tsx';
+import { HEADER_EDGE, HEADER_INK } from './tools/change-parts.tsx';
+import { renderTool } from './renderTool.tsx';
+import { type MoveChanges, applyChanges, changeKey, changeSubtitle, takesLoad, workingLoad } from './changes.ts';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
 import { WalkthroughDone } from './WalkthroughDone.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
-import { overlay, closeBtn, caption, navBtn, shortTitle } from './wt-styles.ts';
+import { overlay, closeBtn, caption, navBtn, shortTitle, targetWord } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
+import type { MoveChange } from './changes.ts';
 import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
 import { clearSessionInProgress, type RunningClock, type SessionSnapshot } from './sessionInProgress.ts';
 import { useRememberSession } from './useRememberSession.ts';
@@ -33,6 +35,11 @@ import { useRememberSession } from './useRememberSession.ts';
  * A plan task's walkthrough (one with an `occurrenceId`) is remembered on disk as it goes and
  * forgotten on close or Finish, so the app coming back after iOS reclaimed it reopens the session
  * where it was — step, logs, tempos and a running timer, caught up (sessionInProgress.ts).
+ *
+ * "Change this move" (walkthrough v3 Phase 5, design A): the Change button beside a target opens one
+ * sheet — add a weight, or swap the move for one of the coach's alternatives — and what the person
+ * changed is kept in `changes` (changes.ts), applied to the steps shown and remembered with the
+ * session. The prescription is never edited; a swap says "swapped from …" and is never a skip.
  */
 export function Walkthrough({
   walkthrough,
@@ -60,7 +67,16 @@ export function Walkthrough({
   /** The remembered session this one reopens, when the app came back mid-session. */
   resume?: SessionSnapshot | null;
 }) {
-  const steps = walkthrough.steps;
+  // What the person changed about a move this session — a swap or an added weight, keyed by step
+  // (changes.ts). The steps SHOWN are the prescription with those applied; the prescription itself
+  // is never edited, so Undo is a delete and the log line can still say what the plan said.
+  const [changes, setChanges] = useState<MoveChanges>(resume?.changes ?? {});
+  const steps = useMemo(() => applyChanges(walkthrough.steps, changes), [walkthrough.steps, changes]);
+  // The Change sheet, open for one move (a step, or a move inside a circuit), starting on the sheet
+  // or straight on the weight control.
+  const [changing, setChanging] = useState<{ key: string; moveIndex?: number; start: 'change' | 'weight' } | null>(
+    null,
+  );
   const [idx, setIdx] = useState(resume?.idx ?? 0);
   const [visited, setVisited] = useState<ReadonlySet<number>>(() => new Set(resume?.visited ?? [0]));
   const [logs, setLogs] = useState<StepLogs>(resume?.logs ?? {});
@@ -79,7 +95,7 @@ export function Walkthrough({
 
   useRememberSession(
     occurrenceId
-      ? { occurrenceId, title, area, walkthrough, idx, visited: [...visited], logs, tempos, phase, clock }
+      ? { occurrenceId, title, area, walkthrough, idx, visited: [...visited], logs, tempos, phase, clock, changes }
       : null,
   );
   const close = () => {
@@ -111,6 +127,22 @@ export function Walkthrough({
   const next = () => (idx + 1 < steps.length ? go(idx + 1) : toPhase('recap'));
   const prev = () => idx > 0 && go(idx - 1);
   const setLog = (id: string, log: StepLog) => setLogs((l) => ({ ...l, [id]: log }));
+  const change = (key: string, patch: (c: MoveChange) => MoveChange | null) =>
+    setChanges((all) => {
+      const next = { ...all };
+      const c = patch(all[key] ?? {});
+      if (c && (c.swap || c.load)) next[key] = c;
+      else delete next[key];
+      return next;
+    });
+  const swapMove = (key: string, alt: SessionItemAlternative) => {
+    change(key, (c) => ({ ...c, swap: alt }));
+    setChanging(null);
+  };
+  const applyLoad = (key: string, load: string) => {
+    change(key, (c) => ({ ...c, load }));
+    setChanging(null);
+  };
 
   /**
    * Finish is the single write — and journal steps write TWICE by design: the occurrence log gets
@@ -230,11 +262,16 @@ export function Walkthrough({
             step={step}
             rounds={step.tool.rounds}
             exercises={step.tool.exercises}
+            workingLoads={Object.fromEntries(
+              step.tool.exercises.map((_, i) => [i, workingLoad(changes, changeKey(step.id, i))]).filter(([, l]) => l),
+            )}
             log={
               logs[step.id]?.kind === 'circuit' ? (logs[step.id] as Extract<StepLog, { kind: 'circuit' }>) : undefined
             }
             onLog={(l) => setLog(step.id, l)}
             onAdvance={next}
+            onChange={(i) => setChanging({ key: changeKey(step.id, i), moveIndex: i, start: 'change' })}
+            onUndoSwap={(i) => change(changeKey(step.id, i), (c) => ({ ...c, swap: undefined }))}
           />
         ) : step.tool.kind === 'interval' ? (
           // Like a circuit, the interval player owns its whole body — the coach chip and the phase
@@ -251,17 +288,44 @@ export function Walkthrough({
           />
         ) : (
           <>
-            <StepHeader step={step} />
+            <StepHeader
+              step={step}
+              workingLoad={workingLoad(changes, step.id)}
+              onChange={
+                takesLoad(step.tool) || step.alternatives
+                  ? () => setChanging({ key: step.id, start: 'change' })
+                  : undefined
+              }
+              onUndoSwap={() => change(step.id, (c) => ({ ...c, swap: undefined }))}
+            />
             {/* Keyed by step so each step gets its OWN tool instance. Without the key React reused
                 the calf stretch's timer for the hip flexor stretch — same component type, same
                 position — and the new step opened with the old step's finished clock: 0:00 left,
                 "Resume" (2026-09-06). */}
             <div key={step.id} style={{ marginTop: 18 }}>
-              {renderTool(step, logs, setLog, next, {
-                resume: clock?.stepId === step.id ? clock : null,
-                set: (c) => setClock(c ? { stepId: step.id, ...c } : null),
-              })}
+              {renderTool(
+                step,
+                logs,
+                setLog,
+                next,
+                {
+                  resume: clock?.stepId === step.id ? clock : null,
+                  set: (c) => setClock(c ? { stepId: step.id, ...c } : null),
+                },
+                workingLoad(changes, step.id),
+              )}
             </div>
+            {/* Once a weight is on the move, one quiet button reopens the weight control for the set
+                in hand (design A, board 2). Logged sets keep the load they were logged at. */}
+            {workingLoad(changes, step.id) && (
+              <button
+                type="button"
+                style={changeWeightBtn}
+                onClick={() => setChanging({ key: step.id, start: 'weight' })}
+              >
+                Change weight
+              </button>
+            )}
             {/* The metronome rides ALONGSIDE the tool rather than being one, so it is attached here
                 — once, under whatever card the step rendered — instead of inside each tool that
                 might want it. Circuits and intervals are the two that own their whole body and so
@@ -311,6 +375,16 @@ export function Walkthrough({
         )}
       </div>
 
+      {changing && (
+        <ChangeFlow
+          key={changing.key}
+          target={changeTarget(step, changing.moveIndex, changes, title, logs[step.id])}
+          start={changing.start}
+          onSwap={(alt) => swapMove(changing.key, alt)}
+          onUseLoad={(load) => applyLoad(changing.key, load)}
+          onClose={() => setChanging(null)}
+        />
+      )}
       {allSteps && (
         <AllSteps
           steps={steps}
@@ -329,137 +403,62 @@ export function Walkthrough({
   );
 }
 
-/** Dispatch the current step to its tool card (the tool owns its own log button). Circuits render
- *  their whole body directly in the shell, so they aren't here. */
-function renderTool(
+/** What the Change flow needs to know about the move it is changing — a step, or one move inside a circuit. */
+function changeTarget(
   step: WalkthroughStep,
-  logs: StepLogs,
-  setLog: (id: string, l: StepLog) => void,
-  onAdvance: () => void,
-  clock?: { resume: TimerClock | null; set: (c: TimerClock | null) => void },
-): ReactNode {
-  const t = step.tool;
-  const log = logs[step.id];
-  switch (t.kind) {
-    case 'reps':
-      return (
-        <StepReps
-          sets={t.sets}
-          reps={t.reps}
-          load={t.load}
-          log={log?.kind === 'reps' ? log : undefined}
-          onLog={(l) => setLog(step.id, l)}
-          onDone={onAdvance}
-        />
-      );
-    case 'timer':
-      // Two or more sets play as sets of a timed effort (walkthrough v3 R1); one set is the hold
-      // it always was. Both share the remembered running clock.
-      if (t.sets && t.sets > 1) {
-        return (
-          <StepTimedSets
-            seconds={t.seconds}
-            sets={t.sets}
-            load={t.load}
-            chime={t.chime ?? true}
-            switchSides={t.switch_sides ?? false}
-            title={step.title}
-            log={log?.kind === 'timed_sets' ? log : undefined}
-            resumeClock={clock?.resume}
-            onClock={clock?.set}
-            onLog={(l) => setLog(step.id, l)}
-            onDone={onAdvance}
-          />
-        );
-      }
-      return (
-        <StepTimer
-          seconds={t.seconds}
-          chime={t.chime ?? true}
-          openEnded={t.open_ended ?? false}
-          switchSides={t.switch_sides ?? false}
-          title={step.title}
-          log={log?.kind === 'timer' ? log : undefined}
-          resumeClock={clock?.resume}
-          onClock={clock?.set}
-          onLog={(l) => setLog(step.id, l)}
-          onDone={onAdvance}
-        />
-      );
-    // No `title` passed on purpose: the shell header already shows step.title (the coach's own
-    // words), so the card names the rhythm instead of repeating the name back.
-    case 'breathing':
-      return (
-        <StepBreathing
-          pattern={t.pattern}
-          cycles={t.cycles}
-          caution={t.pattern.caution}
-          log={log?.kind === 'breathing' ? log : undefined}
-          onLog={(l) => setLog(step.id, l)}
-          onDone={onAdvance}
-        />
-      );
-    case 'meditate':
-      return (
-        <StepMeditate
-          seconds={t.seconds}
-          bells={t.bells}
-          intervalMin={t.intervalMin}
-          log={log?.kind === 'meditate' ? log : undefined}
-          onLog={(l) => setLog(step.id, l)}
-          onDone={onAdvance}
-        />
-      );
-    case 'grounding':
-      return <StepGrounding spec={t.spec} onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
-    case 'feeling_log':
-      return <StepFeelingLog onLog={(l) => setLog(step.id, l)} onDone={onAdvance} />;
-    case 'measure':
-      return (
-        <StepMeasure
-          metric={t.metric}
-          unit={t.unit}
-          log={log?.kind === 'measure' ? log : undefined}
-          onLog={(l) => setLog(step.id, l)}
-        />
-      );
-    case 'journal': {
-      const jl = log?.kind === 'journal' ? log : null;
-      return (
-        <StepJournal
-          prompt={t.prompt}
-          minutes={t.minutes}
-          note={jl?.note ?? ''}
-          secret={jl?.secret ?? false}
-          onSecret={(secret) =>
-            setLog(step.id, {
-              kind: 'journal',
-              note: jl?.note ?? '',
-              secret,
-              bank: t.bank ?? null,
-              prompt: t.prompt,
-            })
-          }
-          onLog={(note) =>
-            setLog(step.id, {
-              kind: 'journal',
-              note,
-              secret: jl?.secret ?? false,
-              bank: t.bank ?? null,
-              prompt: t.prompt,
-            })
-          }
-        />
-      );
-    }
-    default:
-      return (
-        <StepCheckoff
-          label={t.kind === 'checkoff' ? t.label : undefined}
-          prompt={t.kind === 'checkoff' ? t.prompt : undefined}
-          log={log?.kind === 'done' ? log : undefined}
-          onLog={(l) => setLog(step.id, l)}
-        />
-      );
+  moveIndex: number | undefined,
+  changes: MoveChanges,
+  activity: string,
+  log: StepLog | undefined,
+): ChangeTarget {
+  const key = changeKey(step.id, moveIndex);
+  if (step.tool.kind === 'circuit' && moveIndex != null) {
+    const ex = step.tool.exercises[moveIndex]!;
+    const tool: StepTool = ex.seconds
+      ? { kind: 'timer', seconds: ex.seconds, sets: step.tool.rounds, ...(ex.load ? { load: ex.load } : {}) }
+      : {
+          kind: 'reps',
+          sets: step.tool.rounds,
+          ...(ex.reps != null ? { reps: ex.reps } : {}),
+          ...(ex.load ? { load: ex.load } : {}),
+        };
+    const round = log?.kind === 'circuit' ? log.roundsDone : 0;
+    return {
+      name: ex.name,
+      tool,
+      alternatives: ex.alternatives,
+      suggested_load: ex.suggested_load,
+      workingLoad: workingLoad(changes, key),
+      activity,
+      subtitle: changeSubtitle(step.title, step.tool, log, moveIndex, round),
+      targetWord: targetWord(tool),
+    };
   }
+  return {
+    name: step.title,
+    tool: step.tool,
+    alternatives: step.alternatives,
+    suggested_load: step.suggested_load,
+    workingLoad: workingLoad(changes, key),
+    activity,
+    subtitle: changeSubtitle(step.title, step.tool, log),
+    targetWord: targetWord(step.tool),
+  };
 }
+
+const changeWeightBtn: CSSProperties = {
+  marginTop: 12,
+  height: 48,
+  borderRadius: 14,
+  border: HEADER_EDGE,
+  background: 'oklch(100% 0 0 / 0.7)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  fontSize: 14,
+  fontWeight: 900,
+  color: HEADER_INK,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};

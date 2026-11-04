@@ -106,6 +106,12 @@ export const queryKeys = {
   units: {
     all: ['units'] as const,
   },
+  /** `/plan/exercise-history` — the last time one exercise was logged, for the Change sheet's rows
+   *  and the weight sheet's "last time" chip. Keyed by the activity and the move's name. */
+  exerciseHistory: {
+    last: (activity: string, exercise: string) =>
+      ['exercise-history', activity, exercise.trim().toLowerCase()] as const,
+  },
   /** `/review` — goals, tools and the baseline. One key: the Settings root counts them, the goals
    *  and tools doors edit them, and the weigh-in row reads the baseline out of the same answer, so
    *  none of the four can be showing a different account of what is on the plan. */
