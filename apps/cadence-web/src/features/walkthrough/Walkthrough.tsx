@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type { MetronomeSpec, SessionItemAlternative, Walkthrough as WalkthroughData } from '@cadence/shared';
+import {
+  type MetronomeSpec,
+  type SessionItemAlternative,
+  type Walkthrough as WalkthroughData,
+  structureDiff,
+} from '@cadence/shared';
 import { StepCircuit } from './tools/StepCircuit.tsx';
+import { StepGroup } from './tools/StepGroup.tsx';
 import { StepInterval, type StepChrome } from './tools/StepInterval.tsx';
 import { MetronomeSlot, type StepArea } from './tools/MetronomeSlot.tsx';
 import { ChangeFlow } from './tools/ChangeFlow.tsx';
+import { RearrangeSheet } from './tools/RearrangeSheet.tsx';
 import { HEADER_EDGE, HEADER_INK } from './tools/change-parts.tsx';
 import { renderTool } from './renderTool.tsx';
-import {
-  type MoveChanges,
-  applyChanges,
-  changeKey,
-  changeTarget,
-  loadChange,
-  takesLoad,
-  workingLoad,
-} from './changes.ts';
+import { changeKey, changeTarget, loadChange, takesLoad, workingLoad } from './changes.ts';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
@@ -22,7 +21,8 @@ import { WalkthroughDone } from './WalkthroughDone.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
 import { overlay, closeBtn, caption, navBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
-import type { MoveChange } from './changes.ts';
+import { effectiveLogs, recapView } from './played-recap.ts';
+import { usePlayedSession } from './usePlayedSession.ts';
 import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
 import { clearSessionInProgress, type RunningClock, type SessionSnapshot } from './sessionInProgress.ts';
 import { useRememberSession } from './useRememberSession.ts';
@@ -38,10 +38,10 @@ import { useRememberSession } from './useRememberSession.ts';
  * forgotten on close or Finish, so the app coming back after iOS reclaimed it reopens the session
  * where it was — step, logs, tempos and a running timer, caught up (sessionInProgress.ts).
  *
- * "Change this move" (walkthrough v3 Phase 5, design A): the Change button beside a target opens one
- * sheet — add a weight, or swap the move for one of the coach's alternatives — and what the person
- * changed is kept in `changes` (changes.ts), applied to the steps shown and remembered with the
- * session. The prescription is never edited; a swap says "swapped from …" and is never a skip.
+ * What the person changes about the session lives beside the prescription, never in it
+ * (usePlayedSession.ts): "Change this move" (Phase 5) swaps a move or adds a weight; Rearrange
+ * (Phase 6) regroups the sets — alternate two moves, spread a hang through the session — and a
+ * regrouped step plays one turn at a time (StepGroup). The Recap reads it all back as facts.
  */
 export function Walkthrough({
   walkthrough,
@@ -69,16 +69,16 @@ export function Walkthrough({
   /** The remembered session this one reopens, when the app came back mid-session. */
   resume?: SessionSnapshot | null;
 }) {
-  // What the person changed about a move this session — a swap or an added weight, keyed by step
-  // (changes.ts). The steps SHOWN are the prescription with those applied; the prescription itself
-  // is never edited, so Undo is a delete and the log line can still say what the plan said.
-  const [changes, setChanges] = useState<MoveChanges>(resume?.changes ?? {});
-  const steps = useMemo(() => applyChanges(walkthrough.steps, changes), [walkthrough.steps, changes]);
-  // The Change sheet, open for one move (a step, or a move inside a circuit), starting on the sheet
-  // or straight on the weight control.
-  const [changing, setChanging] = useState<{ key: string; moveIndex?: number; start: 'change' | 'weight' } | null>(
-    null,
-  );
+  const played = usePlayedSession(walkthrough.steps, resume);
+  const { changes, change, prescribed, shape, steps, stepOf, turnLogs } = played;
+  // The Change sheet, open for one move: a step, one move inside a circuit, or the step a
+  // rearranged turn belongs to; starting on the sheet or straight on the weight control.
+  const [changing, setChanging] = useState<{
+    key: string;
+    stepId?: string;
+    moveIndex?: number;
+    start: 'change' | 'weight';
+  } | null>(null);
   const [idx, setIdx] = useState(resume?.idx ?? 0);
   const [visited, setVisited] = useState<ReadonlySet<number>>(() => new Set(resume?.visited ?? [0]));
   const [logs, setLogs] = useState<StepLogs>(resume?.logs ?? {});
@@ -87,6 +87,7 @@ export function Walkthrough({
   // stepping away has always stopped a timer.
   const [clock, setClock] = useState<RunningClock | null>(resume?.clock ?? null);
   const [allSteps, setAllSteps] = useState(false);
+  const [rearranging, setRearranging] = useState(false);
   // A step may recolour the shell while it is on screen — today only the interval player, whose
   // whole instruction IS the frame colour. Null means the ordinary walkthrough tone.
   const [chrome, setChrome] = useState<StepChrome | null>(null);
@@ -97,7 +98,21 @@ export function Walkthrough({
 
   useRememberSession(
     occurrenceId
-      ? { occurrenceId, title, area, walkthrough, idx, visited: [...visited], logs, tempos, phase, clock, changes }
+      ? {
+          occurrenceId,
+          title,
+          area,
+          walkthrough,
+          idx,
+          visited: [...visited],
+          logs,
+          tempos,
+          phase,
+          clock,
+          changes,
+          shape,
+          turnLogs,
+        }
       : null,
   );
   const close = () => {
@@ -105,8 +120,11 @@ export function Walkthrough({
     onClose();
   };
 
-  const step = steps[idx];
-  const left = minutesLeft(steps, idx, visited);
+  const safeIdx = Math.min(idx, steps.length - 1);
+  const step = steps[safeIdx];
+  // What the pips, the discs and the all-steps rows read: a rearranged group's log comes from its turns.
+  const logsView = useMemo(() => effectiveLogs(steps, logs, turnLogs), [steps, logs, turnLogs]);
+  const left = minutesLeft(steps, safeIdx, visited);
 
   // The step body is the one thing that scrolls. A long step read to the bottom used to hand its
   // scroll position to the next step, which then opened with its title and tool off the top
@@ -126,28 +144,35 @@ export function Walkthrough({
     if (p !== 'step') setClock(null);
     setPhase(p);
   };
-  const next = () => (idx + 1 < steps.length ? go(idx + 1) : toPhase('recap'));
-  const prev = () => idx > 0 && go(idx - 1);
+  const next = () => (safeIdx + 1 < steps.length ? go(safeIdx + 1) : toPhase('recap'));
+  const prev = () => safeIdx > 0 && go(safeIdx - 1);
   const setLog = (id: string, log: StepLog) => setLogs((l) => ({ ...l, [id]: log }));
-  const change = (key: string, patch: (c: MoveChange) => MoveChange | null) =>
-    setChanges((all) => {
-      const next = { ...all };
-      const c = patch(all[key] ?? {});
-      if (c && (c.swap || c.load)) next[key] = c;
-      else delete next[key];
-      return next;
-    });
   const swapMove = (key: string, alt: SessionItemAlternative) => {
     change(key, (c) => ({ ...c, swap: alt }));
     setChanging(null);
   };
+  // The move the Change sheet is about: a rearranged turn's own step, else the step on screen.
+  const changingStep = (changing?.stepId && stepOf(changing.stepId)) || step;
   // "Use bodyweight" on a move whose plan had no load is not a change, so nothing is recorded
   // (changes.ts loadChange); on a move the plan loaded it IS one, and the log line says so.
   const applyLoad = (key: string, load: string) => {
-    const plan = changeTarget(step!, changing?.moveIndex, changes, title, logs[step!.id]).tool;
+    const plan = changeTarget(changingStep!, changing?.moveIndex, changes, title, logs[changingStep!.id]).tool;
     change(key, (c) => ({ ...c, load: loadChange('load' in plan ? plan.load : undefined, load) }));
     setChanging(null);
   };
+  // Rearranging logs nothing and loses nothing: the step in hand stays in hand, wherever its set went.
+  const rearranged = (nextShape: typeof shape) => {
+    const anchor = played.anchorAt(safeIdx);
+    played.setShape(nextShape);
+    setRearranging(false);
+    setAllSteps(false);
+    const after = played.indexOfTurn(played.steps, anchor);
+    setIdx(after);
+    setVisited((v) => new Set(v).add(after));
+  };
+  // The Recap and Finish read the session back one row per thing done (played-recap.ts).
+  const view = useMemo(() => recapView(prescribed, shape, logs, turnLogs), [prescribed, shape, logs, turnLogs]);
+  const diff = useMemo(() => structureDiff(prescribed, shape), [prescribed, shape]);
 
   /**
    * Finish is the single write — and journal steps write TWICE by design: the occurrence log gets
@@ -156,8 +181,8 @@ export function Walkthrough({
    * and the receipt in the occurrence log survives either way.
    */
   const finish = () => {
-    for (const step of steps) {
-      const log = logs[step.id];
+    for (const s of view.steps) {
+      const log = view.logs[s.id];
       if (log?.kind !== 'journal' || !log.note.trim()) continue;
       void keepJournalEntry({
         bank: log.bank,
@@ -171,12 +196,12 @@ export function Walkthrough({
     // coach can see it next time she prescribes. Best-effort like the journal write above — the
     // dock's local copy already holds the tempo, so a failed sync costs the sharing, not the tempo.
     if (occurrenceId) {
-      for (const [title, tempo] of Object.entries(tempos)) {
-        void settleTempo(occurrenceId, { title, bpm: tempo.bpm, meter: tempo.meter }).catch(() => undefined);
+      for (const [t, tempo] of Object.entries(tempos)) {
+        void settleTempo(occurrenceId, { title: t, bpm: tempo.bpm, meter: tempo.meter }).catch(() => undefined);
       }
     }
     clearSessionInProgress();
-    onComplete(recapSummary(steps, logs));
+    onComplete(recapSummary(view.steps, view.logs));
   };
 
   if (steps.length === 0 || !step) return null;
@@ -184,8 +209,8 @@ export function Walkthrough({
   if (phase === 'done') {
     return (
       <WalkthroughDone
-        steps={steps}
-        logs={logs}
+        steps={view.steps}
+        logs={view.logs}
         title={title}
         occurrenceId={occurrenceId}
         onFinish={finish}
@@ -197,19 +222,24 @@ export function Walkthrough({
   if (phase === 'recap') {
     return (
       <Recap
-        steps={steps}
-        logs={logs}
+        steps={view.steps}
+        logs={view.logs}
         title={title}
+        changes={diff}
+        occurrenceId={occurrenceId}
+        saveSteps={prescribed}
         onBack={() => toPhase('step')}
         onJump={(i) => {
           toPhase('step');
-          go(i);
+          go(Math.min(i, steps.length - 1));
         }}
         onResolve={setLog}
         onFinish={() => toPhase('done')}
       />
     );
   }
+
+  const skipsCircuit = step.tool.kind === 'circuit' && (!step.play || step.play.names.length > 1);
 
   return (
     <div
@@ -243,14 +273,14 @@ export function Walkthrough({
                 key={s.id}
                 onClick={() => go(i)}
                 flex={Math.max(2, s.minutes)}
-                status={stepStatus(i, idx, visited, s, logs[s.id])}
-                fraction={stepFraction(s, logs[s.id])}
+                status={stepStatus(i, safeIdx, visited, s, logsView[s.id])}
+                fraction={stepFraction(s, logsView[s.id])}
               />
             ))}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div style={{ ...caption, color: chrome?.sub ?? caption.color }}>
-              Step {idx + 1} of {steps.length}
+              Step {safeIdx + 1} of {steps.length}
             </div>
             <div style={{ ...caption, color: chrome?.sub ?? caption.color }}>{left} min left</div>
           </div>
@@ -262,7 +292,21 @@ export function Walkthrough({
         data-step-body
         style={{ marginTop: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflowY: 'auto' }}
       >
-        {step.tool.kind === 'circuit' ? (
+        {step.play ? (
+          // A rearranged group — a set on its own, or two moves alternating — plays one turn at a
+          // time; Change opens for the turn's own step.
+          <StepGroup
+            key={step.id}
+            step={step}
+            stepOf={stepOf}
+            workingLoads={Object.fromEntries(step.play.turns.map((t) => [t.stepId, workingLoad(changes, t.stepId)]))}
+            turnLogs={turnLogs}
+            onLogTurn={played.logTurn}
+            onAdvance={next}
+            onChange={(stepId) => setChanging({ key: stepId, stepId, start: 'change' })}
+            onUndoSwap={(stepId) => change(stepId, (c) => ({ ...c, swap: undefined }))}
+          />
+        ) : step.tool.kind === 'circuit' ? (
           <StepCircuit
             step={step}
             rounds={step.tool.rounds}
@@ -352,7 +396,7 @@ export function Walkthrough({
         <button
           style={{ ...navBtn, width: 62, flex: 'none' }}
           onClick={prev}
-          disabled={idx === 0}
+          disabled={safeIdx === 0}
           aria-label="Previous step"
         >
           ‹
@@ -360,7 +404,7 @@ export function Walkthrough({
         <button style={{ ...navBtn, flex: 1 }} onClick={() => setAllSteps(true)}>
           <span style={{ fontSize: 13, fontWeight: 900, color: 'oklch(32% 0.02 150)' }}>All steps</span>
         </button>
-        {step.tool.kind === 'circuit' ? (
+        {skipsCircuit ? (
           <button
             style={{
               ...navBtn,
@@ -380,21 +424,23 @@ export function Walkthrough({
         )}
       </div>
 
-      {changing && (
+      {changing && changingStep && (
         <ChangeFlow
           key={changing.key}
-          target={changeTarget(step, changing.moveIndex, changes, title, logs[step.id])}
+          target={changeTarget(changingStep, changing.moveIndex, changes, title, logs[changingStep.id])}
           start={changing.start}
           onSwap={(alt) => swapMove(changing.key, alt)}
           onUseLoad={(load) => applyLoad(changing.key, load)}
           onClose={() => setChanging(null)}
         />
       )}
-      {allSteps && (
+      {allSteps && !rearranging && (
         <AllSteps
           steps={steps}
-          logs={logs}
-          idx={idx}
+          shape={shape}
+          stepOf={stepOf}
+          logs={logsView}
+          idx={safeIdx}
           visited={visited}
           onClose={() => setAllSteps(false)}
           onJump={go}
@@ -402,7 +448,12 @@ export function Walkthrough({
             setAllSteps(false);
             toPhase('recap');
           }}
+          onRearrange={() => setRearranging(true)}
+          onSplit={(id) => played.splitGroup(id)}
         />
+      )}
+      {rearranging && (
+        <RearrangeSheet steps={prescribed} shape={shape} onDone={rearranged} onClose={() => setRearranging(false)} />
       )}
     </div>
   );

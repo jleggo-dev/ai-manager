@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { Walkthrough as WalkthroughData } from '@cadence/shared';
 import { Walkthrough } from './Walkthrough.tsx';
@@ -128,7 +128,8 @@ describe('Walkthrough — every step opens at the top', () => {
     );
     scroller(container).scrollTop = 300;
     fireEvent.click(screen.getByText('All steps'));
-    fireEvent.click(screen.getByText(/^Back to Warm up/)); // same step, sheet closed
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'All steps' })).getByText('Warm up')); // same step, sheet closed
+    expect(screen.queryByRole('dialog', { name: 'All steps' })).toBeNull();
     expect(scroller(container).scrollTop).toBe(300);
   });
 });
