@@ -4,6 +4,7 @@ import { EXTEND_HORIZON } from './coach-action-extend-horizon.ts';
 import { BUILD_WEEK_AHEAD } from './coach-action-build-week-ahead.ts';
 import { PAUSE_WEEK } from './coach-action-pause-week.ts';
 import { REVISE_SESSION } from './coach-action-revise-session.ts';
+import { REARRANGE_SESSION } from './coach-action-rearrange-session.ts';
 import { START_REPLAN } from './coach-action-start-replan.ts';
 
 /**
@@ -82,8 +83,13 @@ export const SHAPE_WEEK: CoachActionTool = defineAction({
   },
 });
 
+// `order` (walkthrough v3 Phase 6, R2's agentic path, 2026-11-03): the same moves in a new
+// structure — alternate two, spread one through the session — written at once by a small job
+// that may not add, drop or rename a move. A third scope rather than a third tool, so the
+// drawer's label grows by a clause and not a hook.
 const REBUILD_SCOPES = {
   session: REVISE_SESSION,
+  order: REARRANGE_SESSION,
   week: START_REPLAN,
 } as const;
 type RebuildScope = keyof typeof REBUILD_SCOPES;
@@ -93,23 +99,24 @@ export const REBUILD: CoachActionTool = defineAction({
   name: 'rebuild',
   mutates: 'immediate',
   description:
-    'Rebuild from their words — one session, or the whole week. {"scope": "session", "session": "Strength", "steer": "add chest and abs", "date": "2026-09-01"} reprograms what is INSIDE one upcoming session and {gate} ("session" as the plan lists it; omit "date" for the soonest one). {"scope": "week", "steer": "more recovery, keep the long run"} redoes the plan itself in the background — minutes, ending in a card they tap; nothing changes until that tap. "steer" is always THEIR words, never your rewrite. Use "session" when they want the work within a session different, "week" only when they ask for the week itself reshaped. Moving, resizing, dropping or adding commitments is propose_plan_change; a first-ever plan is the build card, not this.',
+    'Rebuild from their words — one session, its order, or the whole week. {"scope": "session", "session": "Strength", "steer": "add chest and abs", "date": "2026-09-01"} reprograms what is INSIDE one upcoming session and {gate} (omit "date" for the soonest one). {"scope": "order", "session": "Strength", "steer": "alternate presses and rows, spread the hangs out"} keeps every move and its numbers and changes only their arrangement, at once. {"scope": "week", "steer": "more recovery, keep the long run"} redoes the plan itself in the background, ending in a card they tap; nothing changes until that tap. "steer" is always THEIR words. Use "session" for different work, "order" for the same work arranged differently, "week" only for the week itself.',
   parameters: {
     properties: {
       scope: {
         type: 'string',
         enum: Object.keys(REBUILD_SCOPES),
         description:
-          '"session" for what is inside one upcoming session; "week" for the plan itself, in the background.',
+          '"session" for what is inside one upcoming session; "order" for the same moves arranged differently; "week" for the plan itself, in the background.',
       },
       steer: {
         type: 'string',
         description: 'What should be different, in THEIR words — never your summary of what they asked.',
       },
-      session: { type: 'string', description: 'For "session": which one, by the title the plan lists.' },
+      session: { type: 'string', description: 'For "session" and "order": which one, by the title the plan lists.' },
       date: {
         type: 'string',
-        description: 'For "session": the day it is scheduled, YYYY-MM-DD. Omit to take the soonest upcoming one.',
+        description:
+          'For "session" and "order": the day it is scheduled, YYYY-MM-DD. Omit to take the soonest upcoming one.',
       },
     },
     required: ['scope', 'steer'],

@@ -11,6 +11,7 @@ const runs = {
   build_ahead: vi.fn(),
   pause: vi.fn(),
   session: vi.fn(),
+  order: vi.fn(),
   week: vi.fn(),
 };
 vi.mock('./coach-action-extend-horizon.ts', () => ({
@@ -24,6 +25,9 @@ vi.mock('./coach-action-pause-week.ts', () => ({
 }));
 vi.mock('./coach-action-revise-session.ts', () => ({
   REVISE_SESSION: { name: 'revise_session', run: (...a: unknown[]) => runs.session(...a) },
+}));
+vi.mock('./coach-action-rearrange-session.ts', () => ({
+  REARRANGE_SESSION: { name: 'rearrange_session', run: (...a: unknown[]) => runs.order(...a) },
 }));
 vi.mock('./coach-action-start-replan.ts', () => ({
   START_REPLAN: { name: 'start_replan', run: (...a: unknown[]) => runs.week(...a) },
@@ -60,9 +64,10 @@ describe('shape_week — the week’s edges', () => {
   });
 });
 
-describe('rebuild — one session, or the whole week', () => {
+describe('rebuild — one session, its order, or the whole week', () => {
   it.each([
     ['session', 'session', { scope: 'session', session: 'Strength', steer: 'add chest and abs', date: '2026-09-01' }],
+    ['order', 'order', { scope: 'order', session: 'Strength', steer: 'alternate presses and rows' }],
     ['week', 'week', { scope: 'week', steer: 'more recovery, keep the long run' }],
   ] as const)('scope "%s" runs the original with the same parameters', async (_scope, which, params) => {
     expect(await REBUILD.run('u1', params)).toBe('done');
@@ -74,18 +79,25 @@ describe('rebuild — one session, or the whole week', () => {
     ['no scope', { steer: 'more recovery' }],
     ['an unknown scope', { scope: 'month', steer: 'more recovery' }],
     ['an old tool name as the scope', { scope: 'start_replan', steer: 'more recovery' }],
-  ])('%s runs nothing and names the two choices', async (_label, params) => {
+  ])('%s runs nothing and names the three choices', async (_label, params) => {
     const out = await REBUILD.run('u1', params);
     expect(out).toMatch(/^nothing changed: .*so nothing was rebuilt/);
-    expect(out).toContain('session, week');
+    expect(out).toContain('session, order, week');
     for (const r of Object.values(runs)) expect(r).not.toHaveBeenCalled();
   });
 });
 
 describe('what the facades cover', () => {
-  it('is exactly the five the drawer no longer lists', () => {
+  it('is exactly the six the drawer no longer lists', () => {
     expect([...PLAN_FACADE_COVERS].sort()).toEqual(
-      ['build_week_ahead', 'extend_horizon', 'pause_week', 'revise_session', 'start_replan'].sort(),
+      [
+        'build_week_ahead',
+        'extend_horizon',
+        'pause_week',
+        'rearrange_session',
+        'revise_session',
+        'start_replan',
+      ].sort(),
     );
   });
 

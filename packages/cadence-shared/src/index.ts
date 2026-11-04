@@ -47,6 +47,7 @@ export * from './played-shape.ts';
 export * from './played-lines.ts';
 export * from './played-steps.ts';
 export * from './played-diff.ts';
+export * from './played-sessions.ts';
 export * from './tool-catalog.ts';
 export * from './step-cues.ts';
 export * from './timed-sets.ts';

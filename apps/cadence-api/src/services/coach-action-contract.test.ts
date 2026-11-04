@@ -33,6 +33,7 @@ const fake = vi.hoisted(() => ({
   extendHorizon: vi.fn(),
   enterEpisode: vi.fn(),
   reviseSession: vi.fn(),
+  rearrangeSession: vi.fn(),
   startReplanRun: vi.fn(),
   logMeal: vi.fn(),
   previewDescribedMeal: vi.fn(),
@@ -149,6 +150,7 @@ vi.mock('./plan-horizon.ts', async (importOriginal) => ({
 }));
 vi.mock('./episode.ts', () => ({ enterEpisode: fake.enterEpisode }));
 vi.mock('./session-generate.ts', () => ({ reviseSession: fake.reviseSession }));
+vi.mock('./rearrange-session.ts', () => ({ rearrangeSession: fake.rearrangeSession }));
 vi.mock('./replan-start.ts', () => ({ startReplanRun: fake.startReplanRun }));
 vi.mock('./plan-run.ts', () => ({ readPlanRun: () => null }));
 vi.mock('./nutrition.ts', () => ({ logMeal: fake.logMeal }));
@@ -260,6 +262,32 @@ const CASES: Record<string, Case[]> = {
   rebuild: [
     empty(),
     { label: 'one session', params: { scope: 'session', session: 'Strength', steer: 'add abs' }, want: 'changed' },
+    {
+      label: 'the order of one session',
+      params: { scope: 'order', session: 'Strength', steer: 'alternate presses and rows' },
+      want: 'changed',
+      setup: () =>
+        fake.rearrangeSession.mockResolvedValue({
+          status: 'rearranged',
+          occ: { occurrence_id: 'o9', date: '2026-09-03', title: 'Strength' },
+          session: { blocks: [], note: '', generated_at: '', version: 1 },
+          changes: [
+            {
+              kind: 'alternate',
+              key: 'alternate:s1+s2',
+              words: 'Bench press + dumbbell row, alternating',
+              sentence: 'alternate bench press and dumbbell row',
+            },
+          ],
+          findings: [],
+        }),
+    },
+    {
+      label: 'the order, but the answer changed the moves',
+      params: { scope: 'order', session: 'Strength', steer: 'alternate presses and rows' },
+      want: 'fault',
+      setup: () => fake.rearrangeSession.mockResolvedValue({ status: 'items_changed', occ: { occurrence_id: 'o9' } }),
+    },
     { label: 'the whole week', params: { scope: 'week', steer: 'more recovery' }, want: 'changed' },
   ],
   edit_calendar: [

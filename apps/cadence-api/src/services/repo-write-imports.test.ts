@@ -31,7 +31,7 @@ const WRITE_VERBS = new Set([
   'record', 'mark', 'merge', 'rename', 'restore', 'retire', 'save', 'touch', 'stamp', 'prune',
   'expire', 'claim', 'write', 'supersede', 'settle', 'restart', 'repoint', 'put', 'pause', 'move',
   'duplicate', 'mint', 'heal', 'ensure', 'end', 'dismiss', 'correct', 'commit', 'append', 'resolve',
-  'remember', 'finish', 'sweep', 'start',
+  'remember', 'finish', 'sweep', 'start', 'replace',
 ]); // prettier-ignore
 
 /** Verbs that only read. `collection` and `portion` name pure derivations (a key, a median). */

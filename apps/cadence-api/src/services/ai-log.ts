@@ -38,7 +38,10 @@ export type AiLogKind =
   // calls per meal, whether she was reached, and what the lookups found.
   | 'food_check'
   // The Change sheet's "Something else" (walkthrough v3 Phase 5f): one alternative for one item.
-  | 'alternative_item';
+  | 'alternative_item'
+  // The coach rearranging one session in place (walkthrough v3 Phase 6, R2): the same items,
+  // a new structure, and whether the answer kept the items.
+  | 'rearrange_session';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging
