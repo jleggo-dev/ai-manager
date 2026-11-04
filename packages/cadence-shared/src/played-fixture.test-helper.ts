@@ -8,9 +8,27 @@ import type { WalkthroughStep } from './walkthrough.ts';
 export const GYM: WalkthroughStep[] = [
   { id: 's1', title: 'Warm-up', minutes: 6, tool: { kind: 'read' }, skippable: true },
   { id: 's2', title: 'Pull-ups', minutes: 6, tool: { kind: 'reps', sets: 3, reps: 5 }, skippable: true },
-  { id: 's3', title: 'Bench press', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 8, load: '95 lb' }, skippable: true },
-  { id: 's4', title: 'Dumbbell row', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 10, load: '40 lb' }, skippable: true },
-  { id: 's5', title: 'Dead hang', minutes: 3, tool: { kind: 'timer', seconds: 45, chime: true, sets: 3 }, skippable: true },
+  {
+    id: 's3',
+    title: 'Bench press',
+    minutes: 9,
+    tool: { kind: 'reps', sets: 3, reps: 8, load: '95 lb' },
+    skippable: true,
+  },
+  {
+    id: 's4',
+    title: 'Dumbbell row',
+    minutes: 9,
+    tool: { kind: 'reps', sets: 3, reps: 10, load: '40 lb' },
+    skippable: true,
+  },
+  {
+    id: 's5',
+    title: 'Dead hang',
+    minutes: 3,
+    tool: { kind: 'timer', seconds: 45, chime: true, sets: 3 },
+    skippable: true,
+  },
   {
     id: 's6',
     title: 'Farmer carry',

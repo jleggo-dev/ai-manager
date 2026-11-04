@@ -23,7 +23,12 @@ describe('structureDiff — the changes as facts', () => {
     shape = moveTurnOut(shape, 'g5', 0, 4);
     // In the order they sit in the session: the first hang now comes before the pair.
     expect(structureDiff(GYM, shape)).toEqual([
-      { kind: 'spread', key: 'spread:s5', words: 'Dead hang, one set at a time', sentence: 'dead hang one set at a time' },
+      {
+        kind: 'spread',
+        key: 'spread:s5',
+        words: 'Dead hang, one set at a time',
+        sentence: 'dead hang one set at a time',
+      },
       {
         kind: 'alternate',
         key: 'alternate:s3+s4',
@@ -32,7 +37,12 @@ describe('structureDiff — the changes as facts', () => {
         pills: ['Bench', 'Row', 'Bench', 'Row'],
         rounds: 3,
       },
-      { kind: 'swap', key: 'swap:s7', words: 'Glute bridge → hip thrust', sentence: 'hip thrust instead of glute bridge' },
+      {
+        kind: 'swap',
+        key: 'swap:s7',
+        words: 'Glute bridge → hip thrust',
+        sentence: 'hip thrust instead of glute bridge',
+      },
     ]);
   });
 
@@ -73,7 +83,15 @@ describe('structureDiff — the changes as facts', () => {
   it('a swap inside a prescribed circuit is a swap too', () => {
     const steps = plain.map((s) =>
       s.id === 's8' && s.tool.kind === 'circuit'
-        ? { ...s, tool: { ...s.tool, exercises: s.tool.exercises.map((e, i) => (i === 1 ? { ...e, name: 'Bird dog', swapped_from: 'Dead bug' } : e)) } }
+        ? {
+            ...s,
+            tool: {
+              ...s.tool,
+              exercises: s.tool.exercises.map((e, i) =>
+                i === 1 ? { ...e, name: 'Bird dog', swapped_from: 'Dead bug' } : e,
+              ),
+            },
+          }
         : s,
     );
     expect(structureDiff(steps, defaultShape(steps))).toEqual([
@@ -84,7 +102,13 @@ describe('structureDiff — the changes as facts', () => {
 
 describe('appendHowTo — one sentence, bounded, never twice', () => {
   it.each([
-    ['nothing there yet', '', 'alternate bench press and dumbbell row', 'written', 'alternate bench press and dumbbell row'],
+    [
+      'nothing there yet',
+      '',
+      'alternate bench press and dumbbell row',
+      'written',
+      'alternate bench press and dumbbell row',
+    ],
     ['null there', null, 'dead hang one set at a time', 'written', 'dead hang one set at a time'],
     [
       'the coach’s own text stands, the sentence follows it',
@@ -114,6 +138,9 @@ describe('appendHowTo — one sentence, bounded, never twice', () => {
 
   it('past the bound nothing is written and nothing already there is dropped', () => {
     const existing = 'x'.repeat(590);
-    expect(appendHowTo(existing, 'alternate bench press and dumbbell row', 600)).toEqual({ status: 'full', how_to: existing });
+    expect(appendHowTo(existing, 'alternate bench press and dumbbell row', 600)).toEqual({
+      status: 'full',
+      how_to: existing,
+    });
   });
 });

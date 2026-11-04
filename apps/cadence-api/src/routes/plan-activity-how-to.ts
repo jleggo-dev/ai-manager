@@ -26,7 +26,8 @@ router.post('/activity-how-to', async (req: Request, res: Response) => {
     const body = parseBody(bodySchema, req.body);
     const r = await keepHowTo(userId, body.occurrence_id, body.sentence);
     if (r.status === 'not_found') return void res.status(404).json({ error: 'occurrence not found' });
-    if (r.status === 'full') return void res.status(422).json({ error: 'how_to_full', how_to: r.how_to, activity: r.activity });
+    if (r.status === 'full')
+      return void res.status(422).json({ error: 'how_to_full', how_to: r.how_to, activity: r.activity });
     res.json(r);
   } catch (err) {
     if (err instanceof BodyValidationError) return void res.status(400).json({ error: err.message });

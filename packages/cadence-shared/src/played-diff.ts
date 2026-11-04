@@ -49,14 +49,30 @@ export function structureDiff(steps: readonly WalkthroughStep[], shape: PlayedSh
       const ids = distinctSteps(g);
       const names = ids.map(title);
       const short = shortNames(names);
-      const pills = g.turns.slice(0, Math.min(g.turns.length, ids.length * 2)).map((t) => short[ids.indexOf(t.stepId)] ?? '');
+      const pills = g.turns
+        .slice(0, Math.min(g.turns.length, ids.length * 2))
+        .map((t) => short[ids.indexOf(t.stepId)] ?? '');
       const rounds = g.turns.reduce((m, t) => Math.max(m, t.set + 1), 0);
       const mode = g.mode ?? 'alternate';
       const key = `${mode}:${ids.join('+')}`;
       out.push(
         mode === 'alternate'
-          ? { kind: 'alternate', key, words: `${groupTitle(names)}, alternating`, sentence: `alternate ${names.map(lower).join(' and ')}`, pills, rounds }
-          : { kind: 'sequence', key, words: `${groupTitle(names)}, in sequence`, sentence: names.map(lower).join(', then '), pills, rounds },
+          ? {
+              kind: 'alternate',
+              key,
+              words: `${groupTitle(names)}, alternating`,
+              sentence: `alternate ${names.map(lower).join(' and ')}`,
+              pills,
+              rounds,
+            }
+          : {
+              kind: 'sequence',
+              key,
+              words: `${groupTitle(names)}, in sequence`,
+              sentence: names.map(lower).join(', then '),
+              pills,
+              rounds,
+            },
       );
       continue;
     }
@@ -69,8 +85,18 @@ export function structureDiff(steps: readonly WalkthroughStep[], shape: PlayedSh
       const name = title(id);
       out.push(
         oneAtATime
-          ? { kind: 'spread', key: `spread:${id}`, words: `${name}, one set at a time`, sentence: `${lower(name)} one set at a time` }
-          : { kind: 'spread', key: `spread:${id}`, words: `${name}, in ${singles.length} places`, sentence: `${lower(name)} in ${singles.length} places` },
+          ? {
+              kind: 'spread',
+              key: `spread:${id}`,
+              words: `${name}, one set at a time`,
+              sentence: `${lower(name)} one set at a time`,
+            }
+          : {
+              kind: 'spread',
+              key: `spread:${id}`,
+              words: `${name}, in ${singles.length} places`,
+              sentence: `${lower(name)} in ${singles.length} places`,
+            },
       );
     }
   }
@@ -79,12 +105,22 @@ export function structureDiff(steps: readonly WalkthroughStep[], shape: PlayedSh
 
   for (const s of steps) {
     if (s.swapped_from) {
-      out.push({ kind: 'swap', key: `swap:${s.id}`, words: `${s.swapped_from} → ${lower(s.title)}`, sentence: `${lower(s.title)} instead of ${lower(s.swapped_from)}` });
+      out.push({
+        kind: 'swap',
+        key: `swap:${s.id}`,
+        words: `${s.swapped_from} → ${lower(s.title)}`,
+        sentence: `${lower(s.title)} instead of ${lower(s.swapped_from)}`,
+      });
     }
     if (s.tool.kind === 'circuit') {
       s.tool.exercises.forEach((ex, i) => {
         if (ex.swapped_from) {
-          out.push({ kind: 'swap', key: `swap:${s.id}:${i}`, words: `${ex.swapped_from} → ${lower(ex.name)}`, sentence: `${lower(ex.name)} instead of ${lower(ex.swapped_from)}` });
+          out.push({
+            kind: 'swap',
+            key: `swap:${s.id}:${i}`,
+            words: `${ex.swapped_from} → ${lower(ex.name)}`,
+            sentence: `${lower(ex.name)} instead of ${lower(ex.swapped_from)}`,
+          });
         }
       });
     }
@@ -97,7 +133,11 @@ export function structureDiff(steps: readonly WalkthroughStep[], shape: PlayedSh
  * already said). The moved ones are the steps outside the longest run that kept the prescribed
  * order; each is named with what it now follows.
  */
-function reorders(steps: readonly WalkthroughStep[], shape: PlayedShape, spread: Map<string, unknown>): StructureChange[] {
+function reorders(
+  steps: readonly WalkthroughStep[],
+  shape: PlayedShape,
+  spread: Map<string, unknown>,
+): StructureChange[] {
   const skip = new Set<string>(spread.keys());
   for (const g of shape) if (isCombined(g)) for (const id of distinctSteps(g)) skip.add(id);
   const played: string[] = [];
@@ -145,7 +185,11 @@ function longestCommonSubsequence(a: string[], b: string[]): string[] {
 /** Sentences in a how_to are joined with this; the coach's own free text before them is kept whole. */
 const JOIN = '; ';
 
-const normalizeSentence = (s: string) => s.trim().replace(/\s+/g, ' ').replace(/[.;]+$/, '');
+const normalizeSentence = (s: string) =>
+  s
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[.;]+$/, '');
 
 export type AppendHowTo =
   | { status: 'written'; how_to: string }

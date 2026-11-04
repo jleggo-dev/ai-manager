@@ -27,7 +27,12 @@ const { keepHowTo } = await import('./activity-how-to.ts');
 
 const OCC = { occurrence_id: 'o1', activity_id: 'a-old', date: '2026-11-02', title: 'Obstacle strength' };
 const OLD_ROW = { activity_id: 'a-old', commitment_id: 'c1', title: 'Obstacle strength', how_to: null };
-const ACTIVE_ROW = { activity_id: 'a-new', commitment_id: 'c1', title: 'Obstacle strength', how_to: 'dead hangs, not farmers carries' };
+const ACTIVE_ROW = {
+  activity_id: 'a-new',
+  commitment_id: 'c1',
+  title: 'Obstacle strength',
+  how_to: 'dead hangs, not farmers carries',
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -47,7 +52,11 @@ describe('keepHowTo', () => {
       activity: 'Obstacle strength',
     });
     expect(getActiveActivityForCommitment).toHaveBeenCalledWith('u1', 'c1');
-    expect(updateActivityHowTo).toHaveBeenCalledWith('u1', 'a-new', 'dead hangs, not farmers carries; alternate bench press and dumbbell row');
+    expect(updateActivityHowTo).toHaveBeenCalledWith(
+      'u1',
+      'a-new',
+      'dead hangs, not farmers carries; alternate bench press and dumbbell row',
+    );
     // After the day being played, never the day itself.
     expect(clearFuturePendingSessions).toHaveBeenCalledWith('u1', 'a-new', '2026-11-02');
   });

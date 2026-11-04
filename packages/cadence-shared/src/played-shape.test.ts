@@ -162,7 +162,11 @@ describe('moveTurnOut — spread: one set into a gap', () => {
     ]);
     expect(at(shape, 2).id).toBe('g9');
     expect(at(shape, 5).id).toBe('g5');
-    expect(spreadSteps(shape).get('s5')?.map((g) => g.id)).toEqual(['g9', 'g5']);
+    expect(
+      spreadSteps(shape)
+        .get('s5')
+        ?.map((g) => g.id),
+    ).toEqual(['g9', 'g5']);
   });
 
   it('the owner’s case: three hangs spread through the session', () => {
@@ -227,20 +231,45 @@ describe('normalizeShape — a shape that fits the steps', () => {
   });
 
   it('a step the shape never had gets a plain group at the end; an unknown step is dropped', () => {
-    const shape: PlayedShape = [{ id: 'g1', turns: [{ stepId: 'ghost', set: 0 }, { stepId: 's2', set: 0 }, { stepId: 's2', set: 1 }, { stepId: 's2', set: 2 }] }];
-    expect(ids(normalizeShape(shape, [byTitle('Pull-ups'), byTitle('Dead hang')]))).toEqual(['s2:0 s2:1 s2:2', 's5:0 s5:1 s5:2']);
+    const shape: PlayedShape = [
+      {
+        id: 'g1',
+        turns: [
+          { stepId: 'ghost', set: 0 },
+          { stepId: 's2', set: 0 },
+          { stepId: 's2', set: 1 },
+          { stepId: 's2', set: 2 },
+        ],
+      },
+    ];
+    expect(ids(normalizeShape(shape, [byTitle('Pull-ups'), byTitle('Dead hang')]))).toEqual([
+      's2:0 s2:1 s2:2',
+      's5:0 s5:1 s5:2',
+    ]);
   });
 
   it('a turn that appears twice is kept once', () => {
     const shape: PlayedShape = [
-      { id: 'g1', turns: [{ stepId: 's2', set: 0 }, { stepId: 's2', set: 1 }, { stepId: 's2', set: 2 }] },
+      {
+        id: 'g1',
+        turns: [
+          { stepId: 's2', set: 0 },
+          { stepId: 's2', set: 1 },
+          { stepId: 's2', set: 2 },
+        ],
+      },
       { id: 'g2', turns: [{ stepId: 's2', set: 1 }] },
     ];
     expect(ids(normalizeShape(shape, [byTitle('Pull-ups')]))).toEqual(['s2:0 s2:1 s2:2']);
   });
 
   it('nextGroupId never reuses an id', () => {
-    expect(nextGroupId([{ id: 'g3', turns: [] }, { id: 'g12', turns: [] }])).toBe('g13');
+    expect(
+      nextGroupId([
+        { id: 'g3', turns: [] },
+        { id: 'g12', turns: [] },
+      ]),
+    ).toBe('g13');
     expect(nextGroupId([])).toBe('g1');
   });
 });

@@ -118,7 +118,11 @@ describe('foldTurns — a step’s logged turns, back into sets', () => {
   });
 
   it('a set done at another load brings the loads list, the plan filling the sets that kept it', () => {
-    const logs: TurnLogs = { 's3:0': { value: 8 }, 's3:1': { value: 8, load: '100 lb' }, 's3:2': { value: 6, load: '100 lb' } };
+    const logs: TurnLogs = {
+      's3:0': { value: 8 },
+      's3:1': { value: 8, load: '100 lb' },
+      's3:2': { value: 6, load: '100 lb' },
+    };
     expect(foldTurns('s3', turns, logs, '95 lb')).toEqual({ sets: [8, 8, 6], loads: ['95 lb', '100 lb', '100 lb'] });
   });
 
@@ -128,8 +132,14 @@ describe('foldTurns — a step’s logged turns, back into sets', () => {
   });
 
   it('groupProgress counts turns and the rounds fully done', () => {
-    expect(groupProgress(turns, { 's3:0': { value: 8 }, 's4:0': { value: 10 }, 's3:1': { value: 8 } })).toEqual({ turns: 3, rounds: 1 });
+    expect(groupProgress(turns, { 's3:0': { value: 8 }, 's4:0': { value: 10 }, 's3:1': { value: 8 } })).toEqual({
+      turns: 3,
+      rounds: 1,
+    });
     expect(groupProgress(turns, {})).toEqual({ turns: 0, rounds: 0 });
-    expect(groupProgress(turns, Object.fromEntries(turns.map((t) => [`${t.stepId}:${t.set}`, { value: 1 }])))).toEqual({ turns: 6, rounds: 3 });
+    expect(groupProgress(turns, Object.fromEntries(turns.map((t) => [`${t.stepId}:${t.set}`, { value: 1 }])))).toEqual({
+      turns: 6,
+      rounds: 3,
+    });
   });
 });

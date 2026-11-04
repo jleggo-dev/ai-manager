@@ -47,7 +47,8 @@ export interface TurnTarget {
 export function turnTarget(step: Pick<WalkthroughStep, 'tool'>): TurnTarget {
   const t = step.tool;
   if (t.kind === 'timer') return { kind: 'seconds', value: t.seconds, ...(t.load ? { load: t.load } : {}) };
-  if (t.kind === 'reps') return { kind: 'reps', ...(t.reps != null ? { value: t.reps } : {}), ...(t.load ? { load: t.load } : {}) };
+  if (t.kind === 'reps')
+    return { kind: 'reps', ...(t.reps != null ? { value: t.reps } : {}), ...(t.load ? { load: t.load } : {}) };
   return { kind: 'reps' };
 }
 
@@ -129,10 +130,13 @@ export interface FoldedSets {
  * singles), so a set appears once. `loads` comes back only when some set was done at a load
  * other than the plan's, which is when the log line has something to say about it.
  */
-export function foldTurns(stepId: string, turns: readonly Turn[], logs: TurnLogs, planLoad?: string): FoldedSets | null {
-  const mine = turns
-    .filter((t) => t.stepId === stepId && logs[turnKey(t)])
-    .sort((a, b) => a.set - b.set);
+export function foldTurns(
+  stepId: string,
+  turns: readonly Turn[],
+  logs: TurnLogs,
+  planLoad?: string,
+): FoldedSets | null {
+  const mine = turns.filter((t) => t.stepId === stepId && logs[turnKey(t)]).sort((a, b) => a.set - b.set);
   if (mine.length === 0) return null;
   const sets = mine.map((t) => logs[turnKey(t)]?.value ?? 0);
   const loads = mine.map((t) => logs[turnKey(t)]?.load ?? planLoad ?? null);

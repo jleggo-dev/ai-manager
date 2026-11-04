@@ -280,7 +280,11 @@ export async function deleteFuturePendingOccurrences(
  * being played and every logged day are left alone; nothing is deleted, the session cache on a
  * row is simply emptied. Returns how many rows were cleared.
  */
-export async function clearFuturePendingSessions(userId: string, activityId: string, afterDate: string): Promise<number> {
+export async function clearFuturePendingSessions(
+  userId: string,
+  activityId: string,
+  afterDate: string,
+): Promise<number> {
   const res = await sql`
     update cadence.occurrences set session = null
     where user_id = ${userId} and activity_id = ${activityId}

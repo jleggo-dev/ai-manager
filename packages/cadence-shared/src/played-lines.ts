@@ -25,7 +25,11 @@ const GENERIC_LAST_WORDS = new Set(['press', 'raise', 'curl', 'extension', 'hold
  * only names the kind of move; a plural loses its s. A one-word title is itself.
  */
 export function shortName(title: string): string {
-  const words = title.replace(/\s*\([^)]*\)\s*/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const words = title
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   const last = words[words.length - 1];
   const first = words[0];
   if (last === undefined || first === undefined) return title.trim();
@@ -82,16 +86,26 @@ export function groupMeta(turns: number, tool: StepTool | undefined): string {
  * "circuit · 2 of 3 rounds" when it stopped early. One step's sets then the other's are a
  * sequence: "in sequence", or "4 of 6 sets · in sequence". Counts what happened, never what broke.
  */
-export function groupLogLine(mode: CombineMode, done: { turns: number; rounds: number }, total: { turns: number; rounds: number }): string {
+export function groupLogLine(
+  mode: CombineMode,
+  done: { turns: number; rounds: number },
+  total: { turns: number; rounds: number },
+): string {
   if (mode === 'alternate') {
-    return done.rounds >= total.rounds ? `circuit · ${total.rounds} rounds` : `circuit · ${done.rounds} of ${total.rounds} rounds`;
+    return done.rounds >= total.rounds
+      ? `circuit · ${total.rounds} rounds`
+      : `circuit · ${done.rounds} of ${total.rounds} rounds`;
   }
   return done.turns >= total.turns ? 'in sequence' : `${done.turns} of ${total.turns} sets · in sequence`;
 }
 
 /** What a combined group contributes to the summary the coach reads: its name, its line, and each
  *  member's own numbers behind it — "bench + row circuit · 3 rounds (bench press 3×8 @ 95 lb, dumbbell row 3×10)". */
-export function groupSummary(nick: string, line: string, members: ReadonlyArray<{ title: string; line: string }>): string {
+export function groupSummary(
+  nick: string,
+  line: string,
+  members: ReadonlyArray<{ title: string; line: string }>,
+): string {
   const inside = members.map((m) => `${m.title.toLowerCase()} ${m.line}`).join(', ');
   return `${nick} ${line}${inside ? ` (${inside})` : ''}`;
 }

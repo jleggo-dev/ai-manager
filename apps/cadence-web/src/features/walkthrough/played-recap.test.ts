@@ -19,9 +19,27 @@ import { logLine, recapSummary, stepFraction } from './state.ts';
 
 const steps: WalkthroughStep[] = [
   { id: 's1', title: 'Pull-ups', minutes: 6, tool: { kind: 'reps', sets: 3, reps: 5 }, skippable: true },
-  { id: 's2', title: 'Bench press', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 8, load: '95 lb' }, skippable: true },
-  { id: 's3', title: 'Dumbbell row', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 10, load: '40 lb' }, skippable: true },
-  { id: 's4', title: 'Dead hang', minutes: 3, tool: { kind: 'timer', seconds: 45, chime: true, sets: 3 }, skippable: true },
+  {
+    id: 's2',
+    title: 'Bench press',
+    minutes: 9,
+    tool: { kind: 'reps', sets: 3, reps: 8, load: '95 lb' },
+    skippable: true,
+  },
+  {
+    id: 's3',
+    title: 'Dumbbell row',
+    minutes: 9,
+    tool: { kind: 'reps', sets: 3, reps: 10, load: '40 lb' },
+    skippable: true,
+  },
+  {
+    id: 's4',
+    title: 'Dead hang',
+    minutes: 3,
+    tool: { kind: 'timer', seconds: 45, chime: true, sets: 3 },
+    skippable: true,
+  },
 ];
 
 const pairShape = combine(defaultShape(steps), 'g2', 'g3', 'alternate');
@@ -39,7 +57,12 @@ describe('a combined group', () => {
     const played = applyShape(steps, pairShape);
     const logs = effectiveLogs(played, {}, { 's2:0': { value: 8 }, 's3:0': { value: 10 }, 's2:1': { value: 8 } });
     const pair = played[1]!;
-    expect(logs[pair.id]).toMatchObject({ kind: 'group', mode: 'alternate', done: { turns: 3, rounds: 1 }, total: { turns: 6, rounds: 3 } });
+    expect(logs[pair.id]).toMatchObject({
+      kind: 'group',
+      mode: 'alternate',
+      done: { turns: 3, rounds: 1 },
+      total: { turns: 6, rounds: 3 },
+    });
     expect(stepFraction(pair, logs[pair.id])).toBeCloseTo(0.5);
     expect(logLine(pair, logs[pair.id]!)).toBe('circuit · 1 of 3 rounds');
     expect(logs['s1']).toBeUndefined();
@@ -64,7 +87,11 @@ describe('a combined group', () => {
   it('split back after two rounds: each step keeps the turns it logged, as its own sets', () => {
     const back = split(pairShape, 'g5');
     const played = applyShape(steps, back);
-    const logs = effectiveLogs(played, {}, { 's2:0': { value: 8 }, 's3:0': { value: 10 }, 's2:1': { value: 8 }, 's3:1': { value: 10 } });
+    const logs = effectiveLogs(
+      played,
+      {},
+      { 's2:0': { value: 8 }, 's3:0': { value: 10 }, 's2:1': { value: 8 }, 's3:1': { value: 10 } },
+    );
     expect(logs['s2']).toEqual({ kind: 'reps', sets: [8, 8], target: 8, load: '95 lb' });
     expect(logs['s3']).toEqual({ kind: 'reps', sets: [10, 10], target: 10, load: '40 lb' });
     // A step's own log, once its tool writes one, wins over the turns.
@@ -80,7 +107,14 @@ describe('a spread step', () => {
 
   it('plays as three one-set steps, each with its own group log', () => {
     const played = applyShape(steps, shape);
-    expect(played.map((p) => p.title)).toEqual(['Dead hang', 'Pull-ups', 'Dead hang', 'Bench press', 'Dumbbell row', 'Dead hang']);
+    expect(played.map((p) => p.title)).toEqual([
+      'Dead hang',
+      'Pull-ups',
+      'Dead hang',
+      'Bench press',
+      'Dumbbell row',
+      'Dead hang',
+    ]);
     const logs = effectiveLogs(played, {}, { 's4:0': { value: 45 } });
     expect(stepFraction(played[0]!, logs[played[0]!.id])).toBe(1);
     expect(logs[played[2]!.id]).toBeUndefined();

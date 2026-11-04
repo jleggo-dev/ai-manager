@@ -47,8 +47,18 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   getOccurrenceWithActivity.mockResolvedValue({ occurrence_id: 'o1', activity_id: 'a1', date: '2026-11-02' });
-  getUserActivity.mockResolvedValue({ activity_id: 'a1', commitment_id: 'c1', title: 'Obstacle strength', how_to: null });
-  getActiveActivityForCommitment.mockResolvedValue({ activity_id: 'a1', commitment_id: 'c1', title: 'Obstacle strength', how_to: null });
+  getUserActivity.mockResolvedValue({
+    activity_id: 'a1',
+    commitment_id: 'c1',
+    title: 'Obstacle strength',
+    how_to: null,
+  });
+  getActiveActivityForCommitment.mockResolvedValue({
+    activity_id: 'a1',
+    commitment_id: 'c1',
+    title: 'Obstacle strength',
+    how_to: null,
+  });
   updateActivityHowTo.mockResolvedValue(true);
   clearFuturePendingSessions.mockResolvedValue(0);
 });
@@ -81,8 +91,16 @@ describe('keepHowTo against POST /plan/activity-how-to', () => {
   });
 
   it('an instruction at its bound is full to the client', async () => {
-    getActiveActivityForCommitment.mockResolvedValue({ activity_id: 'a1', commitment_id: 'c1', title: 'x', how_to: 'x'.repeat(590) });
-    expect(await served.web.keepHowTo('o1', 'alternate bench press and dumbbell row')).toEqual({ ok: false, reason: 'full' });
+    getActiveActivityForCommitment.mockResolvedValue({
+      activity_id: 'a1',
+      commitment_id: 'c1',
+      title: 'x',
+      how_to: 'x'.repeat(590),
+    });
+    expect(await served.web.keepHowTo('o1', 'alternate bench press and dumbbell row')).toEqual({
+      ok: false,
+      reason: 'full',
+    });
     expect(updateActivityHowTo).not.toHaveBeenCalled();
   });
 

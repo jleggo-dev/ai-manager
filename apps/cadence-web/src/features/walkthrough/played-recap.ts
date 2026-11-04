@@ -32,7 +32,12 @@ import { type StepLog, type StepLogs, logLine } from './state.ts';
 type SetsLog = Extract<StepLog, { kind: 'reps' | 'timed_sets' }>;
 
 /** A step's logged turns as the log its own tool would have written. */
-function foldedLog(step: WalkthroughStep, turns: PlayedStep['play'] extends infer P ? (P extends { turns: infer T } ? T : never) : never, turnLogs: TurnLogs, spread: boolean): SetsLog | null {
+function foldedLog(
+  step: WalkthroughStep,
+  turns: PlayedStep['play'] extends infer P ? (P extends { turns: infer T } ? T : never) : never,
+  turnLogs: TurnLogs,
+  spread: boolean,
+): SetsLog | null {
   const t = step.tool;
   const planLoad = 'load' in t ? t.load : undefined;
   const folded = foldTurns(step.id, turns, turnLogs, planLoad);
@@ -43,11 +48,19 @@ function foldedLog(step: WalkthroughStep, turns: PlayedStep['play'] extends infe
     ...(spread ? { spread: true as const } : {}),
   };
   if (t.kind === 'timer') return { kind: 'timed_sets', sets: folded.sets, targetSec: t.seconds, ...tail };
-  return { kind: 'reps', sets: folded.sets, ...(t.kind === 'reps' && t.reps != null ? { target: t.reps } : {}), ...tail };
+  return {
+    kind: 'reps',
+    sets: folded.sets,
+    ...(t.kind === 'reps' && t.reps != null ? { target: t.reps } : {}),
+    ...tail,
+  };
 }
 
 /** A played group's own log, from its turns. */
-function groupLog(play: NonNullable<PlayedStep['play']>, turnLogs: TurnLogs): Extract<StepLog, { kind: 'group' }> | null {
+function groupLog(
+  play: NonNullable<PlayedStep['play']>,
+  turnLogs: TurnLogs,
+): Extract<StepLog, { kind: 'group' }> | null {
   const done = groupProgress(play.turns, turnLogs);
   if (done.turns === 0) return null;
   const turns: TurnLogs = {};
@@ -81,7 +94,10 @@ export function effectiveLogs(played: readonly PlayedStep[], logs: StepLogs, tur
       continue;
     }
     if (out[step.id]) continue;
-    const all = Array.from({ length: step.tool.kind === 'reps' ? step.tool.sets : step.tool.kind === 'timer' ? (step.tool.sets ?? 1) : 1 }, (_, set) => ({ stepId: step.id, set }));
+    const all = Array.from(
+      { length: step.tool.kind === 'reps' ? step.tool.sets : step.tool.kind === 'timer' ? (step.tool.sets ?? 1) : 1 },
+      (_, set) => ({ stepId: step.id, set }),
+    );
     const folded = foldedLog(step, all, turnLogs, false);
     if (folded) out[step.id] = folded;
   }
@@ -97,7 +113,12 @@ export interface RecapView {
  * One row per thing the person did, in played order. Steps and logs together so Recap.tsx and
  * `recapSummary` read them exactly as they read an ordinary session.
  */
-export function recapView(steps: readonly WalkthroughStep[], shape: PlayedShape, logs: StepLogs, turnLogs: TurnLogs): RecapView {
+export function recapView(
+  steps: readonly WalkthroughStep[],
+  shape: PlayedShape,
+  logs: StepLogs,
+  turnLogs: TurnLogs,
+): RecapView {
   const groups = normalizeShape(shape, steps);
   const byId = new Map(steps.map((s) => [s.id, s] as const));
   const spread = spreadSteps(groups);
@@ -112,12 +133,24 @@ export function recapView(steps: readonly WalkthroughStep[], shape: PlayedShape,
       const row: WalkthroughStep = {
         id: g.id,
         title: groupRecapTitle(members.map((m) => m.title)),
-        minutes: g.turns.reduce((n, t) => n + turnMinutes(byId.get(t.stepId) ?? { tool: { kind: 'read' }, minutes: 1 }), 0),
+        minutes: g.turns.reduce(
+          (n, t) => n + turnMinutes(byId.get(t.stepId) ?? { tool: { kind: 'read' }, minutes: 1 }),
+          0,
+        ),
         tool: { kind: 'circuit', rounds: g.turns.reduce((m, t) => Math.max(m, t.set + 1), 0), exercises: [] },
         skippable: true,
       };
       rows.push(row);
-      const log = groupLog({ groupId: g.id, mode: g.mode, turns: g.turns, rounds: row.tool.kind === 'circuit' ? row.tool.rounds : 1, names: [] }, turnLogs);
+      const log = groupLog(
+        {
+          groupId: g.id,
+          mode: g.mode,
+          turns: g.turns,
+          rounds: row.tool.kind === 'circuit' ? row.tool.rounds : 1,
+          names: [],
+        },
+        turnLogs,
+      );
       if (log) {
         log.members = members
           .map((m) => {

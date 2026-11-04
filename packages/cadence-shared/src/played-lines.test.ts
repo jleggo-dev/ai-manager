@@ -77,11 +77,35 @@ describe('pillLabel and groupMeta — what a row draws', () => {
 
 describe('the log-line shapes the coach reads', () => {
   it.each([
-    ['alternate, every round done', 'alternate', { turns: 6, rounds: 3 }, { turns: 6, rounds: 3 }, 'circuit · 3 rounds'],
-    ['alternate, stopped after two', 'alternate', { turns: 4, rounds: 2 }, { turns: 6, rounds: 3 }, 'circuit · 2 of 3 rounds'],
-    ['alternate, mid-round counts the full rounds only', 'alternate', { turns: 5, rounds: 2 }, { turns: 6, rounds: 3 }, 'circuit · 2 of 3 rounds'],
+    [
+      'alternate, every round done',
+      'alternate',
+      { turns: 6, rounds: 3 },
+      { turns: 6, rounds: 3 },
+      'circuit · 3 rounds',
+    ],
+    [
+      'alternate, stopped after two',
+      'alternate',
+      { turns: 4, rounds: 2 },
+      { turns: 6, rounds: 3 },
+      'circuit · 2 of 3 rounds',
+    ],
+    [
+      'alternate, mid-round counts the full rounds only',
+      'alternate',
+      { turns: 5, rounds: 2 },
+      { turns: 6, rounds: 3 },
+      'circuit · 2 of 3 rounds',
+    ],
     ['sequence, all sets', 'sequence', { turns: 6, rounds: 3 }, { turns: 6, rounds: 3 }, 'in sequence'],
-    ['sequence, stopped early', 'sequence', { turns: 4, rounds: 2 }, { turns: 6, rounds: 3 }, '4 of 6 sets · in sequence'],
+    [
+      'sequence, stopped early',
+      'sequence',
+      { turns: 4, rounds: 2 },
+      { turns: 6, rounds: 3 },
+      '4 of 6 sets · in sequence',
+    ],
   ] as const)('%s', (_n, mode, done, total, expected) => {
     expect(groupLogLine(mode, done, total)).toBe(expected);
   });

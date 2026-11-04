@@ -198,9 +198,7 @@ export function normalizeShape(shape: PlayedShape, steps: readonly WalkthroughSt
   }
   for (const s of steps) {
     const n = setCount(s.tool);
-    const missing = Array.from({ length: n }, (_, set) => ({ stepId: s.id, set })).filter(
-      (t) => !seen.has(turnKey(t)),
-    );
+    const missing = Array.from({ length: n }, (_, set) => ({ stepId: s.id, set })).filter((t) => !seen.has(turnKey(t)));
     if (!missing.length) continue;
     const last = findLastIndex(out, (g) => g.turns.some((t) => t.stepId === s.id));
     const home = out[last];
@@ -235,7 +233,9 @@ export function spreadSteps(shape: PlayedShape): Map<string, PlayedGroup[]> {
 
 /** Whether the shape is the prescription as written: every group plain, in the steps' order. */
 export function isDefaultShape(shape: PlayedShape, steps: readonly WalkthroughStep[]): boolean {
-  return shape.length === steps.length && shape.every((g, i) => isPlain(g, steps) && g.turns[0]?.stepId === steps[i]?.id);
+  return (
+    shape.length === steps.length && shape.every((g, i) => isPlain(g, steps) && g.turns[0]?.stepId === steps[i]?.id)
+  );
 }
 
 /* ── Undo ── */
