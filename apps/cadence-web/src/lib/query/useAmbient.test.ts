@@ -7,7 +7,9 @@
  * showed the reading alone for the rest of the hour with nothing to indicate why (owner, on
  * device, 2026-09-09).
  */
-import { QueryClient } from '@tanstack/react-query';
+import { createElement, type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Forecast } from '../api.ts';
 
@@ -19,7 +21,8 @@ vi.mock('../api.ts', () => ({
   getDailyCheckinStatus: vi.fn(),
 }));
 
-const { prefetchForecast, refetchForecast } = await import('./useAmbient.ts');
+const { prefetchForecast, refetchForecast, useDailyCheckinDue, useSettleDailyCheckin } =
+  await import('./useAmbient.ts');
 const { queryKeys } = await import('./keys.ts');
 
 const SERIES: Forecast = {
@@ -35,6 +38,19 @@ const NONE: Forecast = { available: false };
 function client() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
+
+describe('the daily check-in, once it has been answered', () => {
+  it('a fresh cached "due" goes false, so a return to Plan does not reopen the sheet', async () => {
+    const qc = client();
+    qc.setQueryData(queryKeys.dailyCheckin.all, true);
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => ({ due: useDailyCheckinDue(), settle: useSettleDailyCheckin() }), { wrapper });
+    expect(result.current.due).toBe(true);
+    act(() => result.current.settle());
+    await waitFor(() => expect(result.current.due).toBe(false));
+  });
+});
 
 describe('the forecast read, through the cache', () => {
   beforeEach(() => {

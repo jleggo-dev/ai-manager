@@ -313,6 +313,18 @@ describe('buildPendingChangeDetail — only what the proposal changes', () => {
     ]);
   });
 
+  it("shows today's slot on an evening change — the week counts from their day, not the UTC one", async () => {
+    getUser.mockResolvedValue({
+      timezone: 'America/Toronto',
+      pending_plan: pendingPlan({
+        activities: [runAsProposed({ recurrence: 'FREQ=WEEKLY;BYDAY=TU', cadence: 'Tuesday' })],
+      }),
+    });
+    const r = await buildPendingChangeDetail('u1', new Date('2026-11-04T02:56:19Z')); // 21:56 Tue 3 Nov
+    expect(r.week[0]!.date).toBe('2026-11-03');
+    expect(r.week[0]!.entries.map((e) => e.title)).toEqual(['Easy run']);
+  });
+
   it("matches a rebuild's rows by name, as the commit does — a kept row is neither new nor removed", async () => {
     getUser.mockResolvedValue({
       pending_plan: pendingPlan({ activities: [runAsProposed({ commitment_id: undefined })] }),

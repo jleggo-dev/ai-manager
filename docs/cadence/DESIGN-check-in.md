@@ -207,12 +207,16 @@ the build button all held back until `checkin_due` flipped on day seven.
 - **The gate** (`checkinGate.ts`, `WeekGateSheet.tsx`, `useWeekGate.ts`): a tap on a locked
   activity asks before it opens. Day 1–3: *"It's only day N of your plan"* → Build next week /
   Not yet. Day 4 on: *"We're still working through this week"* → Check in now / Build next week /
-  Just browsing. On the check-in's day or later, a tap on any activity from the check-in on asks
-  *"Do you want to check in today?"* → Check in now / Later today / Just build my week (the
-  owner's "skip til next week", wearing the trust path's name — never "Skip"). *Later today*
-  dismisses for the rest of the local day (per device) and opens what was tapped; the card
-  stays, and a locked day still asks — it is the only door a locked day has. A preview node is
-  never opened. The gate is table-tested (`checkinGate.test.ts`).
+  Just browsing. A locked day from the check-in on, and an open day once they are a day past the
+  check-in with nothing built for today, asks *"Do you want to check in today?"* → Check in now /
+  Later today / Just build my week (the owner's "skip til next week", wearing the trust path's
+  name — never "Skip"). **The check-in's own day never asks on an open day** (owner, 2026-11-03,
+  replacing the 2026-09-09 "it should still re-prompt": *"i was all good to do the check in, but i
+  wasn't ready yet - i was trying to do my daily tasks"*): tasks open, and the check-in is there
+  to tap as one of them. *Later today* dismisses for the rest of the local day (per device) and
+  opens what was tapped; *Cancel* counts for the day too and opens nothing. The card stays, and a
+  locked day still asks — it is the only door a locked day has. A preview node is never opened.
+  The gate is table-tested (`checkinGate.test.ts`).
 - **The coach can do all of it from chat.** `build_week_ahead` (tail tier, category `plan`)
   writes next week without moving the check-in; `build_next_week` still ends a finished week
   (the skipped check-in); `open_week_review` runs the check-in; `extend_horizon` runs this week

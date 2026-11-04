@@ -73,7 +73,12 @@ export function useWeekGate({
   };
 
   const close = () => {
-    if (!busy) setGate(null);
+    if (busy) return;
+    // The due ask comes once a day, whichever way it is answered. Cancel used to leave no trace,
+    // so every tap on an activity asked again. `gateFor` still asks on a locked day: the prompt is
+    // the only door it has.
+    if (gate?.variant === 'due' && todayIso) writeLaterOn(todayIso);
+    setGate(null);
   };
   const checkIn = () => {
     setGate(null);

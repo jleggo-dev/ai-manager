@@ -41,9 +41,9 @@ export interface CommitDiffWindow {
   from: string;
   /** Last date of the new plan's materialization horizon (today + occurrenceDays). */
   to: string;
-  /** The OLD plan's recurrence anchor: its generated_at date (ensureHorizon's convention). */
+  /** The OLD plan's recurrence anchor: `planAnchorIso`, as ensureHorizon reads it. */
   oldAnchor: string;
-  /** The NEW plan's recurrence anchor: its generated_at date. */
+  /** The NEW plan's recurrence anchor: `planAnchorIso`. */
   newAnchor: string;
 }
 

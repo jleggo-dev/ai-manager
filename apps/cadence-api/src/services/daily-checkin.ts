@@ -1,15 +1,20 @@
 import { getUser } from '../repos/users.ts';
 import { listOccurrences } from '../repos/occurrences.ts';
 import { getDailyCheckin } from '../repos/coach-moments.ts';
+import { MORNING_ENDS_HOUR } from './notify/producers/clock.ts';
 import { localDateIso } from './weather/weather-map.ts';
 
 /**
  * Should Cadence ask about yesterday?
  *
- * The gate is four ANDs, and each one exists to stop a specific way this becomes annoying:
+ * The gate is five ANDs, and each one exists to stop a specific way this becomes annoying:
  *
  *  • Once per local day        — keyed on the user's own date, so a 1am scroll isn't "tomorrow".
  *  • Not before 4am           — someone still awake at 3am is finishing yesterday, not starting today.
+ *  • Not after noon           — the sheet opens "Morning. Before today gets going". With no ceiling
+ *                               the first Plan open of the day could be any hour: on 2026-11-03 it
+ *                               said that at 21:21 to someone sitting down to practise piano. A day
+ *                               missed here is just missed, and the next morning asks as usual.
  *  • Yesterday had a plan     — with nothing scheduled there is nothing to ask about, and asking
  *                               anyway is the app talking to fill silence.
  *  • Something actually happened to it — if every planned item is still `pending`, the day never
@@ -54,7 +59,8 @@ export async function getDailyCheckinStatus(userId: string, now = new Date()): P
   const tz = user?.timezone ?? null;
   const today = localDateIso(now, tz);
 
-  if (localHour(now, tz) < EARLIEST_HOUR) return { due: false, date: today, reviewing: null };
+  const hour = localHour(now, tz);
+  if (hour < EARLIEST_HOUR || hour >= MORNING_ENDS_HOUR) return { due: false, date: today, reviewing: null };
 
   // Already answered or dismissed today.
   if (await getDailyCheckin(userId, today)) return { due: false, date: today, reviewing: null };

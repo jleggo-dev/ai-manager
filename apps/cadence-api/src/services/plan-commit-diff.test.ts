@@ -148,6 +148,14 @@ describe('diffCommittedActivities — the anchor gate (a new plan version means 
     expect(survivorsOf([weekly(), daily()], [weekly(), daily()], w)).toHaveLength(2);
   });
 
+  it("an evening commit keeps today's rows: both anchors are local days, so today is on both plans", () => {
+    const daily = () => act({ schedule: { recurrence: 'FREQ=DAILY', time_of_day: '08:00' } });
+    const window = { from: '2026-11-03', to: '2026-11-10', oldAnchor: '2026-11-01', newAnchor: '2026-11-03' };
+    expect(survivorsOf([daily()], [daily()], window)).toHaveLength(1);
+    // The near-miss is the bug: anchored a day after `from`, today is off the new plan.
+    expect(survivorsOf([daily()], [daily()], { ...window, newAnchor: '2026-11-04' })).toHaveLength(0);
+  });
+
   it('a weekly with NO BYDAY defaults to the anchor weekday — different weekdays means changed', () => {
     const weekly = (): Activity => act({ schedule: { recurrence: 'FREQ=WEEKLY' } });
     // 2026-08-24 (Mon) vs 2026-08-31 (Mon): same weekday, survives.

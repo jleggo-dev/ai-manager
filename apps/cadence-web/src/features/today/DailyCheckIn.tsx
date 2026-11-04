@@ -2,16 +2,16 @@ import { useState } from 'react';
 import { CHECKIN_ADJUSTMENT_OPTIONS, MOODS, type CheckinAdjustment, type MoodValue } from '@cadence/shared';
 import { sendDailyCheckin } from '../../lib/api.ts';
 import { CoachFace } from '../../components/CoachFace.tsx';
-import { useDailyCheckinDue } from '../../lib/query/index.ts';
+import { useDailyCheckinDue, useSettleDailyCheckin } from '../../lib/query/index.ts';
 import { commitLabel } from './checkinCommit.ts';
 
 /**
  * The daily check-in — Cadence's one unprompted moment.
  *
  * Everything about it is built to be easy to refuse. Both answers are optional and independent,
- * and the whole thing fires at most once a local day (the gate lives server-side in
- * services/daily-checkin.ts, since it turns on the user's timezone and on whether yesterday
- * actually had a plan).
+ * and the whole thing fires at most once a local day, in the morning only (the gate lives
+ * server-side in services/daily-checkin.ts, since it turns on the user's timezone and on whether
+ * yesterday actually had a plan).
  *
  * ONE BUTTON under the list (owner, 2026-09-08: "there's no way to accept what I've chosen").
  * With nothing picked it is the quiet "Not now — take me to today". Pick a mood or "Keep the
@@ -40,6 +40,7 @@ export function DailyCheckIn({
   // Through the cache (PERF-03) rather than a fetch per mount: the gate is once per local day and
   // lives server-side, so re-asking on every Plan-tab return could never change the answer.
   const due = useDailyCheckinDue();
+  const settle = useSettleDailyCheckin();
   if (!due) return null;
 
   const nothingPicked = mood == null && picked == null;
@@ -48,6 +49,7 @@ export function DailyCheckIn({
   /** "Not now" — also what tapping the scrim means. Writes today's row so it never re-asks. */
   const dismiss = () => {
     void sendDailyCheckin({ dismissed: true });
+    settle();
     onClose();
   };
 
@@ -55,6 +57,7 @@ export function DailyCheckIn({
     if (nothingPicked) return dismiss();
     const opt = picked ? CHECKIN_ADJUSTMENT_OPTIONS.find((o) => o.code === picked) : null;
     void sendDailyCheckin({ mood, adjustment: picked });
+    settle();
     // "Keep as is" (or a mood alone) is the end of the conversation. A steer is the start of one —
     // it goes to the coach, because an adjustment the user never saw isn't one they agreed to.
     if (opt?.steer) onAdjust(opt.steer);

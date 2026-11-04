@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { localDayIso, localDayIsoPlus, planDayBase } from './plan-day.ts';
+import { localDayIso, localDayIsoPlus, planAnchorIso, planDayBase } from './plan-day.ts';
 
 /**
  * The commit's half of the same bug (2026-09-01): at 20:05 in Montreal a plan change read
@@ -23,6 +23,29 @@ describe('localDayIso', () => {
 
   it('floors to UTC when no zone is known', () => {
     expect(localDayIso(new Date('2026-09-02T00:05:00Z'))).toBe('2026-09-02');
+  });
+});
+
+describe('planAnchorIso — the day a plan version starts', () => {
+  it.each([
+    [
+      '21:56 in Toronto is still Tuesday, though UTC has moved on',
+      '2026-11-04T02:56:19Z',
+      'America/Toronto',
+      '2026-11-03',
+    ],
+    ['one minute past 19:00 in winter', '2026-11-04T00:01:00Z', 'America/Toronto', '2026-11-03'],
+    ['one minute past 20:00 in summer', '2026-07-08T00:01:00Z', 'America/Toronto', '2026-07-07'],
+    ['the same morning agrees with UTC', '2026-11-03T14:00:00Z', 'America/Toronto', '2026-11-03'],
+    ['a zone ahead of UTC is already tomorrow', '2026-11-03T20:00:00Z', 'Pacific/Auckland', '2026-11-04'],
+    ['no zone floors to the UTC date', '2026-11-04T02:56:19Z', null, '2026-11-04'],
+  ])('%s', (_label, at, zone, want) => {
+    expect(planAnchorIso(at, zone)).toBe(want);
+  });
+
+  it('takes the Date the driver may hand back, and falls to the hint with no stored zone', () => {
+    expect(planAnchorIso(new Date('2026-11-04T02:56:19Z'), 'America/Toronto')).toBe('2026-11-03');
+    expect(planAnchorIso('2026-11-04T02:56:19Z', null, 'America/Toronto')).toBe('2026-11-03');
   });
 });
 

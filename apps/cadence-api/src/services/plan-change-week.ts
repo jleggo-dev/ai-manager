@@ -53,7 +53,7 @@ export interface WeekInputs {
   /** First and last day shown, inclusive. */
   from: string;
   to: string;
-  /** Recurrence anchors — the active plan's generated_at date, and the date a commit would get. */
+  /** Recurrence anchors (`planAnchorIso`) — the active plan's, and the one a commit would get. */
   currentAnchor: string;
   proposedAnchor: string;
 }
