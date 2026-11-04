@@ -4,6 +4,7 @@ import { YouTubeLink } from './tools/YouTubeLink.tsx';
 import { TONE } from './tools/tone.ts';
 import { targetText, videoLabel } from './wt-styles.ts';
 import { Cue } from './wt-cue.tsx';
+import { ChangeButton, SwappedPill } from './tools/change-parts.tsx';
 
 /** One progress-bar pip — width = its step's minutes; state is logged / partial / current / skipped
  *  / untouched, so the bar's shape is the session's shape and a long step can't look like a short one. */
@@ -71,17 +72,37 @@ export function StatusDisc({ status }: { status: string }) {
   return <div style={{ ...box, border: '2px solid oklch(88% 0.02 85)' }} />;
 }
 
-/** The common step header (title, then the target as plain text with the video link beside it, then
- *  the cue) — everything but circuits and intervals. No TARGET label or box: the design ruling of
- *  2026-11-03. A Change control joins the target row in a later phase. */
-export function StepHeader({ step }: { step: WalkthroughStep }) {
-  const target = targetText(step);
+/**
+ * The common step header (title, then the target as plain text with the Change button and the video
+ * link beside it, then the cue) — everything but circuits and intervals. No TARGET label or box: the
+ * design ruling of 2026-11-03. `onChange` draws the Change button (walkthrough v3 Phase 5); a step
+ * the person swapped carries the "Swapped from … · Undo" pill above its title. `workingLoad` is the
+ * weight they added this session, shown in the target in place of the plan's.
+ */
+export function StepHeader({
+  step,
+  workingLoad,
+  onChange,
+  onUndoSwap,
+}: {
+  step: WalkthroughStep;
+  workingLoad?: string;
+  onChange?: () => void;
+  onUndoSwap?: () => void;
+}) {
+  const target = targetText(step, workingLoad);
   return (
-    <div style={{ textAlign: 'center' }}>
+    <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {step.swapped_from && onUndoSwap && <SwappedPill from={step.swapped_from} onUndo={onUndoSwap} />}
       <div style={{ fontSize: 21, fontWeight: 800, color: TONE.ink2 }}>{step.title}</div>
-      {(target || step.video_query) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 7 }}>
-          {target && <span style={{ fontSize: 15, fontWeight: 900, color: TONE.ink }}>{target}</span>}
+      {(target || step.video_query || onChange) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+          {target && (
+            <span style={{ fontSize: 14, fontWeight: 900, color: TONE.ink, marginRight: 2, whiteSpace: 'nowrap' }}>
+              {target}
+            </span>
+          )}
+          {onChange && <ChangeButton onClick={onChange} />}
           {step.video_query && <YouTubeLink query={step.video_query} label={videoLabel(step.tool.kind)} />}
         </div>
       )}

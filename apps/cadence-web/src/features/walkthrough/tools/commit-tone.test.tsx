@@ -22,6 +22,8 @@ import { StepBreathing } from './StepBreathing.tsx';
 import { StepGrounding } from './StepGrounding.tsx';
 import { StepMeasure } from './StepMeasure.tsx';
 import { StepCheckoff } from './SimpleTools.tsx';
+import { WeightSheet } from './WeightSheet.tsx';
+import { StepHeader } from '../wt-parts.tsx';
 import { COMMIT, TONE } from './tone.ts';
 import { logBtn as timerFace } from './timerStyles.ts';
 import { greenBtn } from '../wt-styles.ts';
@@ -135,6 +137,42 @@ const ROWS: Row[] = [
     },
     'Done',
     'commit',
+  ],
+  [
+    'weight sheet: Use 7.5 lb writes the load',
+    () =>
+      render(
+        <WeightSheet
+          title="Add weight"
+          name="Glute bridge"
+          targetWord="12 reps"
+          unit="lb"
+          start={7.5}
+          onUse={vi.fn()}
+          onBack={vi.fn()}
+        />,
+      ),
+    'Use 7.5 lb',
+    'commit',
+  ],
+  // Change, Change weight and Undo only open a sheet or put a move back — neither green nor amber.
+  [
+    'header: Change opens the sheet',
+    () => render(<StepHeader step={{ ...STEP, tool: { kind: 'reps', sets: 2, reps: 12 } }} onChange={vi.fn()} />),
+    'Change',
+    'other',
+  ],
+  [
+    'header: Undo puts the prescribed move back',
+    () =>
+      render(
+        <StepHeader
+          step={{ ...STEP, tool: { kind: 'reps', sets: 2, reps: 12 }, swapped_from: 'Glute bridge' }}
+          onUndoSwap={vi.fn()}
+        />,
+      ),
+    'Undo',
+    'other',
   ],
   // Starts, pauses and mid-game moves → amber. The near-misses.
   [

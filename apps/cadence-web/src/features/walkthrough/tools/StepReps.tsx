@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react';
+import type { SetLoads } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C, COMMIT } from './tone.ts';
 import { useHandoff } from './useHandoff.ts';
@@ -17,11 +18,16 @@ type RepsLog = Extract<StepLog, { kind: 'reps' }>;
  * the next step on its own, like the timer does (see `useHandoff`): "Sets logged · 1 of 1" was a
  * dead end that needed a second tap on › (2026-09-06). Re-opening a chip inside that window keeps
  * you here.
+ *
+ * `workingLoad` is the weight the person added this session (walkthrough v3 Phase 5): the set in
+ * hand is logged at it, written into `loads` beside `sets`, and the chips show each set's load.
+ * `load` stays the plan. A logged set keeps the load it was logged at when its reps are edited.
  */
 export function StepReps({
   sets,
   reps: target,
   load,
+  workingLoad,
   log,
   onLog,
   onDone,
@@ -29,6 +35,7 @@ export function StepReps({
   sets: number;
   reps?: number;
   load?: string;
+  workingLoad?: string;
   log?: RepsLog;
   onLog: (l: RepsLog) => void;
   /** Called a beat after the last set is logged. Omitted → the step waits for ›. */
@@ -45,15 +52,21 @@ export function StepReps({
   const setNum = editing != null ? editing + 1 : Math.min(logged.length + 1, sets);
   const full = logged.length >= sets && editing == null;
 
+  // The load the set in hand will be logged at, and what a chip shows under its number.
+  const liveLoad = workingLoad ?? load;
+  const loadsInPlay = workingLoad != null || log?.loads != null;
   const bump = (d: number) => setDial(Math.max(0, Math.min(99, reps + d)));
+  /** Per-set loads for the sets logged so far, filled with the plan's where none was recorded. */
+  const loadsSoFar = (): (string | null)[] => logged.map((_, i) => log?.loads?.[i] ?? load ?? null);
   function commit() {
     if (editing != null) {
       const next = logged.slice();
       next[editing] = reps;
-      onLog({ kind: 'reps', sets: next, target, load });
+      onLog({ kind: 'reps', sets: next, target, load, ...(loadsInPlay ? { loads: loadsSoFar() } : {}) });
       setEditing(null);
     } else if (logged.length < sets) {
-      onLog({ kind: 'reps', sets: [...logged, reps], target, load });
+      const loads: SetLoads | undefined = loadsInPlay ? [...loadsSoFar(), liveLoad ?? null] : undefined;
+      onLog({ kind: 'reps', sets: [...logged, reps], target, load, ...(loads ? { loads } : {}) });
       if (logged.length + 1 >= sets && onDone) handoff.schedule(onDone, 700);
     }
     setDial(null);
@@ -116,7 +129,7 @@ export function StepReps({
               color: TONE.sub,
             }}
           >
-            reps done
+            {liveLoad ? `reps · ${liveLoad}` : 'reps done'}
           </div>
         </div>
         <button onClick={() => bump(-1)} disabled={full} style={{ ...dialBtn, left: 6 }} aria-label="one fewer rep">
@@ -155,8 +168,14 @@ export function StepReps({
           inside the hand-off window means stay here. */}
       <SetChips
         count={sets}
-        logged={logged.map((r) => ({ label: String(r), off: target != null && r !== target }))}
-        current={editing != null ? null : { index: logged.length }}
+        logged={logged.map((r, i) => ({
+          label: String(r),
+          off: target != null && r !== target,
+          ...(loadsInPlay ? { sub: log?.loads?.[i] ?? load ?? 'bodyweight' } : {}),
+        }))}
+        current={
+          editing != null ? null : { index: logged.length, ...(loadsInPlay ? { sub: liveLoad ?? 'bodyweight' } : {}) }
+        }
         onEdit={(i) => {
           handoff.cancel();
           setEditing(i);

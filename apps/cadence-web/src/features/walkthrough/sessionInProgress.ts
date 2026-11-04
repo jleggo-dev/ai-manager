@@ -20,6 +20,7 @@ import type { MetronomeSpec, Walkthrough as WalkthroughData } from '@cadence/sha
 import { isDevMode, getDevAccount } from '../../lib/api/http.ts';
 import { readPersistedSession } from '../../lib/persisted-session.ts';
 import type { StepLogs } from './state.ts';
+import type { MoveChanges } from './changes.ts';
 import type { StepArea } from './tools/MetronomeSlot.tsx';
 
 export const SESSION_IN_PROGRESS_KEY = 'cadence.sessionInProgress';
@@ -56,6 +57,9 @@ export interface SessionSnapshot {
   tempos: Record<string, MetronomeSpec>;
   phase: SessionPhase;
   clock: RunningClock | null;
+  /** What the person changed about a move — a swap or an added weight (changes.ts). Additive to
+   *  the stored shape: a snapshot written before it existed reads back with none. */
+  changes?: MoveChanges;
 }
 
 interface Stored extends SessionSnapshot {
@@ -94,6 +98,7 @@ export function readSessionInProgress(now = Date.now()): SessionSnapshot | null 
       tempos: s.tempos ?? {},
       phase: s.phase === 'recap' || s.phase === 'done' ? s.phase : 'step',
       clock: s.clock && typeof s.clock.startedAt === 'number' ? s.clock : null,
+      changes: s.changes && typeof s.changes === 'object' ? s.changes : {},
     };
   } catch {
     return null;

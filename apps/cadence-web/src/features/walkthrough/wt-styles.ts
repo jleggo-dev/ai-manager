@@ -1,5 +1,11 @@
 import type { CSSProperties } from 'react';
-import { type WalkthroughStep, intervalShorthand, intervalTotalMinutes, secondsText } from '@cadence/shared';
+import {
+  type StepTool,
+  type WalkthroughStep,
+  intervalShorthand,
+  intervalTotalMinutes,
+  secondsText,
+} from '@cadence/shared';
 import { type StepLog, logLine } from './state.ts';
 import { TONE, COMMIT } from './tools/tone.ts';
 
@@ -8,23 +14,33 @@ import { TONE, COMMIT } from './tools/tone.ts';
 /** The prescription, stated once, in the same grammar as the log line ("15 × light band · 2 sets").
  *  Plain text in the header (design ruling 2026-11-03: no TARGET box) and the right-hand word in the
  *  all-steps list. */
-export function targetText(step: WalkthroughStep): string {
+export function targetText(step: { tool: StepTool }, workingLoad?: string): string {
   const t = step.tool;
+  // The weight the person added this session shows in place of the plan's ("12 × 15 lb · 2 sets");
+  // the plan itself is untouched and the log line names it.
+  const load = workingLoad ?? ('load' in t ? t.load : undefined);
   if (t.kind === 'reps') {
-    const head = [t.reps != null ? String(t.reps) : '', t.load ? `× ${t.load}` : ''].filter(Boolean).join(' ');
+    const head = [t.reps != null ? String(t.reps) : '', load ? `× ${load}` : ''].filter(Boolean).join(' ');
     return t.sets ? `${head}${head ? ' · ' : ''}${t.sets} sets` : head;
   }
   if (t.kind === 'timer') {
     // A plain hold keeps its minute ("5 min"). Sets or a load read like the reps line, in
     // seconds: "45 s × 40 lb · 4 sets" (walkthrough v3 design B).
-    if (!t.sets && !t.load) return `${Math.round(t.seconds / 60) || 1} min`;
-    const head = [secondsText(t.seconds), t.load ? `× ${t.load}` : ''].filter(Boolean).join(' ');
+    if (!t.sets && !load) return `${Math.round(t.seconds / 60) || 1} min`;
+    const head = [secondsText(t.seconds), load ? `× ${load}` : ''].filter(Boolean).join(' ');
     return t.sets ? `${head} · ${t.sets} sets` : head;
   }
   if (t.kind === 'checkoff') return t.label ?? '';
   // The unit IS the prescription here — there's no target number, just what to type it in.
   // Absent unit degrades honestly: the target line disappears rather than showing a blank label.
   if (t.kind === 'measure') return t.unit;
+  return '';
+}
+
+/** The move's own number for the weight sheet's subtitle: "12 reps", "45 s", or nothing. */
+export function targetWord(t: StepTool): string {
+  if (t.kind === 'reps') return t.reps != null ? `${t.reps} reps` : `${t.sets} sets`;
+  if (t.kind === 'timer') return secondsText(t.seconds);
   return '';
 }
 
@@ -43,9 +59,11 @@ export function toolNoun(step: WalkthroughStep): string {
 /** The all-steps row's second line — the receipt of what happened, never the word "failed". */
 export function rowReceipt(step: WalkthroughStep, log: StepLog | undefined, current: boolean, status: string): string {
   if (log) return logLine(step, log);
-  if (current) return 'Here now';
-  if (status === 'skipped') return 'Passed over · you can still do it';
-  return toolNoun(step);
+  // A swapped move that has not been logged yet still reads as a swap, never as a skip.
+  const swapped = step.swapped_from ? `Swapped from ${step.swapped_from} · ` : '';
+  if (current) return `${swapped}Here now`;
+  if (status === 'skipped') return `${swapped}Passed over · you can still do it`;
+  return swapped + toolNoun(step);
 }
 
 /** A short header label — strip the parenthetical qualifier and cap length, so the workout name in

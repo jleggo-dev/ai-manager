@@ -7,6 +7,8 @@ import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { HandsFree } from './HandsFree.tsx';
 import { CircuitMoveClock } from './CircuitMoveClock.tsx';
 import { Cue } from '../wt-cue.tsx';
+import { ChangeButton, SwappedPill } from './change-parts.tsx';
+import { moveTarget } from '../change-text.ts';
 
 type CircuitLog = Extract<StepLog, { kind: 'circuit' }>;
 const GAP = 10;
@@ -23,21 +25,31 @@ const ordinal = (i: number) => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th',
  * The ring belongs to the ROUNDS; completed rounds fill deep, the current round fills pro-rata by
  * moves done.
  * "Skip circuit" (the shell's nav) leaves the loop, not the workout. Captures rounds done.
+ *
+ * "Change this move" (walkthrough v3 Phase 5) sits on the current move's row: `onChange(i)` opens
+ * the sheet for that move, a swapped move carries the "Swapped from …" pill, and `workingLoads`
+ * (by move index) shows in the target and is written into the round's log so the coach reads it.
  */
 export function StepCircuit({
   step,
   rounds,
   exercises,
+  workingLoads = {},
   log,
   onLog,
   onAdvance,
+  onChange,
+  onUndoSwap,
 }: {
   step: WalkthroughStep;
   rounds: number;
   exercises: CircuitExercise[];
+  workingLoads?: Record<string, string | undefined>;
   log?: CircuitLog;
   onLog: (l: CircuitLog) => void;
   onAdvance: () => void;
+  onChange?: (moveIndex: number) => void;
+  onUndoSwap?: (moveIndex: number) => void;
 }) {
   const n = exercises.length;
   const [round, setRound] = useState(log?.roundsDone ?? 0); // completed rounds
@@ -59,7 +71,8 @@ export function StepCircuit({
       const nr = round + 1;
       setRound(nr);
       setPos(0);
-      onLog({ kind: 'circuit', roundsDone: nr, totalRounds: rounds });
+      const loads = Object.fromEntries(Object.entries(workingLoads).filter(([, l]) => l)) as Record<string, string>;
+      onLog({ kind: 'circuit', roundsDone: nr, totalRounds: rounds, ...(Object.keys(loads).length ? { loads } : {}) });
       if (nr >= rounds) onAdvance();
     }
   }
@@ -192,14 +205,21 @@ export function StepCircuit({
               gap: 11,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: TONE.ink2 }}>{ex.name}</div>
-              {/* Plain text, no TARGET box — the design ruling of 2026-11-03, same as the step header. */}
+            {ex.swapped_from && onUndoSwap && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: -4 }}>
+                <SwappedPill from={ex.swapped_from} onUndo={() => onUndoSwap(pos)} />
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, fontSize: 17, fontWeight: 900, color: TONE.ink2, minWidth: 90 }}>{ex.name}</div>
+              {/* Plain text, no TARGET box — the design ruling of 2026-11-03, same as the step header.
+                  A weight the person added shows in place of the plan's ("12 reps × 15 lb"). */}
               {(ex.reps != null || ex.seconds) && (
-                <div style={{ fontSize: 15, fontWeight: 900, color: TONE.ink, whiteSpace: 'nowrap' }}>
-                  {ex.reps != null ? `${ex.reps} reps` : `${ex.seconds} s`}
+                <div style={{ fontSize: 14, fontWeight: 900, color: TONE.ink, whiteSpace: 'nowrap', marginRight: 2 }}>
+                  {moveTarget(ex, workingLoads[String(pos)])}
                 </div>
               )}
+              {onChange && <ChangeButton onClick={() => onChange(pos)} />}
               {ex.video_query && (
                 <YouTubeLink query={ex.video_query} label={ex.reps != null ? 'Form' : 'Follow along'} />
               )}

@@ -37,11 +37,15 @@ type Phase = 'idle' | 'running' | 'review';
  *
  * Stop and Start only move the clock, so they wear the amber do-tone; Log writes, so it is green;
  * Keep going is the grey of a step back (tools/tone.ts, pinned in commit-tone.test.tsx).
+ *
+ * `workingLoad` is the weight the person added this session (walkthrough v3 Phase 5): each set
+ * logged from then on carries it in `loads`, and the chips show each set's load. `load` stays the plan.
  */
 export function StepTimedSets({
   seconds,
   sets,
   load,
+  workingLoad,
   chime,
   switchSides = false,
   title,
@@ -54,6 +58,7 @@ export function StepTimedSets({
   seconds: number;
   sets: number;
   load?: string;
+  workingLoad?: string;
   chime: boolean;
   switchSides?: boolean;
   title?: string;
@@ -117,11 +122,24 @@ export function StepTimedSets({
     run(base);
   }
 
+  const liveLoad = workingLoad ?? load;
+  const loadsInPlay = workingLoad != null || log?.loads != null;
   function logSet() {
     const next = logged.slice();
+    // Per-set loads, filled with the plan's where none was recorded; an edited set keeps its own.
+    const loads = loadsInPlay ? logged.map((_, i) => log?.loads?.[i] ?? load ?? null) : undefined;
     if (editing != null) next[editing] = dial;
-    else next.push(dial);
-    onLog({ kind: 'timed_sets', sets: next, targetSec: target, ...(load ? { load } : {}) });
+    else {
+      next.push(dial);
+      loads?.push(liveLoad ?? null);
+    }
+    onLog({
+      kind: 'timed_sets',
+      sets: next,
+      targetSec: target,
+      ...(load ? { load } : {}),
+      ...(loads ? { loads } : {}),
+    });
     const last = editing == null && next.length >= sets;
     setEditing(null);
     setPhase('idle');
@@ -282,13 +300,18 @@ export function StepTimedSets({
 
       <SetChips
         count={sets}
-        logged={logged.map((s) => ({ label: secondsText(s), off: s !== target }))}
+        logged={logged.map((s, i) => ({
+          label: secondsText(s),
+          off: s !== target,
+          ...(loadsInPlay ? { sub: log?.loads?.[i] ?? load ?? 'bodyweight' } : {}),
+        }))}
         current={
           editing != null
             ? null
             : {
                 index: logged.length,
                 label: running ? formatClock(elapsed) : reviewing ? secondsText(dial) : undefined,
+                ...(loadsInPlay ? { sub: liveLoad ?? 'bodyweight' } : {}),
               }
         }
         onEdit={edit}
