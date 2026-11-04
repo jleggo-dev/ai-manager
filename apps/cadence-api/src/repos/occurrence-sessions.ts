@@ -79,6 +79,24 @@ export async function clearFuturePendingSessions(
 }
 
 /**
+ * Replace the session on a still-pending row with a rearranged one (walkthrough v3 Phase 6, the
+ * coach's `rearrange_session`). Guarded to pending like `clearOccurrenceSession`: a done
+ * occurrence's session is the record of what was asked that day. One write rather than clear +
+ * compare-and-set: nothing is generated in between, so there is no window for a racing open to
+ * fill. Returns whether a row was written.
+ */
+export async function replaceOccurrenceSession(
+  userId: string,
+  occurrenceId: string,
+  session: OccurrenceSession,
+): Promise<boolean> {
+  const res = await sql`
+    update cadence.occurrences set session = ${json(session)}
+    where user_id = ${userId} and occurrence_id = ${occurrenceId} and status = 'pending'`;
+  return res.count > 0;
+}
+
+/**
  * Upcoming still-to-do sessions WITH their ids — what a session revision aims at. The mirror of
  * `listRecentForLogging` (occurrences.ts): that one is ceilinged at today because you cannot log
  * the future; this one FLOORS at today because you cannot rebuild the past. Soonest first, so an

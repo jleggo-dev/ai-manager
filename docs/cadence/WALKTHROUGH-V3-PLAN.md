@@ -322,7 +322,7 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 ## Phase 6 — rearrange the session (after R2 + R5 + design C)
 
-- [ ] **6a. A model for the played session: groups of set-turns.** The design's unit is a
+- [x] **6a. A model for the played session: groups of set-turns.** (#494) The design's unit is a
       **group** (a row) of **turns** (a pill = one set of one item). Today the walkthrough is keyed by
       step id and logs once per step; a circuit logs only `roundsDone`. Rearranging needs:
   - turns keyed by (item, set index), so one step's sets can live in different groups;
@@ -331,14 +331,14 @@ the check found back to her. Never correct it silently (see Phase 3).
 
   Do this first, in shared, with table tests. Everything else in Phase 6 sits on it.
 
-- [ ] **6a′. Rearrange mode (design C).**
+- [x] **6a′. Rearrange mode (design C).** (#495)
   - Opened from All steps, with Undo and Done.
   - Pick groups → Alternate / Sequence (the preview updates live) → Combine; Split undoes it.
   - Drag a set pill into a gap to spread it.
   - Logs nothing, can be undone, and is remembered across a reload (`sessionInProgress` stores
     the played shape).
-- [ ] **6b. The log records the structure as done** (a short diff against what she prescribed).
-- [ ] **6c. "You changed N things" at the Recap (design 6).**
+- [x] **6b. The log records the structure as done** (#494, #495) (a short diff against what she prescribed).
+- [x] **6c. "You changed N things" at the Recap (design 6).** (#494, #495; R2's agentic path = `rebuild` scope `order`, PR 3)
   - Each change, swaps included, is listed as a fact with its own **Every time / Just today**.
   - The copy is fixed, and no model writes it.
   - Every time → `rework` writes it to `activity.how_to` in plain words ("alternate presses and
