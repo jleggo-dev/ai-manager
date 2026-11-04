@@ -275,6 +275,20 @@ export async function deleteFuturePendingOccurrences(
 }
 
 /**
+ * Forget the sessions already written for ONE activity's pending days after `afterDate`, so the
+ * next open asks the coach again with what she now knows (a how_to that just changed). The day
+ * being played and every logged day are left alone; nothing is deleted, the session cache on a
+ * row is simply emptied. Returns how many rows were cleared.
+ */
+export async function clearFuturePendingSessions(userId: string, activityId: string, afterDate: string): Promise<number> {
+  const res = await sql`
+    update cadence.occurrences set session = null
+    where user_id = ${userId} and activity_id = ${activityId}
+      and date > ${afterDate} and status = 'pending' and session is not null`;
+  return res.count;
+}
+
+/**
  * Store the user's parsed post-session report in ONE update: log + numeric rollups +
  * provenance (first real writer of that column) + status → done. Dual-keyed and count-checked
  * — false means the occurrence isn't this user's / vanished under a replan (route → 404).
