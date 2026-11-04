@@ -9,3 +9,9 @@ export const ITEM_NAME_MAX = 120;
 export const ITEM_LOAD_MAX = 80;
 export const ITEM_DETAIL_MAX = 600;
 export const BLOCK_LABEL_MAX = 40;
+
+/** Alternatives per item (walkthrough v3 R3): the coach writes two or three; the app keeps at most this. */
+export const ALTERNATIVES_MAX = 3;
+/** Equipment names on an alternative: each this long at most, and at most this many of them. */
+export const EQUIPMENT_NAME_MAX = 40;
+export const ALTERNATIVE_EQUIPMENT_MAX = 6;

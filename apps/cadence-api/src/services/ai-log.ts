@@ -36,7 +36,9 @@ export type AiLogKind =
   | 'progress_layout_compose'
   // The described-meal check (FOOD-LOGGING-COACH-LED.md, 2026-11-01): the food-check job's
   // calls per meal, whether she was reached, and what the lookups found.
-  | 'food_check';
+  | 'food_check'
+  // The Change sheet's "Something else" (walkthrough v3 Phase 5f): one alternative for one item.
+  | 'alternative_item';
 
 /**
  * Durable log of a behind-the-scenes AI call (see migration 0004). Best-effort: a logging

@@ -5,6 +5,7 @@
  * no clock.
  */
 import type { SessionItem } from './types/occurrence.ts';
+import { loadTail, type SetLoads } from './set-loads.ts';
 
 /** Rest between timed sets is stored bounded: nothing above ten minutes, whole seconds. */
 export const MAX_REST_SEC = 600;
@@ -42,10 +43,11 @@ export function secondsText(sec: number): string {
 /**
  * The receipt for sets of a timed effort, in the reps line's grammar: "4×40 s @ 2×40 lb" when
  * every set ran the same, "45 · 53 · 32 · 45 s @ 2×40 lb" when they did not. Seconds as logged,
- * never the target, and never a word about which were over or under.
+ * never the target, and never a word about which were over or under. `loads` is what was actually
+ * held per set when the person changed it (set-loads.ts): "4×45 s @ 50 lb (plan said 40 lb)".
  */
-export function timedSetsLogLine(secondsPerSet: readonly number[], load?: string): string {
-  const tail = load ? ` @ ${load}` : '';
+export function timedSetsLogLine(secondsPerSet: readonly number[], load?: string, loads?: SetLoads): string {
+  const tail = loadTail(load, loads);
   const [first] = secondsPerSet;
   if (first === undefined) return '';
   const uniform = secondsPerSet.every((s) => s === first);

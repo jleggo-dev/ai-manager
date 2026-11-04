@@ -66,6 +66,9 @@ export {
 
 export { getProgressLayout } from './api/progress-layout.ts';
 
+export { getExerciseHistory, type ExerciseHistoryResult } from './api/exercise-history.ts';
+export { askAlternativeItem, type AlternativeItemOutcome } from './api/alternative-item.ts';
+
 export {
   prepareCoachFoodAction,
   type CoachFoodAction,
