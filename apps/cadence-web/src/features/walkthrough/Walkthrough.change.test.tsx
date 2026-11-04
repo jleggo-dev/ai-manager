@@ -139,7 +139,9 @@ describe('Change this move — through the shell', () => {
     press('Log set 2 · 12 reps');
     press('All steps');
     expect(screen.getAllByText('Kettlebell hip thrust').length).toBeGreaterThan(1); // the header and the row
-    expect(screen.getByText('2×12 @ 40 lb · swapped from Glute bridge')).toBeInTheDocument();
+    const sheet = within(screen.getByRole('dialog', { name: 'All steps' }));
+    expect(sheet.getByText('Swapped from Glute bridge')).toBeInTheDocument();
+    expect(sheet.getAllByText('✓ 12')).toHaveLength(2); // both sets, logged
     press('Review & finish ›');
     expect(screen.getByText('2×12 @ 40 lb · swapped from Glute bridge')).toBeInTheDocument();
     expect(screen.queryByText(/skipped|passed over.*hip thrust/i)).toBeNull();
@@ -156,7 +158,9 @@ describe('Change this move — through the shell', () => {
     press(/^Kettlebell hip thrust/);
     press('Next step');
     press('All steps');
-    expect(screen.getByText('Swapped from Glute bridge · Passed over · you can still do it')).toBeInTheDocument();
+    const sheet = within(screen.getByRole('dialog', { name: 'All steps' }));
+    expect(sheet.getByText('Swapped from Glute bridge')).toBeInTheDocument();
+    expect(sheet.queryByText(/skipped|passed over/i)).toBeNull();
   });
 
   it('a relaunch keeps the swap and the loads', () => {
@@ -203,6 +207,7 @@ describe('Change this move — through the shell', () => {
     press('Log set 1 · 12 reps');
     press('Log set 2 · 12 reps');
     press('All steps');
+    press('Review & finish ›');
     expect(screen.getByText('2×12 @ bodyweight (plan said 40 lb) · swapped from Glute bridge')).toBeInTheDocument();
   });
 

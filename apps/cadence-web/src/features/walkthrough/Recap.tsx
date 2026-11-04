@@ -1,4 +1,5 @@
-import type { WalkthroughStep } from '@cadence/shared';
+import type { StructureChange, WalkthroughStep } from '@cadence/shared';
+import { RecapChanges } from './RecapChanges.tsx';
 import { type StepLog, type StepLogs, stepFraction, logLine, recapSummary } from './state.ts';
 import { SaveAsYours } from './SaveAsYours.tsx';
 import { StatusDisc } from './wt-parts.tsx';
@@ -15,6 +16,9 @@ export function Recap({
   steps,
   logs,
   title,
+  changes = [],
+  occurrenceId,
+  saveSteps,
   onBack,
   onJump,
   onResolve,
@@ -23,6 +27,12 @@ export function Recap({
   steps: WalkthroughStep[];
   logs: StepLogs;
   title: string;
+  /** What the person changed about the structure this session — each a fact with its own
+   *  Every time / Just today (walkthrough v3 Phase 6). */
+  changes?: StructureChange[];
+  occurrenceId?: string | null;
+  /** The prescription as written, for Save as yours; the rows above may be rearranged groups. */
+  saveSteps?: WalkthroughStep[];
   onBack: () => void;
   onJump: (i: number) => void;
   onResolve: (id: string, log: StepLog) => void;
@@ -84,6 +94,8 @@ export function Recap({
         <div style={{ fontSize: 13.5, lineHeight: 1.5, color: 'oklch(42% 0.02 150)', marginTop: 6 }}>
           {doneCount} of {steps.length} steps, {doneMin} minutes. Finish writes this to your log.
         </div>
+
+        <RecapChanges changes={changes} occurrenceId={occurrenceId} />
 
         {doneCount > 0 && (
           <div style={{ ...recapCard, marginTop: 16 }}>
@@ -178,7 +190,7 @@ export function Recap({
           </div>
         )}
 
-        <SaveAsYours steps={steps} title={title} />
+        <SaveAsYours steps={saveSteps ?? steps} title={title} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>

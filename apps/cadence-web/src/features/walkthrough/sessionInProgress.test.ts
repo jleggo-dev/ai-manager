@@ -47,6 +47,22 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+describe('sessionInProgress — the played shape and the turn logs (walkthrough v3 Phase 6)', () => {
+  it('round-trips a rearranged shape and the turn logs; a snapshot written before they existed reads back without them', () => {
+    const shaped: SessionSnapshot = {
+      ...SNAP,
+      shape: [{ id: 'g3', turns: [{ stepId: 's1', set: 0 }, { stepId: 's2', set: 0 }], mode: 'alternate' }],
+      turnLogs: { 's1:0': { value: 300 } },
+    };
+    writeSessionInProgress(shaped);
+    expect(readSessionInProgress()).toEqual(shaped);
+    writeSessionInProgress(SNAP);
+    const back = readSessionInProgress();
+    expect(back?.shape).toBeUndefined();
+    expect(back?.turnLogs).toBeUndefined();
+  });
+});
+
 describe('sessionInProgress', () => {
   it('reads back exactly what was written — step, logs, tempo and the running clock', () => {
     writeSessionInProgress(SNAP);
