@@ -12,6 +12,7 @@ import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TONE } from './tone.ts';
 import { StepTimedSets } from './StepTimedSets.tsx';
+import { getRunningClock } from '../runningClock.ts';
 
 const chimes = vi.hoisted(() => ({ tones: [] as number[][] }));
 vi.mock('./chime.ts', async (orig) => {
@@ -218,33 +219,32 @@ describe('StepTimedSets — a carry in four sets of 45 seconds', () => {
     expect(switchChimes()).toBe(1);
   });
 
-  it('a remembered running clock reopens on the same set, caught up, still counting', () => {
+  it('a remembered running clock reopens on the same set, caught up, still counting, and registered', () => {
     const startedAt = Date.now() - 50_000;
-    const onClock = vi.fn();
     mount({
       log: { kind: 'timed_sets', sets: [45], targetSec: 45, load: '2×40 lb' },
       resumeClock: { startedAt, base: 0 },
-      onClock,
+      stepId: 's7',
     });
     expect(screen.getByText('Set 2 of 4')).toBeInTheDocument();
     expect(screen.getByText('5 s over')).toBeInTheDocument();
     expect(button('Stop')).toBeInTheDocument();
+    expect(getRunningClock()).toMatchObject({ stepId: 's7', kind: 'timed_set', startedAt, base: 0, targetSec: 45 });
     tick(1_000);
     expect(screen.getByText('6 s over')).toBeInTheDocument();
     press('Stop');
-    expect(onClock).toHaveBeenLastCalledWith(null);
+    expect(getRunningClock()).toBeNull();
   });
 
-  it('tells the session when the clock starts and stops', () => {
-    const onClock = vi.fn();
-    mount({ onClock });
+  it('registers the clock at app level when it starts, lets it go on Stop, registers again on Keep going', () => {
+    mount({ stepId: 's7' });
     press('Start');
-    expect(onClock).toHaveBeenCalledWith({ startedAt: Date.now(), base: 0 });
+    expect(getRunningClock()).toMatchObject({ stepId: 's7', kind: 'timed_set', startedAt: Date.now(), base: 0 });
     tick(10_000);
     press('Stop');
-    expect(onClock).toHaveBeenLastCalledWith(null);
+    expect(getRunningClock()).toBeNull();
     press('Keep going');
-    expect(onClock).toHaveBeenLastCalledWith({ startedAt: Date.now(), base: 10 });
+    expect(getRunningClock()).toMatchObject({ startedAt: Date.now(), base: 10 });
   });
 
   it('nothing on the card explains the UI', () => {

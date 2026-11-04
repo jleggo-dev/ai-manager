@@ -22,7 +22,8 @@ export function renderTool(
   logs: StepLogs,
   setLog: (id: string, l: StepLog) => void,
   onAdvance: () => void,
-  clock?: { resume: TimerClock | null; set: (c: TimerClock | null) => void },
+  /** The step's id for the app-level clock store, and the clock already running for it, if any. */
+  clock?: { stepId: string; resume: TimerClock | null },
   workingLoad?: string,
 ): ReactNode {
   const t = step.tool;
@@ -53,9 +54,9 @@ export function renderTool(
             chime={t.chime ?? true}
             switchSides={t.switch_sides ?? false}
             title={step.title}
+            stepId={clock?.stepId}
             log={log?.kind === 'timed_sets' ? log : undefined}
             resumeClock={clock?.resume}
-            onClock={clock?.set}
             onLog={(l) => setLog(step.id, l)}
             onDone={onAdvance}
           />
@@ -68,9 +69,9 @@ export function renderTool(
           openEnded={t.open_ended ?? false}
           switchSides={t.switch_sides ?? false}
           title={step.title}
+          stepId={clock?.stepId}
           log={log?.kind === 'timer' ? log : undefined}
           resumeClock={clock?.resume}
-          onClock={clock?.set}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}
         />
@@ -83,7 +84,10 @@ export function renderTool(
           pattern={t.pattern}
           cycles={t.cycles}
           caution={t.pattern.caution}
+          stepId={clock?.stepId}
+          stepTitle={step.title}
           log={log?.kind === 'breathing' ? log : undefined}
+          resumeClock={clock?.resume}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}
         />
@@ -94,7 +98,10 @@ export function renderTool(
           seconds={t.seconds}
           bells={t.bells}
           intervalMin={t.intervalMin}
+          title={step.title}
+          stepId={clock?.stepId}
           log={log?.kind === 'meditate' ? log : undefined}
+          resumeClock={clock?.resume}
           onLog={(l) => setLog(step.id, l)}
           onDone={onAdvance}
         />

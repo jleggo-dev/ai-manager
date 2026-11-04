@@ -130,3 +130,36 @@ describe('StepCircuit — a timed move gets a real countdown', () => {
     expect(screen.queryByText(/^\d:\d\d$/)).toBeNull();
   });
 });
+
+describe('StepCircuit — a timed move left running (walkthrough v3 R6)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    audio.chime.mockReset();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('keeps counting at app level while the circuit is away, chimes at zero, and reopens caught up', () => {
+    render(<StepCircuit step={STEP} rounds={1} exercises={[PLANK, DEAD_BUG]} onLog={vi.fn()} onAdvance={vi.fn()} />);
+    press('Start · 0:30');
+    tick(10_000);
+    cleanup(); // the step is left; the clock is not
+    tick(5_000);
+    render(<StepCircuit step={STEP} rounds={1} exercises={[PLANK, DEAD_BUG]} onLog={vi.fn()} onAdvance={vi.fn()} />);
+    expect(screen.getByText('0:15')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    tick(16_000);
+    expect(audio.chime).toHaveBeenCalledTimes(1);
+  });
+
+  it('Log move while the clock runs lets the clock go — it does not chime later for a move already logged', () => {
+    render(<StepCircuit step={STEP} rounds={1} exercises={[PLANK, DEAD_BUG]} onLog={vi.fn()} onAdvance={vi.fn()} />);
+    press('Start · 0:30');
+    tick(10_000);
+    press(/^Log move · next move/);
+    tick(30_000);
+    expect(audio.chime).not.toHaveBeenCalled();
+  });
+});

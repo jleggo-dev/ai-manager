@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import {
-  MEDITATE_HOW,
-  RETURNS_FOOTER,
-  type MeditateBells,
-  returnsSentence,
-  ringsAt,
-  sitLogLine,
-} from '@cadence/shared';
+import { MEDITATE_HOW, RETURNS_FOOTER, type MeditateBells, returnsSentence, sitLogLine } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C, COMMIT } from './tone.ts';
-import { playChime } from './chime.ts';
+import { playChime, unlockAudio } from './chime.ts';
 import { WhatsThis } from './WhatsThis.tsx';
+import { useWallClock } from './useWallClock.ts';
+import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
+import { useRegisteredClock } from '../useRegisteredClock.ts';
+import { unregisterClock } from '../runningClock.ts';
+import { readSitScreen } from '../../../lib/sit-screen.ts';
+import type { TimerClock } from './StepTimer.tsx';
 
 type MeditateLog = Extract<StepLog, { kind: 'meditate' }>;
 
@@ -31,60 +30,100 @@ const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
  *     gesture once; a bright button would invite performance.
  *   • **zero taps shows no closing sentence at all** — zero could be a settled sit or a forgotten
  *     gesture, and the app must not guess which, nor congratulate "perfect focus".
+ *
+ * Time is the wall clock (`useWallClock`), and the running sit is registered at app level
+ * (runningClock.ts), which rings the bells off the shared schedule on any screen. The screen does
+ * NOT stay on by default — a sit is eyes-closed, and keep-awake means a lit screen — unless this
+ * phone's "Screen during a sit" says so (owner, 2026-11-03; lib/sit-screen.ts).
  */
 export function StepMeditate({
   seconds,
   bells,
   intervalMin,
+  title = 'Sit',
+  stepId = 'step',
   log,
+  resumeClock,
   onLog,
   onDone,
 }: {
   seconds: number;
   bells: MeditateBells;
   intervalMin: number;
+  /** The step's title and id, for the app-level clock store and its pill. */
+  title?: string;
+  stepId?: string;
   log?: MeditateLog;
+  /** A sit that was running when this card was last seen — it opens running from that mark. */
+  resumeClock?: TimerClock | null;
   onLog: (l: MeditateLog) => void;
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<'idle' | 'preroll' | 'running' | 'closed'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'preroll' | 'running' | 'closed'>(resumeClock ? 'running' : 'idle');
   const [preroll, setPreroll] = useState(PREROLL);
-  const [elapsed, setElapsed] = useState(log?.done ? seconds : (log?.elapsedSec ?? 0));
+  // The clock: `base` is what was sat before the current run; `startedAt` the instant it began.
+  const [base, setBase] = useState(resumeClock?.base ?? (log?.done ? seconds : (log?.elapsedSec ?? 0)));
+  const [startedAt, setStartedAt] = useState<number | null>(resumeClock?.startedAt ?? null);
+  const elapsed = Math.min(seconds, useWallClock(startedAt, base));
+  const [sitScreen] = useState(() => readSitScreen());
   const [returns, setReturns] = useState(log?.returns ?? 0);
   const [ripples, setRipples] = useState<number[]>([]);
   const finished = useRef(log?.done ?? false);
   const minutes = Math.max(1, Math.round(seconds / 60));
   const remaining = Math.max(0, seconds - elapsed);
 
+  // The interval and end bells come off the shared schedule (`bellMarks`), rung by the store so
+  // the clock and the bells can't drift and so they ring with this card off screen.
+  useRegisteredClock(
+    phase === 'running' && startedAt != null
+      ? {
+          stepId,
+          title,
+          kind: 'sit',
+          startedAt,
+          base,
+          targetSec: seconds,
+          chime: bells !== 'none',
+          bells: { bells, intervalMin },
+        }
+      : null,
+  );
+  useKeepAwakeWhile((phase === 'preroll' || phase === 'running') && sitScreen === 'on');
+
+  /** The sit runs from `base`, now. */
+  function run() {
+    setStartedAt(Date.now());
+    setPhase('running');
+  }
+
+  /** The sit stops at `at` seconds, keeping them. */
+  function halt(at: number) {
+    setBase(at);
+    setStartedAt(null);
+    unregisterClock(stepId);
+  }
+
   useEffect(() => {
     if (phase !== 'preroll') return undefined;
     if (preroll <= 0) {
-      setPhase('running');
+      run();
       if (bells !== 'none') playChime();
       return undefined;
     }
     const id = setTimeout(() => setPreroll((p) => p - 1), 1000);
     return () => clearTimeout(id);
-  }, [phase, preroll, bells]);
-
-  useEffect(() => {
-    if (phase !== 'running') return undefined;
-    const id = setInterval(() => setElapsed((e) => Math.min(seconds, e + 1)), 1000);
-    return () => clearInterval(id);
-  }, [phase, seconds]);
-
-  // Interval and end bells come off the shared schedule, so the clock and the bells can't drift.
-  useEffect(() => {
-    if (phase === 'running' && elapsed > 0 && ringsAt(elapsed, minutes, bells, intervalMin)) playChime();
-  }, [phase, elapsed, minutes, bells, intervalMin]);
+  });
 
   useEffect(() => {
     if (phase === 'running' && elapsed >= seconds && !finished.current) {
       finished.current = true;
+      setBase(seconds);
+      setStartedAt(null);
+      unregisterClock(stepId);
       setPhase('closed');
       onLog({ kind: 'meditate', elapsedSec: seconds, targetSec: seconds, returns, done: true });
     }
-  }, [phase, elapsed, seconds, returns, onLog]);
+  }, [phase, elapsed, seconds, returns, onLog, stepId]);
 
   /** A return. One ripple, nothing else — see the rules in the component doc. */
   function cameBack() {
@@ -97,11 +136,13 @@ export function StepMeditate({
   }
 
   function primary() {
+    unlockAudio(); // inside the tap, so the bells minutes from now are allowed to sound
     if (phase === 'running') {
+      halt(elapsed);
       setPhase('closed');
       onLog({ kind: 'meditate', elapsedSec: elapsed, targetSec: seconds, returns, done: false });
     } else if (phase === 'preroll') {
-      setPhase('running');
+      run(); // skip the count
     } else {
       finished.current = false;
       setPreroll(PREROLL);

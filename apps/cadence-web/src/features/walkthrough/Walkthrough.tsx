@@ -26,6 +26,7 @@ import { usePlayedSession } from './usePlayedSession.ts';
 import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
 import { clearSessionInProgress, type RunningClock, type SessionSnapshot } from './sessionInProgress.ts';
 import { useRememberSession } from './useRememberSession.ts';
+import { unregisterClock, useRunningClock } from './runningClock.ts';
 
 /**
  * The task walkthrough (v2 — design "browse / do / commit"). Moving between steps (Back ↔ Next, the
@@ -37,6 +38,10 @@ import { useRememberSession } from './useRememberSession.ts';
  * A plan task's walkthrough (one with an `occurrenceId`) is remembered on disk as it goes and
  * forgotten on close or Finish, so the app coming back after iOS reclaimed it reopens the session
  * where it was — step, logs, tempos and a running timer, caught up (sessionInProgress.ts).
+ *
+ * A running clock lives at app level, not here (runningClock.ts): leaving this screen, switching
+ * tab or moving to another step never stops it or its chimes, and the tool for its step opens
+ * caught up when it is next on screen. Close and Finish let it go with the session.
  *
  * What the person changes about the session lives beside the prescription, never in it
  * (usePlayedSession.ts): "Change this move" (Phase 5) swaps a move or adds a weight; Rearrange
@@ -83,9 +88,21 @@ export function Walkthrough({
   const [visited, setVisited] = useState<ReadonlySet<number>>(() => new Set(resume?.visited ?? [0]));
   const [logs, setLogs] = useState<StepLogs>(resume?.logs ?? {});
   const [phase, setPhase] = useState<'step' | 'recap' | 'done'>(resume?.phase ?? 'step');
-  // A timer that is RUNNING, so a reload can reopen it running. Forgotten on leaving the step —
-  // stepping away has always stopped a timer.
-  const [clock, setClock] = useState<RunningClock | null>(resume?.clock ?? null);
+  // The clock that is RUNNING, from the app-level store, so the remembered session can reopen it
+  // running. Until a tool has registered one, the remembered clock stands in — on a relaunch the
+  // store is empty and the snapshot is what seeds the tool, which registers it on mount.
+  const running = useRunningClock();
+  const [seed, setSeed] = useState<RunningClock | null>(resume?.clock ?? null);
+  useEffect(() => {
+    if (running) setSeed(null);
+  }, [running]);
+  const clock = useMemo<RunningClock | null>(
+    () => (running ? { stepId: running.stepId, startedAt: running.startedAt, base: running.base } : seed),
+    [running, seed],
+  );
+  // Closed or finished: the session is forgotten, and the re-render that letting the clock go
+  // causes must not write it back.
+  const [closed, setClosed] = useState(false);
   const [allSteps, setAllSteps] = useState(false);
   const [rearranging, setRearranging] = useState(false);
   // A step may recolour the shell while it is on screen — today only the interval player, whose
@@ -97,7 +114,7 @@ export function Walkthrough({
   const [tempos, setTempos] = useState<Record<string, MetronomeSpec>>(resume?.tempos ?? {});
 
   useRememberSession(
-    occurrenceId
+    occurrenceId && !closed
       ? {
           occurrenceId,
           title,
@@ -116,6 +133,8 @@ export function Walkthrough({
       : null,
   );
   const close = () => {
+    setClosed(true);
+    unregisterClock();
     clearSessionInProgress();
     onClose();
   };
@@ -134,16 +153,13 @@ export function Walkthrough({
     if (body.current) body.current.scrollTop = 0;
   }, [idx]);
 
+  // Moving does not touch a running clock: a step you left keeps counting at app level.
   const go = (i: number) => {
-    if (i !== idx) setClock(null);
     setIdx(i);
     setVisited((v) => new Set(v).add(i));
     setAllSteps(false);
   };
-  const toPhase = (p: 'step' | 'recap' | 'done') => {
-    if (p !== 'step') setClock(null);
-    setPhase(p);
-  };
+  const toPhase = (p: 'step' | 'recap' | 'done') => setPhase(p);
   const next = () => (safeIdx + 1 < steps.length ? go(safeIdx + 1) : toPhase('recap'));
   const prev = () => safeIdx > 0 && go(safeIdx - 1);
   const setLog = (id: string, log: StepLog) => setLogs((l) => ({ ...l, [id]: log }));
@@ -200,6 +216,8 @@ export function Walkthrough({
         void settleTempo(occurrenceId, { title: t, bpm: tempo.bpm, meter: tempo.meter }).catch(() => undefined);
       }
     }
+    setClosed(true);
+    unregisterClock();
     clearSessionInProgress();
     onComplete(recapSummary(view.steps, view.logs));
   };
@@ -331,6 +349,7 @@ export function Walkthrough({
             log={
               logs[step.id]?.kind === 'interval' ? (logs[step.id] as Extract<StepLog, { kind: 'interval' }>) : undefined
             }
+            resumeClock={clock?.stepId === step.id ? clock : null}
             onLog={(l) => setLog(step.id, l)}
             onDone={next}
             onChrome={setChrome}
@@ -357,10 +376,7 @@ export function Walkthrough({
                 logs,
                 setLog,
                 next,
-                {
-                  resume: clock?.stepId === step.id ? clock : null,
-                  set: (c) => setClock(c ? { stepId: step.id, ...c } : null),
-                },
+                { stepId: step.id, resume: clock?.stepId === step.id ? clock : null },
                 workingLoad(changes, step.id),
               )}
             </div>

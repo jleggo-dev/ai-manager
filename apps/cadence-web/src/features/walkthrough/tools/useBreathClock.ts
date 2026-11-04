@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { TimerClock } from './StepTimer.tsx';
 
 /** How often the pacer samples. A breath phase changes shape continuously, so this is finer than
  *  the timer's 1 s tick — but still cheap, and it only runs while breathing. */
 const TICK_MS = 100;
+
+export interface BreathClock {
+  elapsed: number;
+  /** The run in progress — when it began and what was banked before — or null while idle. */
+  mark: TimerClock | null;
+}
 
 /**
  * Elapsed seconds while `running`, measured from a wall-clock start rather than accumulated from
@@ -13,25 +20,25 @@ const TICK_MS = 100;
  *
  * Pausing is not supported by design — a breath pattern half-finished is a partial round, not a
  * paused one. Stopping logs what was done and the next start begins a fresh run from zero.
+ *
+ * `resume` is a run that was already going when this card was last seen (another tab, a relaunch):
+ * the clock opens from that mark, caught up, rather than from zero.
  */
-export function useBreathClock(running: boolean): number {
-  const [elapsed, setElapsed] = useState(0);
-  const startedAt = useRef<number | null>(null);
+export function useBreathClock(running: boolean, resume?: TimerClock | null): BreathClock {
+  const [mark, setMark] = useState<TimerClock | null>(resume ?? null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!running) {
-      startedAt.current = null;
-      setElapsed(0);
+      setMark(null);
       return undefined;
     }
-    startedAt.current = Date.now();
-    setElapsed(0);
-    const id = setInterval(() => {
-      const t0 = startedAt.current;
-      if (t0 !== null) setElapsed((Date.now() - t0) / 1000);
-    }, TICK_MS);
+    setMark((was) => was ?? { startedAt: Date.now(), base: 0 });
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(id);
   }, [running]);
 
-  return elapsed;
+  const elapsed = running && mark ? mark.base + Math.max(0, now - mark.startedAt) / 1000 : 0;
+  return { elapsed, mark: running ? mark : null };
 }

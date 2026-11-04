@@ -15,17 +15,9 @@ export function playChime(): void {
   playTones([660, 880]);
 }
 
-/**
- * The same two-note voice, given a direction. Intervals need the ear to carry the whole message —
- * phone on the floor, three metres away — so **the chime says which way the phase went**: rising
- * for work, falling for recover, a three-note flourish for the end of the run. Same envelope and
- * same timing as the plain chime, so it is recognisably the app rather than a new sound.
- */
-export const CHIME_WORK = [660, 880];
-export const CHIME_RECOVER = [660, 520];
-export const CHIME_DONE = [660, 880, 990];
-/** Halfway through a two-sided hold: a down-and-up "turn over", unlike anything that means stop. */
-export const CHIME_SWITCH = [880, 660, 880];
+// The same two-note voice, given a direction — see chime-tones.ts, re-exported from here so every
+// player imports its sound from one place.
+export { CHIME_DONE, CHIME_RECOVER, CHIME_SWITCH, CHIME_WORK } from './chime-tones.ts';
 
 let shared: AudioContext | null = null;
 

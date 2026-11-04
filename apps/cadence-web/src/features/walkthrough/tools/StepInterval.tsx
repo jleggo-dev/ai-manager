@@ -31,7 +31,11 @@ import {
   secBtn,
   stage,
 } from './intervalStyles.ts';
-import { CHIME_DONE, CHIME_RECOVER, CHIME_WORK, playTones, unlockAudio } from './chime.ts';
+import { CHIME_RECOVER, CHIME_WORK, playTones, unlockAudio } from './chime.ts';
+import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
+import { useRegisteredClock } from '../useRegisteredClock.ts';
+import { unregisterClock } from '../runningClock.ts';
+import type { TimerClock } from './StepTimer.tsx';
 import { formatClock } from './timer.ts';
 import { ringSegments } from './intervalRing.ts';
 import { useIntervalClock } from './useIntervalClock.ts';
@@ -74,12 +78,16 @@ export interface StepChrome {
  *     prescription, and seconds jumped with "Skip phase" are not counted as done.
  *
  * Position is a pure function of elapsed time (`positionAt`), so a backgrounded tab resumes in the
- * right phase rather than however many ticks behind it fell.
+ * right phase rather than however many ticks behind it fell. The running clock is registered at
+ * app level (runningClock.ts), which plays the handover and end chimes whether or not this player
+ * is on screen; a run you left keeps running, and coming back shows it caught up. The screen stays
+ * on while it runs (useKeepAwakeWhile).
  */
 export function StepInterval({
   step,
   plan: prescribed,
   log,
+  resumeClock,
   onLog,
   onDone,
   onChrome,
@@ -87,6 +95,8 @@ export function StepInterval({
   step: WalkthroughStep;
   plan: IntervalPlan;
   log?: IntervalLog;
+  /** A run that was going when this player was last seen — the clock opens live from that mark. */
+  resumeClock?: TimerClock | null;
   onLog: (l: IntervalLog) => void;
   onDone: () => void;
   /** Hand the current phase's colours up to the walkthrough shell. The background swap is the
@@ -97,11 +107,10 @@ export function StepInterval({
   // The edit sheet's changes apply to TODAY's occurrence only — the coach's plan stays the thing
   // "tap to reset" restores, and tomorrow's prescription is still the coach's call.
   const [plan, setPlan] = useState<IntervalPlan>(prescribed);
-  // Coming back to a step you left mid-workout resumes where you were, paused: Back and Next only
-  // move you, and nothing is logged or lost on the way (the shell keeps that promise without
-  // saying it on screen — owner ruling 2026-11-03, no text that explains the UI).
+  // A run you left is still running (walkthrough v3 R6): coming back opens it live and caught up.
+  // A run you paused and left opens paused where it was; nothing is logged or lost on the way.
   const [status, setStatus] = useState<Status>(() =>
-    log ? (log.roundsDone >= log.totalRounds ? 'done' : 'paused') : 'idle',
+    resumeClock ? 'live' : log ? (log.roundsDone >= log.totalRounds ? 'done' : 'paused') : 'idle',
   );
   const [preroll, setPreroll] = useState(PREROLL);
   const [chimeOn, setChimeOn] = useState(true);
@@ -117,16 +126,31 @@ export function StepInterval({
    */
   const [skippedWork, setSkippedWork] = useState<readonly number[]>([]);
   const finished = useRef(status === 'done');
-  const lastPhase = useRef(-1);
   const handoff = useHandoff();
 
-  const { elapsed, start, pause, reset, seek } = useIntervalClock(log?.elapsedSec ?? 0);
+  const { elapsed, mark, start, pause, reset, seek } = useIntervalClock(log?.elapsedSec ?? 0, resumeClock);
   const phases = useMemo(() => expandIntervalPhases(plan), [plan]);
   const total = useMemo(() => intervalTotalSeconds(plan), [plan]);
   const at = positionAt(phases, elapsed);
   const kind = INTERVAL_KIND[status === 'done' ? 'neutral' : at.phase.kind];
   const spent = Math.max(0, Math.min(total, elapsed) - skipped);
   const roundsDone = Math.max(0, at.roundsDone - skippedWork.filter((r) => r <= at.roundsDone).length);
+
+  useRegisteredClock(
+    status === 'live' && mark
+      ? {
+          stepId: step.id,
+          title: step.title,
+          kind: 'interval',
+          startedAt: mark.startedAt,
+          base: mark.base,
+          targetSec: total,
+          chime: chimeOn,
+          plan,
+        }
+      : null,
+  );
+  useKeepAwakeWhile(status === 'preroll' || status === 'live');
 
   const emit = (done: boolean) =>
     onLog({
@@ -151,18 +175,12 @@ export function StepInterval({
     return () => clearTimeout(id);
   }, [status, preroll, chimeOn, start]);
 
-  /* ── the handover chime, fired on the phase INDEX changing (so a skip sounds like a handover
-        too). The first index seen after starting is never chimed: starting already announced
-        itself, and a second note half a beat later reads as a stutter. ── */
-  useEffect(() => {
-    if (status !== 'live' || at.done) return;
-    if (lastPhase.current === at.index) return;
-    const first = lastPhase.current === -1;
-    lastPhase.current = at.index;
-    if (chimeOn && !first) playTones(at.phase.kind === 'work' ? CHIME_WORK : CHIME_RECOVER);
-  }, [status, at.index, at.done, at.phase.kind, chimeOn]);
+  /* ── the handover chimes are the store's (runningClock.ts): one per phase boundary, derived from
+        the plan, played whether or not this player is on screen. The start chime stays here,
+        inside the tap that opened the audio; a skip plays its own handover note below. ── */
 
-  /* ── completion: chime, log the full run, hand on like every other timer ── */
+  /* ── completion: log the full run and hand on like every other timer (the end chime is the
+        store's, at the last boundary) ── */
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   const emitRef = useRef(emit);
@@ -172,11 +190,11 @@ export function StepInterval({
     finished.current = true;
     pause();
     setStatus('done');
-    if (chimeOn) playTones(CHIME_DONE);
+    unregisterClock(step.id);
     emitRef.current(true);
     // Never `return () => clearTimeout(...)` here — see useHandoff for why that cancels itself.
     handoff.schedule(() => onDoneRef.current(), 600);
-  }, [status, at.done, chimeOn, pause, handoff]);
+  }, [status, at.done, pause, handoff, step.id]);
 
   /* ── the frame colours, handed to the shell; released when the step goes away ── */
   useEffect(() => {
@@ -193,6 +211,7 @@ export function StepInterval({
     if (status === 'live') {
       pause();
       setStatus('paused');
+      unregisterClock(step.id);
       emit(false);
     } else if (status === 'preroll') {
       setStatus('live');
@@ -218,10 +237,10 @@ export function StepInterval({
     // Restart inside the 600 ms hand-off means stay here — don't move on to the next step.
     handoff.cancel();
     finished.current = false;
-    lastPhase.current = -1;
     setSkipped(0);
     setSkippedWork([]);
     reset();
+    unregisterClock(step.id);
     setStatus('idle');
   }
 
@@ -236,6 +255,9 @@ export function StepInterval({
       setSkippedWork((rs) => (rs.includes(round) ? rs : [...rs, round]));
     }
     seek(Math.min(total, elapsed + at.remaining));
+    // A skip sounds like a handover: the note of the phase being jumped into. The end of the run
+    // is the completion effect's to announce.
+    if (chimeOn && status === 'live' && at.next) playTones(at.next.kind === 'work' ? CHIME_WORK : CHIME_RECOVER);
   }
 
   const voice = useHandsFree(voiceOn, (command: HandsFreeCommand) => {

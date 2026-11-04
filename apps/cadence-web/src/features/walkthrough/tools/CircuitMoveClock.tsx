@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { TONE, RING_C } from './tone.ts';
-import { playChime, unlockAudio } from './chime.ts';
+import { unlockAudio } from './chime.ts';
 import { useWallClock } from './useWallClock.ts';
 import { useHandoff } from './useHandoff.ts';
 import { formatClock } from './timer.ts';
 import { logBtn as amberBtn } from './timerStyles.ts';
+import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
+import { useRegisteredClock } from '../useRegisteredClock.ts';
+import { getRunningClock, unregisterClock } from '../runningClock.ts';
 
 /**
  * The countdown for one timed move inside a circuit — a 30 s plank between two reps moves.
@@ -12,20 +15,38 @@ import { logBtn as amberBtn } from './timerStyles.ts';
  * Until 2026-11-03 a timed circuit move read "30s hold — self-timed" and showed no clock at all
  * (owner's gym session). This is StepTimer's clock, cut down to what a move inside a rotation
  * needs: the same wall-clock seconds (`useWallClock`, so leaving the app loses nothing), the same
- * chime at zero, the audio opened inside the Start tap so that chime is allowed to sound, and at
- * zero the same hand-off beat before the circuit moves to the next move — by the path the Log
- * move button takes, so the round's log is the same shape either way.
+ * chime at zero — played by the app-level clock store (runningClock.ts), so it sounds on any
+ * screen — the audio opened inside the Start tap so that chime is allowed to sound, the screen
+ * held while it runs, and at zero the same hand-off beat before the circuit moves to the next
+ * move — by the path the Log move button takes, so the round's log is the same shape either way.
  *
  * What it leaves out on purpose: no pre-roll (you just logged the previous move, you are in
  * position), no +1 min, no pocket alarm, no lock-screen clock. Interim look; design round B
  * restyles it. The Log move button under it still logs the move early at any time.
  *
- * Mount it with a `key` per move: a fresh clock per move is simpler than resetting one.
+ * Mount it with a `key` per move: a fresh clock per move is simpler than resetting one — unless
+ * the store already holds this move's clock (the circuit was left mid-plank and come back to), in
+ * which case it opens running from that mark, caught up.
  */
-export function CircuitMoveClock({ seconds, onElapsed }: { seconds: number; onElapsed: () => void }) {
+export function CircuitMoveClock({
+  seconds,
+  stepId = 'step',
+  title = 'Move',
+  onElapsed,
+}: {
+  seconds: number;
+  /** The step and the move's name, for the app-level clock store and its pill. */
+  stepId?: string;
+  title?: string;
+  onElapsed: () => void;
+}) {
   const target = Math.max(1, Math.round(seconds));
-  const [base, setBase] = useState(0);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [resume] = useState(() => {
+    const c = getRunningClock();
+    return c && c.kind === 'circuit_move' && c.stepId === stepId && c.title === title ? c : null;
+  });
+  const [base, setBase] = useState(resume?.base ?? 0);
+  const [startedAt, setStartedAt] = useState<number | null>(resume?.startedAt ?? null);
   const elapsed = useWallClock(startedAt, base);
   const finished = useRef(false);
   const handoff = useHandoff();
@@ -34,12 +55,18 @@ export function CircuitMoveClock({ seconds, onElapsed }: { seconds: number; onEl
   const running = startedAt != null;
   const remaining = Math.max(0, target - elapsed);
 
+  useRegisteredClock(
+    startedAt != null ? { stepId, title, kind: 'circuit_move', startedAt, base, targetSec: target, chime: true } : null,
+  );
+  useKeepAwakeWhile(running);
+
   function startOrPause() {
     unlockAudio(); // inside the tap, so the chime at zero — with no finger near the phone — may sound
     if (finished.current) return;
     if (running) {
       setBase(elapsed);
       setStartedAt(null);
+      unregisterClock(stepId);
     } else {
       setStartedAt(Date.now());
     }
@@ -48,13 +75,12 @@ export function CircuitMoveClock({ seconds, onElapsed }: { seconds: number; onEl
   useEffect(() => {
     if (!running || elapsed < target || finished.current) return;
     finished.current = true;
-    playChime();
-    navigator.vibrate?.(60);
     setBase(target);
     setStartedAt(null);
+    unregisterClock(stepId);
     // Not `return () => clearTimeout(...)` — see useHandoff for why that cancels itself.
     handoff.schedule(() => onElapsedRef.current(), 600);
-  }, [running, elapsed, target, handoff]);
+  }, [running, elapsed, target, handoff, stepId]);
 
   const done = finished.current;
   const frac = Math.min(1, elapsed / target);
