@@ -54,12 +54,18 @@ progress.
   - Under that are the log lines the coach reads ("Hip thrust 2×12 @ 40 lb · swapped", "Farmer
     carry 45 · 53 · 32 · 45 s").
   - R5 is now per change, not one question.
-- **Not on the canvas yet:** the long-cue boards (7a/7b) and Redlines + naming are listed in the
-  canvas index, but their files were never published. The circuit board's "… more" is enough for 1c.
-- **Small design questions:**
-  - The timed set's **Stop** is drawn commit green, but it doesn't write (Log on the next screen
-    does). By #472's rule it should be amber.
-  - The Recap mixes "Just today" and "Today". Pick one.
+- **Long cue (7a/7b):** the cue under the title clamps at **two lines** with an inline **more**;
+  more opens a bottom sheet with the whole text at reading size (16 / 1.6), the Form link and
+  Change beside it. The tool never moves. Circuit moves use the same clamp in the middle band.
+- **Redlines + naming:** one board with every value the screens use (colour roles, type, sizes,
+  spacing, radii, shadows), the naming table against BRAND.md, and the log-line grammar
+  (`2×12 @ 40 lb · swapped from glute bridge`, `45 · 53 · 32 · 45 s`, `circuit · 3 rounds`,
+  `3×45 s · one at a time`). Colour has three jobs: amber = in progress, green = done / commit,
+  one off-target colour for over and under alike.
+- **Settled on the canvas 2026-11-03:** the timed set's **Stop** is amber (it only halts the
+  clock; Log on the next screen writes), matching #472; the Recap says **Just today** everywhere.
+- **Still open from design:** the typeface for the big numbers (the shipped serif vs the design
+  system's Plus Jakarta Sans); the Sequence state of the toggle is described, not drawn.
 
 ## What the owner asked for (six points)
 
@@ -276,7 +282,8 @@ the check found back to her. Never correct it silently (see Phase 3).
 ## Phase 4 — design (Claude Design, runs alongside Phases 1–3)
 
 - [x] Canvas done 2026-11-03 (link at the top); its decisions are under "What the design settled".
-- [ ] Publish the missing boards: long cue 7a/7b and Redlines + naming.
+- [x] Publish the missing boards: long cue 7a/7b and Redlines + naming (published 2026-11-03; the
+      canvas is complete, 17 boards).
 - [x] Naming settled by the canvas: **Change** (one button, not Swap/Adjust), **Add weight**,
       **Or swap for…**, **Something else**, **Rearrange**, **Alternate / Sequence**, **Combine** /
       **Split**, **Every time / Just today**.
@@ -337,11 +344,28 @@ the check found back to her. Never correct it silently (see Phase 3).
   - Nothing is learned without a tap.
 - [ ] **6d. Eval.** Replay: a session after a saved structure → does `prescribe-session` follow
       `how_to`? Run `eval:tools` only if this touches the coach's actions (`rework` already exists).
+- [ ] **6e. The agentic path: "rearrange this session" as a per-session job (R2).** The second
+      path R2 ruled, beside the sheet, not instead of it. The person says it in chat ("spread the
+      hangs out", "alternate the presses and rows") or taps **Something else** inside Rearrange, and
+      the coach reorders **this session in place**, with no week replan to review and accept.
+  - A small new AI Admin job (auditable, prompt change → sync-jobs): one session's groups of
+    set-turns in (6a's shape), the same turns reordered out, nothing added or removed. It sits
+    beside 5f's single-item alternative job; `revise_session` is the wrong size for it.
+  - A coach action that calls the job, in the drawer, never always-on (TOOL-HARNESS checklist; it
+    answers `changed:` / `nothing changed:` / fault). The hard rule in both places: she **reorders
+    only**. A swap or a load change stays in Phase 5's paths, so her answer can be checked by
+    counting turns before and after.
+  - Her result lands the way a manual rearrange does: All steps shows the new groups, Undo takes
+    it back, nothing is logged, and at the Recap it is one of the "You changed N things" with its
+    own **Every time / Just today**. Nothing she arranges is learned without that tap (R5).
+  - After 6a; can run alongside 6a′. Target the same ~20 s as 5f, shown with the same
+    "asking · ~20 s" row, never blocking.
 
 ## Order and parallelism
 
 - **Now:** Phase 1 (one PR) and Phase 4 (design) at the same time.
 - **After R1/R4:** Phases 2 and 3 in parallel. 3a lives in its own new file. 2a and 3b both touch
   session building, so whichever lands second rebases.
-- **After design:** Phase 5, then Phase 6. Phase 6 uses 5a's log shape.
+- **After design (the canvas is complete as of 2026-11-03):** Phase 5, then Phase 6. Phase 6 uses
+  5a's log shape; 6e (the rearrange job) needs 6a's shape and can run alongside 6a′.
 - **Owner-only steps, per PR:** API deploy, phone rebuild, sync-jobs (3b, 5c), cleanup.
