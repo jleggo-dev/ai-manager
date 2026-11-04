@@ -10,7 +10,8 @@ const sendDailyCheckin = vi.fn();
 vi.mock('../../lib/api.ts', () => ({
   sendDailyCheckin: (...a: unknown[]) => sendDailyCheckin(...a),
 }));
-vi.mock('../../lib/query/index.ts', () => ({ useDailyCheckinDue: () => true }));
+const settle = vi.fn();
+vi.mock('../../lib/query/index.ts', () => ({ useDailyCheckinDue: () => true, useSettleDailyCheckin: () => settle }));
 vi.mock('../../components/CoachFace.tsx', () => ({ CoachFace: () => <span /> }));
 
 const { DailyCheckIn } = await import('./DailyCheckIn.tsx');
@@ -57,6 +58,7 @@ describe('DailyCheckIn', () => {
     const { onClose, onAdjust } = mount();
     fireEvent.click(screen.getByRole('button', { name: 'Not now — take me to today' }));
     expect(sendDailyCheckin).toHaveBeenCalledWith({ dismissed: true });
+    expect(settle).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onAdjust).not.toHaveBeenCalled();
   });

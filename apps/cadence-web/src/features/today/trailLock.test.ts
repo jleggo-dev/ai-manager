@@ -6,10 +6,23 @@
  * `built_through`, while the card still stands on the check-in's own day).
  */
 import { describe, it, expect } from 'vitest';
-import { isLockedDay, lockedFromDate, wallDate } from './trailLock.ts';
+import { checkinTaskDate, isLockedDay, lockedFromDate, wallDate } from './trailLock.ts';
 
 const DUE = { ends_on: '2026-09-07', checkin_due: true };
 const RUNNING = { ends_on: '2026-09-07', checkin_due: false };
+
+describe('checkinTaskDate — which day lists the check-in as a task', () => {
+  it.each([
+    ['before its day, it waits on its own day', '2026-11-03', '2026-10-30', '2026-11-03'],
+    ["on its day, it is one of today's tasks", '2026-11-03', '2026-11-03', '2026-11-03'],
+    ['a day past, it moves to today', '2026-11-03', '2026-11-04', '2026-11-04'],
+    ['a week past, still today', '2026-11-03', '2026-11-10', '2026-11-10'],
+    ['today unknown, its own day decides', '2026-11-03', undefined, '2026-11-03'],
+    ['no week end, no task', undefined, '2026-11-03', undefined],
+  ])('%s', (_label, endsOn, today, want) => {
+    expect(checkinTaskDate(endsOn, today)).toBe(want);
+  });
+});
 
 describe('wallDate — where the check-in card stands', () => {
   it.each([

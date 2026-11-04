@@ -39,6 +39,12 @@ export function userToday(now: Date, timezone: string | null | undefined): strin
 }
 
 /**
+ * The local hour morning ends. Anything that talks about yesterday stops here: the notifications
+ * below and the in-app daily check-in (services/daily-checkin.ts) read this one number.
+ */
+export const MORNING_ENDS_HOUR = 12;
+
+/**
  * The morning window a "yesterday" notification may land in: from 07:00 to noon, local.
  *
  * Bounded at BOTH ends on purpose. The lower bound is why `freeze_save` is never a same-night
@@ -49,7 +55,7 @@ export function userToday(now: Date, timezone: string | null | undefined): strin
 export function inMorningWindow(now: Date, timezone: string | null | undefined): boolean {
   const mins = localMinutes(now, timezone);
   if (mins == null) return false; // unknown zone → we cannot prove it is morning, so we hold
-  return mins >= 7 * 60 && mins < 12 * 60;
+  return mins >= 7 * 60 && mins < MORNING_ENDS_HOUR * 60;
 }
 
 /**

@@ -1,8 +1,9 @@
 /**
  * The gate's table (checkinGate.ts): which prompt a tap gets, and when it gets none. Positives
  * and near-misses side by side — the near-misses that matter: an open day before the check-in
- * (never asks), the check-in's own day after "later today" (asks no more that day), a locked day
- * after "later today" (still asks — it is the only door), and day 3 vs day 4 (the wording line).
+ * (never asks), the check-in's own day (a day of tasks, never asks on an open day), a day past it
+ * with today built (nothing to ask for), a locked day after "later today" (still asks — it is the
+ * only door), and day 3 vs day 4 (the wording line).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { gateFor, planDay, readLaterOn, writeLaterOn } from './checkinGate.ts';
@@ -31,21 +32,15 @@ describe('gateFor — which prompt a tap gets', () => {
     ['day 4, a locked day → the three-way ask', '2026-09-15', true, '2026-09-09', null, { variant: 'midweek', day: 4 }],
     ['day 7, a locked day → the three-way ask', '2026-09-15', true, '2026-09-12', null, { variant: 'midweek', day: 7 }],
     ['an open day before the check-in never asks', '2026-09-09', false, '2026-09-08', null, null],
+    ['the check-in day, its own activity → opens, no ask', '2026-09-13', false, '2026-09-13', null, null],
+    ['the check-in day, a built next-week day → opens, no ask', '2026-09-16', false, '2026-09-13', null, null],
     [
-      'the check-in day, its own activity → the due ask',
-      '2026-09-13',
+      'a day past the check-in, nothing built → the due ask',
+      '2026-09-14',
       false,
-      '2026-09-13',
+      '2026-09-14',
       null,
-      { variant: 'due', day: 8 },
-    ],
-    [
-      'the check-in day, a built next-week day → the due ask',
-      '2026-09-16',
-      false,
-      '2026-09-13',
-      null,
-      { variant: 'due', day: 8 },
+      { variant: 'due', day: 9 },
     ],
     [
       'the check-in day, a locked day → the due ask',
@@ -63,7 +58,7 @@ describe('gateFor — which prompt a tap gets', () => {
       null,
       null,
     ],
-    ['after "later today", an open day is quiet for the day', '2026-09-13', false, '2026-09-13', '2026-09-13', null],
+    ['after "later today", an open day is quiet for the day', '2026-09-14', false, '2026-09-14', '2026-09-14', null],
     [
       'after "later today", a locked day still asks — the only door',
       '2026-09-20',
@@ -83,6 +78,31 @@ describe('gateFor — which prompt a tap gets', () => {
     ['late by a week, still the due ask', '2026-09-20', false, '2026-09-20', null, { variant: 'due', day: 15 }],
   ])('%s', (_label, date, locked, todayIso, laterOn, want) => {
     expect(gateFor({ date, locked, todayIso, weekState: WEEK, laterOn })).toEqual(want);
+  });
+
+  describe('a day past the check-in, with a week built', () => {
+    const at = (builtThrough: string | null, todayIso = '2026-09-14') =>
+      gateFor({
+        date: todayIso,
+        locked: false,
+        todayIso,
+        weekState: { ...WEEK, built_through: builtThrough },
+        laterOn: null,
+      });
+
+    it.each([
+      ['built past today → opens, no ask', '2026-09-20', null],
+      ['built through exactly today → opens, no ask', '2026-09-14', null],
+      ['built only up to yesterday → the due ask', '2026-09-13', { variant: 'due', day: 9 }],
+      ['nothing built → the due ask', null, { variant: 'due', day: 9 }],
+      ['an unreadable date is not a built week → the due ask', 'soon', { variant: 'due', day: 9 }],
+    ])('%s', (_label, built, want) => {
+      expect(at(built)).toEqual(want);
+    });
+
+    it('asks again once today runs past what was built', () => {
+      expect(at('2026-09-20', '2026-09-21')).toEqual({ variant: 'due', day: 16 });
+    });
   });
 
   it('asks nothing without a readable week', () => {

@@ -8,7 +8,7 @@ import { deleteFuturePendingOccurrences, repointFuturePendingOccurrences } from 
 import { getActiveEpisode } from '../repos/episodes.ts';
 import { getUser } from '../repos/users.ts';
 import { cadenceConfig } from '../config.ts';
-import { localDayIso, localDayIsoPlus } from './plan-day.ts';
+import { localDayIso, localDayIsoPlus, planAnchorIso } from './plan-day.ts';
 import { diffCommittedActivities } from './plan-commit-diff.ts';
 import { DEFAULT_HORIZON_DAYS, ensureHorizon } from './plan-horizon.ts';
 import { carriedBuiltThrough, carriedWeekStart } from './week-clock.ts';
@@ -495,8 +495,8 @@ export async function commitActivities(
       const diff = diffCommittedActivities(oldActivities, acts, {
         from: today,
         to: horizonEnd,
-        oldAnchor: new Date(old.generated_at).toISOString().slice(0, 10),
-        newAnchor: new Date(p.generated_at).toISOString().slice(0, 10),
+        oldAnchor: planAnchorIso(old.generated_at, timezone),
+        newAnchor: planAnchorIso(p.generated_at, timezone),
       });
       for (const s of diff.survivors) {
         survivedCount += await repointFuturePendingOccurrences(s.oldActivityId, s.newActivityId, today, horizonEnd, tx);

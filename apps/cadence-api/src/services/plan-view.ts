@@ -10,7 +10,7 @@ import { DEFAULT_HORIZON_DAYS, ensureHorizon, horizonFallsShort, writtenAheadDay
 import { describeRecurrence } from './scheduling.ts';
 import { rollingConsistency } from './metrics.ts';
 import { evaluateStreak } from './streak.ts';
-import { localDayIso, planDayBase } from './plan-day.ts';
+import { localDayIso, planAnchorIso, planDayBase } from './plan-day.ts';
 import { addDaysIso } from './progress-rhythm.ts';
 import { builtThroughIso, weekStartIso, type WeekClockPlan } from './week-clock.ts';
 import { previewFromDate, projectPreview, type PlanViewPreviewItem } from './plan-preview.ts';
@@ -379,7 +379,7 @@ export async function buildPlanView(
     days,
     activities,
     goalById,
-    iso(plan.generated_at),
+    planAnchorIso(plan.generated_at, timezone, tzHint),
     previewFromDate(weekState?.ends_on, todayIso, weekState?.built_through),
   );
 

@@ -9,6 +9,7 @@ export {
   prefetchForecast,
   refetchForecast,
   useDailyCheckinDue,
+  useSettleDailyCheckin,
   useForecast,
   useHomeLocation,
   useSetHomeLocation,

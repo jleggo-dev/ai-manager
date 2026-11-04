@@ -38,6 +38,19 @@ function nextDay(iso: string): string {
   return new Date(Date.UTC(y!, m! - 1, d! + 1)).toISOString().slice(0, 10);
 }
 
+/**
+ * Which day's task list carries the "Weekly check-in" node (owner, 2026-09-13, again 2026-11-03):
+ * its own day, or today once that day is past, because a late check-in is demanded today and not
+ * on a day already gone. A tap starts it with no prompt on any of these days (useWeekGate.ts).
+ */
+export function checkinTaskDate(
+  endsOn: string | null | undefined,
+  todayIso: string | null | undefined,
+): string | undefined {
+  if (!endsOn) return undefined;
+  return todayIso && todayIso > endsOn ? todayIso : endsOn;
+}
+
 /** Where the check-in card stands, or null when the dates cannot say. `todayIso` is the trail's
  *  own today (`plan.week[0].date`); absent, `ends_on` alone decides. */
 export function wallDate(

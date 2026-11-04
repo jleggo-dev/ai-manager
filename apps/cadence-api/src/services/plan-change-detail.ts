@@ -6,7 +6,7 @@ import { clockLabel12 } from './plan-change-detail-labels.ts';
 import { inheritCommitmentIds } from './plan-synthesis.ts';
 import { sessionFingerprint } from './plan-commit-diff.ts';
 import { buildProposedWeek, type ProposedRow, type WeekDay } from './plan-change-week.ts';
-import { localDayIso, localDayIsoPlus } from './plan-day.ts';
+import { localDayIso, localDayIsoPlus, planAnchorIso } from './plan-day.ts';
 import type { Activity, PendingPlanActivity } from '@cadence/shared';
 
 /**
@@ -138,10 +138,10 @@ export async function buildPendingChangeDetail(userId: string, now = new Date())
     current,
     from: localDayIso(now, user?.timezone),
     to: localDayIsoPlus(now, 6, user?.timezone),
-    // The same anchors a commit uses (plan-synthesis.ts): the active plan's generated_at date, and
-    // the date the new version would be generated on.
-    currentAnchor: plan ? new Date(plan.generated_at).toISOString().slice(0, 10) : now.toISOString().slice(0, 10),
-    proposedAnchor: now.toISOString().slice(0, 10),
+    // The same anchors a commit uses (plan-synthesis.ts): the active plan's start day, and the day
+    // the new version would start.
+    currentAnchor: planAnchorIso(plan?.generated_at ?? now, user?.timezone),
+    proposedAnchor: planAnchorIso(now, user?.timezone),
   });
 
   return { plan_version: plan?.version ?? null, items, removed, week };
