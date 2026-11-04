@@ -5,7 +5,6 @@ import { TONE, RING_C, COMMIT } from './tone.ts';
 import { unlockAudio } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
 import { useWallClock } from './useWallClock.ts';
-import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
 import { formatClock } from './timer.ts';
@@ -36,7 +35,8 @@ type Phase = 'idle' | 'running' | 'review';
  * pocket bells, and a remembered session reopens on the same set with the clock caught up
  * (sessionInProgress.ts); the set index is the logged sets, which the session keeps anyway. What
  * the session does not keep: a review in progress — Stop then a dead phone comes back on Start
- * for the same set. The screen stays on while a set's clock runs (useKeepAwakeWhile).
+ * for the same set. The screen stays on while a set's clock runs (useClockKeepAwake, from the
+ * app root).
  *
  * Stop and Start only move the clock, so they wear the amber do-tone; Log writes, so it is green;
  * Keep going is the grey of a step back (tools/tone.ts, pinned in commit-tone.test.tsx).
@@ -97,7 +97,6 @@ export function StepTimedSets({
       ? { stepId, title: title ?? 'Timer', kind: 'timed_set', startedAt, base, targetSec: target, chime, switchSides }
       : null,
   );
-  useKeepAwakeWhile(running);
 
   /** The clock runs from `from` seconds, now. */
   function run(from: number) {

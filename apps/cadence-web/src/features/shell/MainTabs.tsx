@@ -16,6 +16,7 @@ import { readDraft, type BuilderDraft } from '../builder/draftStore.ts';
 import { DraftPill } from '../builder/DraftPill.tsx';
 import { readReadInProgress } from '../food/readInProgress.ts';
 import { RunningClockPill } from '../walkthrough/RunningClockPill.tsx';
+import { useClockKeepAwake } from '../walkthrough/useClockKeepAwake.ts';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -209,6 +210,10 @@ export function MainTabs({
    * — leaving Plan lit while Settings fills the screen is the same lie the dead taps told.
    */
   const current: Tab | 'settings' = settingsRoomOpen ? 'settings' : tab;
+
+  // The screen stays on while a clock you watch runs — held here, for the life of the shell, so
+  // switching tabs (which unmounts the walkthrough) never lets the phone lock on a running clock.
+  useClockKeepAwake();
 
   return (
     <>

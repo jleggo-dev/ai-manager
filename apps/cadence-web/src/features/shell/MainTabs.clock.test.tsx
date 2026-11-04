@@ -9,6 +9,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MainTabs } from './MainTabs.tsx';
 import { registerClock, unregisterClock } from '../walkthrough/runningClock.ts';
+import { capabilities } from '../../lib/capability/index.ts';
 
 vi.mock('../plan/PlanView.tsx', () => ({ PlanView: () => <div data-testid="plan-view" /> }));
 vi.mock('../onboarding/OnboardingChat.tsx', () => ({ OnboardingChat: () => <div data-testid="coach-view" /> }));
@@ -92,6 +93,26 @@ describe('MainTabs — the running clock pill', () => {
     render(<MainTabs email={null} />);
     expect(screen.getByTestId('plan-view')).toBeInTheDocument();
     expect(pill()).toBeNull();
+  });
+
+  it('holds the screen while a watched clock is registered, from the shell itself, on any tab', () => {
+    const set = vi.spyOn(capabilities.keepAwake, 'set').mockResolvedValue(undefined);
+    render(<MainTabs email={null} />);
+    tab('Coach');
+    act(() =>
+      registerClock({
+        stepId: 's1',
+        title: 'Plank',
+        kind: 'timer',
+        startedAt: Date.now(),
+        base: 0,
+        targetSec: 30,
+        chime: true,
+      }),
+    );
+    expect(set).toHaveBeenLastCalledWith(true);
+    act(() => unregisterClock());
+    expect(set).toHaveBeenLastCalledWith(false);
   });
 
   it('a tap lands back on Plan, and the pill goes', () => {

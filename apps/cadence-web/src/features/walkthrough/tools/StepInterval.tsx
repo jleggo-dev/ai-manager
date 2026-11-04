@@ -32,7 +32,6 @@ import {
   stage,
 } from './intervalStyles.ts';
 import { CHIME_RECOVER, CHIME_WORK, playTones, unlockAudio } from './chime.ts';
-import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
 import type { TimerClock } from './StepTimer.tsx';
@@ -81,7 +80,7 @@ export interface StepChrome {
  * right phase rather than however many ticks behind it fell. The running clock is registered at
  * app level (runningClock.ts), which plays the handover and end chimes whether or not this player
  * is on screen; a run you left keeps running, and coming back shows it caught up. The screen stays
- * on while it runs (useKeepAwakeWhile).
+ * on while it runs (useClockKeepAwake, from the app root).
  */
 export function StepInterval({
   step,
@@ -150,7 +149,6 @@ export function StepInterval({
         }
       : null,
   );
-  useKeepAwakeWhile(status === 'preroll' || status === 'live');
 
   const emit = (done: boolean) =>
     onLog({

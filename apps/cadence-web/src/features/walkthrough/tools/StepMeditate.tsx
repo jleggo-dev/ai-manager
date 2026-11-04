@@ -5,10 +5,8 @@ import { TONE, RING_C, COMMIT } from './tone.ts';
 import { playChime, unlockAudio } from './chime.ts';
 import { WhatsThis } from './WhatsThis.tsx';
 import { useWallClock } from './useWallClock.ts';
-import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
-import { readSitScreen } from '../../../lib/sit-screen.ts';
 import type { TimerClock } from './StepTimer.tsx';
 
 type MeditateLog = Extract<StepLog, { kind: 'meditate' }>;
@@ -34,7 +32,8 @@ const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
  * Time is the wall clock (`useWallClock`), and the running sit is registered at app level
  * (runningClock.ts), which rings the bells off the shared schedule on any screen. The screen does
  * NOT stay on by default — a sit is eyes-closed, and keep-awake means a lit screen — unless this
- * phone's "Screen during a sit" says so (owner, 2026-11-03; lib/sit-screen.ts).
+ * phone's "Screen during a sit" says so (owner, 2026-11-03; lib/sit-screen.ts, held from the app
+ * root by useClockKeepAwake).
  */
 export function StepMeditate({
   seconds,
@@ -65,7 +64,6 @@ export function StepMeditate({
   const [base, setBase] = useState(resumeClock?.base ?? (log?.done ? seconds : (log?.elapsedSec ?? 0)));
   const [startedAt, setStartedAt] = useState<number | null>(resumeClock?.startedAt ?? null);
   const elapsed = Math.min(seconds, useWallClock(startedAt, base));
-  const [sitScreen] = useState(() => readSitScreen());
   const [returns, setReturns] = useState(log?.returns ?? 0);
   const [ripples, setRipples] = useState<number[]>([]);
   const finished = useRef(log?.done ?? false);
@@ -88,7 +86,6 @@ export function StepMeditate({
         }
       : null,
   );
-  useKeepAwakeWhile((phase === 'preroll' || phase === 'running') && sitScreen === 'on');
 
   /** The sit runs from `base`, now. */
   function run() {
@@ -103,16 +100,19 @@ export function StepMeditate({
     unregisterClock(stepId);
   }
 
+  // Keyed on the count, never re-armed by an unrelated render: a ripple tap during the count must
+  // not restart the second it is in.
   useEffect(() => {
     if (phase !== 'preroll') return undefined;
     if (preroll <= 0) {
-      run();
+      setStartedAt(Date.now());
+      setPhase('running');
       if (bells !== 'none') playChime();
       return undefined;
     }
     const id = setTimeout(() => setPreroll((p) => p - 1), 1000);
     return () => clearTimeout(id);
-  });
+  }, [phase, preroll, bells]);
 
   useEffect(() => {
     if (phase === 'running' && elapsed >= seconds && !finished.current) {
