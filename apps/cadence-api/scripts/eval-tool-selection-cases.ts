@@ -551,6 +551,30 @@ const ACTIONS: EvalCase[] = [
       'behind shape_week its half of the extend/build_ahead line needs one.',
   },
   {
+    id: 'A31',
+    kind: 'action',
+    turn: "for today's strength session can you alternate the presses and the rows, and spread the dead hangs through the session instead of three in a row?",
+    expect: ['rebuild'],
+    allow: [...DOSSIER_READS, 'get_session', 'get_recent_logs'],
+    // The same moves in a different order is `rebuild` with scope "order" (walkthrough v3 Phase 6,
+    // R2's agentic path): never a whole-session rewrite ("session" would re-prescribe the work),
+    // never the plan-structure tools, never a card.
+    forbid: ['propose_plan_change', 'build_next_week', 'shape_week', 'edit_calendar'],
+    args: {
+      tool: 'rebuild',
+      check: (a) => {
+        if (a.scope !== 'order') return `scope was ${JSON.stringify(a.scope)}, wanted "order"`;
+        const s = str(a.steer);
+        if (!s) return 'steer was empty — the rearrange is nothing without their words';
+        if (!/alternat/.test(s) || !/hang/.test(s)) return `steer "${s}" lost the alternating or the hangs`;
+        return null;
+      },
+    },
+    from:
+      'docs/cadence/WALKTHROUGH-V3-PLAN.md R2 (owner, 2026-11-03) — the gym session of 2026-11-02: presses and rows ' +
+      'written one after the other, three 45 s dead hangs back to back. The agentic path beside the Rearrange sheet.',
+  },
+  {
     id: 'A28',
     kind: 'action',
     turn: "move tomorrow's hill intervals to thursday, tuesday night's gone. just this once",
@@ -1100,6 +1124,17 @@ const CANARIES: EvalCase[] = [
     turn: 'reply with the single word ok and nothing else',
     expect: [],
     from: 'Instrument check, the other way: nothing to look up and an explicit instruction not to elaborate.',
+  },
+  {
+    id: 'C24',
+    kind: 'silence',
+    turn: 'did the presses and rows alternating today, felt much better than three sets of each in a row',
+    expect: [],
+    // Telling her how today WENT, in the past tense, is a session report — log_session's turf, and
+    // a `rebuild` here would rearrange a session they have already done. The restraint half of A31.
+    allow: [...DOSSIER_READS, 'log_session', 'get_recent_logs'],
+    forbid: ['rebuild', 'propose_plan_change'],
+    from: 'rearrange_session ships (walkthrough v3 Phase 6, 2026-11-03) — TOOL-HARNESS.md step 7, the must-not case.',
   },
 ];
 

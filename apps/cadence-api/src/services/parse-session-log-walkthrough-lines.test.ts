@@ -40,3 +40,32 @@ describe('parse-session-log — reads the walkthrough log line shapes', () => {
     expect(rule).toContain('keep the load as written');
   });
 });
+
+/**
+ * Walkthrough v3 Phase 6: a rearranged session writes its structure into the line the coach
+ * reads. The parse must list the members of a combined group as items (never the group's name),
+ * read "one at a time" as spread sets, and keep the words in the summary.
+ */
+const rearranged = template.split('\n').find((l) => l.startsWith('- REARRANGED LINES:')) ?? '';
+
+describe('parse-session-log — reads the rearranged shapes', () => {
+  it('one rule shows the combined group and the spread set', () => {
+    expect(rearranged).not.toBe('');
+    expect(rearranged).toContain('bench + row circuit · 3 rounds (bench press 3×8 @ 95 lb, dumbbell row 3×10 @ 40 lb)');
+    expect(rearranged).toContain('3×45 s · one at a time');
+  });
+
+  it('the members are the items, the group is not one', () => {
+    expect(rearranged).toContain('list EACH item in the brackets');
+    expect(rearranged).toContain('do not list "bench + row" as an item');
+  });
+
+  it('a sequence is one item’s sets then the other’s, and the words stay in the summary', () => {
+    expect(rearranged).toContain('"in sequence"');
+    expect(rearranged).toContain('Keep these words in the summary');
+  });
+
+  it('names no move and gives no verdict', () => {
+    expect(rearranged).not.toMatch(/should|better|instead you|recommend/i);
+  });
+});

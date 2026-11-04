@@ -313,7 +313,7 @@ export const DRAWER_HOOKS: Readonly<Record<string, string>> = {
   // pause_week sit behind `shape_week`; revise_session and start_replan behind `rebuild`. The
   // originals are no longer tools of their own, so they have no hooks here.
   shape_week: 'ACTION: this week’s edges — run it longer, write next week early, pause a stretch',
-  rebuild: 'ACTION: rebuild one upcoming session, or the WHOLE week, from their words',
+  rebuild: 'ACTION: rebuild one upcoming session, reorder its moves, or redo the WHOLE week',
   set_home_location: 'ACTION: record where they live — weather and daylight outdoors',
   note_follow_up: 'ACTION: note a thing to come back to with them',
   close_follow_up: 'ACTION: close a follow-up, with how it ended',
@@ -493,6 +493,9 @@ export const TOOL_CATEGORIES: Array<{ key: string; label: string; members: strin
     // `get_session` (2026-11-01): every step of one dated session — what "what one session holds"
     // in this label always promised and no read delivered, until she told the owner she could see
     // eight steps of today's and not its warm-up.
+    // `rearrange_session` (2026-11-03, walkthrough v3 Phase 6, R2): the same moves in a new
+    // order, written in place — reached as `rebuild`'s "order" scope, so the ladder gains a rung
+    // without the label gaining a hook.
     members: ['shape_week', 'rebuild', 'edit_calendar', 'get_calendar', 'get_session', 'get_user_built_activities'],
   },
   {

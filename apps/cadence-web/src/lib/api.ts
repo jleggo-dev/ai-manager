@@ -68,6 +68,7 @@ export { getProgressLayout } from './api/progress-layout.ts';
 
 export { getExerciseHistory, type ExerciseHistoryResult } from './api/exercise-history.ts';
 export { askAlternativeItem, type AlternativeItemOutcome } from './api/alternative-item.ts';
+export { keepHowTo, type KeepHowToOutcome } from './api/activity-how-to.ts';
 
 export {
   prepareCoachFoodAction,

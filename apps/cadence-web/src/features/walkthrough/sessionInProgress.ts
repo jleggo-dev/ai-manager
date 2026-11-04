@@ -16,7 +16,7 @@
  * dead battery doesn't spring open tomorrow. Every read and write is wrapped — a disabled store
  * means "nothing remembered", never a crash on launch.
  */
-import type { MetronomeSpec, Walkthrough as WalkthroughData } from '@cadence/shared';
+import type { MetronomeSpec, PlayedShape, TurnLogs, Walkthrough as WalkthroughData } from '@cadence/shared';
 import { isDevMode, getDevAccount } from '../../lib/api/http.ts';
 import { readPersistedSession } from '../../lib/persisted-session.ts';
 import type { StepLogs } from './state.ts';
@@ -60,6 +60,12 @@ export interface SessionSnapshot {
   /** What the person changed about a move — a swap or an added weight (changes.ts). Additive to
    *  the stored shape: a snapshot written before it existed reads back with none. */
   changes?: MoveChanges;
+  /** How the person rearranged the session — groups of sets (played-shape.ts). Additive: a
+   *  snapshot written before it existed reads back without one, and the shell plays the
+   *  prescription as written. */
+  shape?: PlayedShape;
+  /** What each set logged inside a rearranged group, keyed by turn. Additive like `shape`. */
+  turnLogs?: TurnLogs;
 }
 
 interface Stored extends SessionSnapshot {
@@ -99,6 +105,8 @@ export function readSessionInProgress(now = Date.now()): SessionSnapshot | null 
       phase: s.phase === 'recap' || s.phase === 'done' ? s.phase : 'step',
       clock: s.clock && typeof s.clock.startedAt === 'number' ? s.clock : null,
       changes: s.changes && typeof s.changes === 'object' ? s.changes : {},
+      ...(Array.isArray(s.shape) ? { shape: s.shape } : {}),
+      ...(s.turnLogs && typeof s.turnLogs === 'object' ? { turnLogs: s.turnLogs } : {}),
     };
   } catch {
     return null;

@@ -100,6 +100,33 @@ export async function getUserActivity(userId: string, activityId: string): Promi
   return row ?? null;
 }
 
+/**
+ * The active plan's row for a commitment — the one every future session is prescribed from.
+ * Null when the commitment is not on the active plan (a superseded row's occurrence being logged).
+ */
+export async function getActiveActivityForCommitment(userId: string, commitmentId: string): Promise<Activity | null> {
+  const [row] = await sql<Activity[]>`
+    select a.* from cadence.activities a
+    join cadence.plans p on p.plan_id = a.plan_id
+    where a.user_id = ${userId} and a.commitment_id = ${commitmentId} and p.status = 'active'
+    order by p.version desc limit 1`;
+  return row ?? null;
+}
+
+/**
+ * Write a commitment's standing instruction (walkthrough v3 Phase 6, R5: "Every time" at the
+ * Recap). The whole column, already appended and bounded by `appendHowTo` (@cadence/shared), on
+ * one row the user owns. The session fingerprint (plan-commit-diff.ts) covers how_to, which is
+ * why the caller also clears the sessions written ahead for this activity: a changed how_to is a
+ * changed prescription, the same as a commit treats it. Returns whether a row was written.
+ */
+export async function updateActivityHowTo(userId: string, activityId: string, howTo: string): Promise<boolean> {
+  const res = await sql`
+    update cadence.activities set how_to = ${howTo}
+    where user_id = ${userId} and activity_id = ${activityId}`;
+  return res.count > 0;
+}
+
 /** Insert the activities for a plan (one statement each — jsonb schedule/target via json()). */
 export async function insertActivities(
   userId: string,

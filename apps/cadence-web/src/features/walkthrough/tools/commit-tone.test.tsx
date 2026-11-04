@@ -23,6 +23,9 @@ import { StepGrounding } from './StepGrounding.tsx';
 import { StepMeasure } from './StepMeasure.tsx';
 import { StepCheckoff } from './SimpleTools.tsx';
 import { WeightSheet } from './WeightSheet.tsx';
+import { RearrangeSheet } from './RearrangeSheet.tsx';
+import { StepGroup } from './StepGroup.tsx';
+import { applyShape, combine, defaultShape } from '@cadence/shared';
 import { StepHeader } from '../wt-parts.tsx';
 import { COMMIT, TONE } from './tone.ts';
 import { logBtn as timerFace } from './timerStyles.ts';
@@ -33,6 +36,8 @@ import { greenBtn } from '../wt-styles.ts';
  * sits on hue 152 (green); the amber do-tone is hue 68–70. Anything else (the grey pre-roll) is other.
  */
 function face(el: HTMLElement): 'commit' | 'amber' | 'other' {
+  // The flat forest green (#2c5545, the design system's commit colour for Done and the toast).
+  if (el.style.background === 'rgb(44, 85, 69)') return 'commit';
   const hues = [...el.style.background.matchAll(/oklch\([^)]*?\s(\d+)\)/g)].map((m) => Number(m[1]));
   if (hues.length && hues.every((h) => h === 152)) return 'commit';
   if (hues.length && hues.every((h) => h >= 60 && h <= 75)) return 'amber';
@@ -55,6 +60,13 @@ function tickUntilButton(label: string | RegExp, maxMs = 20_000) {
 const STEP: WalkthroughStep = { id: 's1', title: 'Step', minutes: 1, tool: { kind: 'read' }, skippable: true };
 
 type Row = [name: string, setup: () => void, label: string | RegExp, expected: 'commit' | 'amber' | 'other'];
+
+const PAIR: WalkthroughStep[] = [
+  { id: 's1', title: 'Bench press', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 8 }, skippable: true },
+  { id: 's2', title: 'Dumbbell row', minutes: 9, tool: { kind: 'reps', sets: 3, reps: 10 }, skippable: true },
+];
+const mountRearrange = () =>
+  render(<RearrangeSheet steps={PAIR} shape={defaultShape(PAIR)} onDone={vi.fn()} onClose={vi.fn()} />);
 
 const ROWS: Row[] = [
   // Writes → commit green.
@@ -154,6 +166,48 @@ const ROWS: Row[] = [
       ),
     'Use 7.5 lb',
     'commit',
+  ],
+  // Rearrange (walkthrough v3 Phase 6): Done and Combine commit; the group player's Log writes.
+  ['rearrange: Done', () => mountRearrange(), 'Done', 'commit'],
+  [
+    'rearrange: Combine',
+    () => {
+      mountRearrange();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Bench press' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Dumbbell row' }));
+    },
+    'Combine',
+    'commit',
+  ],
+  [
+    'group: Log writes the turn',
+    () =>
+      render(
+        <StepGroup
+          step={applyShape(PAIR, combine(defaultShape(PAIR), 'g1', 'g2', 'alternate'))[0]!}
+          stepOf={(id) => PAIR.find((s) => s.id === id)}
+          workingLoads={{}}
+          turnLogs={{}}
+          onLogTurn={vi.fn()}
+        />,
+      ),
+    'Log',
+    'commit',
+  ],
+  // Undo, Split, Alternate and Sequence only move sets about — neither green nor amber.
+  ['rearrange: Undo', () => mountRearrange(), 'Undo', 'other'],
+  [
+    'rearrange: Alternate and Sequence choose, Split undoes a combine',
+    () => {
+      mountRearrange();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Bench press' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Pick Dumbbell row' }));
+      expect(face(screen.getByRole('radio', { name: 'Alternate' }))).toBe('other');
+      expect(face(screen.getByRole('radio', { name: 'Sequence' }))).toBe('other');
+      press('Combine');
+    },
+    'Split',
+    'other',
   ],
   // Change, Change weight and Undo only open a sheet or put a move back — neither green nor amber.
   [
