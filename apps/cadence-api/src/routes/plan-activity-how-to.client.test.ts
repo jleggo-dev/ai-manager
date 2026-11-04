@@ -21,6 +21,8 @@ vi.mock('../auth/middleware.ts', () => ({
 }));
 vi.mock('../repos/occurrences.ts', () => ({
   getOccurrenceWithActivity: (...a: unknown[]) => getOccurrenceWithActivity(...a),
+}));
+vi.mock('../repos/occurrence-sessions.ts', () => ({
   clearFuturePendingSessions: (...a: unknown[]) => clearFuturePendingSessions(...a),
 }));
 vi.mock('../repos/activities.ts', () => ({

@@ -15,7 +15,8 @@
  */
 import { HOW_TO_MAX, appendHowTo } from '@cadence/shared';
 import { getActiveActivityForCommitment, getUserActivity, updateActivityHowTo } from '../repos/activities.ts';
-import { clearFuturePendingSessions, getOccurrenceWithActivity } from '../repos/occurrences.ts';
+import { getOccurrenceWithActivity } from '../repos/occurrences.ts';
+import { clearFuturePendingSessions } from '../repos/occurrence-sessions.ts';
 
 /** A sentence longer than this is not one of the fixed ones. */
 export const HOW_TO_SENTENCE_MAX = 160;
