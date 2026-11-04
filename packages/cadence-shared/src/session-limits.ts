@@ -15,3 +15,8 @@ export const ALTERNATIVES_MAX = 3;
 /** Equipment names on an alternative: each this long at most, and at most this many of them. */
 export const EQUIPMENT_NAME_MAX = 40;
 export const ALTERNATIVE_EQUIPMENT_MAX = 6;
+
+/** A commitment's standing instruction (`activity.how_to`), in characters. There was no stored
+ *  bound before walkthrough v3 Phase 6; 600 is the same backstop the coach's `why` has
+ *  (plan-synthesis.ts). The Every time write refuses rather than runs past it. */
+export const HOW_TO_MAX = 600;

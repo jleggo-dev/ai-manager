@@ -1,9 +1,14 @@
 import {
+  type CombineMode,
   type GroundingGame,
   type SetLoads,
+  type TurnLogs,
   type WalkthroughStep,
+  SPREAD_TAIL,
   feelingLogLine,
   groundingLogLine,
+  groupLogLine,
+  groupSummary,
   intervalLogLine,
   loadTail,
   sitLogLine,
@@ -25,15 +30,31 @@ import {
  * `stepFraction`, the chips and the edit-a-set path untouched; the one reader of the pair is the
  * log line, through `loadTail`. A circuit has no per-set log, so its loads are keyed by move index.
  */
+/**
+ * `spread` (walkthrough v3 Phase 6) marks a reps or timed-sets log folded from sets the person
+ * played one at a time, in places of their own: the line reads "3×45 s · one at a time".
+ * A `group` log is a rearranged group's own record (played-shape.ts): what each turn logged, keyed
+ * by turn, with the progress counted so the pips and the line can read it without the turn list.
+ * The recap folds a group's turns back into its member steps' lines (played-recap.ts).
+ */
 export type StepLog =
-  | { kind: 'reps'; sets: number[]; target?: number; load?: string; loads?: SetLoads }
+  | { kind: 'reps'; sets: number[]; target?: number; load?: string; loads?: SetLoads; spread?: true }
   | { kind: 'circuit'; roundsDone: number; totalRounds: number; loads?: Record<string, string> }
   | { kind: 'timer'; elapsedSec: number; targetSec: number; done: boolean }
   // Sets of a timed effort (walkthrough v3 R1): the seconds each set actually ran, in order, and
   // the target one set was set for. Its own kind rather than a list on `timer`: a timer log is one
   // number read as elapsed-over-target, and every reader of it would have had to branch; this is
   // read like `reps` — sets logged over sets asked — with a load so the line reads "4×40 s @ 2×40 lb".
-  | { kind: 'timed_sets'; sets: number[]; targetSec: number; load?: string; loads?: SetLoads }
+  | { kind: 'timed_sets'; sets: number[]; targetSec: number; load?: string; loads?: SetLoads; spread?: true }
+  | {
+      kind: 'group';
+      mode?: CombineMode;
+      turns: TurnLogs;
+      done: { turns: number; rounds: number };
+      total: { turns: number; rounds: number };
+      /** Each member step's own line, written by the recap fold — the numbers behind the group's. */
+      members?: { title: string; line: string }[];
+    }
   // An interval run logs the ROUNDS finished and the seconds actually spent — never the
   // prescription. `shorthand` is carried rather than re-derived because the person may have
   // edited the plan before starting, and the receipt has to describe what they ran.
@@ -85,6 +106,9 @@ export function stepFraction(step: WalkthroughStep, log?: StepLog): number {
     case 'breathing':
     case 'interval':
       return log.totalRounds > 0 ? Math.min(1, log.roundsDone / log.totalRounds) : log.roundsDone > 0 ? 1 : 0;
+    // Turns logged over turns in the group.
+    case 'group':
+      return log.total.turns > 0 ? Math.min(1, log.done.turns / log.total.turns) : 0;
     case 'timer':
     case 'meditate':
       return log.targetSec > 0 ? Math.min(1, log.elapsedSec / log.targetSec) : log.done ? 1 : 0;
@@ -139,12 +163,19 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
       const first = sets[0]!;
       const uniform = sets.every((r) => r === first);
       const base = uniform ? `${sets.length}×${first}` : `${sets.length}×[${sets.join(',')}]`;
-      return `${base}${loadTail(log.load, log.loads)}${swappedTail(step.swapped_from)}`;
+      return `${base}${loadTail(log.load, log.loads)}${swappedTail(step.swapped_from)}${log.spread ? SPREAD_TAIL : ''}`;
     }
     case 'timed_sets':
-      return (timedSetsLogLine(log.sets, log.load, log.loads) || step.title) + swappedTail(step.swapped_from);
+      return (
+        (timedSetsLogLine(log.sets, log.load, log.loads) || step.title) +
+        swappedTail(step.swapped_from) +
+        (log.spread ? SPREAD_TAIL : '')
+      );
     case 'circuit':
       return `${log.roundsDone} of ${log.totalRounds} rounds${circuitChanges(step, log.loads)}`;
+    // "circuit · 3 rounds" for alternating turns, "in sequence" for one step's sets then the other's.
+    case 'group':
+      return groupLogLine(log.mode ?? 'alternate', log.done, log.total);
     case 'interval':
       return intervalLogLine(log);
     // Never "incomplete" — the rounds you did are the rounds you did.
@@ -194,9 +225,17 @@ function circuitChanges(step: WalkthroughStep, loads: Record<string, string> | u
     .join('');
 }
 
-/** The whole-task summary written on Finish — "squat 4×12 @ 40 kg · circuit 2/3 · 2 steps left". */
+/** The whole-task summary written on Finish — "squat 4×12 @ 40 kg · circuit 2/3 · 2 steps left". A
+ *  rearranged group carries each member's numbers behind its own line:
+ *  "bench + row circuit · 3 rounds (bench press 3×8 @ 95 lb, dumbbell row 3×10 @ 40 lb)". */
 export function recapSummary(steps: WalkthroughStep[], logs: StepLogs): string {
-  const parts = steps.filter((s) => logs[s.id]).map((s) => `${s.title.toLowerCase()} ${logLine(s, logs[s.id]!)}`);
+  const parts = steps
+    .filter((s) => logs[s.id])
+    .map((s) => {
+      const log = logs[s.id]!;
+      if (log.kind === 'group') return groupSummary(s.title.toLowerCase(), logLine(s, log), log.members ?? []);
+      return `${s.title.toLowerCase()} ${logLine(s, log)}`;
+    });
   const skipped = steps.filter((s) => !logs[s.id]).length;
   if (skipped > 0) parts.push(`${skipped} step${skipped === 1 ? '' : 's'} left`);
   return parts.join(' · ');

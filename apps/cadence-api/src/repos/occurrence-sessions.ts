@@ -61,6 +61,24 @@ export async function setOccurrenceSession(
 }
 
 /**
+ * Forget the sessions already written for ONE activity's pending days after `afterDate`, so the
+ * next open asks the coach again with what she now knows (a how_to that just changed). The day
+ * being played and every logged day are left alone; nothing is deleted, the session cache on a
+ * row is simply emptied. Returns how many rows were cleared.
+ */
+export async function clearFuturePendingSessions(
+  userId: string,
+  activityId: string,
+  afterDate: string,
+): Promise<number> {
+  const res = await sql`
+    update cadence.occurrences set session = null
+    where user_id = ${userId} and activity_id = ${activityId}
+      and date > ${afterDate} and status = 'pending' and session is not null`;
+  return res.count;
+}
+
+/**
  * Upcoming still-to-do sessions WITH their ids — what a session revision aims at. The mirror of
  * `listRecentForLogging` (occurrences.ts): that one is ceilinged at today because you cannot log
  * the future; this one FLOORS at today because you cannot rebuild the past. Soonest first, so an
