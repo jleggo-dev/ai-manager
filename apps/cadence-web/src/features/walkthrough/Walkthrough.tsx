@@ -1,24 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type {
-  MetronomeSpec,
-  SessionItemAlternative,
-  StepTool,
-  Walkthrough as WalkthroughData,
-  WalkthroughStep,
-} from '@cadence/shared';
+import type { MetronomeSpec, SessionItemAlternative, Walkthrough as WalkthroughData } from '@cadence/shared';
 import { StepCircuit } from './tools/StepCircuit.tsx';
 import { StepInterval, type StepChrome } from './tools/StepInterval.tsx';
 import { MetronomeSlot, type StepArea } from './tools/MetronomeSlot.tsx';
-import { ChangeFlow, type ChangeTarget } from './tools/ChangeFlow.tsx';
+import { ChangeFlow } from './tools/ChangeFlow.tsx';
 import { HEADER_EDGE, HEADER_INK } from './tools/change-parts.tsx';
 import { renderTool } from './renderTool.tsx';
-import { type MoveChanges, applyChanges, changeKey, changeSubtitle, takesLoad, workingLoad } from './changes.ts';
+import {
+  type MoveChanges,
+  applyChanges,
+  changeKey,
+  changeTarget,
+  loadChange,
+  takesLoad,
+  workingLoad,
+} from './changes.ts';
 import { TONE } from './tools/tone.ts';
 import { Recap } from './Recap.tsx';
 import { AllSteps } from './AllSteps.tsx';
 import { WalkthroughDone } from './WalkthroughDone.tsx';
 import { Pip, StepHeader } from './wt-parts.tsx';
-import { overlay, closeBtn, caption, navBtn, shortTitle, targetWord } from './wt-styles.ts';
+import { overlay, closeBtn, caption, navBtn, shortTitle } from './wt-styles.ts';
 import { type StepLog, type StepLogs, stepStatus, stepFraction, minutesLeft, recapSummary } from './state.ts';
 import type { MoveChange } from './changes.ts';
 import { keepJournalEntry, settleTempo } from '../../lib/api.ts';
@@ -139,8 +141,11 @@ export function Walkthrough({
     change(key, (c) => ({ ...c, swap: alt }));
     setChanging(null);
   };
+  // "Use bodyweight" on a move whose plan had no load is not a change, so nothing is recorded
+  // (changes.ts loadChange); on a move the plan loaded it IS one, and the log line says so.
   const applyLoad = (key: string, load: string) => {
-    change(key, (c) => ({ ...c, load }));
+    const plan = changeTarget(step!, changing?.moveIndex, changes, title, logs[step!.id]).tool;
+    change(key, (c) => ({ ...c, load: loadChange('load' in plan ? plan.load : undefined, load) }));
     setChanging(null);
   };
 
@@ -401,49 +406,6 @@ export function Walkthrough({
       )}
     </div>
   );
-}
-
-/** What the Change flow needs to know about the move it is changing — a step, or one move inside a circuit. */
-function changeTarget(
-  step: WalkthroughStep,
-  moveIndex: number | undefined,
-  changes: MoveChanges,
-  activity: string,
-  log: StepLog | undefined,
-): ChangeTarget {
-  const key = changeKey(step.id, moveIndex);
-  if (step.tool.kind === 'circuit' && moveIndex != null) {
-    const ex = step.tool.exercises[moveIndex]!;
-    const tool: StepTool = ex.seconds
-      ? { kind: 'timer', seconds: ex.seconds, sets: step.tool.rounds, ...(ex.load ? { load: ex.load } : {}) }
-      : {
-          kind: 'reps',
-          sets: step.tool.rounds,
-          ...(ex.reps != null ? { reps: ex.reps } : {}),
-          ...(ex.load ? { load: ex.load } : {}),
-        };
-    const round = log?.kind === 'circuit' ? log.roundsDone : 0;
-    return {
-      name: ex.name,
-      tool,
-      alternatives: ex.alternatives,
-      suggested_load: ex.suggested_load,
-      workingLoad: workingLoad(changes, key),
-      activity,
-      subtitle: changeSubtitle(step.title, step.tool, log, moveIndex, round),
-      targetWord: targetWord(tool),
-    };
-  }
-  return {
-    name: step.title,
-    tool: step.tool,
-    alternatives: step.alternatives,
-    suggested_load: step.suggested_load,
-    workingLoad: workingLoad(changes, key),
-    activity,
-    subtitle: changeSubtitle(step.title, step.tool, log),
-    targetWord: targetWord(step.tool),
-  };
 }
 
 const changeWeightBtn: CSSProperties = {

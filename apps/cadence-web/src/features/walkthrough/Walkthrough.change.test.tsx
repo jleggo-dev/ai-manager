@@ -177,6 +177,35 @@ describe('Change this move — through the shell', () => {
     expect(screen.getByText('Change weight')).toBeInTheDocument();
   });
 
+  it('None on a move the plan left at bodyweight records no change; on a move the plan loaded, it is one', () => {
+    mount();
+    press('Change');
+    press(/Add weight/);
+    press(/bodyweight/); // the None chip
+    press('Use bodyweight');
+    expect(screen.queryByText('Change weight')).toBeNull();
+    press('Log set 1 · 12 reps');
+    press('Log set 2 · 12 reps');
+    const first = readSessionInProgress();
+    expect(first?.changes).toEqual({});
+    expect(first?.logs.s1).toEqual({ kind: 'reps', sets: [12, 12], target: 12, load: 'bodyweight' });
+    cleanup();
+    localStorage.clear();
+
+    mount();
+    press('Change');
+    press(/^Kettlebell hip thrust/); // plan 40 lb
+    press('Change');
+    press(/Add weight/);
+    press(/bodyweight/);
+    press('Use bodyweight');
+    expect(screen.getByText('Change weight')).toBeInTheDocument();
+    press('Log set 1 · 12 reps');
+    press('Log set 2 · 12 reps');
+    press('All steps');
+    expect(screen.getByText('2×12 @ bodyweight (plan said 40 lb) · swapped from Glute bridge')).toBeInTheDocument();
+  });
+
   it('a step that takes no weight and has no alternatives has no Change button', () => {
     mount();
     press('Next step');

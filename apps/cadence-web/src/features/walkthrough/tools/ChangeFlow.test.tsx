@@ -201,6 +201,21 @@ describe('the Change sheet — every button', () => {
     expect(screen.queryByText('asking · ~20 s')).toBeNull();
   });
 
+  it('Something else for a circuit move sends the MOVE — its reps and load over the rounds — never the whole circuit', async () => {
+    api.ask.mockResolvedValue({ ok: false, reason: 'unreachable' });
+    mount({
+      ...bridge,
+      name: 'Glute bridge',
+      tool: { kind: 'reps', sets: 3, reps: 12, load: '40 lb' }, // what changeTarget builds for a move in a 3-round circuit
+      alternatives: undefined,
+      subtitle: 'GLUTE BRIDGE · ROUND 2 OF 3',
+    });
+    fireEvent.click(row('Something else'));
+    const [ask] = api.ask.mock.calls[0]! as [{ item: Record<string, unknown> }];
+    expect(ask.item).toEqual({ name: 'Glute bridge', sets: 3, reps: 12, load: '40 lb' });
+    await waitFor(() => expect(screen.getByText("Couldn't reach the coach — try again")).toBeInTheDocument());
+  });
+
   it('a fault is one plain line on the row, and the row can be tapped again', async () => {
     api.ask.mockResolvedValue({ ok: false, reason: 'unreachable' });
     mount(bridge);

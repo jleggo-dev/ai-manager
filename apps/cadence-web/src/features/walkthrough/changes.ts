@@ -19,10 +19,13 @@ import {
   type SessionItemAlternative,
   type StepTool,
   type WalkthroughStep,
+  NO_LOAD,
   inferTool,
   parseLoad,
 } from '@cadence/shared';
 import type { StepLog } from './state.ts';
+import type { ChangeTarget } from './tools/ChangeFlow.tsx';
+import { targetWord } from './wt-styles.ts';
 
 export interface MoveChange {
   swap?: SessionItemAlternative;
@@ -138,4 +141,58 @@ export function dialStart(
   suggested: string | undefined,
 ): number {
   return parseLoad(working)?.value ?? parseLoad(plan)?.value ?? parseLoad(suggested)?.value ?? 0;
+}
+
+/**
+ * The load to record for a move after the weight sheet's Use. "Use bodyweight" is a change only
+ * when the plan named a load ("@ bodyweight (plan said 15 lb)"); on a move the plan left at
+ * bodyweight it is nothing at all, so the load change is removed and the log stays "2×12".
+ */
+export function loadChange(plan: string | undefined, load: string): string | undefined {
+  const none = load.trim().toLowerCase() === NO_LOAD;
+  const planNone = !plan || plan.trim().toLowerCase() === NO_LOAD;
+  return none && planNone ? undefined : load;
+}
+
+/** What the Change flow needs to know about the move it is changing — a step, or one move inside a circuit. */
+export function changeTarget(
+  step: WalkthroughStep,
+  moveIndex: number | undefined,
+  changes: MoveChanges,
+  activity: string,
+  log: StepLog | undefined,
+): ChangeTarget {
+  const key = changeKey(step.id, moveIndex);
+  if (step.tool.kind === 'circuit' && moveIndex != null) {
+    const ex = step.tool.exercises[moveIndex]!;
+    const tool: StepTool = ex.seconds
+      ? { kind: 'timer', seconds: ex.seconds, sets: step.tool.rounds, ...(ex.load ? { load: ex.load } : {}) }
+      : {
+          kind: 'reps',
+          sets: step.tool.rounds,
+          ...(ex.reps != null ? { reps: ex.reps } : {}),
+          ...(ex.load ? { load: ex.load } : {}),
+        };
+    const round = log?.kind === 'circuit' ? log.roundsDone : 0;
+    return {
+      name: ex.name,
+      tool,
+      alternatives: ex.alternatives,
+      suggested_load: ex.suggested_load,
+      workingLoad: workingLoad(changes, key),
+      activity,
+      subtitle: changeSubtitle(step.title, step.tool, log, moveIndex, round),
+      targetWord: targetWord(tool),
+    };
+  }
+  return {
+    name: step.title,
+    tool: step.tool,
+    alternatives: step.alternatives,
+    suggested_load: step.suggested_load,
+    workingLoad: workingLoad(changes, key),
+    activity,
+    subtitle: changeSubtitle(step.title, step.tool, log),
+    targetWord: targetWord(step.tool),
+  };
 }

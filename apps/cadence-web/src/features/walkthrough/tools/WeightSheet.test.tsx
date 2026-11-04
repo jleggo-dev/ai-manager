@@ -167,3 +167,21 @@ describe('WeightSheet — the field, the chips and Use', () => {
     expect(screen.queryByText(/tap|type|enter a/i)).toBeNull();
   });
 });
+
+describe('WeightSheet — the subtitle', () => {
+  it('drops the separator when the move has no number of its own', () => {
+    render(
+      <WeightSheet
+        title="Add weight"
+        name="Plank"
+        targetWord=""
+        unit="lb"
+        start={0}
+        onUse={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('PLANK')).toBeInTheDocument();
+    expect(screen.queryByText(/PLANK ·/)).toBeNull();
+  });
+});

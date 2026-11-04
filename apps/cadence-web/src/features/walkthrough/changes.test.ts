@@ -9,7 +9,9 @@ import {
   applyChanges,
   changeKey,
   changeSubtitle,
+  changeTarget,
   dialStart,
+  loadChange,
   swapRows,
   takesLoad,
   workingLoad,
@@ -213,5 +215,73 @@ describe('the small ones', () => {
     expect(dialStart(undefined, 'bodyweight', '15 lb')).toBe(15);
     expect(dialStart('bodyweight', '2×40 lb', 'light band')).toBe(0);
     expect(dialStart(undefined, undefined, undefined)).toBe(0);
+  });
+});
+
+describe('loadChange — "Use bodyweight" is a change only where the plan named a load', () => {
+  it.each<[string, string | undefined, string, string | undefined]>([
+    ['plan had no load, None', undefined, 'bodyweight', undefined],
+    ['plan said bodyweight, None', 'bodyweight', 'bodyweight', undefined],
+    ['plan said Bodyweight in caps, None', 'Bodyweight', 'bodyweight', undefined],
+    ['plan said 15 lb, None', '15 lb', 'bodyweight', 'bodyweight'],
+    ['plan said light band, None', 'light band', 'bodyweight', 'bodyweight'],
+    ['plan had no load, a weight', undefined, '15 lb', '15 lb'],
+    ['plan said 15 lb, another weight', '15 lb', '20 lb', '20 lb'],
+  ])('%s', (_name, plan, load, expected) => {
+    expect(loadChange(plan, load)).toBe(expected);
+  });
+});
+
+describe('changeTarget — what the flow is told about the move', () => {
+  it('a step: its own name, tool, alternatives, suggestion, working load and subtitle', () => {
+    const t = changeTarget(bridge, undefined, { s3: { load: '15 lb' } }, 'Obstacle strength', {
+      kind: 'reps',
+      sets: [12],
+    });
+    expect(t).toMatchObject({
+      name: 'Glute bridge',
+      tool: bridge.tool,
+      alternatives: bridge.alternatives,
+      suggested_load: '15 lb',
+      workingLoad: '15 lb',
+      activity: 'Obstacle strength',
+      subtitle: 'GLUTE BRIDGE · SET 2 OF 2 NEXT',
+      targetWord: '12 reps',
+    });
+  });
+
+  it('a circuit move: the MOVE, played as reps or a timer over the rounds, never the whole circuit', () => {
+    const weighted: WalkthroughStep = {
+      ...circuit,
+      tool: {
+        kind: 'circuit',
+        rounds: 3,
+        exercises: [
+          { name: 'Plank', seconds: 30 },
+          { name: 'Glute bridge', reps: 12, load: '40 lb', alternatives: [thrust], suggested_load: '45 lb' },
+        ],
+      },
+    };
+    const plank = changeTarget(weighted, 0, {}, 'Abs', undefined);
+    expect(plank).toMatchObject({
+      name: 'Plank',
+      tool: { kind: 'timer', seconds: 30, sets: 3 },
+      targetWord: '30 s',
+      subtitle: 'PLANK · ROUND 1 OF 3',
+    });
+    const bridgeMove = changeTarget(weighted, 1, { 's5:1': { load: '50 lb' } }, 'Abs', {
+      kind: 'circuit',
+      roundsDone: 1,
+      totalRounds: 3,
+    });
+    expect(bridgeMove).toMatchObject({
+      name: 'Glute bridge',
+      tool: { kind: 'reps', sets: 3, reps: 12, load: '40 lb' },
+      alternatives: [thrust],
+      suggested_load: '45 lb',
+      workingLoad: '50 lb',
+      targetWord: '12 reps',
+      subtitle: 'GLUTE BRIDGE · ROUND 2 OF 3',
+    });
   });
 });

@@ -77,7 +77,7 @@ export function WeightSheet({
           <div style={{ textAlign: 'center' }}>
             <div style={sheetTitle}>{title}</div>
             <div style={{ ...sheetSubtitle, fontSize: 11.5, marginTop: 0 }}>
-              {name.toUpperCase()} · {targetWord.toUpperCase()}
+              {[name, targetWord].filter(Boolean).join(' · ').toUpperCase()}
             </div>
           </div>
           <div style={{ width: 34 }} />
