@@ -4,10 +4,8 @@ import type { StepLog } from '../state.ts';
 import { TONE, COMMIT } from './tone.ts';
 import { unlockAudio } from './chime.ts';
 import { useBreathClock } from './useBreathClock.ts';
-import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
-import { readSitScreen } from '../../../lib/sit-screen.ts';
 import type { TimerClock } from './StepTimer.tsx';
 import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
@@ -38,7 +36,7 @@ const R_MAX = 96;
  *
  * The running pacer is registered at app level (runningClock.ts), which plays the end chime on
  * any screen. Like a sit, it does not hold the screen unless this phone's "Screen during a sit"
- * says so (owner, 2026-11-03; lib/sit-screen.ts).
+ * says so (owner, 2026-11-03; lib/sit-screen.ts, held from the app root by useClockKeepAwake).
  */
 export function StepBreathing({
   pattern,
@@ -74,7 +72,6 @@ export function StepBreathing({
   const finished = useRef(log ? log.roundsDone >= log.totalRounds : false);
   const handoff = useHandoff();
   const [voiceOn, setVoiceOn] = useState(false);
-  const [sitScreen] = useState(() => readSitScreen());
   const { elapsed, mark } = useBreathClock(phase === 'running', resumeClock);
 
   const per = cycleSeconds(pattern);
@@ -94,7 +91,6 @@ export function StepBreathing({
         }
       : null,
   );
-  useKeepAwakeWhile((phase === 'preroll' || phase === 'running') && sitScreen === 'on');
 
   useEffect(() => {
     if (phase !== 'preroll') return undefined;

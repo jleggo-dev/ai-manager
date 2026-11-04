@@ -5,7 +5,6 @@ import { useWallClock } from './useWallClock.ts';
 import { useHandoff } from './useHandoff.ts';
 import { formatClock } from './timer.ts';
 import { logBtn as amberBtn } from './timerStyles.ts';
-import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { getRunningClock, unregisterClock } from '../runningClock.ts';
 
@@ -17,7 +16,7 @@ import { getRunningClock, unregisterClock } from '../runningClock.ts';
  * needs: the same wall-clock seconds (`useWallClock`, so leaving the app loses nothing), the same
  * chime at zero — played by the app-level clock store (runningClock.ts), so it sounds on any
  * screen — the audio opened inside the Start tap so that chime is allowed to sound, the screen
- * held while it runs, and at zero the same hand-off beat before the circuit moves to the next
+ * held while it runs (useClockKeepAwake, from the app root), and at zero the same hand-off beat before the circuit moves to the next
  * move — by the path the Log move button takes, so the round's log is the same shape either way.
  *
  * What it leaves out on purpose: no pre-roll (you just logged the previous move, you are in
@@ -58,7 +57,6 @@ export function CircuitMoveClock({
   useRegisteredClock(
     startedAt != null ? { stepId, title, kind: 'circuit_move', startedAt, base, targetSec: target, chime: true } : null,
   );
-  useKeepAwakeWhile(running);
 
   function startOrPause() {
     unlockAudio(); // inside the tap, so the chime at zero — with no finger near the phone — may sound

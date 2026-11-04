@@ -6,7 +6,6 @@ import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { useWallClock } from './useWallClock.ts';
 import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
-import { useKeepAwakeWhile } from './useKeepAwakeWhile.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
 import { endTimerActivity, pauseTimerActivity, startTimerActivity } from './timerLiveActivity.ts';
@@ -36,7 +35,8 @@ export interface TimerClock {
  * native alarm is booked for the target so the bell rings from a pocket, and the same instants go
  * to the lock screen as a Live Activity (`timerLiveActivity`) that counts on its own. The running
  * clock is registered at app level (runningClock.ts), which plays the halfway and target chimes
- * whether or not this card is on screen; the screen stays on while it runs (useKeepAwakeWhile).
+ * whether or not this card is on screen; the screen stays on while it runs (useClockKeepAwake,
+ * from the app root).
  *
  * Two shapes, decided by the step (step-cues.ts):
  *  • a HOLD — reaching the target chimes, logs the full duration and hands off to the next step
@@ -108,8 +108,6 @@ export function StepTimer({
         }
       : null,
   );
-  // Held from Start through the pre-roll and the run; let go on pause, stop, finish and unmount.
-  useKeepAwakeWhile(phase !== 'idle');
 
   /** Start the clock from `base` — now, from the wall clock. Books the pocket bell and the lock-screen clock. */
   function run() {
