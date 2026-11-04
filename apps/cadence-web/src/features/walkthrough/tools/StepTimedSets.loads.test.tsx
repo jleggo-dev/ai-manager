@@ -12,7 +12,6 @@ vi.mock('./chime.ts', () => ({
   unlockAudio: vi.fn(),
   CHIME_SWITCH: [880, 660, 880],
 }));
-vi.mock('./timerAlarm.ts', () => ({ bookTimerAlarm: vi.fn(), cancelTimerAlarm: vi.fn() }));
 
 const press = (label: string | RegExp) => fireEvent.click(screen.getByRole('button', { name: label }));
 

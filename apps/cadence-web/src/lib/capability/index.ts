@@ -105,24 +105,40 @@ export interface LocalNotificationsCapability {
   cancelAll(): Promise<void>;
   pendingCount(): Promise<number>;
   /**
-   * The one fixed-moment alarm: a walkthrough timer ringing while the phone is in a pocket and
-   * the webview is asleep. It is NOT a plan reminder — `sync` and `cancelAll` step around it —
-   * and there is only ever one, because only one timer runs at a time. Rescheduling replaces.
-   * Resolves false when nothing could be scheduled (web, or permission refused).
+   * The fixed-moment alarms of the one running clock: a walkthrough clock's next boundaries —
+   * work, recover, the target, a bell — ringing while the phone is in a pocket and the webview
+   * is asleep. They are NOT plan reminders — `sync` and `cancelAll` step around their ids — and
+   * there are never more than `BOUNDARY_ALARM_COUNT`, because only one clock runs at a time.
+   * Booking replaces whatever was booked. Resolves false when nothing could be scheduled (web,
+   * or permission refused).
    */
-  scheduleAlarm(alarm: TimerAlarm): Promise<boolean>;
-  cancelAlarm(): Promise<void>;
+  scheduleAlarms(alarms: TimerAlarm[]): Promise<boolean>;
+  cancelAlarms(): Promise<void>;
 }
 
-/** What the alarm says when it fires. `at` is an epoch-ms instant, never a relative delay. */
+/** What an alarm says when it fires. `at` is an epoch-ms instant, never a relative delay. */
 export interface TimerAlarm {
   at: number;
   title: string;
   body: string;
 }
 
-/** The alarm's reserved id — above every hashed reminder id (those top out at 2147483646 - 1). */
-export const TIMER_ALARM_ID = 2147483646;
+/**
+ * The boundary alarms' reserved ids: the `BOUNDARY_ALARM_COUNT` ids above the largest id a plan
+ * reminder can take (`MAX_LOCAL_NOTIFICATION_ID`, @cadence/shared), up to the 32-bit signed
+ * maximum iOS accepts. A reminder hash can never land here, and the reminder sync never cancels
+ * here. The 64-slot budget these share with the reminders is worked out in
+ * features/walkthrough/tools/timerAlarm.ts.
+ */
+export const BOUNDARY_ALARM_COUNT = 8;
+export const BOUNDARY_ALARM_IDS: readonly number[] = Array.from(
+  { length: BOUNDARY_ALARM_COUNT },
+  (_, i) => MAX_LOCAL_NOTIFICATION_ID + 1 + i,
+);
+
+export function isBoundaryAlarmId(id: number): boolean {
+  return id > MAX_LOCAL_NOTIFICATION_ID && id <= MAX_LOCAL_NOTIFICATION_ID + BOUNDARY_ALARM_COUNT;
+}
 
 /**
  * The coach's face on a notification (iOS communication notifications).
@@ -300,7 +316,12 @@ export interface Capabilities {
   keepAwake: KeepAwakeCapability;
 }
 
-import type { LocalNotificationSpec, WatchWeekPayload, WorkoutPlanSpec } from '@cadence/shared';
+import {
+  MAX_LOCAL_NOTIFICATION_ID,
+  type LocalNotificationSpec,
+  type WatchWeekPayload,
+  type WorkoutPlanSpec,
+} from '@cadence/shared';
 import { Capacitor } from '@capacitor/core';
 import { webCapabilities } from './web.ts';
 import { nativeCapabilities } from './native.ts';

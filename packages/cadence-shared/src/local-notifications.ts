@@ -130,8 +130,18 @@ export function weekdaysFromRrule(rrule: string | undefined | null): IosWeekday[
 }
 
 /**
+ * The largest id a plan reminder can be given. The ids above it, up to the 32-bit signed
+ * maximum (2147483647), are reserved for the walkthrough's boundary alarms — the eight
+ * fixed-moment notifications a running clock books so its chimes ring from a pocket — which the
+ * reminder sync must never touch and a reminder must never land on. Eight is the app's
+ * `BOUNDARY_ALARM_COUNT` (lib/capability/index.ts); this number is what keeps the two apart.
+ */
+export const MAX_LOCAL_NOTIFICATION_ID = 2147483647 - 8;
+
+/**
  * Deterministic id per (activity, weekday), so a re-sync REPLACES the same notification instead
- * of stacking duplicates. Must be a positive 32-bit int — that is what the iOS API accepts.
+ * of stacking duplicates. Must be a positive 32-bit int — that is what the iOS API accepts — and
+ * never above `MAX_LOCAL_NOTIFICATION_ID`, so it can never collide with a boundary alarm.
  *
  * A hash can collide; the consequence here is one reminder overwriting another, which is why the
  * caller cancels everything it owns before rescheduling rather than relying on ids alone.
@@ -143,7 +153,7 @@ export function localNotificationId(activityId: string, weekday: number): number
     h ^= key.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  return ((h >>> 0) % 2147483646) + 1; // 1..2147483646 — positive, fits a 32-bit signed int
+  return ((h >>> 0) % MAX_LOCAL_NOTIFICATION_ID) + 1; // 1..MAX_LOCAL_NOTIFICATION_ID
 }
 
 /**

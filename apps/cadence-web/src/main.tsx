@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { wirePocketBells } from './features/walkthrough/tools/timerAlarm.ts';
 import './styles.css';
 // After styles.css on purpose: the coach-face rules fill in portraits on placements whose
 // geometry (the header plate, the trail bay disc) is already defined there.
@@ -88,6 +89,10 @@ persistBootCache(queryClient);
 // than 480px — into the fake-phone mockup, a fixed 390px frame that cannot fit inside body padding
 // on a 393px screen, which is one of the ways every screen ended up panning side to side.
 if (Capacitor.isNativePlatform()) document.documentElement.setAttribute('data-native', '');
+
+// The running clock's pocket bells (walkthrough v3 R6): a walkthrough clock's next boundaries
+// are booked as notifications from here, for the life of the page, so a phone in a pocket rings.
+wirePocketBells();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

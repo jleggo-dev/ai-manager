@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseTimeOfDay,
   localNotificationId,
+  MAX_LOCAL_NOTIFICATION_ID,
   shiftMinutes,
   specMinutes,
   weekdaysFromRrule,
@@ -85,7 +86,7 @@ describe('localNotificationId', () => {
         const id = localNotificationId(key, wd);
         expect(Number.isInteger(id)).toBe(true);
         expect(id).toBeGreaterThan(0);
-        expect(id).toBeLessThanOrEqual(2147483647);
+        expect(id).toBeLessThanOrEqual(MAX_LOCAL_NOTIFICATION_ID); // never a boundary alarm's id
       }
     }
   });
