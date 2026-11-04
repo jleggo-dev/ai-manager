@@ -159,6 +159,9 @@ the check found back to her. Never correct it silently (see Phase 3).
   locked by hand or in a pocket, local notifications for the next boundaries, inside the iOS
   64-slot budget shared with plan reminders, rebooked on every pause, skip or edit. (1) and (2)
   cover the gym floor; (3) is the pocket tier behind them.
+  **Addendum (owner, 2026-11-03):** a sit and the breath pacer do not hold the screen by default
+  — their bells ring as notifications with the screen dark — and whether the screen stays on
+  during a sit is a per-device setting (Phase 7a).
 - **No text that explains the UI** (ruled 2026-11-03 in the header parcel, extended the same day):
   every tool, not only the ones Phase 1 touched. StepMeditate's "tap anywhere" half and its
   footnote, HandsFree's "tap to control the timer by voice", and Metronome's "Tap four beats to
@@ -231,7 +234,7 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 - [x] **3a. `checkSession()` in `@cadence/shared`** (`session-check.ts`, PR: the session checker,
       2026-11-03). It returns findings, never fixes. Each finding is `{ rule, blockIndex, itemIndex,
-    item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
+  item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
       each with a table of positives (the stored shapes) and near-misses:
   - `timer_no_time` (error): a timer with no `duration_min`;
   - `one_rep_sets` (question): `reps` ≤ 1 with `sets` ≥ 2 — the carry; the cue's time is quoted
@@ -352,14 +355,25 @@ notification plumbing books exactly ONE fixed-moment alarm (`LocalNotificationsC
 scheduleAlarm`, reserved id `TIMER_ALARM_ID`, which `sync` / `cancelAll` step around), with the
 body "… is up — keep going or stop the clock." (#477's locked-screen check has the full costing.)
 
-- [ ] **7a. The screen stays awake while a clock runs.** One hook, `useKeepAwakeWhile(running)`,
-      extracted from `useMetronome` (which keeps its behaviour), used by every running clock:
-      `StepTimer`, `StepTimedSets`, `StepInterval`, `CircuitMoveClock`. Held from Start, released on
-      pause, stop, finish and unmount. **Owner's call, not assumed:** whether a sit (`StepMeditate`,
-      bells every N min) and the breath pacer hold the screen too — a 20-minute sit with the screen
-      on costs battery and light; the ruling says "every running clock", so the default here is
-      yes, and the question is brought once with that cost.
-  - Table test, one row per tool: `keepAwake.set(true)` on Start, `set(false)` on each way out.
+- [ ] **7a. The screen stays awake while a clock you watch runs.** One hook,
+      `useKeepAwakeWhile(running)`, extracted from `useMetronome` (which keeps its behaviour), used
+      by every clock the person looks at: `StepTimer`, `StepTimedSets`, `StepInterval`,
+      `CircuitMoveClock`. Held from Start, released on pause, stop, finish and unmount. Not a
+      setting: the ruling says the screen stays on, and a phone pocketed mid-run is 7c's case.
+  - **A sit and the breath pacer are different (owner, 2026-11-03):** keep-awake holds the
+    screen _lit_, and a person sitting with their eyes closed did not ask for a lamp for twenty
+    minutes. Their bells happen at known moments, so they ring through 7c's notifications with
+    the screen dark. Whether the screen stays on anyway is a **per-device setting** — it is about
+    this phone's screen, so it lives in the phone's own preferences, not the API, and needs no
+    migration. One row in the Settings Room's device group (`SettingsDeviceGroup.tsx`):
+    **"Screen during a sit"** — _goes dark_ (default) / _stays on_, with the plain line "The bells
+    still ring either way." The hook reads it for `StepMeditate` and `StepBreathing` only.
+  - Table tests: one row per watched tool (`keepAwake.set(true)` on Start, `set(false)` on each
+    way out); the sit and the pacer never hold the screen on the default, and do on _stays on_;
+    the setting round-trips the preferences store and reads _goes dark_ when nothing is stored.
+  - Left out on purpose, one line to widen it later: a long timer in a pocket (a 20-minute zone-2
+    run) has the same battery argument; 7c's notification covers the chime, and one switch people
+    can explain beats two.
 - [ ] **7b. The running clock lives at app level.** A clock store mounted at the App root (beside
       what `sessionInProgress.ts` already snapshots as `RunningClock`): the tool **registers** its
       clock (started at, base, target, which chime, and for intervals the plan so `positionAt`
