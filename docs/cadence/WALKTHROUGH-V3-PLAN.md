@@ -286,18 +286,22 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 ## Phase 5 — swap and adjust (after R3 + design A)
 
-- [ ] **5a. Log per-set load.** Each set records `{reps|seconds, load}`, and the walkthrough log
-      sends what was actually lifted. Check what `parse-session-log` and `OccurrenceLogItem` need.
-      Check whether this needs a migration (the log is jsonb, so possibly not).
-- [ ] **5b. A history read.** "Exercise X, last N times": dates, sets, reps, load. It feeds the
-      sheet's "you've done this" rows, and the coach's `recent_logs` gets per-item lines instead of
-      only the summary. Check whether the dossier already carries this (TOOL-HARNESS step 1) before
-      making it a coach tool.
-- [ ] **5c. `alternatives[]` on `SessionItem`**, written by `prescribe-session`. Each alternative:
-      name, quantities, and the equipment it uses (drawn as a chip). **No reason line**: owner ruling,
-      the rows show the name, target, equipment and history or New only. Each item also
-      gets a **suggested next load** (the "my suggestion" jump). Normalized and capped. Job prompt
-      change → sync-jobs.
+- [x] **5a. Log per-set load.** (PR: the data side of Change this move.) `StepLog` reps and
+      timed_sets carry `loads` — what was lifted, one entry per set, beside the unchanged `sets`
+      — and a circuit log carries them by move index; `load` stays what the plan said. The log
+      line reads `3×12 @ 15 lb (plan said bodyweight)` and `2×12 @ 40 lb · swapped from glute
+      bridge` (`set-loads.ts` in shared holds the grammar). `parse-session-log` is told how to
+      read both shapes and `OccurrenceLogItem` gained `swapped_from`. The log is jsonb: no
+      migration.
+- [x] **5b. A history read.** `GET /plan/exercise-history?exercise=&activity=&limit=`
+      (`services/exercise-history.ts`, names matched with `normTitle`): the sheet's "Last 3 × 10 ·
+      25 lb · Oct 28" rows and the weight sheet's "last time" chip. A client read, not a coach
+      tool: she already gets these logs as sentences in `recent_logs` when she builds a session.
+- [x] **5c. `alternatives[]` on `SessionItem`**, written by `prescribe-session`, each with its
+      own quantities, a cue, a search phrase and the equipment it uses; `suggested_load` beside
+      it. No reason field anywhere (pinned by `prescribe-session-alternatives.test.ts`). Capped
+      at 3, bounded in `session-alternatives.ts`, carried onto `WalkthroughStep` and
+      `CircuitExercise`. **sync-jobs owed.**
 - [ ] **5d. The Change sheet (design A).**
   - Add weight: its own control, with − / + in 2.5 lb steps (in the person's units), a decimal
     field, and jump chips for suggestion / last time / bodyweight.
@@ -306,10 +310,11 @@ the check found back to her. Never correct it silently (see Phase 3).
   - Swapped pill with Undo.
   - Change weight scoped to the current set.
   - On reps steps, timed sets and circuit moves.
-- [ ] **5f. "Something else": a single-item alternative job.** A small new AI Admin job (auditable):
-      one item plus equipment, constraints and history in, one alternative out. Target ~20 s or less.
-      The result lands as a new row and never blocks the sheet. `revise_session` is too big for this,
-      because it rebuilds the whole session.
+- [x] **5f. "Something else": a single-item alternative job.** `alternative-item` in the AI Admin
+      config (pinned gpt-class profile, strict schema), behind `POST /plan/alternative-item`
+      (`services/alternative-item.ts`): one item plus equipment, constraints and that item's last
+      logs in, ONE alternative out, inside a 25 s budget or a 503 the sheet says in words. Never
+      `revise_session`. **sync-jobs creates the job.**
 - [ ] **5e. Show swaps.** A swap reads as "swapped X for Y" in All steps, the Recap and the log
       line, never as a skip. The coach sees swaps in `recent_logs`.
 

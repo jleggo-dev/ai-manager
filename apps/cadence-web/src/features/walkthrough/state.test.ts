@@ -122,3 +122,63 @@ describe('feeling check-in — one word, always fully credited', () => {
     expect(line).not.toMatch(/\b[123]\b/); // the 1–3 room scale never renders as a raw digit
   });
 });
+
+describe('load per set and swaps — the log line the coach reads (walkthrough v3 Phase 5)', () => {
+  const bridge = step({ kind: 'reps', sets: 2, reps: 12, load: 'bodyweight' });
+
+  it('a load the plan did not say names both: what was lifted and what the plan said', () => {
+    const log: StepLog = { kind: 'reps', sets: [12, 12, 12], load: 'bodyweight', loads: ['15 lb', '15 lb', '15 lb'] };
+    expect(logLine(bridge, log)).toBe('3×12 @ 15 lb (plan said bodyweight)');
+  });
+
+  it('sets lifted at the planned load read as before — the record adds nothing', () => {
+    const log: StepLog = { kind: 'reps', sets: [12, 12], load: '40 lb', loads: ['40 lb', '40 lb'] };
+    expect(logLine(bridge, log)).toBe('2×12 @ 40 lb');
+  });
+
+  it('a swapped step says so after the numbers, never as a skip', () => {
+    const thrust: WalkthroughStep = {
+      ...step({ kind: 'reps', sets: 2, reps: 12, load: '40 lb' }),
+      title: 'Kettlebell hip thrust',
+      swapped_from: 'glute bridge',
+    };
+    expect(logLine(thrust, { kind: 'reps', sets: [12, 12], load: '40 lb' })).toBe(
+      '2×12 @ 40 lb · swapped from glute bridge',
+    );
+    expect(logLine(thrust, { kind: 'reps', sets: [12, 12], load: '40 lb', loads: ['45 lb', '45 lb'] })).toBe(
+      '2×12 @ 45 lb (plan said 40 lb) · swapped from glute bridge',
+    );
+  });
+
+  it('timed sets carry the same tails', () => {
+    const carry: WalkthroughStep = {
+      ...step({ kind: 'timer', seconds: 45, sets: 2, load: '40 lb' }),
+      swapped_from: 'dead hang',
+    };
+    expect(
+      logLine(carry, { kind: 'timed_sets', sets: [45, 45], targetSec: 45, load: '40 lb', loads: ['50 lb', '50 lb'] }),
+    ).toBe('2×45 s @ 50 lb (plan said 40 lb) · swapped from dead hang');
+  });
+
+  it('a circuit names each swapped move and each move lifted at another load', () => {
+    const circuit = step({
+      kind: 'circuit',
+      rounds: 3,
+      exercises: [
+        { name: 'Hip thrust', reps: 12, load: '40 lb', swapped_from: 'glute bridge' },
+        { name: 'Plank', seconds: 30 },
+        { name: 'Row', reps: 10, load: '20 lb' },
+      ],
+    });
+    expect(logLine(circuit, { kind: 'circuit', roundsDone: 2, totalRounds: 3 })).toBe(
+      '2 of 3 rounds · swapped glute bridge for Hip thrust',
+    );
+    expect(logLine(circuit, { kind: 'circuit', roundsDone: 3, totalRounds: 3, loads: { '2': '25 lb' } })).toBe(
+      '3 of 3 rounds · swapped glute bridge for Hip thrust · Row @ 25 lb (plan said 20 lb)',
+    );
+    // A load equal to the plan is not a change.
+    expect(logLine(circuit, { kind: 'circuit', roundsDone: 1, totalRounds: 3, loads: { '2': '20 lb' } })).toBe(
+      '1 of 3 rounds · swapped glute bridge for Hip thrust',
+    );
+  });
+});

@@ -16,16 +16,23 @@
  * about, so it only ever composes from tools that actually exist. See docs/cadence/REQ8.
  */
 
-import type { OccurrenceSession, SessionBlock, SessionItem, SessionItemTool } from './types/occurrence.ts';
-import { type BreathPattern, clampCycles, isBreathPatternId, patternById, totalMinutes } from './breathing.ts';
+import type {
+  OccurrenceSession,
+  SessionBlock,
+  SessionItem,
+  SessionItemAlternative,
+  SessionItemTool,
+} from './types/occurrence.ts';
+import { type BreathPattern, clampCycles, isBreathPatternId, patternById } from './breathing.ts';
 import { type MeditateBells, clampIntervalMinutes, clampSitMinutes, isMeditateBells } from './meditate.ts';
 import { type GroundingGame, type GroundingSpec, groundingSpec, isGroundingGame } from './grounding.ts';
 import { type JournalBankId, isJournalBankId, journalBank, todaysPhrasing } from './journal.ts';
 import { clampFreeWriteMinutes } from './freewrite.ts';
-import { type IntervalPlan, intervalTotalMinutes, singleSetPlan } from './interval.ts';
+import { type IntervalPlan, singleSetPlan } from './interval.ts';
 import { type MetronomeSpec, normalizeMetronome } from './metronome.ts';
 import { bodyCheckinPart, bodyCheckinPrompt, isOpenEndedTimer, mentionsSides } from './step-cues.ts';
 import { clampRestSec, isTimedSets } from './timed-sets.ts';
+import { minutesOf } from './walkthrough-minutes.ts';
 
 /* ── The tool catalog ────────────────────────────────────────────────────────────────────────
    Three capture classes (see `stepCaptureMode`):
@@ -42,6 +49,11 @@ export interface CircuitExercise {
   seconds?: number;
   detail?: string;
   video_query?: string;
+  /** The coach's alternatives and starting load for this move — see `WalkthroughStep`. */
+  alternatives?: SessionItemAlternative[];
+  suggested_load?: string;
+  /** Set by the player when the person swapped this move during the session: the prescribed move's name. */
+  swapped_from?: string;
 }
 
 export type StepTool =
@@ -119,6 +131,14 @@ export interface WalkthroughStep {
   metronome?: MetronomeSpec;
   skippable: boolean;
   core?: boolean;
+  /** Carried from the item (walkthrough v3 Phase 5): the moves the coach offered in its place, and
+   *  the load she would start at. The Change sheet reads both; nothing else does. */
+  alternatives?: SessionItemAlternative[];
+  suggested_load?: string;
+  /** Set by the PLAYER, never the coach: the prescribed move's name once the person swapped this
+   *  step for one of the alternatives. Read by the log line ("· swapped from glute bridge"), the
+   *  all-steps list and the recap, so a swap never reads as a skip. */
+  swapped_from?: string;
 }
 
 export interface Walkthrough {
@@ -163,41 +183,6 @@ export function stepCaptureMode(tool: StepTool): StepCaptureMode {
       return 'done';
     }
   }
-}
-
-const DEFAULT_MINUTES: Record<StepToolKind, number> = {
-  timer: 1, // timer items always carry a real duration; this is only a floor
-  interval: 9, // an interval run computes its real minutes from the plan; this is only a floor
-  reps: 3,
-  circuit: 8, // circuits compute their own minutes (rounds × items); this is only a floor
-  checkoff: 5,
-  read: 1,
-  photo: 1,
-  journal: 3,
-  measure: 1,
-  breathing: 1, // breathing computes its real minutes from pattern × cycles; this is only a floor
-  meditate: 10, // a sit carries its own duration; this is only a floor
-  grounding: 3, // a grounding flow has no required length — this is a nominal slot on the trail
-  feeling_log: 1, // twenty seconds, every time
-  rings: 1,
-  insight: 1,
-};
-
-/** Round a positive minute value; treat missing/≤0 as absent. A breathing step ignores any stated
- *  duration — its real length is pattern × clamped cycles, which is arithmetic, not a guess. */
-function minutesOf(item: SessionItem, tool: StepTool): number {
-  if (tool.kind === 'breathing') return totalMinutes(tool.pattern, tool.cycles);
-  if (tool.kind === 'meditate') return Math.max(1, Math.round(tool.seconds / 60));
-  // Same rule as breathing: an interval run's length is arithmetic over its own numbers, so a
-  // `duration_min` the coach also wrote down is ignored rather than allowed to contradict the ring.
-  if (tool.kind === 'interval') return intervalTotalMinutes(tool.plan);
-  const d = item.duration_min;
-  // Sets of a timed effort: `duration_min` is one set, so the step is sets × that plus the rests.
-  if (tool.kind === 'timer' && tool.sets && typeof d === 'number' && d > 0) {
-    return Math.max(1, Math.round(tool.sets * d + ((tool.sets - 1) * (tool.rest_sec ?? 0)) / 60));
-  }
-  if (typeof d === 'number' && d > 0) return Math.round(d);
-  return DEFAULT_MINUTES[tool.kind];
 }
 
 /** A journal step. A named bank supplies today's phrasing (rotating, deterministic) unless the
@@ -424,6 +409,7 @@ export function deriveWalkthrough(session: OccurrenceSession | null | undefined)
       if (block.label) step.group = block.label;
       if (item.detail) step.body = item.detail;
       if (item.video_query) step.video_query = item.video_query;
+      Object.assign(step, changeFields(item));
       // Rides along with whatever tool was inferred above — never replaces it.
       const metronome = normalizeMetronome(item.metronome_bpm, item.metronome_meter);
       if (metronome) step.metronome = metronome;
@@ -432,6 +418,14 @@ export function deriveWalkthrough(session: OccurrenceSession | null | undefined)
   }
   flagCore(steps);
   return { steps, total_min: steps.reduce((sum, s) => sum + s.minutes, 0) };
+}
+
+/** The Change sheet's two inputs, copied onto a step or a circuit move only when the item has them. */
+function changeFields(item: SessionItem): Pick<WalkthroughStep, 'alternatives' | 'suggested_load'> {
+  return {
+    ...(item.alternatives?.length ? { alternatives: item.alternatives } : {}),
+    ...(item.suggested_load ? { suggested_load: item.suggested_load } : {}),
+  };
 }
 
 /**
@@ -450,6 +444,7 @@ function circuitStep(block: SessionBlock, items: SessionItem[], index: number): 
     ...(i.duration_min && i.duration_min > 0 ? { seconds: Math.round(i.duration_min * 60) } : {}),
     ...(i.detail ? { detail: i.detail } : {}),
     ...(i.video_query ? { video_query: i.video_query } : {}),
+    ...changeFields(i),
   }));
   const perRound = items.reduce((n, i) => n + (i.duration_min && i.duration_min > 0 ? i.duration_min : 1), 0);
   const step: WalkthroughStep = {
@@ -470,22 +465,4 @@ function flagCore(steps: WalkthroughStep[]): void {
     if (!core || step.minutes > core.minutes) core = step;
   }
   if (core) core.core = true;
-}
-
-/**
- * The "I have less time" version. Rule (from the redesign spec): keep the **setup** step plus the
- * **core** (longest) step at HALF its duration (min 2 min); if the task has ≤2 steps, keep them
- * all. The core is never dropped — a condensed run must still contain the run. Deterministic; a
- * 4-step run [3,2,20,5] condenses to [warm-up 3, run 10] = 13 min.
- */
-export function condense(w: Walkthrough): Walkthrough {
-  const steps = w.steps;
-  const setup = steps[0];
-  if (steps.length <= 2 || !setup) return { steps: steps.map((s) => ({ ...s })), total_min: w.total_min };
-
-  const core = steps.find((s) => s.core) ?? steps.reduce((a, b) => (b.minutes > a.minutes ? b : a), setup);
-  const halvedCore: WalkthroughStep = { ...core, minutes: Math.max(2, Math.round(core.minutes / 2)) };
-
-  const kept: WalkthroughStep[] = setup.id === core.id ? [halvedCore] : [{ ...setup }, halvedCore];
-  return { steps: kept, total_min: kept.reduce((sum, s) => sum + s.minutes, 0) };
 }

@@ -1,10 +1,13 @@
 import {
   type GroundingGame,
+  type SetLoads,
   type WalkthroughStep,
   feelingLogLine,
   groundingLogLine,
   intervalLogLine,
+  loadTail,
   sitLogLine,
+  swappedTail,
   timedSetsLogLine,
 } from '@cadence/shared';
 
@@ -14,15 +17,23 @@ import {
  * `StepLogs` map keyed by step id; these pure helpers derive the progress bar, the all-steps list,
  * the recap, and the final log line from it.
  */
+/**
+ * Load per set (walkthrough v3 Phase 5): `load` stays what the plan said for the step — every
+ * reader that compared or printed it is unchanged — and `loads` is what was actually lifted, one
+ * entry per set in the same order as `sets`, written only once the person changed a weight during
+ * the step. A parallel list rather than `{reps, load}` objects so `sets: number[]` keeps feeding
+ * `stepFraction`, the chips and the edit-a-set path untouched; the one reader of the pair is the
+ * log line, through `loadTail`. A circuit has no per-set log, so its loads are keyed by move index.
+ */
 export type StepLog =
-  | { kind: 'reps'; sets: number[]; target?: number; load?: string }
-  | { kind: 'circuit'; roundsDone: number; totalRounds: number }
+  | { kind: 'reps'; sets: number[]; target?: number; load?: string; loads?: SetLoads }
+  | { kind: 'circuit'; roundsDone: number; totalRounds: number; loads?: Record<string, string> }
   | { kind: 'timer'; elapsedSec: number; targetSec: number; done: boolean }
   // Sets of a timed effort (walkthrough v3 R1): the seconds each set actually ran, in order, and
   // the target one set was set for. Its own kind rather than a list on `timer`: a timer log is one
   // number read as elapsed-over-target, and every reader of it would have had to branch; this is
   // read like `reps` — sets logged over sets asked — with a load so the line reads "4×40 s @ 2×40 lb".
-  | { kind: 'timed_sets'; sets: number[]; targetSec: number; load?: string }
+  | { kind: 'timed_sets'; sets: number[]; targetSec: number; load?: string; loads?: SetLoads }
   // An interval run logs the ROUNDS finished and the seconds actually spent — never the
   // prescription. `shorthand` is carried rather than re-derived because the person may have
   // edited the plan before starting, and the receipt has to describe what they ran.
@@ -114,22 +125,26 @@ export function minutesLeft(steps: WalkthroughStep[], currentIndex: number, visi
   return steps.reduce((n, _s, i) => (i !== currentIndex && !visited.has(i) ? n + steps[i]!.minutes : n), 0);
 }
 
-/** The one-line receipt a logged step contributes to the occurrence log ("4×12 @ 40 kg"). */
+/**
+ * The one-line receipt a logged step contributes to the occurrence log ("4×12 @ 40 kg"). A step
+ * the person swapped says so ("· swapped from glute bridge") and one lifted at another load than
+ * the plan names both ("@ 15 lb (plan said bodyweight)") — the shapes on the design's Redlines
+ * board, so a swap is never read as a skip and the coach reads what was lifted.
+ */
 export function logLine(step: WalkthroughStep, log: StepLog): string {
   switch (log.kind) {
     case 'reps': {
       const sets = log.sets;
-      const load = log.load ? ` @ ${log.load}` : '';
       if (sets.length === 0) return step.title;
       const first = sets[0]!;
       const uniform = sets.every((r) => r === first);
       const base = uniform ? `${sets.length}×${first}` : `${sets.length}×[${sets.join(',')}]`;
-      return `${base}${load}`;
+      return `${base}${loadTail(log.load, log.loads)}${swappedTail(step.swapped_from)}`;
     }
     case 'timed_sets':
-      return timedSetsLogLine(log.sets, log.load) || step.title;
+      return (timedSetsLogLine(log.sets, log.load, log.loads) || step.title) + swappedTail(step.swapped_from);
     case 'circuit':
-      return `${log.roundsDone} of ${log.totalRounds} rounds`;
+      return `${log.roundsDone} of ${log.totalRounds} rounds${circuitChanges(step, log.loads)}`;
     case 'interval':
       return intervalLogLine(log);
     // Never "incomplete" — the rounds you did are the rounds you did.
@@ -161,6 +176,22 @@ export function logLine(step: WalkthroughStep, log: StepLog): string {
     case 'done':
       return log.note?.trim() || 'done';
   }
+}
+
+/**
+ * What changed inside a circuit, per move: " · swapped glute bridge for hip thrust" and
+ * " · hip thrust @ 15 lb (plan said bodyweight)". Read off the effective step's moves (the player
+ * writes `swapped_from` there) and the loads the circuit log kept by move index.
+ */
+function circuitChanges(step: WalkthroughStep, loads: Record<string, string> | undefined): string {
+  if (step.tool.kind !== 'circuit') return '';
+  return step.tool.exercises
+    .map((ex, i) => {
+      const used = loads?.[String(i)];
+      const lifted = used && used !== (ex.load ?? undefined) ? ` · ${ex.name}${loadTail(ex.load, [used])}` : '';
+      return (ex.swapped_from ? ` · swapped ${ex.swapped_from} for ${ex.name}` : '') + lifted;
+    })
+    .join('');
 }
 
 /** The whole-task summary written on Finish — "squat 4×12 @ 40 kg · circuit 2/3 · 2 steps left". */

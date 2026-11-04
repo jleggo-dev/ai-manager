@@ -26,6 +26,7 @@ import {
   type SessionItem,
   type SessionItemTool,
 } from '@cadence/shared';
+import { normalizeAlternatives, normalizeSuggestedLoad } from './session-alternatives.ts';
 
 const MAX_BLOCKS = 6;
 const MAX_ITEMS = 12;
@@ -187,6 +188,13 @@ export function normalizeSession(raw: Record<string, unknown> | null): Occurrenc
             // Rest between timed sets (walkthrough v3 R1): kept only when given, bounded, so a
             // stored session never holds a rest nobody can wait out. Not drawn yet; stored now.
             ...(clampRestSec(num(i.rest_sec)) !== undefined ? { rest_sec: clampRestSec(num(i.rest_sec)) } : {}),
+            // The Change sheet's inputs (walkthrough v3 R3): her alternatives for this move, capped
+            // and bounded in session-alternatives.ts, and the load she would start at. Keys only
+            // when she wrote them, so a session without them is byte-identical to before.
+            ...(normalizeAlternatives(i.alternatives) ? { alternatives: normalizeAlternatives(i.alternatives) } : {}),
+            ...(normalizeSuggestedLoad(i.suggested_load)
+              ? { suggested_load: normalizeSuggestedLoad(i.suggested_load) }
+              : {}),
             // Bounded here too, so a stored session never holds an out-of-range sit.
             meditate_interval_min:
               num(i.meditate_interval_min) === undefined

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { OccurrenceSession, SessionItem } from './types/occurrence.ts';
-import { deriveWalkthrough, condense, inferTool, stepCaptureMode, type WalkthroughStep } from './walkthrough.ts';
+import { deriveWalkthrough, inferTool, stepCaptureMode, type WalkthroughStep } from './walkthrough.ts';
+import { condense } from './walkthrough-condense.ts';
 
 /** The redesign's canonical example: "Easy run (zone 2)" — 4 steps, 30 min total, condenses to 13. */
 const runSession: OccurrenceSession = {

@@ -41,6 +41,8 @@ function normalizeLogItems(raw: unknown): OccurrenceLogItem[] {
         duration_min: num(i.duration_min),
         distance_km: num(i.distance_km),
         felt: typeof i.felt === 'string' && FELTS.has(i.felt) ? (i.felt as OccurrenceLogItem['felt']) : undefined,
+        // "· swapped from glute bridge" in the walkthrough's line: the item this one replaced.
+        swapped_from: str(i.swapped_from, ITEM_NAME_MAX),
       };
     })
     .filter((i): i is OccurrenceLogItem => i !== null);

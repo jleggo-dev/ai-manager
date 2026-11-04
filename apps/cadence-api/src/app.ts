@@ -14,6 +14,8 @@ import weekReviewRoutes from './routes/week-review.ts';
 import planChangesRoutes from './routes/plan-changes.ts';
 import planWatchRoutes from './routes/plan-watch.ts';
 import planOccurrenceEditRoutes from './routes/plan-occurrence-edit.ts';
+import planExerciseHistoryRoutes from './routes/plan-exercise-history.ts';
+import planAlternativeItemRoutes from './routes/plan-alternative-item.ts';
 import planRoutinesRoutes from './routes/plan-routines.ts';
 import weekRoutes from './routes/week.ts';
 import reviewRoutes from './routes/review.ts';
@@ -60,6 +62,8 @@ export function createApp() {
   app.use('/plan', planChangesRoutes);
   app.use('/plan', planWatchRoutes);
   app.use('/plan', planOccurrenceEditRoutes);
+  app.use('/plan', planExerciseHistoryRoutes);
+  app.use('/plan', planAlternativeItemRoutes);
   app.use('/plan', planRoutinesRoutes);
   app.use('/plan/week', weekRoutes);
   app.use('/review', reviewRoutes);

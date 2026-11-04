@@ -118,6 +118,30 @@ export interface SessionItem {
   /** `measure` only — the unit label shown beside the number ("kg", "km", "reps"). Absent = no
    *  unit shown, never a stray blank label. */
   measure_unit?: string;
+  /** Other moves the person could do in this item's place, written by the coach when she builds
+   *  the session (walkthrough v3 R3, owner 2026-11-03). Two or three per strength or cardio item,
+   *  each with its own quantities and the equipment it uses; the Change sheet lists them as swap
+   *  rows. Capped and bounded in session-normalize.ts. No reason is written or stored: the rows
+   *  show the name, target, equipment and history, nothing else (owner ruling). */
+  alternatives?: SessionItemAlternative[];
+  /** The load the coach would start at when the person adds weight to this item ("15 lb"), in
+   *  their own units. The weight sheet's "my suggestion" chip. Absent where no load applies. */
+  suggested_load?: string;
+}
+
+/** One alternative to a session item: a move with its own quantities and the equipment it needs.
+ *  The same quantity fields as `SessionItem` so `inferTool` plays it the same way; `equipment` is
+ *  what the row's chip names (an empty list reads "No tools"). Deliberately no reason field. */
+export interface SessionItemAlternative {
+  name: string;
+  sets?: number;
+  reps?: number;
+  load?: string;
+  duration_min?: number;
+  distance_km?: number;
+  detail?: string;
+  video_query?: string | null;
+  equipment: string[];
 }
 
 export interface SessionBlock {
@@ -158,6 +182,10 @@ export interface OccurrenceLogItem {
   duration_min?: number;
   distance_km?: number;
   felt?: 'easy' | 'right' | 'hard';
+  /** The prescribed item this one was done INSTEAD of, when the walkthrough's log line said
+   *  "swapped from …" (walkthrough v3 Phase 5). A swap is never a skip: the item named here was
+   *  not missed, it was replaced by this one. */
+  swapped_from?: string;
 }
 
 /** The user's structured report for ONE occurrence — durable history (feeds adaptation). */
@@ -179,4 +207,22 @@ export interface Occurrence {
   session?: OccurrenceSession | null; // prescription (cached; may be unset until first open)
   log?: OccurrenceLog | null; // the user's report
   episode_id?: string | null; // set on the TEMP "do what you can" occurrences a disrupted episode adds (Req 4)
+}
+
+/**
+ * One past time the person did an exercise, read off the stored occurrence logs (walkthrough v3
+ * Phase 5b): the Change sheet's "Last 3 × 10 · 25 lb · Oct 28" rows and the weight sheet's "last
+ * time" chip. Facts only — the client writes the words. `seconds` is one set of a timed effort.
+ */
+export interface ExerciseHistoryLine {
+  date: string;
+  /** The activity the session belonged to ("Obstacle strength"). */
+  activity: string;
+  /** The item's name as it was logged. */
+  name: string;
+  sets?: number;
+  reps?: number;
+  seconds?: number;
+  load?: string;
+  swapped_from?: string;
 }
