@@ -64,8 +64,9 @@ progress.
   one off-target colour for over and under alike.
 - **Settled on the canvas 2026-11-03:** the timed set's **Stop** is amber (it only halts the
   clock; Log on the next screen writes), matching #472; the Recap says **Just today** everywhere.
-- **Still open from design:** the typeface for the big numbers (the shipped serif vs the design
-  system's Plus Jakarta Sans); the Sequence state of the toggle is described, not drawn.
+- **Still open from design:** the Sequence state of the toggle is described, not drawn. (The
+  typeface question was a false alarm: `--display` is Plus Jakarta Sans; the walkthrough's
+  `'var(--display), serif'` only names serif as the fallback, a v2 leftover that never renders.)
 
 ## What the owner asked for (six points)
 
