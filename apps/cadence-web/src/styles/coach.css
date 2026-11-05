@@ -199,17 +199,30 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  flex: 0 0 auto;
   background: var(--surface);
   border: 1px solid oklch(91% 0.015 85);
   border-radius: 12px;
   padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.strim-dot {
-  width: 6px;
-  height: 6px;
+.strim-tick {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   flex: 0 0 auto;
-  background: oklch(55% 0.12 35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--forest);
+  border: 1.5px solid var(--forest);
+  box-sizing: border-box;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
 }
 .strim-t {
   flex: 1;
@@ -223,7 +236,8 @@
   color: oklch(58% 0.02 120);
 }
 /* Cut steps stay visible and named. A trim that silently shortens the list is a change that
-   happened TO someone; a struck-through line they can read is one they agreed to. */
+   happened TO someone; a struck-through line they can read is one they agreed to. The minutes stay
+   too: they are what the person weighs when deciding to put a step back. */
 .strim-row.is-cut {
   background: transparent;
   border-style: dashed;
@@ -232,12 +246,17 @@
   text-decoration: line-through;
   color: var(--text-mute);
 }
-.strim-row.is-cut .strim-dot {
-  background: var(--line);
+.strim-row.is-cut .strim-tick {
+  background: transparent;
+  border: 1.5px dashed var(--line);
 }
 .strim-row.is-cut .strim-m {
   color: var(--text-mute);
-  font-style: italic;
+}
+/* Everything dropped: there is nothing to start until a step is put back. */
+.ss-start:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* ── End of session: celebration, then the one question ──────────────── */
@@ -250,6 +269,20 @@
   padding: 56px 20px 28px;
   overflow-y: auto;
   background: oklch(94% 0.03 35);
+}
+/* Back to the Recap: the same quiet round button the Recap's own back is. */
+.wtdone-back {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: oklch(100% 0 0 / 0.6);
+  font-size: 16px;
+  color: oklch(40% 0.04 60);
+  cursor: pointer;
 }
 .wtdone-top {
   display: flex;
@@ -295,6 +328,10 @@
    breath session is a completed rep — nothing here may read as "almost". */
 .wtdone-mind {
   background: linear-gradient(to bottom, oklch(28% 0.05 262) 0%, oklch(23% 0.06 268) 100%);
+}
+.wtdone-mind .wtdone-back {
+  background: oklch(100% 0 0 / 0.12);
+  color: oklch(92% 0.02 262);
 }
 .wtdone-mind .wtdone-tick {
   background: oklch(100% 0 0 / 0.12);

@@ -13,12 +13,16 @@ import { SessionFeedbackCard } from './SessionFeedbackCard.tsx';
  * Mind sessions get the dark surface and the softer headline. A partial breath session is a
  * completed rep, so it is celebrated exactly as hard as a complete one — no dimmed tick, no
  * "almost", nothing that reads as a shortfall.
+ *
+ * Nothing is written until Done, so this screen is not the end of the road: Back returns to the
+ * Recap with every log intact, for the person who got here by accident or spots a mistake.
  */
 export function WalkthroughDone({
   steps,
   logs,
   title,
   occurrenceId,
+  onBack,
   onFinish,
   onTalk,
 }: {
@@ -26,6 +30,7 @@ export function WalkthroughDone({
   logs: StepLogs;
   title: string;
   occurrenceId?: string | null;
+  onBack: () => void;
   onFinish: () => void;
   onTalk?: () => void;
 }) {
@@ -34,6 +39,9 @@ export function WalkthroughDone({
 
   return (
     <div className={`wtdone${mind ? ' wtdone-mind' : ''}`} role="dialog" aria-label="Task complete">
+      <button className="wtdone-back" onClick={onBack} aria-label="Back">
+        ‹
+      </button>
       <div className="wtdone-top">
         <div className="wtdone-tick" aria-hidden>
           ✓

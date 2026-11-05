@@ -9,8 +9,10 @@ import type { Walkthrough as WalkthroughData, WalkthroughStep } from '@cadence/s
  * inverts it — they see exactly which steps go and what's left before anything starts, which is
  * the same suggest-then-confirm contract every other plan change in Cadence honours.
  *
- * Core steps are the floor and are never proposed for cutting. A session trimmed past its core
- * isn't a shorter session, it's a different one — and that conversation belongs in "Custom".
+ * Core steps are the floor of what she PROPOSES: she never suggests cutting one. The proposal is
+ * where the choosing starts, though, not the end of it: the person can put back anything she cut
+ * and drop anything she kept, the core included (`pickSteps`), because it is their session and
+ * their time (owner, 2026-11-05).
  */
 
 export interface TrimProposal {
@@ -64,6 +66,25 @@ export function proposeTrim(wt: WalkthroughData, level: number): TrimProposal | 
     minutes: minutesOf(kept),
     canTrimMore: i < rungs.length - 1,
   };
+}
+
+/** What the person chose, row by row, in the session's own order. Empty when they dropped it all. */
+export function pickSteps(steps: readonly WalkthroughStep[], keep: ReadonlySet<string>): TrimProposal {
+  const kept = steps.filter((s) => keep.has(s.id));
+  return { kept, cut: steps.filter((s) => !keep.has(s.id)), minutes: minutesOf(kept), canTrimMore: false };
+}
+
+/** Whether a pick is still exactly what she proposed, so her words and "trim more" still apply. */
+export function isHerProposal(proposal: TrimProposal, keep: ReadonlySet<string>): boolean {
+  return proposal.kept.length === keep.size && proposal.kept.every((s) => keep.has(s.id));
+}
+
+/** Her line over the list. "What I'd drop" is only true until the person changes something. */
+export function trimLine(pick: TrimProposal, hers: boolean): string {
+  if (pick.kept.length === 0) return 'That drops everything — keep at least one step.';
+  if (hers) return `Here's what I'd drop — that brings it to ${pick.minutes} min. Sound right?`;
+  if (pick.cut.length === 0) return `That keeps all of it — ${pick.minutes} min.`;
+  return `Your call — that brings it to ${pick.minutes} min.`;
 }
 
 /** Turn an accepted proposal back into a runnable walkthrough. */

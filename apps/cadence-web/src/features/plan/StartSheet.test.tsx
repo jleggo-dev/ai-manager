@@ -10,10 +10,11 @@ import { screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { renderWithQuery } from '../../test/withQuery.tsx';
 
 const getOccurrenceDetail = vi.fn();
+const setOccurrence = vi.fn();
 vi.mock('../../lib/api.ts', () => ({
   getOccurrenceDetail: (...a: unknown[]) => getOccurrenceDetail(...a),
   getSessionInsight: vi.fn(async () => null),
-  setOccurrence: vi.fn(),
+  setOccurrence: (...a: unknown[]) => setOccurrence(...a),
   logOccurrence: vi.fn(),
   // Read by a step tool's unit label once the session renders; not part of this fetch.
   getUnits: vi.fn(async () => null),
@@ -118,5 +119,40 @@ describe('StartSheet — when the detail does not come', () => {
     mount();
     await waitFor(() => expect(screen.getByText(/Couldn't open this just now/)).toBeTruthy());
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+});
+
+describe('StartSheet — a task already answered', () => {
+  const answered = (status: string) => ({ ...detail(), status });
+
+  it.each([
+    { status: 'done', line: /already done — nice/, door: true },
+    { status: 'skipped', line: /already marked skipped/, door: false },
+    { status: 'paused', line: /already marked paused/, door: false },
+  ])('$status: door back in is $door', async ({ status, line, door }) => {
+    getOccurrenceDetail.mockResolvedValue(answered(status));
+    mount();
+    await waitFor(() => expect(screen.getByText(line)).toBeTruthy());
+    expect(!!screen.queryByRole('button', { name: 'Open it again' })).toBe(door);
+  });
+
+  it('Open it again sets the row back to pending, tells the plan, and opens the session', async () => {
+    getOccurrenceDetail.mockResolvedValue(answered('done'));
+    setOccurrence.mockResolvedValue(undefined);
+    const onLogged = vi.fn();
+    renderWithQuery(<StartSheet occurrenceId="o1" title="Upper body" onClose={() => {}} onLogged={onLogged} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open it again' }));
+    expect(await screen.findByRole('button', { name: /I've got time/ })).toBeTruthy();
+    expect(setOccurrence).toHaveBeenCalledWith('o1', 'pending');
+    expect(onLogged).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused write says so and leaves the door open', async () => {
+    getOccurrenceDetail.mockResolvedValue(answered('done'));
+    setOccurrence.mockRejectedValue(new Error('nope'));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Open it again' }));
+    expect(await screen.findByText(/Couldn't open it just now/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Open it again' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

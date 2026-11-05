@@ -231,6 +231,7 @@ export function Walkthrough({
         logs={view.logs}
         title={title}
         occurrenceId={occurrenceId}
+        onBack={() => toPhase('recap')}
         onFinish={finish}
         onTalk={onTalk}
       />
@@ -252,6 +253,7 @@ export function Walkthrough({
           go(Math.min(i, steps.length - 1));
         }}
         onResolve={setLog}
+        onClose={close}
         onFinish={() => toPhase('done')}
       />
     );

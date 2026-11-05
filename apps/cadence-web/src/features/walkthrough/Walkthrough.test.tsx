@@ -53,6 +53,41 @@ describe('Walkthrough v2 — browse / do / commit', () => {
     expect(screen.getByText('Nothing logged yet.')).toBeInTheDocument();
     expect(screen.getByText('Close without logging')).toBeInTheDocument();
   });
+
+  it('Close without logging closes and writes nothing, with no celebration on the way', () => {
+    const onClose = vi.fn();
+    const onComplete = vi.fn();
+    render(<Walkthrough walkthrough={wt} title="Easy run" onClose={onClose} onComplete={onComplete} />);
+    fireEvent.click(screen.getByLabelText('Next step'));
+    fireEvent.click(screen.getByLabelText('Next step'));
+    fireEvent.click(screen.getByText('Close without logging'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(screen.queryByText('Nice work!')).toBeNull();
+  });
+
+  it('Back from the celebration returns to the Recap with the logs intact, and Finish still writes once', () => {
+    const onComplete = vi.fn();
+    render(<Walkthrough walkthrough={wt} title="Easy run" onClose={() => {}} onComplete={onComplete} />);
+    fireEvent.click(screen.getByLabelText('Next step'));
+    fireEvent.click(screen.getByText('Log this done'));
+    fireEvent.click(screen.getByLabelText('Next step'));
+    fireEvent.click(screen.getByText('Finish · +10 XP'));
+
+    fireEvent.click(screen.getByLabelText('Back'));
+    expect(screen.queryByText('Nice work!')).toBeNull();
+    expect(screen.getByText("Here's what today looked like.")).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+
+    // And on past the Recap, into the session itself: the step is still logged.
+    fireEvent.click(screen.getByLabelText('Back'));
+    expect(screen.getByText('Step 2 of 2')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Next step'));
+    fireEvent.click(screen.getByText('Finish · +10 XP'));
+    fireEvent.click(screen.getByText('Done'));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete.mock.calls[0]![0]).toContain('main effort done');
+  });
 });
 
 /** A one-step measure walkthrough — end-to-end proof the shell dispatches `measure` to its own

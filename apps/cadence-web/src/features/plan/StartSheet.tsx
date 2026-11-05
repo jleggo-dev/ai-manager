@@ -5,6 +5,7 @@ import { CoachPlainVersion, CoachUnreachable } from './occurrence/CoachUnreachab
 import { WatchHandoffRow } from './occurrence/WatchHandoffRow.tsx';
 import { coachingMessages, useRotatingMessage } from './coaching-progress.ts';
 import { StartCoachAsk } from './start/StartCoachAsk.tsx';
+import { StartNotPending } from './start/StartNotPending.tsx';
 import { StartTrim } from './start/StartTrim.tsx';
 import { applyTrim, canTrim, proposeTrim, type TrimProposal } from './start/trim.ts';
 import { Walkthrough } from '../walkthrough/Walkthrough.tsx';
@@ -21,8 +22,9 @@ import { getSessionInsight, setOccurrence, logOccurrence, type SessionInsight } 
  * + three doors:
  *
  *   Start           — run it as planned.
- *   I have less time — Cadence PROPOSES which steps to cut and the user confirms. It deliberately
- *                     never asks for a number; see start/trim.ts for why that inversion matters.
+ *   I have less time — Cadence PROPOSES which steps to cut, and the user changes it row by row or
+ *                     confirms it. It deliberately never asks for a number; see start/trim.ts for
+ *                     why that inversion matters.
  *   Custom          — hand the whole thing to the coach in the user's own words ("I'd rather do a
  *                     10-min walking meditation, I'm by the beach"), which can move it, swap it, or
  *                     design a replacement. Routes through the ordinary suggest→preview→confirm
@@ -61,7 +63,7 @@ export function StartSheet({
   onTalk?: () => void;
   resume?: SessionSnapshot | null;
 }) {
-  const { detail, state, retry } = useOccurrenceDetail(occurrenceId);
+  const { detail, setDetail, state, retry } = useOccurrenceDetail(occurrenceId);
   const messages = useMemo(() => coachingMessages(title), [title]);
   const loadingMsg = useRotatingMessage(state === 'loading', messages);
   const [run, setRun] = useState<WalkthroughData | null>(resume?.walkthrough ?? null);
@@ -129,6 +131,13 @@ export function StartSheet({
     onClose();
   }
 
+  /** Back into a finished session: the row goes back to pending and the sheet opens as it did. */
+  async function reopen() {
+    await setOccurrence(occurrenceId, 'pending');
+    if (detail) setDetail({ ...detail, status: 'pending' });
+    onLogged?.();
+  }
+
   const proposal: TrimProposal | null = wt && trimLevel !== null ? proposeTrim(wt, trimLevel) : null;
 
   return (
@@ -154,14 +163,13 @@ export function StartSheet({
         ) : state === 'error' || !detail || !wt ? (
           <div className="sheet-msg">{"Couldn't open this just now — close and tap it again in a moment."}</div>
         ) : detail.status !== 'pending' ? (
-          <div className="sheet-msg">
-            {"This one's already "}
-            {detail.status === 'done' ? 'done — nice.' : `marked ${detail.status}.`}
-          </div>
+          <StartNotPending status={detail.status} onReopen={reopen} />
         ) : proposal ? (
           <StartTrim
+            key={trimLevel}
+            steps={wt.steps}
             proposal={proposal}
-            onConfirm={() => setRun(applyTrim(wt, proposal))}
+            onConfirm={(pick) => setRun(applyTrim(wt, pick))}
             onTrimMore={() => setTrimLevel((l) => (l ?? 0) + 1)}
             onBack={() => setTrimLevel(null)}
           />
