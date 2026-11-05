@@ -33,6 +33,26 @@ describe('daily check-in gate', () => {
     expect(s.due).toBe(false);
   });
 
+  it.each([
+    ['the last minute of the morning', '2026-03-12T11:59:00Z', true],
+    ['noon', '2026-03-12T12:00:00Z', false],
+    ['mid-afternoon', '2026-03-12T15:00:00Z', false],
+    ['late evening', '2026-03-12T21:00:00Z', false],
+  ])('morning only — %s', async (_label, at, due) => {
+    expect((await getDailyCheckinStatus('u1', new Date(at))).due).toBe(due);
+  });
+
+  it('does not say "Morning" at 21:21 — the first open of the day was the evening (2026-11-03)', async () => {
+    getUser.mockResolvedValue({ timezone: 'America/Toronto' });
+    const s = await getDailyCheckinStatus('u1', new Date('2026-11-04T02:21:00Z'));
+    expect(s).toEqual({ due: false, date: '2026-11-03', reviewing: null });
+  });
+
+  it('reads noon on the LOCAL clock, not UTC — 11:00 in Toronto is already 16:00 UTC', async () => {
+    getUser.mockResolvedValue({ timezone: 'America/Toronto' });
+    expect((await getDailyCheckinStatus('u1', new Date('2026-11-03T16:00:00Z'))).due).toBe(true);
+  });
+
   it('uses the USER timezone for both the hour and the date, not UTC', async () => {
     getUser.mockResolvedValue({ timezone: 'Pacific/Auckland' });
     // 20:00 UTC on the 11th is 09:00 on the 12th in Auckland — a UTC-based gate would call this

@@ -74,7 +74,7 @@ router.post('/session-feedback', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /me/daily-checkin — should Cadence ask about yesterday? All four gates live server-side
+ * GET /me/daily-checkin — should Cadence ask about yesterday? All five gates live server-side
  * (services/daily-checkin.ts) because they turn on the user's timezone and yesterday's plan,
  * neither of which the client should be re-deriving.
  */

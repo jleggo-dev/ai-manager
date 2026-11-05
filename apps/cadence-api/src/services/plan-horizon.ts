@@ -5,7 +5,7 @@ import { upsertOccurrences, type NewOccurrence } from '../repos/occurrences.ts';
 import { listSettledCommitmentDates } from '../repos/commitment-dates.ts';
 import { expandRecurrence } from './scheduling.ts';
 import { localMinutes } from './notify/policy.ts';
-import { localDayIso, localDayIsoPlus } from './plan-day.ts';
+import { localDayIso, localDayIsoPlus, planAnchorIso } from './plan-day.ts';
 import { weekStartMs } from './week-clock.ts';
 
 /**
@@ -82,7 +82,7 @@ export function minutesOfDay(timeOfDay: string | undefined | null): number | nul
  * writes the week it just started, because a confirm may commit nothing and used to leave the
  * new week with no days at all. None of them moves the check-in: that is the week clock's
  * (0058), and the step-6 worry — a view that kept writing days meant a week that never ended —
- * no longer applies. Recurrences are anchored to the plan's `generated_at`, so INTERVAL patterns
+ * no longer applies. Recurrences are anchored to the plan's start day, so INTERVAL patterns
  * (every other day / week) keep the same parity across calls. Returns the count materialized.
  *
  * **Never invents a task in the past.** A slot for TODAY whose time has already gone by is
@@ -107,7 +107,6 @@ export async function ensureHorizon(
   const plan = await getActivePlan(userId);
   if (!plan) return 0;
 
-  const anchor = new Date(plan.generated_at).toISOString().slice(0, 10);
   // THEIR today, not the server's: from 20:00 in Montreal the UTC date is already tomorrow, and
   // a fill that starts there leaves the evening the person is still living in with nothing
   // (plan-day.ts, `localDayIso`). No stored zone → UTC, the same floor the view uses.
@@ -115,6 +114,7 @@ export async function ensureHorizon(
   const timezone = (await getUser(userId))?.timezone;
   const today = localDayIso(now, timezone);
   const to = localDayIsoPlus(now, days, timezone);
+  const anchor = planAnchorIso(plan.generated_at, timezone);
 
   const activities = await listActivities(plan.plan_id);
   const nowMinutes = localMinutes(now, timezone);

@@ -46,6 +46,7 @@ vi.mock('../../lib/query/index.ts', () => ({
   useWatchLogInbox: vi.fn(),
   useWatchPortraitSync: vi.fn(),
   useDailyCheckinDue: () => true,
+  useSettleDailyCheckin: () => () => {},
 }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({}) }));
 /** The Phase 0 recovery watch's state, per test — `working` true = a background run is live. */

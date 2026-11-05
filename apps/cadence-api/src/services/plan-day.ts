@@ -43,6 +43,20 @@ export function localDayIso(now: Date, timezone?: string | null, tzHint?: string
   return new Date(planDayBase(now, timezone, tzHint)).toISOString().slice(0, 10);
 }
 
+/**
+ * The day a plan version starts: its recurrence anchor, which `expandRecurrence` never fires before.
+ *
+ * This was the UTC date of `generated_at`, so a commit after 19:00 in Toronto (20:00 in summer)
+ * anchored the new plan on tomorrow. Today then fell before the plan began: the commit diff saw
+ * every activity with a slot today as changed and wiped it, and the fill refused to write it back.
+ * On 2026-11-03 a check-in saved at 21:56 took the owner's whole Tuesday down to one moved piano
+ * session. The anchor is the same local day the commit and the fill call today, so the day the
+ * person is standing in always belongs to the plan they just saved. Every reader goes through here.
+ */
+export function planAnchorIso(generatedAt: string | Date, timezone?: string | null, tzHint?: string | null): string {
+  return localDayIso(new Date(generatedAt), timezone, tzHint);
+}
+
 /** `localDayIso` shifted by whole days — the commit's horizon end, the view's window edges. */
 export function localDayIsoPlus(now: Date, days: number, timezone?: string | null, tzHint?: string | null): string {
   return new Date(planDayBase(now, timezone, tzHint) + days * 86_400_000).toISOString().slice(0, 10);

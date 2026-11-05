@@ -161,3 +161,13 @@ export function useDailyCheckinDue(): boolean {
   });
   return data === true;
 }
+
+/**
+ * The check-in was answered or dismissed, so the cached `true` is no longer the answer. PlanView
+ * unmounts on every tab change and its "settled" flag goes with it, so without this a "Not now"
+ * came straight back on the next return to Plan, for as long as the cache stayed fresh.
+ */
+export function useSettleDailyCheckin(): () => void {
+  const queryClient = useQueryClient();
+  return () => queryClient.setQueryData(queryKeys.dailyCheckin.all, false);
+}

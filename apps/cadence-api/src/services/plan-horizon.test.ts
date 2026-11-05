@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * A plan change must never delete the day you are standing in.
@@ -135,5 +135,29 @@ describe("ensureHorizon and the user's own day", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe('a plan saved in the evening (2026-11-03, 21:56 in Toronto)', () => {
+    const SAVED = '2026-11-04T02:56:19.141Z';
+    const MORNING = { activity_id: 'a1', schedule: { recurrence: 'FREQ=WEEKLY;BYDAY=TU', time_of_day: '06:30' } };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(SAVED));
+      getUser.mockResolvedValue({ timezone: 'America/Toronto' });
+      getActivePlan.mockResolvedValue({ plan_id: 'p2', generated_at: SAVED });
+      listActivities.mockResolvedValue([MORNING]);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('the commit writes today back, morning included', async () => {
+      await ensureHorizon('u1', 7, { keepElapsedToday: true });
+      expect(datesFor()).toEqual(['2026-11-03', '2026-11-10']);
+    });
+
+    it('the rolling top-up still will not invent a 06:30 that has gone by', async () => {
+      await ensureHorizon('u1', 7);
+      expect(datesFor()).toEqual(['2026-11-10']);
+    });
   });
 });

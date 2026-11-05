@@ -19,7 +19,7 @@ import { DetourDayCards } from './DetourDayCards.tsx';
 import { isWeeklyCheckin } from './occurrence/format.ts';
 import { EndOfTrail } from './EndOfTrailCard.tsx';
 import { HorizonEndCap } from './HorizonEndCap.tsx';
-import { isLockedDay } from '../today/trailLock.ts';
+import { checkinTaskDate, isLockedDay } from '../today/trailLock.ts';
 import { useDaySkies } from '../today/useDaySkies.ts';
 import { useWeekGate } from './useWeekGate.ts';
 import { WeekGateSheet } from './WeekGateSheet.tsx';
@@ -311,10 +311,7 @@ export function PlanView({
   // of them is on screen.
   const { wallAt, lockedFrom, todayIso } = gate;
   const wallInView = data.week.some((d) => isLockedDay(d.date, lockedFrom));
-  // The check-in as a task on the day it is demanded (owner, 2026-09-13): its own day, or today
-  // once that day is past — a late check-in is demanded today, not on a day already gone.
-  const endsOn = data.weekState?.ends_on;
-  const checkinOn = endsOn && todayIso && todayIso > endsOn ? todayIso : endsOn;
+  const checkinOn = checkinTaskDate(data.weekState?.ends_on, todayIso);
   const endOfTrail = (
     <EndOfTrail
       show={horizonReached || wallInView}
