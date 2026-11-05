@@ -1,4 +1,4 @@
-import type { Food, FoodBaseUnit, FoodNutrients, FoodServing } from '@cadence/shared';
+import { scaleNutrients, type Food, type FoodBaseUnit, type FoodNutrients, type FoodServing } from '@cadence/shared';
 import { runJobBySlug } from '../ai/aim.ts';
 import { logAi } from './ai-log.ts';
 import { normalizeFood, describeNormalizationProblems } from './food-sources/normalized.ts';
@@ -143,9 +143,28 @@ function toNutrients(raw: unknown): FoodNutrients {
   if (!raw || typeof raw !== 'object') return out;
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     const n = num(v);
-    if (n !== null && n >= 0) out[k as keyof FoodNutrients] = n;
+    // "fibre_g" is the spelling a Canadian guide invites; the store has one name for it.
+    if (n !== null && n >= 0) out[(k === 'fibre_g' ? 'fiber_g' : k) as keyof FoodNutrients] = n;
   }
   return out;
+}
+
+/** How many base units `macros_per_100` describes: a hundred by weight or volume, one for an item. */
+const perBase = (unit: FoodBaseUnit): number => (unit === 'item' ? 1 : 100);
+
+/**
+ * The numbers per base unit. A food kept per item needs no weight, so when a restaurant prints none
+ * and the answer leaves the per-100 view empty, the serving's own numbers ARE the base, shared out
+ * over the serving's count. A weight-based food has no such way round: it needs its own view.
+ */
+function baseMacros(
+  per100: FoodNutrients,
+  perServing: FoodNutrients,
+  unit: FoodBaseUnit,
+  amount: number | null,
+): FoodNutrients {
+  if (unit !== 'item' || typeof per100.kcal === 'number' || typeof perServing.kcal !== 'number') return per100;
+  return scaleNutrients(perServing, 1 / (amount && amount > 0 ? amount : 1));
 }
 
 function shapeResult(parsed: Record<string, unknown>, asked: AskedFood): ResearchOutcome {
@@ -181,7 +200,9 @@ function shapeResult(parsed: Record<string, unknown>, asked: AskedFood): Researc
   }
   const base_unit = BASE_UNITS.includes(parsed.base_unit as FoodBaseUnit) ? (parsed.base_unit as FoodBaseUnit) : 'g';
 
-  const macros = toNutrients(parsed.macros_per_100);
+  const perServing = toNutrients(parsed.macros_per_serving);
+  const amount = num(parsed.serving_amount);
+  const macros = baseMacros(toNutrients(parsed.macros_per_100), perServing, base_unit, amount);
   // The whole point of paying for this rung is numbers better than a guess — kcal and the full
   // macro split, or the item falls through to estimate-food.
   const tier = nutritionTier(macros);
@@ -194,9 +215,7 @@ function shapeResult(parsed: Record<string, unknown>, asked: AskedFood): Researc
     };
   }
 
-  const perServing = toNutrients(parsed.macros_per_serving);
   const servings: FoodServing[] = [];
-  const amount = num(parsed.serving_amount);
 
   /**
    * The two views must agree by arithmetic — the check that catches what Atwater cannot.
@@ -207,13 +226,18 @@ function shapeResult(parsed: Record<string, unknown>, asked: AskedFood): Researc
    * Internally-consistent-and-wrong is invisible from one view; from two views it is arithmetic:
    * per_100 × amount/100 must land on per_serving. Disagreement means the model did not actually
    * convert, and a 3.5×-light food pinned forever is precisely this rung's worst case.
+   *
+   * A food kept per item has no hundred to divide by: its base IS one item, so the serving is
+   * per_item × amount. Read as per 100, a Tim Hortons pizza at 750 kcal a serving "disagreed" with
+   * itself (750 × 1/100 = 8) and every restaurant dish with no printed weight was refused, four of
+   * the eight lookups in the 60 days to 2026-11-04.
    */
   if (amount !== null && amount > 0 && typeof perServing.kcal === 'number' && typeof macros.kcal === 'number') {
-    const expected = (macros.kcal * amount) / 100;
+    const expected = (macros.kcal * amount) / perBase(base_unit);
     const bigger = Math.max(expected, perServing.kcal);
     if (bigger >= 20 && Math.abs(expected - perServing.kcal) / bigger > 0.2) {
       const detail =
-        `per-100 (${macros.kcal} kcal) × ${amount}/100 = ${Math.round(expected)} disagrees with the label ` +
+        `per-${perBase(base_unit)} (${macros.kcal} kcal) × ${amount}/${perBase(base_unit)} = ${Math.round(expected)} disagrees with the label ` +
         `serving (${perServing.kcal} kcal) — per-serving filed as per-100?`;
       console.warn(`[food-research] rejected: ${detail}`);
       // The disagreement IS the useful part (TOOL-HARNESS): she gets the arithmetic, not just "no".

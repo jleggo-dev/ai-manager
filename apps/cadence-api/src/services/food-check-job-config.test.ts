@@ -93,10 +93,11 @@ describe('food-check job config', () => {
     for (const k of ['name', 'brand', 'pick', 'measure', 'count', 'assumption', 'question', 'choices', 'estimate'])
       expect(item[k]?.nullable, k).toBe(true);
     expect(item.said?.nullable).toBeUndefined();
-    expect(Object.keys(item.estimate?.fields ?? {}).sort()).toEqual(['kcal', 'protein_g']);
+    expect(Object.keys(item.estimate?.fields ?? {}).sort()).toEqual(['carbs_g', 'fat_g', 'kcal', 'protein_g']);
     // Strict mode makes every declared field required, so "did not estimate this" has to be a
     // legal null on each number — the parser (food-check.ts) and the scorer both read it that way.
-    for (const k of ['kcal', 'protein_g']) expect(item.estimate?.fields?.[k]?.nullable, `estimate.${k}`).toBe(true);
+    for (const k of ['kcal', 'protein_g', 'carbs_g', 'fat_g'])
+      expect(item.estimate?.fields?.[k]?.nullable, `estimate.${k}`).toBe(true);
     expect(Object.keys(fields.lookups?.items?.fields ?? {}).sort()).toEqual(['brand', 'measure', 'q']);
     expect(job?.config.formattingRules?.find((r) => r.type === 'require-keys')?.options?.keys).toEqual([
       'items',
@@ -147,7 +148,7 @@ describe('food-check job config', () => {
     expect(notes).toBeDefined();
     expect(notes?.required).toBeUndefined();
     expect(template).toContain(
-      '<notes> is empty for a typed meal. When the meal came as a photo, it holds what the photo reader could and could not tell about it; a doubt there is a reason to ask one question or to state an assumption for that part. When the person said a previous answer was wrong, it holds that answer and their correction: fix what they named, keep the rest, and a food the correction names counts as said.',
+      '<notes> is empty for a typed meal. When the meal came as a photo, it holds what the photo reader could and could not tell about it, and any numbers it read off a printed table; a doubt there is a reason to ask one question or to state an assumption for that part. When the person said a previous answer was wrong, it holds that answer and their correction: fix what they named, keep the rest, and a food the correction names counts as said.',
     );
     // Facts, not picks: the sentence says what the notes are, never which answer to prefer.
     expect(template).not.toMatch(/notes[^.]*\b(prefer|choose|pick|assume the)\b/i);
@@ -171,6 +172,9 @@ describe('food-check job config', () => {
     expect(template).toContain('one of the measures listed for that record, written exactly as listed');
     expect(template).toContain('Do not write calories or protein for a picked record');
     expect(template).toContain('The app shows it to the person as your estimate');
+    // Numbers they supplied are the food's, all four (2026-11-04: a pasted table kept kcal + protein only).
+    expect(template).toContain("are that food's numbers: scale them to the amount they said");
+    expect(template).toContain('"carbs_g": number | null, "fat_g": number | null');
     expect(template).toContain('the app does not count it until the question is answered');
     expect(template).toContain('A record marked incomplete has no usable calories');
   });

@@ -72,7 +72,9 @@ describe('describe-meal-photo job config', () => {
   it('keeps the rules the app relies on', () => {
     expect(template).toContain('COMMIT TO A READING, AND NAME THE ASSUMPTION YOU COMMITTED TO');
     expect(template).toContain('Never name a food you cannot actually see');
-    expect(template).toContain('If there is no food or drink in the photo at all, say only that, with no list.');
+    expect(template).toContain(
+      'If the photo holds no food, no drink and no printed facts about food, say only that, with no list.',
+    );
     expect(template).toContain('Never infer a chain from a cup that merely looks like theirs');
     // The brand goes on the list line, where the split keeps it with its food.
     expect(template).toContain('Put it on the line ("1 venti Starbucks latte")');
@@ -94,6 +96,15 @@ describe('describe-meal-photo job config', () => {
     expect(description).toContain('plain text');
     expect(description).toContain('list of "amount food" lines');
     expect(description).not.toMatch(/format-flexible|stage 2 does the schema/i);
+  });
+
+  it('a nutrition table or a menu is a reading, not an empty photo', () => {
+    // 2026-11-04: a screenshot of Tim Hortons' nutrition table came back "There is no food or drink
+    // in the photo", with the caption naming two of its rows.
+    expect(template).toContain('printed facts about food in place of the food');
+    expect(template).toContain('That is a reading, not an empty photo');
+    expect(template).toContain('A row of printed facts that the caption names counts as seen');
+    expect(template).toContain('If the photo holds no food, no drink and no printed facts about food');
   });
 
   it.each([/\bcaptured\b/i, /\bjourney\b/i, /\bunlock\b/i, /\bempower/i, /\btempo\b/i, /\bCadence\b/])(

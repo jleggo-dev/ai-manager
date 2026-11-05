@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../lib/api.ts';
 import { newRequestId } from '../../lib/api/kept-answers.ts';
+import { READ_TIMEOUT_MS } from '../../lib/api/nutrition.ts';
 import { clearReadInProgress, rememberRead, type ReadInProgress } from './readInProgress.ts';
 import { MicButton } from '../../components/MicButton.tsx';
 import { PhotoButton } from '../../components/PhotoButton.tsx';
 import { downscalePhoto } from '../plan/occurrence/format.ts';
 import { MealParseCard } from './MealParseCard.tsx';
 import { CoachReadLine } from './CoachReadLine.tsx';
-import { READING } from './coachReadCopy.ts';
+import { READING, STOP_READING } from './coachReadCopy.ts';
 import { failureWords, type FailureWords } from './failureWords.ts';
 import { previousRows } from './previousRows.ts';
+import { useBoundedCall } from './useBoundedCall.ts';
 import { GrowingTextarea } from '../../components/GrowingTextarea.tsx';
 
 /** Lines before the composer stops growing and scrolls — a whole meal, dictated, fits. */
@@ -78,6 +80,9 @@ export function LogByChat({
   const [busy, setBusy] = useState(false);
   const [fail, setFail] = useState<FailureWords | null>(null);
   const thread = useRef<HTMLDivElement>(null);
+  const { begin, end, current, cancel } = useBoundedCall();
+  /** Puts the thread back as it was before the read now in flight. */
+  const stopped = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const el = thread.current;
@@ -100,6 +105,12 @@ export function LogByChat({
         : undefined;
     const forWords = pickUp ? pickUp.words : correcting ? said! : typed;
     const requestId = pickUp?.requestId ?? newRequestId();
+    // The card and its words stay if this is stopped: what was being re-read is still true.
+    const before = { said, correction };
+    stopped.current = () => {
+      setSaid(before.said);
+      setCorrection(before.correction);
+    };
     setBusy(true);
     setFail(null);
     setSaid(forWords);
@@ -116,8 +127,11 @@ export function LogByChat({
         requestId,
         listening,
       });
+    // The API's own bound is the one that speaks; this one only stands behind it.
+    const { signal, token } = begin(READ_TIMEOUT_MS + 5_000);
     try {
-      const p = await previewMeal(forWords, meal, correcting, { requestId, resume: !!pickUp });
+      const p = await previewMeal(forWords, meal, correcting, { requestId, resume: !!pickUp, signal });
+      if (!current(token)) return;
       if (!p.items.length) {
         setFail({ line: NOTHING_READ, retry: false });
         return;
@@ -125,11 +139,22 @@ export function LogByChat({
       setPreview(p);
       setText('');
     } catch (e) {
-      setFail(failureWords(e, 'read'));
+      if (current(token)) setFail(failureWords(e, 'read'));
     } finally {
-      setBusy(false);
-      clearReadInProgress();
+      end(token);
+      if (current(token)) {
+        setBusy(false);
+        clearReadInProgress();
+      }
     }
+  }
+
+  /** Stop the read in flight (owner, 2026-11-05). The words are still in the box, to change and send. */
+  function stop() {
+    cancel();
+    stopped.current?.();
+    setBusy(false);
+    clearReadInProgress();
   }
 
   // Relaunched mid-read: pick it up, once, on open. Leaving the door forgets any read in flight.
@@ -204,7 +229,12 @@ export function LogByChat({
               onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, text.trim()))}
             />
           )}
-          {text.trim() && (
+          {busy && (
+            <button type="button" className="food-stop" onClick={stop}>
+              {STOP_READING}
+            </button>
+          )}
+          {text.trim() && !busy && (
             <button
               type="button"
               className="fc-send"

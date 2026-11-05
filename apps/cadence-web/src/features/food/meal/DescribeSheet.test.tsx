@@ -14,7 +14,7 @@ vi.mock('../../../lib/api.ts', () => api);
 
 const { DescribeSheet, TRY_AGAIN } = await import('./DescribeSheet.tsx');
 const { readReadInProgress, rememberRead } = await import('../readInProgress.ts');
-const { ANOTHER_GO, NOT_REACHED, NOT_REACHED_ANSWER } = await import('../coachReadCopy.ts');
+const { ANOTHER_GO, NOT_REACHED, NOT_REACHED_ANSWER, READING, STOP_READING } = await import('../coachReadCopy.ts');
 const { NOT_QUITE, WHATS_OFF } = await import('../NotQuiteField.tsx');
 const { THATS_IT } = await import('../OwnAnswerField.tsx');
 const { CHECK_FAILED, CHECKING } = await import('../MealQuestionChoices.tsx');
@@ -39,6 +39,69 @@ async function lookUp(preview: unknown) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('DescribeSheet — stopping a read', () => {
+  /** A read that never answers on its own: it ends only when its signal says stop. */
+  const hanging = () =>
+    api.previewMeal.mockImplementationOnce(
+      (_w: string, _m: string, _c: unknown, opts: { signal: AbortSignal }) =>
+        new Promise((_, reject) => {
+          opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+        }),
+    );
+  const open = () => {
+    render(
+      <DescribeSheet meal="snack" seed="a bananna" date="2026-11-05" onAdd={async () => true} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+  };
+
+  it('no Stop until a read is running', () => {
+    render(<DescribeSheet meal="snack" seed="a banana" onAdd={async () => true} onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: STOP_READING })).not.toBeInTheDocument();
+  });
+
+  it('Stop ends the read: no failure line, the words stay and the box opens to change them', async () => {
+    hanging();
+    open();
+    expect(screen.getByRole('button', { name: READING })).toBeDisabled();
+    const box = screen.getByRole('textbox', { name: 'What did you have?' });
+    expect(box).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: STOP_READING }));
+
+    await waitFor(() => expect(box).toBeEnabled());
+    expect(box).toHaveValue('a bananna');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: STOP_READING })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Look it up' })).toBeEnabled();
+    expect(api.previewMeal.mock.calls[0]![3].signal.aborted).toBe(true);
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('an answer that lands after Stop draws nothing', async () => {
+    let answer: (p: unknown) => void = () => {};
+    api.previewMeal.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    open();
+    fireEvent.click(screen.getByRole('button', { name: STOP_READING }));
+    answer(base);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('Banana, raw')).not.toBeInTheDocument();
+  });
+
+  it('after Stop, the corrected words go out as a new read', async () => {
+    hanging();
+    open();
+    fireEvent.click(screen.getByRole('button', { name: STOP_READING }));
+    const box = screen.getByRole('textbox', { name: 'What did you have?' });
+    await waitFor(() => expect(box).toBeEnabled());
+    fireEvent.change(box, { target: { value: 'a banana' } });
+    api.previewMeal.mockResolvedValueOnce(base);
+    fireEvent.click(screen.getByRole('button', { name: 'Look it up' }));
+    await screen.findByText('Banana, raw');
+    expect(api.previewMeal.mock.calls[1]![0]).toBe('a banana');
+  });
 });
 
 describe('DescribeSheet — who read it, and what the rows say', () => {
@@ -440,6 +503,7 @@ describe('DescribeSheet — a read remembered for a relaunch', () => {
     expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', undefined, {
       requestId: inFlight.requestId,
       resume: true,
+      signal: expect.any(AbortSignal),
     });
     expect(screen.getByRole('textbox', { name: 'What did you have?' })).toHaveValue('a banana');
     expect(readReadInProgress()).toBeNull();
@@ -461,7 +525,11 @@ describe('DescribeSheet — a read remembered for a relaunch', () => {
       }),
     );
     const { requestId } = readReadInProgress()!;
-    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', undefined, { requestId, resume: false });
+    expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', undefined, {
+      requestId,
+      resume: false,
+      signal: expect.any(AbortSignal),
+    });
     release({ ...base, coach: { reached: true, calls: 1, checked: [] } });
     await screen.findByText('Banana, raw');
     expect(readReadInProgress()).toBeNull();

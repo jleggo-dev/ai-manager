@@ -6,7 +6,8 @@
  * The row also has to survive the round trip to the card and back — the confirm re-prices every
  * linked item from its food with the row's own `qty`/`unit` (food-pricing.ts). So the portion
  * written on the row is chosen to re-price to the same numbers: the measure's own word when
- * `priceFood` reads it back the same ("1 medium", "1.5 cup"), grams otherwise. A portion that
+ * `priceFood` reads it back the same ("1 medium", "1.5 cup"), grams otherwise — and the word only
+ * ever counts what the label counts, so half a breast is never called one. A portion that
  * cannot be read back at all is still priced here, and the confirm keeps the card's numbers for
  * it rather than re-guessing (`portionReadsBack` says which happened).
  */
@@ -61,11 +62,19 @@ export function portionForPick(food: PricedFood, measure: MeasureOption, count: 
   // Candidates in the order a person would rather read them; the first that reads back wins.
   const candidates: Array<{ qty: number; unit: string }> = [];
   if (serving) {
+    // The number the label opens with belongs to the amount. FatSecret's "1/2 medium" keeps the half
+    // in its label and not in its unit, so two of them read "2 medium breast" for one breast, the
+    // right 196 g under the wrong words (2026-11-04). In the label's own count the word must still
+    // read back; when it does not, the row says grams.
+    const measure = parseMeasure(serving.label);
+    const qty = count * measure.qty;
     const unitWord = serving.unit?.trim();
-    if (unitWord && !['g', 'ml', 'item', 'serving'].includes(unitWord.toLowerCase()))
-      candidates.push({ qty: count, unit: unitWord });
-    const noun = parseMeasure(serving.label).countOf.split(/\s+/)[0] ?? '';
-    if (noun && noun !== unitWord) candidates.push({ qty: count, unit: noun });
+    // A researched food keeps its whole label as its unit ("1 wrap", "12 fl oz"): the row would say
+    // "0.5 1 wrap". The noun below is that word without its number.
+    if (unitWord && !/^\d/.test(unitWord) && !['g', 'ml', 'item', 'serving'].includes(unitWord.toLowerCase()))
+      candidates.push({ qty, unit: unitWord });
+    const noun = measure.countOf.split(/\s+/)[0] ?? '';
+    if (noun && noun !== unitWord) candidates.push({ qty, unit: noun });
   }
   if (byGrams) candidates.push({ qty: round1(grams), unit: food.base_unit });
   else if (serving) candidates.push({ qty: count, unit: serving.unit || 'serving' });

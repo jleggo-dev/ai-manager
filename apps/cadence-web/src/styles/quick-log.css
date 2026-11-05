@@ -288,6 +288,27 @@
 .ms-ds-go {
   flex: 1;
 }
+.ms-ds-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ms-ds-tools[hidden] {
+  display: none;
+}
+/* Ends a read in flight, in both word doors. Plain and outlined: it is neither a door nor a commit. */
+.food-stop {
+  flex: none;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--line, oklch(88% 0.015 85));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
 
 /* ── The meal chat — a second panel inside the drawer ───────────────────────── */
 .ms-chat {

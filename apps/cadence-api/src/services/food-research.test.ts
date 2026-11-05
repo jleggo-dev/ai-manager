@@ -241,6 +241,65 @@ describe('researchFoodOutcome — a refusal says why, not just no (MP35)', () =>
     expect(out.reason).toContain('160');
   });
 
+  describe('a dish kept per item, with no printed weight (Tim Hortons, 2026-11-04)', () => {
+    const PIZZA = {
+      name: 'Pepperoni Flatbread Pizza',
+      brand: 'Tim Hortons',
+      base_unit: 'item',
+      serving_label: '1 serving',
+      serving_amount: 1,
+      macros_per_serving: { kcal: 750, protein_g: 37, carbs_g: 69, fat_g: 37 },
+      macros_per_100: { kcal: 750, protein_g: 37, carbs_g: 69, fat_g: 37 },
+      confidence: 0.9,
+      source_url: 'https://example.com/tim-hortons-nutrition-guide',
+      alternates: [],
+    };
+    const ask = (patch: Record<string, unknown>) => {
+      runJobBySlug.mockResolvedValue({ formatted: JSON.stringify({ ...PIZZA, ...patch }) });
+      return researchFoodOutcome('u1', { name: 'pepperoni pizza', brand: 'Tim Hortons' });
+    };
+
+    it('both views the same is one item, not a shifted label: accepted at its own numbers', async () => {
+      const out = await ask({});
+      expect(out.reason).toBeNull();
+      expect(out.result?.food).toMatchObject({ name: 'Pepperoni Flatbread Pizza', base_unit: 'item' });
+      expect(out.result?.food.macros_per_base?.kcal).toBe(750);
+      expect(out.result?.food.servings[0]).toMatchObject({ label: '1 serving', amount_g: 1 });
+    });
+
+    it('the Canadian spelling of fibre lands on the one name the store reads', async () => {
+      const out = await ask({ macros_per_100: { ...PIZZA.macros_per_100, fibre_g: 3 } });
+      expect(out.result?.food.macros_per_base).toMatchObject({ fiber_g: 3 });
+    });
+
+    it('a serving of two items is twice the item', async () => {
+      const out = await ask({
+        serving_label: '2 cookies',
+        serving_amount: 2,
+        macros_per_100: { kcal: 375, protein_g: 18.5, carbs_g: 34.5, fat_g: 18.5 },
+      });
+      expect(out.reason).toBeNull();
+    });
+
+    it('an empty per-item view takes the serving numbers: no weight is not no nutrition', async () => {
+      const out = await ask({ macros_per_100: {} });
+      expect(out.reason).toBeNull();
+      expect(out.result?.food.macros_per_base).toMatchObject({ kcal: 750, protein_g: 37 });
+    });
+
+    it('per-item views that really disagree are still refused, and say so per item', async () => {
+      const out = await ask({ macros_per_100: { kcal: 375, protein_g: 18, carbs_g: 34, fat_g: 18 } });
+      expect(out.result).toBeNull();
+      expect(out.reason).toContain('per-1 (375 kcal)');
+    });
+
+    it('near-miss: an empty per-100 view on a food kept by weight stays refused', async () => {
+      const out = await ask({ base_unit: 'g', serving_amount: 200, macros_per_100: {} });
+      expect(out.result).toBeNull();
+      expect(out.reason).toMatch(/tier/);
+    });
+  });
+
   it('the normalization guard refuses it: refused, and names the field it refused on', async () => {
     // The Starbucks K-Cup shape: per-package values filed as per-100g — a 'drop' in normalized.ts.
     const corrupt = JSON.parse(GOOD) as Record<string, unknown>;

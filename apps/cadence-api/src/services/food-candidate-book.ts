@@ -103,8 +103,10 @@ function partWords(raw: string): string {
  * toast" was looked up, 2026-11-01), and "a few eggs" read as the food "few eggs".
  */
 const AMOUNT =
-  /^(?:(?:\d+(?:[./]\d+)?|\d*\.\d+|(?:a few|a bit of|a splash of|an|a|one|two|three|four|half|quarter|some)\b)\s*)?(?:(?:ml|l|g|kg|grams?|oz|ounces?|lbs?|cups?|c|tbsp|tablespoons?|tsp|teaspoons?|slices?|shots?|scoops?|cans?|pieces?|handful|small|medium|large)\b\s*)?(?:of\s+)?/i;
-const MEASURE_WORD = /\d|cup|tbsp|tsp|oz|ml|g\b|slice|shot|scoop|handful|small|medium|large|half|quarter/i;
+  /^(?:(?:\d+(?:[./]\d+)?|\d*\.\d+|(?:a few|a bit of|a splash of|an|a|one|two|three|four|half|quarter|some)\b)\s*)?(?:(?:ml|l|g|kg|grams?|oz|ounces?|lbs?|cups?|c|pints?|tbsp|tablespoons?|tsp|teaspoons?|slices?|shots?|scoops?|cans?|pieces?|handful|small|medium|large)\b\s*)?(?:of\s+)?/i;
+const MEASURE_WORD = /\d|cup|pint|tbsp|tsp|oz|ml|g\b|slice|shot|scoop|handful|small|medium|large|half|quarter/i;
+/** How a drink was poured, not what it is: no record is called "guinness on draft", so it is not looked up. */
+const SERVED = /\s+(?:on|from the)\s+(?:draft|draught|tap)$/i;
 
 /** Every part, in order, as the person wrote them — no cap. Never empty for non-blank text. */
 function splitAllParts(text: string): string[] {
@@ -121,7 +123,7 @@ export function splitMealParts(text: string): string[] {
 export function stripAmount(part: string): { q: string; measure: string | null } {
   const m = AMOUNT.exec(part);
   const prefix = m?.[0] ?? '';
-  const q = part.slice(prefix.length).trim();
+  const q = part.slice(prefix.length).trim().replace(SERVED, '');
   if (!q) return { q: part.trim(), measure: null };
   // Nobody eats zero of anything: a leading "0.0" or "0" is the food's name ("0.0 guinness" is
   // the non-alcoholic one), not an amount. Read as one, it looked the beer up as "guinness at

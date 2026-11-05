@@ -30,6 +30,7 @@ import {
 import type { FoodCheckItem, FoodCheckOutcome, FoodCheckVars, WebLookupFn } from './food-check.ts';
 import { phraseKey } from './food-phrases.ts';
 import { portionForPick } from './food-pick-portion.ts';
+import { amountAsSaid, nameForRow } from './food-row-words.ts';
 import { priceFood } from './food-pricing-portion.ts';
 import { sumItemNutrients } from './food-pricing.ts';
 import type { ParsedMealResult } from './nutrition-parse.ts';
@@ -232,11 +233,12 @@ export async function rowsFromOutcome(
       const food = foods.get(pick.entry.food_id ?? '');
       const portion = food ? portionForPick(food, pick.measure, pick.count) : null;
       if (food && portion) {
+        const amount = amountAsSaid(food, said) ?? portion;
         return {
-          name: food.name.slice(0, NAME_MAX),
+          name: nameForRow(food.name, said).slice(0, NAME_MAX),
           ...(food.brand ? { brand: food.brand } : {}),
-          qty: portion.qty,
-          unit: portion.unit,
+          qty: amount.qty,
+          unit: amount.unit,
           // Weight only for a food kept by weight: a per-item food's `amount_g` is a count.
           ...(food.base_unit === 'g' && portion.unit !== 'g' && pick.measure.grams > 0
             ? { grams_each: pick.measure.grams }
@@ -267,6 +269,8 @@ export async function rowsFromOutcome(
         est: {
           ...(typeof e.kcal === 'number' ? { kcal: e.kcal } : {}),
           ...(typeof e.protein_g === 'number' ? { protein_g: e.protein_g } : {}),
+          ...(typeof e.carbs_g === 'number' ? { carbs_g: e.carbs_g } : {}),
+          ...(typeof e.fat_g === 'number' ? { fat_g: e.fat_g } : {}),
           source: 'ai',
         },
         basis: 'estimate',
