@@ -3,6 +3,7 @@ import { SettingsHealthRow } from './SettingsHealthRow.tsx';
 import { SettingsLocation } from './SettingsLocation.tsx';
 import { SettingsNotificationsRow } from './SettingsNotificationsRow.tsx';
 import { SettingsProgressPhotos } from './SettingsProgressPhotos.tsx';
+import { SettingsSitScreenRow } from './SettingsSitScreenRow.tsx';
 
 /**
  * "DEVICE & DATA" (design owner-approved 2026-08-31).
@@ -14,6 +15,7 @@ import { SettingsProgressPhotos } from './SettingsProgressPhotos.tsx';
  * stay inline: the first is a compact multi-state row with its own "Set" flow, and the other two
  * already self-manage a row-that-expands-in-place (`WeighInSettings`) or are a single toggle
  * (`SettingsProgressPhotos`) — wrapping either in a door would be navigation for its own sake.
+ * "Screen during a sit" is a two-choice row, per device (owner, 2026-11-03).
  */
 export function SettingsDeviceGroup({
   onOpenUnits,
@@ -41,6 +43,7 @@ export function SettingsDeviceGroup({
       <SettingsHealthRow onOpenWorkouts={onOpenHealth} />
       <WeighInSettings />
       <SettingsProgressPhotos />
+      <SettingsSitScreenRow />
     </section>
   );
 }

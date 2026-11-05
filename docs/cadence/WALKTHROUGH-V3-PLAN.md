@@ -234,7 +234,7 @@ the check found back to her. Never correct it silently (see Phase 3).
 
 - [x] **3a. `checkSession()` in `@cadence/shared`** (`session-check.ts`, PR: the session checker,
       2026-11-03). It returns findings, never fixes. Each finding is `{ rule, blockIndex, itemIndex,
-  item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
+item, severity: 'error' | 'question', fact }`, the fact one plain sentence for the coach. Rules,
       each with a table of positives (the stored shapes) and near-misses:
   - `timer_no_time` (error): a timer with no `duration_min`;
   - `one_rep_sets` (question): `reps` ≤ 1 with `sets` ≥ 2 — the carry; the cue's time is quoted
@@ -290,7 +290,7 @@ the check found back to her. Never correct it silently (see Phase 3).
       timed_sets carry `loads` — what was lifted, one entry per set, beside the unchanged `sets`
       — and a circuit log carries them by move index; `load` stays what the plan said. The log
       line reads `3×12 @ 15 lb (plan said bodyweight)` and `2×12 @ 40 lb · swapped from glute
-      bridge` (`set-loads.ts` in shared holds the grammar). `parse-session-log` is told how to
+    bridge` (`set-loads.ts` in shared holds the grammar). `parse-session-log` is told how to
       read both shapes and `OccurrenceLogItem` gained `swapped_from`. The log is jsonb: no
       migration.
 - [x] **5b. A history read.** `GET /plan/exercise-history?exercise=&activity=&limit=`
@@ -362,7 +362,8 @@ notification plumbing books exactly ONE fixed-moment alarm (`LocalNotificationsC
 scheduleAlarm`, reserved id `TIMER_ALARM_ID`, which `sync` / `cancelAll` step around), with the
 body "… is up — keep going or stop the clock." (#477's locked-screen check has the full costing.)
 
-- [ ] **7a. The screen stays awake while a clock you watch runs.** One hook,
+- [x] **7a. The screen stays awake while a clock you watch runs.** (PR: the screen stays on while
+      a clock you watch runs, and the clock chimes from any screen, 2026-11-04.) One hook,
       `useKeepAwakeWhile(running)`, extracted from `useMetronome` (which keeps its behaviour), used
       by every clock the person looks at: `StepTimer`, `StepTimedSets`, `StepInterval`,
       `CircuitMoveClock`. Held from Start, released on pause, stop, finish and unmount. Not a
@@ -381,7 +382,7 @@ body "… is up — keep going or stop the clock." (#477's locked-screen check h
   - Left out on purpose, one line to widen it later: a long timer in a pocket (a 20-minute zone-2
     run) has the same battery argument; 7c's notification covers the chime, and one switch people
     can explain beats two.
-- [ ] **7b. The running clock lives at app level.** A clock store mounted at the App root (beside
+- [x] **7b. The running clock lives at app level.** (Same PR as 7a.) A clock store mounted at the App root (beside
       what `sessionInProgress.ts` already snapshots as `RunningClock`): the tool **registers** its
       clock (started at, base, target, which chime, and for intervals the plan so `positionAt`
       can find the boundaries), and the store, not the tool, schedules and plays the chimes

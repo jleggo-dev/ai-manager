@@ -15,6 +15,8 @@ import type { BuilderSeed } from '../plan/quick-add/builderSeed.ts';
 import { readDraft, type BuilderDraft } from '../builder/draftStore.ts';
 import { DraftPill } from '../builder/DraftPill.tsx';
 import { readReadInProgress } from '../food/readInProgress.ts';
+import { RunningClockPill } from '../walkthrough/RunningClockPill.tsx';
+import { useClockKeepAwake } from '../walkthrough/useClockKeepAwake.ts';
 
 /**
  * Today and Week were separate TABS sharing one PlanView, and the owner's device verdict
@@ -209,6 +211,10 @@ export function MainTabs({
    */
   const current: Tab | 'settings' = settingsRoomOpen ? 'settings' : tab;
 
+  // The screen stays on while a clock you watch runs — held here, for the life of the shell, so
+  // switching tabs (which unmounts the walkthrough) never lets the phone lock on a running clock.
+  useClockKeepAwake();
+
   return (
     <>
       <div className="app">
@@ -386,6 +392,16 @@ export function MainTabs({
          */}
         {building.open && building.minimized && (
           <DraftPill onClick={() => setBuilding((b) => ({ ...b, minimized: false }))} />
+        )}
+        {/* A clock running in a walkthrough that is not on the glass (walkthrough v3 R6). The tap
+            lands on Plan, which reopens the remembered session on its step. */}
+        {!(tab === 'plan' && !food && !settingsRoomOpen && !builderShowing) && (
+          <RunningClockPill
+            onOpen={() => {
+              setFood(null);
+              goTab('plan');
+            }}
+          />
         )}
         <nav className="tabbar" aria-label="Main">
           <button

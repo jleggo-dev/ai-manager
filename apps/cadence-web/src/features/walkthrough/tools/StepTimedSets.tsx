@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { secondsText } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C, COMMIT } from './tone.ts';
-import { CHIME_SWITCH, playChime, playTones, unlockAudio } from './chime.ts';
+import { unlockAudio } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
 import { useWallClock } from './useWallClock.ts';
 import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
+import { useRegisteredClock } from '../useRegisteredClock.ts';
+import { unregisterClock } from '../runningClock.ts';
 import { formatClock } from './timer.ts';
 import { card, logBtn as amberBtn, greyBtn, banner, dialBtn } from './timerStyles.ts';
 import { SetChips } from './SetChips.tsx';
@@ -30,10 +32,12 @@ type Phase = 'idle' | 'running' | 'review';
  *  • Switch sides chimes at the halfway point of every set. Tapping a logged chip re-opens it.
  *
  * Time is the wall clock (`useWallClock`), a pocket bell is booked for the target, and a running
- * clock is reported through `onClock` so a remembered session reopens on the same set with the
- * clock caught up (sessionInProgress.ts); the set index is the logged sets, which the session
- * keeps anyway. What the session does not keep: a review in progress — Stop then a dead phone
- * comes back on Start for the same set.
+ * clock is registered at app level (runningClock.ts) — the store plays the target and halfway
+ * chimes on any screen, and a remembered session reopens on the same set with the clock caught up
+ * (sessionInProgress.ts); the set index is the logged sets, which the session keeps anyway. What
+ * the session does not keep: a review in progress — Stop then a dead phone comes back on Start
+ * for the same set. The screen stays on while a set's clock runs (useClockKeepAwake, from the
+ * app root).
  *
  * Stop and Start only move the clock, so they wear the amber do-tone; Log writes, so it is green;
  * Keep going is the grey of a step back (tools/tone.ts, pinned in commit-tone.test.tsx).
@@ -49,9 +53,9 @@ export function StepTimedSets({
   chime,
   switchSides = false,
   title,
+  stepId = 'step',
   log,
   resumeClock,
-  onClock,
   onLog,
   onDone,
 }: {
@@ -62,9 +66,10 @@ export function StepTimedSets({
   chime: boolean;
   switchSides?: boolean;
   title?: string;
+  /** The step this clock belongs to, for the app-level clock store. */
+  stepId?: string;
   log?: TimedSetsLog;
   resumeClock?: TimerClock | null;
-  onClock?: (clock: TimerClock | null) => void;
   onLog: (l: TimedSetsLog) => void;
   onDone?: () => void;
 }) {
@@ -88,6 +93,12 @@ export function StepTimedSets({
   const over = elapsed - target;
   const isOver = running && reached && over >= 0;
 
+  useRegisteredClock(
+    startedAt != null
+      ? { stepId, title: title ?? 'Timer', kind: 'timed_set', startedAt, base, targetSec: target, chime, switchSides }
+      : null,
+  );
+
   /** The clock runs from `from` seconds, now. Books the pocket bell for the target still ahead. */
   function run(from: number) {
     const now = Date.now();
@@ -95,7 +106,6 @@ export function StepTimedSets({
     setStartedAt(now);
     setPhase('running');
     if (from < target) bookTimerAlarm(now + (target - from) * 1000, title ?? 'Time', formatClock(target));
-    onClock?.({ startedAt: now, base: from });
   }
 
   function start() {
@@ -112,7 +122,7 @@ export function StepTimedSets({
     setBase(elapsed);
     setStartedAt(null);
     cancelTimerAlarm();
-    onClock?.(null);
+    unregisterClock(stepId);
     setDial(elapsed);
     setPhase('review');
   }
@@ -162,22 +172,19 @@ export function StepTimedSets({
     setPhase('idle');
   }
 
-  // Halfway, for a two-sided carry or hold: a turn-over chime and the banner, once per set.
+  // Halfway, for a two-sided carry or hold: the banner, once per set. The chime is the store's.
   useEffect(() => {
     if (!switchSides || !running || switched || elapsed < target / 2) return;
     setSwitched(true);
-    if (chime) playTones(CHIME_SWITCH);
-    navigator.vibrate?.(30);
-  }, [switchSides, running, switched, elapsed, target, chime]);
+  }, [switchSides, running, switched, elapsed, target]);
 
-  // The target: a chime and a buzz, and the clock keeps going. No log, no stop (design B).
+  // The target: the ring goes hashed and the clock keeps going. No log, no stop (design B). The
+  // chime and the buzz are the store's, so they happen on any screen.
   useEffect(() => {
     if (!running || elapsed < target || reached) return;
     setReached(true);
-    if (chime) playChime();
-    navigator.vibrate?.(60);
     cancelTimerAlarm();
-  }, [running, reached, elapsed, target, chime]);
+  }, [running, reached, elapsed, target]);
 
   useEffect(() => () => cancelTimerAlarm(), []);
 

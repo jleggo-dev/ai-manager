@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { beforeEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
 
 /**
  * Node 24+ ships its own `localStorage` global, and it SHADOWS jsdom's — resolving to `undefined`
@@ -44,6 +44,17 @@ beforeEach(() => {
   } catch {
     /* storage shadowed or disabled — nothing kept, nothing to clear */
   }
+});
+
+/**
+ * The running clock (features/walkthrough/runningClock.ts) is a module-level store that outlives
+ * every component on purpose — so a test that starts a clock and never stops it would hand it to
+ * the next test. Imported lazily, after the test, so a file's own `vi.mock` of the chime module
+ * has already taken effect by the time the store is loaded.
+ */
+afterEach(async () => {
+  const { unregisterClock } = await import('../features/walkthrough/runningClock.ts');
+  unregisterClock();
 });
 
 Object.defineProperty(window, 'matchMedia', {

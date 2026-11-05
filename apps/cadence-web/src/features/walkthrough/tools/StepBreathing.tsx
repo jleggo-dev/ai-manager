@@ -2,8 +2,11 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { type BreathPattern, breathFullness, cycleSeconds, patternCounts, phaseAt } from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, COMMIT } from './tone.ts';
-import { playChime } from './chime.ts';
+import { unlockAudio } from './chime.ts';
 import { useBreathClock } from './useBreathClock.ts';
+import { useRegisteredClock } from '../useRegisteredClock.ts';
+import { unregisterClock } from '../runningClock.ts';
+import type { TimerClock } from './StepTimer.tsx';
 import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { HandsFree } from './HandsFree.tsx';
@@ -30,19 +33,31 @@ const R_MAX = 96;
  * pre-roll is borrowed from `StepTimer` (the phone is on the floor by second two) and is never
  * logged. Stopping early logs the rounds actually completed: partial is the normal case, and the
  * copy never says "incomplete".
+ *
+ * The running pacer is registered at app level (runningClock.ts), which plays the end chime on
+ * any screen. Like a sit, it does not hold the screen unless this phone's "Screen during a sit"
+ * says so (owner, 2026-11-03; lib/sit-screen.ts, held from the app root by useClockKeepAwake).
  */
 export function StepBreathing({
   pattern,
   cycles,
   caution,
   title,
+  stepId = 'step',
+  stepTitle,
   log,
+  resumeClock,
   onLog,
   onDone,
 }: {
   pattern: BreathPattern;
   cycles: number;
   caution?: string;
+  /** The step's id and title for the app-level clock store and its pill — not drawn on the card. */
+  stepId?: string;
+  stepTitle?: string;
+  /** A run that was going when this card was last seen — the pacer opens running from that mark. */
+  resumeClock?: TimerClock | null;
   /** The coach's own name for this step, when there is one. Inside the walkthrough a header
    *  already shows it, so the card names the RHYTHM instead and never competes; standalone (the
    *  extras menu, the dev preview) there is no header, so the card falls back to the pattern's
@@ -52,16 +67,30 @@ export function StepBreathing({
   onLog: (l: BreathingLog) => void;
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<'idle' | 'preroll' | 'running'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'preroll' | 'running'>(resumeClock ? 'running' : 'idle');
   const [preroll, setPreroll] = useState(PREROLL);
   const finished = useRef(log ? log.roundsDone >= log.totalRounds : false);
   const handoff = useHandoff();
   const [voiceOn, setVoiceOn] = useState(false);
-  const elapsed = useBreathClock(phase === 'running');
+  const { elapsed, mark } = useBreathClock(phase === 'running', resumeClock);
 
   const per = cycleSeconds(pattern);
   const at = phaseAt(pattern, cycles, elapsed);
   const roundsDone = at.done ? cycles : at.cycle;
+
+  useRegisteredClock(
+    phase === 'running' && mark
+      ? {
+          stepId,
+          title: stepTitle ?? title ?? pattern.name,
+          kind: 'breath',
+          startedAt: mark.startedAt,
+          base: mark.base,
+          targetSec: per * cycles,
+          chime: true,
+        }
+      : null,
+  );
 
   useEffect(() => {
     if (phase !== 'preroll') return undefined;
@@ -77,15 +106,17 @@ export function StepBreathing({
     if (phase === 'running' && at.done && !finished.current) {
       finished.current = true;
       setPhase('idle');
-      playChime();
+      unregisterClock(stepId); // the end chime is the store's, at the last boundary
       onLog({ kind: 'breathing', roundsDone: cycles, totalRounds: cycles, pattern: pattern.id });
       handoff.schedule(onDone, 700);
     }
-  }, [phase, at.done, cycles, pattern.id, onLog, onDone, handoff]);
+  }, [phase, at.done, cycles, pattern.id, onLog, onDone, handoff, stepId]);
 
   function primary() {
+    unlockAudio(); // inside the tap, so the chime at the end — with no finger near the phone — may sound
     if (phase === 'running') {
       setPhase('idle');
+      unregisterClock(stepId);
       onLog({ kind: 'breathing', roundsDone, totalRounds: cycles, pattern: pattern.id });
     } else if (phase === 'preroll') {
       setPhase('running');

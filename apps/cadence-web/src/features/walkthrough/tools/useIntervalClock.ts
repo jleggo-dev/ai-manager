@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { TimerClock } from './StepTimer.tsx';
 
 /** 100 ms, like the breath pacer: the ring's current wedge fills continuously, and a 1 s tick
  *  makes that visibly steppy. Only runs while the interval is actually running. */
@@ -8,6 +9,9 @@ export interface IntervalClock {
   /** Seconds since the run began, excluding time spent paused. */
   elapsed: number;
   running: boolean;
+  /** The run in progress — the instant it began and the seconds banked before it — or null while
+   *  paused. What the app-level clock store and the remembered session are told. */
+  mark: TimerClock | null;
   start: () => void;
   pause: () => void;
   /** Back to zero, un-started. */
@@ -25,52 +29,45 @@ export interface IntervalClock {
  * Unlike the breath pacer this one **pauses**, because mid-workout interruptions are ordinary: a
  * pause banks the elapsed seconds and the next start re-marks the wall clock from there. Pause
  * never rewinds the phase.
+ *
+ * `resume` is a run that was already going when this card was last seen — on another tab, or
+ * before the app was relaunched — and the clock opens running from that mark, caught up.
  */
-export function useIntervalClock(initialElapsed = 0): IntervalClock {
-  const [elapsed, setElapsed] = useState(initialElapsed);
-  const [running, setRunning] = useState(false);
-  /** Seconds banked before the current run segment began. Seeded from `initialElapsed` so a step
-   *  someone paused and walked away from picks up where they left it, not at zero. */
-  const banked = useRef(initialElapsed);
-  const startedAt = useRef<number | null>(null);
+export function useIntervalClock(initialElapsed = 0, resume?: TimerClock | null): IntervalClock {
+  const [mark, setMark] = useState<TimerClock | null>(resume ?? null);
+  const [banked, setBanked] = useState(resume?.base ?? initialElapsed);
+  const [now, setNow] = useState(() => Date.now());
+  const running = mark !== null;
 
   useEffect(() => {
-    if (!running) return undefined;
-    const id = setInterval(() => {
-      const t0 = startedAt.current;
-      if (t0 !== null) setElapsed(banked.current + (Date.now() - t0) / 1000);
-    }, TICK_MS);
+    if (!mark) return undefined;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(id);
-  }, [running]);
+  }, [mark]);
+
+  const elapsed = mark ? mark.base + Math.max(0, now - mark.startedAt) / 1000 : banked;
 
   const start = useCallback(() => {
-    setRunning((was) => {
-      if (was) return true;
-      startedAt.current = Date.now();
-      return true;
-    });
-  }, []);
-
-  const stopAt = useCallback((seconds: number) => {
-    banked.current = seconds;
-    startedAt.current = null;
-    setElapsed(seconds);
-    setRunning(false);
-  }, []);
+    setMark((was) => was ?? { startedAt: Date.now(), base: banked });
+  }, [banked]);
 
   const pause = useCallback(() => {
-    const t0 = startedAt.current;
-    stopAt(t0 === null ? banked.current : banked.current + (Date.now() - t0) / 1000);
-  }, [stopAt]);
+    if (mark) setBanked(mark.base + Math.max(0, Date.now() - mark.startedAt) / 1000);
+    setMark(null);
+  }, [mark]);
 
-  const reset = useCallback(() => stopAt(0), [stopAt]);
+  const reset = useCallback(() => {
+    setMark(null);
+    setBanked(0);
+  }, []);
 
   // Seeking mid-run re-marks the wall clock so the jump doesn't get undone by the next tick.
   const seek = useCallback((seconds: number) => {
-    banked.current = Math.max(0, seconds);
-    startedAt.current = startedAt.current === null ? null : Date.now();
-    setElapsed(banked.current);
+    const at = Math.max(0, seconds);
+    setBanked(at);
+    setMark((was) => (was ? { startedAt: Date.now(), base: at } : null));
   }, []);
 
-  return { elapsed, running, start, pause, reset, seek };
+  return { elapsed, running, mark, start, pause, reset, seek };
 }

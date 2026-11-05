@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StepLog } from '../state.ts';
 import { TONE, RING_C, COMMIT } from './tone.ts';
-import { CHIME_SWITCH, playChime, playTones, unlockAudio } from './chime.ts';
+import { playChime, unlockAudio } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { useWallClock } from './useWallClock.ts';
 import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
+import { useRegisteredClock } from '../useRegisteredClock.ts';
+import { unregisterClock } from '../runningClock.ts';
 import { endTimerActivity, pauseTimerActivity, startTimerActivity } from './timerLiveActivity.ts';
 import { HandsFree } from './HandsFree.tsx';
 import { card, logBtn, greyBtn, secBtn, chimeOnStyle, banner, doneRow, minutesInput } from './timerStyles.ts';
@@ -31,7 +33,10 @@ export interface TimerClock {
  *
  * Time is kept by the WALL CLOCK (`useWallClock`), so leaving the app mid-ruck loses nothing; a
  * native alarm is booked for the target so the bell rings from a pocket, and the same instants go
- * to the lock screen as a Live Activity (`timerLiveActivity`) that counts on its own.
+ * to the lock screen as a Live Activity (`timerLiveActivity`) that counts on its own. The running
+ * clock is registered at app level (runningClock.ts), which plays the halfway and target chimes
+ * whether or not this card is on screen; the screen stays on while it runs (useClockKeepAwake,
+ * from the app root).
  *
  * Two shapes, decided by the step (step-cues.ts):
  *  • a HOLD — reaching the target chimes, logs the full duration and hands off to the next step
@@ -50,9 +55,9 @@ export function StepTimer({
   openEnded = false,
   switchSides = false,
   title,
+  stepId = 'step',
   log,
   resumeClock,
-  onClock,
   onLog,
   onDone,
 }: {
@@ -61,12 +66,13 @@ export function StepTimer({
   openEnded?: boolean;
   switchSides?: boolean;
   title?: string;
+  /** The step this clock belongs to, for the app-level clock store. */
+  stepId?: string;
   log?: TimerLog;
-  /** A clock that was running when the app was last seen (sessionInProgress.ts) — the timer opens
-   *  already running from that instant, caught up, instead of idle at its last pause. */
+  /** A clock that was running when the card was last seen — on another tab, or before the app was
+   *  relaunched (sessionInProgress.ts). The timer opens already running from that instant, caught
+   *  up, instead of idle at its last pause. */
   resumeClock?: TimerClock | null;
-  /** Told every time the clock starts or stops, so the session can remember a RUNNING timer. */
-  onClock?: (clock: TimerClock | null) => void;
   onLog: (l: TimerLog) => void;
   onDone: () => void;
 }) {
@@ -86,6 +92,23 @@ export function StepTimer({
   const remaining = Math.max(0, seconds - elapsed);
   const over = elapsed - seconds;
 
+  // The clock lives at app level while it runs: the store plays the chimes, on this screen or any
+  // other. Registered again whenever it changes (a resume, +1 min, the chime switched off).
+  useRegisteredClock(
+    startedAt != null
+      ? {
+          stepId,
+          title: title ?? 'Timer',
+          kind: 'timer',
+          startedAt,
+          base,
+          targetSec: seconds,
+          chime: chimeOn,
+          switchSides,
+        }
+      : null,
+  );
+
   /** Start the clock from `base` — now, from the wall clock. Books the pocket bell and the lock-screen clock. */
   function run() {
     const now = Date.now();
@@ -93,7 +116,6 @@ export function StepTimer({
     setPhase('running');
     if (base < seconds) bookTimerAlarm(now + (seconds - base) * 1000, title ?? 'Time', mmss(seconds));
     startTimerActivity(title ?? 'Timer', seconds, now, base);
-    onClock?.({ startedAt: now, base });
   }
 
   /**
@@ -104,7 +126,7 @@ export function StepTimer({
     setBase(at);
     setStartedAt(null);
     setPhase('idle');
-    onClock?.(null);
+    unregisterClock(stepId);
     cancelTimerAlarm();
     if (why === 'paused') pauseTimerActivity(at);
     else endTimerActivity();
@@ -121,19 +143,17 @@ export function StepTimer({
     return () => clearTimeout(id);
   });
 
-  // Halfway, for a two-sided hold: the ear gets a turn-over chime, the eye gets the banner.
+  // Halfway, for a two-sided hold: the eye gets the banner. The turn-over chime is the store's.
   useEffect(() => {
     if (!switchSides || phase !== 'running' || switched.current || elapsed < seconds / 2) return;
     switched.current = true;
-    if (chimeOn) playTones(CHIME_SWITCH);
-    navigator.vibrate?.(30);
-  }, [switchSides, phase, elapsed, seconds, chimeOn]);
+  }, [switchSides, phase, elapsed, seconds]);
 
+  // The target: the log and the hand-off. The chime and the buzz are the store's, so they happen
+  // even when this card is not on screen.
   useEffect(() => {
     if (phase !== 'running' || elapsed < seconds || finished.current) return;
     finished.current = true;
-    if (chimeOn) playChime();
-    navigator.vibrate?.(60);
     cancelTimerAlarm();
     onLog({ kind: 'timer', elapsedSec: seconds, targetSec: seconds, done: true });
     // An effort keeps the clock running; a hold stops here and moves on.

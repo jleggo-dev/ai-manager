@@ -15,6 +15,7 @@ vi.mock('../../lib/api.ts', () => ({ keepJournalEntry: vi.fn(), settleTempo: vi.
 
 const { Walkthrough } = await import('./Walkthrough.tsx');
 const { readSessionInProgress, writeSessionInProgress } = await import('./sessionInProgress.ts');
+const { getRunningClock } = await import('./runningClock.ts');
 
 const wt: WalkthroughData = {
   total_min: 25,
@@ -132,7 +133,27 @@ describe('Walkthrough remembers the session in progress', () => {
     expect(screen.getByText('0:20')).toBeInTheDocument();
   });
 
-  it('leaving a running timer step forgets the clock — stepping away stops a timer, as it always has', () => {
+  it('leaving a running timer step keeps the clock — it runs at app level, and is still remembered (R6)', () => {
+    const startedAt = Date.now();
+    mount({
+      resume: {
+        occurrenceId: 'o1',
+        title: 'Piano practice',
+        walkthrough: wt,
+        idx: 1,
+        visited: [0, 1],
+        logs: {},
+        tempos: {},
+        phase: 'step',
+        clock: { stepId: 's2', startedAt, base: 0 },
+      },
+    });
+    fireEvent.click(screen.getByLabelText('Previous step'));
+    expect(readSessionInProgress()).toMatchObject({ idx: 0, clock: { stepId: 's2', startedAt, base: 0 } });
+    expect(getRunningClock()).toMatchObject({ stepId: 's2', kind: 'timer', startedAt, base: 0 });
+  });
+
+  it('Close lets the clock go with the session', () => {
     mount({
       resume: {
         occurrenceId: 'o1',
@@ -146,7 +167,9 @@ describe('Walkthrough remembers the session in progress', () => {
         clock: { stepId: 's2', startedAt: Date.now(), base: 0 },
       },
     });
-    fireEvent.click(screen.getByLabelText('Previous step'));
-    expect(readSessionInProgress()).toMatchObject({ idx: 0, clock: null });
+    expect(getRunningClock()).not.toBeNull();
+    fireEvent.click(screen.getByLabelText('Close'));
+    expect(getRunningClock()).toBeNull();
+    expect(readSessionInProgress()).toBeNull();
   });
 });

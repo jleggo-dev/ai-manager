@@ -6,6 +6,7 @@ import { YouTubeLink } from './YouTubeLink.tsx';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { HandsFree } from './HandsFree.tsx';
 import { CircuitMoveClock } from './CircuitMoveClock.tsx';
+import { unregisterClock } from '../runningClock.ts';
 import { Cue } from '../wt-cue.tsx';
 import { ChangeButton, SwappedPill } from './change-parts.tsx';
 import { moveTarget } from '../change-text.ts';
@@ -65,6 +66,7 @@ export function StepCircuit({
   function logMove() {
     if (complete) return;
     setDial(null);
+    unregisterClock(step.id); // a logged move's clock is done with, running or not
     if (pos + 1 < n) {
       setPos(pos + 1);
     } else {
@@ -271,7 +273,13 @@ export function StepCircuit({
             ) : ex.seconds ? (
               // Keyed per move: each timed move gets a fresh clock, and the clock that ran out
               // unmounts (cancelling its hand-off) the moment the circuit moves on.
-              <CircuitMoveClock key={`${round}-${pos}`} seconds={ex.seconds} onElapsed={logMove} />
+              <CircuitMoveClock
+                key={`${round}-${pos}`}
+                seconds={ex.seconds}
+                stepId={step.id}
+                title={ex.name}
+                onElapsed={logMove}
+              />
             ) : (
               <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 800, color: TONE.sub }}>do the move</div>
             )}

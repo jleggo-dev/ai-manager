@@ -12,7 +12,7 @@ type WakeLockApi = { request(type: 'screen'): Promise<Sentinel> };
 
 let held: Sentinel | null = null;
 
-export const browserKeepAwake: KeepAwakeCapability = {
+const rawBrowserKeepAwake: KeepAwakeCapability = {
   set: async (on) => {
     const api = (navigator as unknown as { wakeLock?: WakeLockApi }).wakeLock;
     try {
@@ -38,12 +38,39 @@ export const browserKeepAwake: KeepAwakeCapability = {
  */
 const KeepAwakePlugin = registerPlugin<{ set(options: { on: boolean }): Promise<void> }>('CadenceKeepAwake');
 
-export const nativeKeepAwake: KeepAwakeCapability = {
+const rawNativeKeepAwake: KeepAwakeCapability = {
   set: async (on) => {
     try {
       await KeepAwakePlugin.set({ on });
     } catch {
-      await browserKeepAwake.set(on);
+      await rawBrowserKeepAwake.set(on);
     }
   },
 };
+
+/**
+ * Reference-counted over a single switch. Two things hold the screen: the running clock, from the
+ * app root (features/walkthrough/useClockKeepAwake.ts), and the metronome while it clicks. The
+ * switch underneath is one bit, so without a count the metronome stopping mid-timer would drop the
+ * timer's hold. `set(true)` counts a holder and takes the lock at one; `set(false)` lets a holder
+ * go and releases the lock at zero; a release with nobody holding is ignored, never counted below
+ * zero.
+ */
+export function countedKeepAwake(inner: KeepAwakeCapability): KeepAwakeCapability {
+  let holders = 0;
+  return {
+    set: async (on) => {
+      if (on) {
+        holders += 1;
+        if (holders === 1) await inner.set(true);
+      } else {
+        if (holders === 0) return;
+        holders -= 1;
+        if (holders === 0) await inner.set(false);
+      }
+    },
+  };
+}
+
+export const browserKeepAwake: KeepAwakeCapability = countedKeepAwake(rawBrowserKeepAwake);
+export const nativeKeepAwake: KeepAwakeCapability = countedKeepAwake(rawNativeKeepAwake);
