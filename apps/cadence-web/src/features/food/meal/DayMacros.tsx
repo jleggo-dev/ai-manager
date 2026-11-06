@@ -13,6 +13,9 @@
  * long beside three bars and a ring in a drawer's header). A scoped exception to BRAND.md's
  * no-abbreviation rule; the button's label still says the words in full for a screen reader.
  *
+ * A day not read yet (still on its way, or the read failed) draws dashes, never zeros: "0 SO FAR"
+ * over a day with breakfast in it reads as lost food (owner, 2026-11-05).
+ *
  * The card is also the quiet door out to the whole day when the host has one — the capture
  * answers "what did I just eat" and the next question lives in the Food screen.
  */
@@ -28,6 +31,9 @@ const BARS: Array<{ key: 'protein_g' | 'carbs_g' | 'fat_g'; label: string; name:
   { key: 'fat_g', label: 'F', name: 'fat', color: 'oklch(66% 0.12 268)' },
 ];
 
+/** What stands in for a number the day has not given yet. */
+export const UNKNOWN = '–';
+
 const pct = (v: number, t: number) => Math.max(0, Math.min(100, (v / t) * 100));
 
 export function DayMacros({
@@ -40,6 +46,8 @@ export function DayMacros({
   cart: Macros;
   onOpenDay?: () => void;
 }) {
+  // No day read yet is not a day with nothing in it: the numbers wait, they never say zero.
+  const known = day != null;
   const logged = loggedTotals(day);
   const target = day?.targets ?? null;
   const loggedKcal = logged.kcal ?? 0;
@@ -57,7 +65,9 @@ export function DayMacros({
         stroke={7}
         className="ms-day-ring"
       >
-        {left != null ? (
+        {!known ? (
+          <b aria-label="Your day is still loading">{UNKNOWN}</b>
+        ) : left != null ? (
           <>
             <b>{fmtKcal(Math.abs(left))}</b>
             <span>{left < 0 ? 'OVER' : 'LEFT'}</span>
@@ -92,8 +102,7 @@ export function DayMacros({
                 />
               </div>
               <span className="ms-day-bar-v">
-                {Math.round(done + add)}
-                {t != null ? ` / ${Math.round(t)}` : 'g'}
+                {!known ? UNKNOWN : `${Math.round(done + add)}${t != null ? ` / ${Math.round(t)}` : 'g'}`}
               </span>
             </div>
           );

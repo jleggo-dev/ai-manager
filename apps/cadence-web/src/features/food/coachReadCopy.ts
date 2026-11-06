@@ -11,6 +11,9 @@
  */
 export const READING = 'The coach is checking your foods and the food databases…';
 
+/** The button that ends a read in flight: the words stay, ready to change and send again. */
+export const STOP_READING = 'Stop';
+
 /**
  * When she could not be reached: the old automatic estimate priced it, and the notice says so.
  * The sentence alone, so a surface without tap-to-edit (the quick-log sheet) can show it as is.

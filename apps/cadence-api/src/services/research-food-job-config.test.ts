@@ -116,7 +116,7 @@ describe('research-food job config', () => {
 
   it('keeps the rule of 2026-11-03: the maker in brand, the plain name in name, never a restaurant or store that only serves or sells it', () => {
     expect(template).toContain(
-      "- name: the product's plain name as the maker's own label writes it, without the maker, a size or a place. Never a page title, a menu's wording, or a restaurant, bar or store in brackets.",
+      "- name: the product's plain name as the maker's own label writes it, without the maker, a size or a place. One product, never a list of varieties. Never a page title, a menu's wording, or a restaurant, bar or store in brackets.",
     );
     expect(template).toContain(
       '- brand: the maker — the company that makes the food. A restaurant or chain is the maker of the dishes it cooks itself and of nothing else it serves.',
@@ -154,4 +154,12 @@ describe('research-food job config', () => {
       expect(template).not.toMatch(word);
     },
   );
+
+  it('an item is its own base: no weight is no reason to doubt, and no hundred to divide by', () => {
+    // food-research.ts cross-checks per item; a prompt saying "÷ 100" for an item is what sent a
+    // restaurant's numbers back with an empty per-100 view and a lowered confidence (2026-11-04).
+    expect(template).toContain('macros_per_100 × serving_amount = macros_per_serving for "item"');
+    expect(template).toContain('A printed weight that is missing is not missing nutrition');
+    expect(template).toContain('One product, never a list of varieties');
+  });
 });

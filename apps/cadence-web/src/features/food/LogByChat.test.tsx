@@ -13,7 +13,7 @@ vi.mock('../../lib/api.ts', () => api);
 
 const { LogByChat, TRY_AGAIN } = await import('./LogByChat.tsx');
 const { readReadInProgress, rememberRead } = await import('./readInProgress.ts');
-const { ANOTHER_GO_CARD, NOT_REACHED_CARD, READING } = await import('./coachReadCopy.ts');
+const { ANOTHER_GO_CARD, NOT_REACHED_CARD, READING, STOP_READING } = await import('./coachReadCopy.ts');
 
 const base = {
   meal: 'snack' as const,
@@ -35,6 +35,48 @@ async function readOut(preview: unknown) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+describe('LogByChat — stopping a read', () => {
+  const hanging = () =>
+    api.previewMeal.mockImplementationOnce(
+      (_w: string, _m: string, _c: unknown, opts: { signal: AbortSignal }) =>
+        new Promise((_, reject) => {
+          opts.signal.addEventListener('abort', () => reject(opts.signal.reason));
+        }),
+    );
+
+  it('Stop ends the read: the words go back in the box, no failure line, nothing left on the thread', async () => {
+    hanging();
+    render(<LogByChat meal="snack" date="2026-11-05" onLogged={() => {}} onBack={() => {}} />);
+    const box = screen.getByLabelText('What did you have?');
+    fireEvent.change(box, { target: { value: 'a bananna' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
+    expect(screen.getByText(READING)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Read that' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: STOP_READING }));
+
+    await waitFor(() => expect(box).toBeEnabled());
+    expect(box).toHaveValue('a bananna');
+    expect(screen.queryByText(READING)).not.toBeInTheDocument();
+    expect(document.querySelector('.fc-said')).toBeNull();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Read that' })).toBeEnabled();
+    expect(readReadInProgress()).toBeNull();
+  });
+
+  it('stopping a correction keeps the card it was correcting', async () => {
+    await readOut(base);
+    hanging();
+    fireEvent.change(screen.getByLabelText('What did you have?'), { target: { value: 'it was two' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Read that' }));
+    fireEvent.click(screen.getByRole('button', { name: STOP_READING }));
+    await waitFor(() => expect(screen.getByLabelText('What did you have?')).toBeEnabled());
+    expect(screen.getByText('the card')).toBeInTheDocument();
+    expect(screen.getByText('a banana')).toBeInTheDocument();
+    expect(screen.queryByText('it was two', { selector: '.fc-said' })).not.toBeInTheDocument();
+  });
 });
 
 describe('LogByChat — the line above the card says who read it', () => {
@@ -157,6 +199,7 @@ describe('LogByChat — a read remembered for a relaunch', () => {
     expect(api.previewMeal).toHaveBeenCalledWith('a banana', 'snack', inFlight.correction, {
       requestId: inFlight.requestId,
       resume: true,
+      signal: expect.any(AbortSignal),
     });
     expect(screen.getByText('a banana')).toBeInTheDocument();
     expect(screen.getByText('it was a big one')).toBeInTheDocument();

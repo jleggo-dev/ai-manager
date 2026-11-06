@@ -146,6 +146,16 @@ describe('stripAmount — the amount comes off, the food stays', () => {
     ['0 guinness', '0 guinness', null],
     ['one 0.0 guinness', '0.0 guinness', null],
     ['0.5 cup oats', 'oats', '0.5 cup'],
+    // A pint is an amount, and how it was poured is not part of the food's name (2026-11-04).
+    ['Pint of guinness on draft', 'guinness', 'Pint'],
+    ['one pint of Rickards red', 'Rickards red', 'one pint'],
+    ['2 pints of lager on tap', 'lager', '2 pints'],
+    ['guinness from the tap', 'guinness', null],
+    // Near-misses: a word that starts the same, and "on" that is not how it was poured.
+    ['pinto beans', 'pinto beans', null],
+    ['2 pinto beans', 'pinto beans', '2'],
+    ['chicken on rice', 'chicken on rice', null],
+    ['draft guinness', 'draft guinness', null],
   ])('%j → q %j, measure %j', (part, q, measure) => {
     expect(stripAmount(part)).toEqual({ q, measure });
   });

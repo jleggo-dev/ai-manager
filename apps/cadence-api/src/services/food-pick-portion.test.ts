@@ -36,6 +36,95 @@ const egg: typeof banana = {
   default_serving: 0,
 };
 
+/** FatSecret's chicken breast as stored: the half is in the label and not in the unit. */
+const breast: typeof banana = {
+  base_unit: 'g',
+  macros_per_base: { kcal: 195, protein_g: 29.6, carbs_g: 0, fat_g: 7.7 },
+  servings: [
+    { label: '100 g', unit: 'g', amount_g: 100 },
+    {
+      label: '1/2 small (yield after cooking, bone removed)',
+      unit: 'small breast (yield after cooking, bone removed)',
+      amount_g: 84,
+    },
+    {
+      label: '1/2 medium (yield after cooking, bone removed)',
+      unit: 'medium breast (yield after cooking, bone removed)',
+      amount_g: 98,
+    },
+    { label: '1 cup cooked, diced', unit: 'cup, cooked, diced', amount_g: 135 },
+  ],
+  default_serving: 1,
+};
+/** A researched beer: the label IS the unit, count and all. */
+const beer: typeof banana = {
+  base_unit: 'ml',
+  macros_per_base: { kcal: 28.7, protein_g: 0.3, carbs_g: 1.4, fat_g: 0 },
+  servings: [
+    { label: '12 fl oz', unit: '12 fl oz', amount_g: 355 },
+    { label: '100 ml', unit: 'ml', amount_g: 100 },
+  ],
+  default_serving: 0,
+};
+
+describe('portionForPick — the word never miscounts the label', () => {
+  const half = { label: '1/2 medium (yield after cooking, bone removed)', grams: 98 };
+
+  it('two halves of a medium breast are 196 g, not "2 medium breast"', () => {
+    const p = portionForPick(breast, half, 2);
+    expect(p).toMatchObject({ qty: 196, unit: 'g', reads_back: true });
+    expect(p?.est.kcal).toBeCloseTo(382, 0);
+  });
+
+  it('one half is 98 g, not "1 medium breast"', () => {
+    expect(portionForPick(breast, half, 1)).toMatchObject({ qty: 98, unit: 'g', reads_back: true });
+  });
+
+  it('"12 fl oz" is 355 ml, not "1 fl"', () => {
+    expect(portionForPick(beer, { label: '12 fl oz', grams: 355 }, 1)).toMatchObject({
+      qty: 355,
+      unit: 'ml',
+      reads_back: true,
+    });
+  });
+
+  it('near-miss: a quarter of a measure stays a quarter, never rounded', () => {
+    expect(portionForPick(banana, { label: '1 cup, sliced', grams: 150 }, 0.25)).toMatchObject({
+      qty: 0.25,
+      unit: 'cup',
+      reads_back: true,
+    });
+  });
+
+  it('near-miss: a label that counts one keeps its own word', () => {
+    expect(portionForPick(breast, { label: '1 cup cooked, diced', grams: 135 }, 2)).toMatchObject({
+      qty: 2,
+      unit: 'cup, cooked, diced',
+      reads_back: true,
+    });
+  });
+});
+
+describe('portionForPick — a researched dish, its label kept as its unit', () => {
+  const dish = (label: string): typeof banana => ({
+    base_unit: 'item',
+    macros_per_base: { kcal: 750, protein_g: 36, carbs_g: 69, fat_g: 37 },
+    servings: [{ label, unit: label, amount_g: 1 }],
+    default_serving: 0,
+  });
+
+  it.each([
+    ['1 serving', 'serving'],
+    ['1 wrap', 'wrap'],
+    ['1 item', 'item'],
+    ['1 flatbread pizza', 'flatbread'],
+  ])('half of "%s" reads 0.5 %s and prices at half', (label, unit) => {
+    const p = portionForPick(dish(label), { label, grams: 1 }, 0.5);
+    expect(p).toMatchObject({ qty: 0.5, unit, reads_back: true });
+    expect(p?.est.kcal).toBe(375);
+  });
+});
+
 describe('portionForPick', () => {
   it('a named measure that reads back is written in its own word', () => {
     const p = portionForPick(banana, { label: '1 medium (118g)', grams: 118 }, 2);

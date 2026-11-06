@@ -90,7 +90,15 @@ const chicken = food({
   name: 'Chicken breast, cooked',
   macros_per_base: { kcal: 165, protein_g: 31 },
 });
-const FOODS = [banana, milk, latte, eggs, almonds, chicken];
+const guinnessCan = food({
+  food_id: 'f-guinness',
+  name: 'Draught (Can)',
+  brand: 'Guinness',
+  base_unit: 'item',
+  macros_per_base: { kcal: 155, protein_g: 0.4, carbs_g: 12.3, fat_g: 0 },
+  servings: [{ unit: 'serving', label: '1 can', amount_g: 1 }],
+});
+const FOODS = [banana, milk, latte, eggs, almonds, chicken, guinnessCan];
 
 function asCandidate(f: Food): SourceCandidate {
   const s = f.servings[0]!;
@@ -124,6 +132,7 @@ const BY_Q: Record<string, Food[]> = {
   eggs: [eggs],
   almonds: [almonds],
   chicken: [chicken],
+  guinness: [guinnessCan],
 };
 
 function fanOut(q: string): FanOutResult {
@@ -184,6 +193,45 @@ function deps(over: Partial<DescribedMealDeps> & { reply?: Reply; memory?: Recor
   };
   return { d, calls };
 }
+
+describe('the words on a row match what they had (2026-11-04)', () => {
+  it('a pint on draft priced from a per-can record says a pint of Guinness Draught, at the can sum', async () => {
+    const { d } = deps({
+      reply: [item({ said: 'Pint of guinness on draft', pick: 'c1', measure: '1 can', count: 1.1 })],
+    });
+    const p = await previewDescribedMeal(USER, 'Pint of guinness on draft', 'dinner', d);
+    expect(p.items[0]).toMatchObject({
+      name: 'Draught',
+      brand: 'Guinness',
+      qty: 1,
+      unit: 'pint',
+      food_id: 'f-guinness',
+    });
+    expect(p.items[0]?.est?.kcal).toBeCloseTo(170.5, 0);
+  });
+
+  it('near-miss: a can they said stays a can', async () => {
+    const { d } = deps({ reply: [item({ said: '2 cans of guinness', pick: 'c1', measure: '1 can', count: 2 })] });
+    const p = await previewDescribedMeal(USER, '2 cans of guinness', 'dinner', d);
+    expect(p.items[0]).toMatchObject({ name: 'Draught (Can)', qty: 2 });
+    expect(p.items[0]?.est?.kcal).toBeCloseTo(310, 0);
+  });
+
+  it('an estimate keeps all four numbers she gave: a pasted table is not cut to kcal and protein', async () => {
+    const { d } = deps({
+      reply: [
+        item({
+          said: 'half a Tim Hortons pepperoni pizza',
+          name: 'pepperoni flatbread pizza',
+          estimate: { kcal: 375, protein_g: 18, carbs_g: 34.5, fat_g: 18.5 },
+        }),
+      ],
+    });
+    const p = await previewDescribedMeal(USER, 'half a Tim Hortons pepperoni pizza', 'dinner', d);
+    expect(p.items[0]?.est).toMatchObject({ kcal: 375, protein_g: 18, carbs_g: 34.5, fat_g: 18.5 });
+    expect(p.macros).toMatchObject({ carbs_g: 34.5, fat_g: 18.5 });
+  });
+});
 
 describe('a row with an open question (the question is the answer it waits for)', () => {
   it('carries no number and no link, keeps their words as its name, and is not in the total', async () => {

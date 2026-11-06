@@ -68,7 +68,7 @@ export interface FoodCheckItem {
    * "chips in her voice"; owner 2026-11-01).
    */
   choices: string[] | null;
-  estimate: { kcal: number | null; protein_g: number | null } | null;
+  estimate: { kcal: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null } | null;
 }
 
 export interface FoodCheckReply {
@@ -164,7 +164,7 @@ function readItem(v: unknown): FoodCheckItem | null {
   const e = o.estimate && typeof o.estimate === 'object' ? (o.estimate as Record<string, unknown>) : null;
   const estimate =
     e && (num(e.kcal) !== null || num(e.protein_g) !== null)
-      ? { kcal: num(e.kcal), protein_g: num(e.protein_g) }
+      ? { kcal: num(e.kcal), protein_g: num(e.protein_g), carbs_g: num(e.carbs_g), fat_g: num(e.fat_g) }
       : null;
   const question = str(o.question, 300);
   return {

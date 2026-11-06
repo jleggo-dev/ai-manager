@@ -15,6 +15,7 @@
  */
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { previewMeal, type MealKind, type MealPreview } from '../../../lib/api.ts';
+import { READ_TIMEOUT_MS } from '../../../lib/api/nutrition.ts';
 import { newRequestId } from '../../../lib/api/kept-answers.ts';
 import { clearReadInProgress, rememberRead, type ReadInProgress } from '../readInProgress.ts';
 import { CoachFace } from '../../../components/CoachFace.tsx';
@@ -23,7 +24,7 @@ import { MicButton } from '../../../components/MicButton.tsx';
 import { PhotoButton } from '../../../components/PhotoButton.tsx';
 import { downscalePhoto } from '../../plan/occurrence/format.ts';
 import { fmtKcal } from '../bracket/copy.ts';
-import { ANOTHER_GO, NOT_REACHED, NOT_REACHED_ANSWER, READING } from '../coachReadCopy.ts';
+import { ANOTHER_GO, NOT_REACHED, NOT_REACHED_ANSWER, READING, STOP_READING } from '../coachReadCopy.ts';
 import { CoachTrace } from '../CoachTrace.tsx';
 import { failureWords, type FailureWords } from '../failureWords.ts';
 import { COULD_NOT_SETTLE } from '../MealAskedRow.tsx';
@@ -32,6 +33,7 @@ import { NotQuiteField } from '../NotQuiteField.tsx';
 import { previousRows } from '../previousRows.ts';
 import { REASKS_MAX, reReadAnswer, type AnswerResult } from '../reReadAnswer.ts';
 import { settleButton } from '../settleWords.ts';
+import { useBoundedCall } from '../useBoundedCall.ts';
 import { amountWords } from './amountWords.ts';
 import { macroLine } from './macroLine.ts';
 import { CommitButton } from '../../../components/CommitButton.tsx';
@@ -93,6 +95,7 @@ export function DescribeSheet({
   const [fail, setFail] = useState<FailureWords | null>(null);
   /** The last add that did not land. */
   const [addFailed, setAddFailed] = useState(false);
+  const { begin, end, current, cancel } = useBoundedCall();
 
   // The rows as last rendered, for an answer that lands after they have moved (answer()).
   const rowsRef = useRef<Row[]>([]);
@@ -132,16 +135,29 @@ export function DescribeSheet({
     if (date) {
       rememberRead({ door: 'describe', kind: 'words', meal, date, words, requestId, listening, correction: previous });
     }
+    // The API's own bound is the one that speaks; this one only stands behind it.
+    const { signal, token } = begin(READ_TIMEOUT_MS + 5_000);
     try {
-      const p = await previewMeal(words, meal, previous, { requestId, resume: !!pickUp });
+      const p = await previewMeal(words, meal, previous, { requestId, resume: !!pickUp, signal });
+      if (!current(token)) return;
       if (!p.items.length) setFail({ line: NOTHING_READ, retry: false });
       setRead({ for: words, rows: p.items, coach: p.coach, corrected: !!previous });
     } catch (e) {
-      setFail(failureWords(e, 'read'));
+      if (current(token)) setFail(failureWords(e, 'read'));
     } finally {
-      setLooking(false);
-      clearReadInProgress();
+      end(token);
+      if (current(token)) {
+        setLooking(false);
+        clearReadInProgress();
+      }
     }
+  }
+
+  /** Stop the read in flight (owner, 2026-11-05): a slip is fixed by retyping, not by waiting. */
+  function stop() {
+    cancel();
+    setLooking(false);
+    clearReadInProgress();
   }
 
   // Relaunched mid-read: pick it up, once, on open. Closing the sheet forgets any read in flight.
@@ -299,13 +315,21 @@ export function DescribeSheet({
           </div>
         )}
         <div className="ms-ds-foot">
-          <MicButton value={text} onChange={setText} disabled={looking} autoStart={listening} />
-          {onPhoto && (
-            <PhotoButton
-              className="is-left"
-              disabled={looking}
-              onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, words))}
-            />
+          {/* Hidden, not unmounted, during a read: a remounted mic would start listening again. */}
+          <div className="ms-ds-tools" hidden={looking}>
+            <MicButton value={text} onChange={setText} disabled={looking} autoStart={listening} />
+            {onPhoto && (
+              <PhotoButton
+                className="is-left"
+                disabled={looking}
+                onPick={([file]) => void downscalePhoto(file!).then((photo) => onPhoto(photo, words))}
+              />
+            )}
+          </div>
+          {looking && (
+            <button type="button" className="food-stop" onClick={stop}>
+              {STOP_READING}
+            </button>
           )}
           <CommitButton
             className="ms-ds-go"
