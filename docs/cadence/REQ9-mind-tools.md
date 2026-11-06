@@ -146,6 +146,26 @@ coach-chosen — the extras menu carries params on each item (`breathing(box, 6)
 made when the menu was composed. The nine-pattern picker exists **only** in the dev harness
 (`features/dev/BreathingPreview.tsx`, `?preview=breathing`), which nothing links to.
 
+**Pace is the person's, and it is the one dial on the card** (owner ruling 2026-11-06; amends the
+ruling above for pace only). The coach still prescribes pattern and rounds, but how long a count
+lasts belongs to the person's lungs, not to the choice of practice: *"I actually breathe slower
+than the device is going."* So the card carries a slider until you begin, with no words and no
+numbers on it, just a rabbit and a turtle, and it moves smoothly rather than in steps. Touching it
+loops the pattern at that pace so it can be judged by breathing along; that loop is never logged.
+
+- **The count stretches, it doesn't change.** Box still reads 4-3-2-1 at any pace, each number just
+  lasts longer, so "in for four" stays true in every pattern's copy. Rounds stay as prescribed, so
+  a slower pace makes the session longer.
+- **Range:** 0.75–2 seconds a count, one number per person across all patterns
+  (`packages/cadence-shared/src/breath-pace.ts`). The safety caps below bound what is experienced,
+  so the top of the slider narrows where they bite: Wind-down's 7-count hold stops at about 1.43.
+- **Sharpen has no slider.** It is the one gated pattern, quick on purpose and capped hardest.
+- **Kept on the account** (`cadence.users.breath_pace`, migration 0066, `GET`/`PUT
+  /me/breath-pace`), so it follows the person to a new phone. The phone keeps a copy
+  (`cadence.breathPace`, user-scoped) so the card paints at the right pace before any network
+  answer. A run fixes its pace at Begin. The coach does not read it yet. The word in code and copy
+  is "pace"; BRAND.md vetoes `tempo changes`.
+
 **Preset bank (v1):**
 
 | Preset | Phases | For |

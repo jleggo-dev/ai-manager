@@ -1,0 +1,34 @@
+/* The breath pace slider. One even track rather than the native filled one: pace is a preference,
+   not progress, so neither side of the thumb is "done". The thumb is large and the input tall
+   because this is tuned by feel, with one thumb, possibly in low light. */
+.pace-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+.pace-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: oklch(92% 0.02 74);
+}
+.pace-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -11px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: oklch(71% 0.16 68);
+  box-shadow: 0 1px 4px oklch(0% 0 0 / 0.25);
+}
+.pace-slider:focus-visible {
+  outline: 2px solid oklch(63% 0.15 68);
+  outline-offset: 2px;
+  border-radius: 8px;
+}

@@ -69,6 +69,7 @@ const AMBER_RULES = [
   '.ck-pip.is-on', // the step you are on
   '.fa-chip.is-on', // the choice currently selected
   '.mc-seg-on', // the choice currently selected
+  '.pace-slider::-webkit-slider-thumb', // the pace currently selected, a value and not a button
   '.ss-disc-meal', // a picture in the sheet's head, not a button
 ];
 

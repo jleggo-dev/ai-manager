@@ -55,6 +55,7 @@ export * from './set-loads.ts';
 export * from './session-limits.ts';
 export * from './session-check.ts';
 export * from './breathing.ts';
+export * from './breath-pace.ts';
 export * from './interval.ts';
 export * from './workout-activities.ts';
 export * from './workout-plan.ts';

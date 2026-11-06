@@ -292,11 +292,11 @@ export function phaseAt(pattern: BreathPattern, cycles: number, elapsed: number)
   return { cycle, phaseIndex: 0, phase: first, remaining: first.seconds, progress: 0, done: false };
 }
 
-type PhaseKind = 'in' | 'out' | 'hold';
+export type BreathPhaseKind = 'in' | 'out' | 'hold';
 
 /** Classify a phase from its label. Labels are authored in the bank, so this stays a simple prefix
  *  test — "In", "In again" → in; "Out" → out; "Hold" and anything else → hold. */
-function phaseKind(label: string): PhaseKind {
+export function breathPhaseKind(label: string): BreathPhaseKind {
   const l = label.toLowerCase();
   if (l.startsWith('in')) return 'in';
   if (l.startsWith('out')) return 'out';
@@ -316,15 +316,15 @@ export function breathFullness(pattern: BreathPattern, phaseIndex: number, progr
   const phases = pattern.phases;
   const current = phases[phaseIndex];
   if (!current) return 0;
-  const kind = phaseKind(current.label);
+  const kind = breathPhaseKind(current.label);
 
   if (kind === 'hold') return heldAt(phases, phaseIndex);
 
   // Widen to the contiguous run of same-direction phases containing this one.
   let start = phaseIndex;
-  while (start > 0 && phaseKind(phases[start - 1]?.label ?? '') === kind) start -= 1;
+  while (start > 0 && breathPhaseKind(phases[start - 1]?.label ?? '') === kind) start -= 1;
   let end = phaseIndex;
-  while (end < phases.length - 1 && phaseKind(phases[end + 1]?.label ?? '') === kind) end += 1;
+  while (end < phases.length - 1 && breathPhaseKind(phases[end + 1]?.label ?? '') === kind) end += 1;
 
   let total = 0;
   let before = 0;
@@ -341,12 +341,12 @@ export function breathFullness(pattern: BreathPattern, phaseIndex: number, progr
 /** A hold keeps the fullness the last in/out reached — searching backwards, then wrapping. */
 function heldAt(phases: readonly BreathPhase[], phaseIndex: number): number {
   for (let i = phaseIndex - 1; i >= 0; i -= 1) {
-    const k = phaseKind(phases[i]?.label ?? '');
+    const k = breathPhaseKind(phases[i]?.label ?? '');
     if (k === 'in') return 1;
     if (k === 'out') return 0;
   }
   for (let i = phases.length - 1; i > phaseIndex; i -= 1) {
-    const k = phaseKind(phases[i]?.label ?? '');
+    const k = breathPhaseKind(phases[i]?.label ?? '');
     if (k === 'in') return 1;
     if (k === 'out') return 0;
   }
