@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Walkthrough, WalkthroughStep } from '@cadence/shared';
-import { applyTrim, canTrim, proposeTrim } from './trim.ts';
+import { applyTrim, canTrim, isHerProposal, pickSteps, proposeTrim, trimLine } from './trim.ts';
 
 const step = (id: string, minutes: number, core: boolean, skippable: boolean): WalkthroughStep => ({
   id,
@@ -83,5 +83,61 @@ describe('trim proposals', () => {
       step('d', 1, true, false),
     ]);
     expect(proposeTrim(shuffled, 0)!.kept.map((s) => s.id)).toEqual(['b', 'd']);
+  });
+});
+
+describe('the person picks what stays', () => {
+  const steps = [step('warmup', 3, false, true), step('run', 22, true, false), step('cooldown', 5, false, false)];
+  const full = wt(steps);
+  const ids = (...x: string[]) => new Set(x);
+
+  it.each([
+    { name: 'puts back a step she cut', keep: ['warmup', 'run', 'cooldown'], cut: [], minutes: 30 },
+    { name: 'drops a step she kept', keep: ['run'], cut: ['warmup', 'cooldown'], minutes: 22 },
+    { name: 'may drop the core she would never propose', keep: ['warmup'], cut: ['run', 'cooldown'], minutes: 3 },
+    { name: 'dropping everything keeps nothing', keep: [], cut: ['warmup', 'run', 'cooldown'], minutes: 0 },
+  ])('$name', ({ keep, cut, minutes }) => {
+    const pick = pickSteps(steps, ids(...keep));
+    expect(pick.kept.map((s) => s.id)).toEqual(keep);
+    expect(pick.cut.map((s) => s.id)).toEqual(cut);
+    expect(pick.minutes).toBe(minutes);
+  });
+
+  it('keeps the session order however the choice was made', () => {
+    expect(pickSteps(steps, ids('cooldown', 'warmup')).kept.map((s) => s.id)).toEqual(['warmup', 'cooldown']);
+  });
+
+  it('a pick runs like a proposal, with honest total minutes', () => {
+    const trimmed = applyTrim(full, pickSteps(steps, ids('warmup', 'run')));
+    expect(trimmed.steps.map((s) => s.id)).toEqual(['warmup', 'run']);
+    expect(trimmed.total_min).toBe(25);
+  });
+
+  it.each([
+    { name: 'the same steps', keep: ['run', 'cooldown'], hers: true },
+    { name: 'one more than she kept', keep: ['warmup', 'run', 'cooldown'], hers: false },
+    { name: 'one fewer than she kept', keep: ['run'], hers: false },
+    { name: 'the same count, different steps', keep: ['warmup', 'run'], hers: false },
+  ])('$name is her proposal: $hers', ({ keep, hers }) => {
+    expect(isHerProposal(proposeTrim(full, 0)!, ids(...keep))).toBe(hers);
+  });
+
+  it.each([
+    {
+      name: 'her proposal',
+      keep: ['run', 'cooldown'],
+      hers: true,
+      line: "Here's what I'd drop — that brings it to 27 min. Sound right?",
+    },
+    { name: 'a changed pick', keep: ['run'], hers: false, line: 'Your call — that brings it to 22 min.' },
+    {
+      name: 'all of it put back',
+      keep: ['warmup', 'run', 'cooldown'],
+      hers: false,
+      line: 'That keeps all of it — 30 min.',
+    },
+    { name: 'nothing left', keep: [], hers: false, line: 'That drops everything — keep at least one step.' },
+  ])('she says the true thing for $name', ({ keep, hers, line }) => {
+    expect(trimLine(pickSteps(steps, ids(...keep)), hers)).toBe(line);
   });
 });

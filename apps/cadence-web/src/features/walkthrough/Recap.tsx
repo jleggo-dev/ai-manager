@@ -10,7 +10,9 @@ import { overlay, closeBtn, greenBtn, recapCard, sectionLabel, skipAction } from
  * The Recap (design D) — a real step in the shell, not a sheet. It shows what you did (each row's
  * value IS the log line) and what you passed over, each skip offering do-now / did-offline / leave-it.
  * "Nothing logged yet" is the honesty eyebrow: Finish is the single write in the whole flow. Nothing
- * logged at all → a quiet "Close without logging" instead of a false finish.
+ * logged at all → a quiet "Close without logging" instead of a false finish, and it does exactly
+ * that: it leaves the session and writes nothing. It used to run on into the celebration, whose
+ * Done logged "1 step left" and marked the task done (2026-11-05).
  */
 export function Recap({
   steps,
@@ -22,6 +24,7 @@ export function Recap({
   onBack,
   onJump,
   onResolve,
+  onClose,
   onFinish,
 }: {
   steps: WalkthroughStep[];
@@ -36,6 +39,8 @@ export function Recap({
   onBack: () => void;
   onJump: (i: number) => void;
   onResolve: (id: string, log: StepLog) => void;
+  /** Nothing logged: leave the session, writing nothing. */
+  onClose: () => void;
   onFinish: () => void;
 }) {
   const did = steps.map((s, i) => ({ s, i })).filter(({ s }) => logs[s.id]);
@@ -217,7 +222,7 @@ export function Recap({
             {title} — {doneMin} min · {recapSummary(steps, logs)}
           </div>
         </div>
-        <button style={greenBtn} onClick={onFinish}>
+        <button style={greenBtn} onClick={doneCount === 0 ? onClose : onFinish}>
           {doneCount === 0 ? 'Close without logging' : 'Finish · +10 XP'}
         </button>
       </div>
