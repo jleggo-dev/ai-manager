@@ -54,10 +54,10 @@ export const webCapabilities: Capabilities = {
     sync: async () => 0,
     cancelAll: async () => {},
     pendingCount: async () => 0,
-    // A web timer keeps time from the wall clock and chimes when the tab is next awake; there is
-    // no way to ring a closed tab, so the alarm reports it could not be set rather than pretending.
-    scheduleAlarm: async () => false,
-    cancelAlarm: async () => {},
+    // A web clock keeps time from the wall clock and chimes when the tab is next awake; there is
+    // no way to ring a closed tab, so the alarms report they could not be set rather than pretending.
+    scheduleAlarms: async () => false,
+    cancelAlarms: async () => {},
   },
   // A browser has no lock screen to draw on. Unavailable means the timer never tries.
   liveActivity: {

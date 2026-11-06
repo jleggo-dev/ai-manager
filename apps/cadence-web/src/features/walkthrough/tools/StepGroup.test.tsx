@@ -18,7 +18,6 @@ import {
 import { StepGroup } from './StepGroup.tsx';
 
 vi.mock('./chime.ts', () => ({ playChime: vi.fn(), playTones: vi.fn(), unlockAudio: vi.fn(), CHIME_SWITCH: [] }));
-vi.mock('./timerAlarm.ts', () => ({ bookTimerAlarm: vi.fn(), cancelTimerAlarm: vi.fn() }));
 
 const steps: WalkthroughStep[] = [
   {

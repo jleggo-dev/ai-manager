@@ -5,7 +5,6 @@ import { playChime, unlockAudio } from './chime.ts';
 import { useHandoff } from './useHandoff.ts';
 import { useHandsFree, type HandsFreeCommand } from './useHandsFree.ts';
 import { useWallClock } from './useWallClock.ts';
-import { bookTimerAlarm, cancelTimerAlarm } from './timerAlarm.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
 import { endTimerActivity, pauseTimerActivity, startTimerActivity } from './timerLiveActivity.ts';
@@ -31,12 +30,11 @@ export interface TimerClock {
  * never logged. At zero the ring resets to full and turns tone, the real clock runs. One tone button
  * toggles Start ⇄ (Skip the count) ⇄ Pause; +1 min / Reset / Chime sit below.
  *
- * Time is kept by the WALL CLOCK (`useWallClock`), so leaving the app mid-ruck loses nothing; a
- * native alarm is booked for the target so the bell rings from a pocket, and the same instants go
- * to the lock screen as a Live Activity (`timerLiveActivity`) that counts on its own. The running
- * clock is registered at app level (runningClock.ts), which plays the halfway and target chimes
- * whether or not this card is on screen; the screen stays on while it runs (useClockKeepAwake,
- * from the app root).
+ * Time is kept by the WALL CLOCK (`useWallClock`), so leaving the app mid-ruck loses nothing, and
+ * the same instants go to the lock screen as a Live Activity (`timerLiveActivity`) that counts on
+ * its own. The running clock is registered at app level (runningClock.ts), which plays the halfway
+ * and target chimes whether or not this card is on screen and books them as notifications for a
+ * pocketed phone; the screen stays on while it runs (useClockKeepAwake, from the app root).
  *
  * Two shapes, decided by the step (step-cues.ts):
  *  • a HOLD — reaching the target chimes, logs the full duration and hands off to the next step
@@ -109,12 +107,11 @@ export function StepTimer({
       : null,
   );
 
-  /** Start the clock from `base` — now, from the wall clock. Books the pocket bell and the lock-screen clock. */
+  /** Start the clock from `base` — now, from the wall clock. Puts the clock on the lock screen. */
   function run() {
     const now = Date.now();
     setStartedAt(now);
     setPhase('running');
-    if (base < seconds) bookTimerAlarm(now + (seconds - base) * 1000, title ?? 'Time', mmss(seconds));
     startTimerActivity(title ?? 'Timer', seconds, now, base);
   }
 
@@ -127,7 +124,6 @@ export function StepTimer({
     setStartedAt(null);
     setPhase('idle');
     unregisterClock(stepId);
-    cancelTimerAlarm();
     if (why === 'paused') pauseTimerActivity(at);
     else endTimerActivity();
   }
@@ -154,7 +150,6 @@ export function StepTimer({
   useEffect(() => {
     if (phase !== 'running' || elapsed < seconds || finished.current) return;
     finished.current = true;
-    cancelTimerAlarm();
     onLog({ kind: 'timer', elapsedSec: seconds, targetSec: seconds, done: true });
     // An effort keeps the clock running; a hold stops here and moves on.
     if (openEnded) return;
@@ -162,16 +157,9 @@ export function StepTimer({
     handoff.schedule(onDone, 600);
   });
 
-  // Whatever is booked on the notification centre, and whatever is on the lock screen, dies
-  // with the tool. (The session forgets a running clock when it leaves the step — Walkthrough's
-  // `go` — not here, so a StrictMode remount can't wipe a clock that is still running.)
-  useEffect(
-    () => () => {
-      cancelTimerAlarm();
-      endTimerActivity();
-    },
-    [],
-  );
+  // Whatever is on the lock screen dies with the tool. (The clock itself does not — it lives at
+  // app level, and its pocket bells with it.)
+  useEffect(() => () => endTimerActivity(), []);
 
   function reset() {
     handoff.cancel(); // Reset inside the 600 ms hand-off means stay here, don't move on.

@@ -4,7 +4,7 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import { NUDGE_CATEGORIES, type LocalNotificationSpec } from '@cadence/shared';
 import { Geolocation } from '@capacitor/geolocation';
-import { TIMER_ALARM_ID, type Capabilities, type TimerAlarm, type Workout } from './index.ts';
+import { BOUNDARY_ALARM_IDS, isBoundaryAlarmId, type Capabilities, type TimerAlarm, type Workout } from './index.ts';
 import { grantedFromPermissionResponse } from './health-permissions.ts';
 import { readDailySteps } from './health-steps.ts';
 import { recordedDistanceKm } from './workout-distance.ts';
@@ -68,6 +68,11 @@ function toNotification(r: LocalNotificationSpec): LocalNotificationSchema {
     ...base,
     schedule: { at: new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, r.hour, r.minute), allowWhileIdle: true },
   };
+}
+
+/** The whole reserved range, booked or not — cancelling an id that is not pending is harmless. */
+async function cancelBoundaryAlarms(): Promise<void> {
+  await LocalNotifications.cancel({ notifications: BOUNDARY_ALARM_IDS.map((id) => ({ id })) }).catch(() => undefined);
 }
 
 /** Shape of one workout row from capacitor-health's queryWorkouts. */
@@ -300,9 +305,9 @@ export const nativeCapabilities: Capabilities = {
       // Cancel-then-schedule, rather than trusting stable ids to overwrite. Ids are a hash and
       // can collide, and a plan that DROPS an activity leaves an orphan that no id-based upsert
       // would ever touch — the user would keep being reminded of something no longer in the plan.
-      // ...but never the timer alarm: a plan sync on app resume mid-ruck must not silence the
-      // ruck's own bell.
-      const pending = (await LocalNotifications.getPending()).notifications.filter((p) => p.id !== TIMER_ALARM_ID);
+      // ...but never the running clock's boundary alarms: a plan sync on app resume mid-ruck must
+      // not silence the ruck's own bell.
+      const pending = (await LocalNotifications.getPending()).notifications.filter((p) => !isBoundaryAlarmId(p.id));
       if (pending.length > 0) {
         await LocalNotifications.cancel({ notifications: pending.map((p) => ({ id: p.id })) });
       }
@@ -324,37 +329,36 @@ export const nativeCapabilities: Capabilities = {
       return specs.length;
     },
     cancelAll: async () => {
-      const pending = (await LocalNotifications.getPending()).notifications.filter((p) => p.id !== TIMER_ALARM_ID);
+      const pending = (await LocalNotifications.getPending()).notifications.filter((p) => !isBoundaryAlarmId(p.id));
       if (pending.length === 0) return;
       await LocalNotifications.cancel({ notifications: pending.map((p) => ({ id: p.id })) });
     },
     pendingCount: async () => (await LocalNotifications.getPending()).notifications.length,
-    // The plain plugin path only — the coach's portrait is for her messages, and a timer ringing
+    // The plain plugin path only — the coach's portrait is for her messages, and a clock ringing
     // is the app, not her. Asks for permission if it has never been asked: the start of a
-    // fifty-minute ruck is the one moment the question answers itself.
-    scheduleAlarm: async (alarm: TimerAlarm) => {
+    // fifty-minute ruck is the one moment the question answers itself. The system default sound;
+    // bundled work/recover sounds are a separate, later call.
+    scheduleAlarms: async (alarms: TimerAlarm[]) => {
       let perm = await LocalNotifications.checkPermissions();
       if (perm.display === 'prompt' || perm.display === 'prompt-with-rationale') {
         perm = await LocalNotifications.requestPermissions();
       }
       if (perm.display !== 'granted') return false;
-      await LocalNotifications.cancel({ notifications: [{ id: TIMER_ALARM_ID }] }).catch(() => undefined);
+      await cancelBoundaryAlarms();
+      const booked = alarms.slice(0, BOUNDARY_ALARM_IDS.length);
+      if (booked.length === 0) return true;
       await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: TIMER_ALARM_ID,
-            title: alarm.title,
-            body: alarm.body,
-            schedule: { at: new Date(alarm.at), allowWhileIdle: true },
-            extra: { kind: 'timer_alarm' },
-          },
-        ],
+        notifications: booked.map((alarm, i) => ({
+          id: BOUNDARY_ALARM_IDS[i]!,
+          title: alarm.title,
+          body: alarm.body,
+          schedule: { at: new Date(alarm.at), allowWhileIdle: true },
+          extra: { kind: 'timer_alarm' },
+        })),
       });
       return true;
     },
-    cancelAlarm: async () => {
-      await LocalNotifications.cancel({ notifications: [{ id: TIMER_ALARM_ID }] }).catch(() => undefined);
-    },
+    cancelAlarms: cancelBoundaryAlarms,
   },
   /**
    * The coach's face on a notification, plus the long-press actions.

@@ -24,11 +24,6 @@ vi.mock('./chime.ts', async (orig) => {
     unlockAudio: () => undefined,
   };
 });
-const alarm = vi.hoisted(() => ({ booked: [] as number[], cancelled: 0 }));
-vi.mock('./timerAlarm.ts', () => ({
-  bookTimerAlarm: (at: number) => alarm.booked.push(at),
-  cancelTimerAlarm: () => alarm.cancelled++,
-}));
 
 function tick(totalMs: number, stepMs = 250) {
   for (let t = 0; t < totalMs; t += stepMs) {
@@ -49,8 +44,6 @@ describe('StepTimedSets — a carry in four sets of 45 seconds', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-03T10:00:00Z'));
     chimes.tones.length = 0;
-    alarm.booked.length = 0;
-    alarm.cancelled = 0;
   });
   afterEach(() => {
     cleanup();
@@ -74,7 +67,7 @@ describe('StepTimedSets — a carry in four sets of 45 seconds', () => {
   it('counts down, chimes at the target, then keeps counting UP with the ring hashed — and logs nothing', () => {
     const { onLog, onDone } = mount();
     press('Start');
-    expect(alarm.booked).toHaveLength(1); // the pocket bell for the target
+    expect(getRunningClock()).not.toBeNull(); // registered at app level: the chimes and the pocket bells are its
     tick(10_000);
     expect(screen.getByText('0:35')).toBeInTheDocument();
     expect(screen.getByText('of 0:45')).toBeInTheDocument();
