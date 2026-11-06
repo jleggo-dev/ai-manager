@@ -290,7 +290,7 @@ item, severity: 'error' | 'question', fact }`, the fact one plain sentence for t
       timed_sets carry `loads` — what was lifted, one entry per set, beside the unchanged `sets`
       — and a circuit log carries them by move index; `load` stays what the plan said. The log
       line reads `3×12 @ 15 lb (plan said bodyweight)` and `2×12 @ 40 lb · swapped from glute
-    bridge` (`set-loads.ts` in shared holds the grammar). `parse-session-log` is told how to
+  bridge` (`set-loads.ts` in shared holds the grammar). `parse-session-log` is told how to
       read both shapes and `OccurrenceLogItem` gained `swapped_from`. The log is jsonb: no
       migration.
 - [x] **5b. A history read.** `GET /plan/exercise-history?exercise=&activity=&limit=`
@@ -398,7 +398,8 @@ body "… is up — keep going or stop the clock." (#477's locked-screen check h
     `sessionInProgress` round-trips the registered clock.
   - What this does NOT cover: iOS suspends the webview when the app is backgrounded or the phone
     is locked, app-level or not. That is 7a's job while the app is in front, and 7c's otherwise.
-- [ ] **7c. The pocket tier: notifications for the next boundaries.** For a phone locked by hand
+- [x] **7c. The pocket tier: notifications for the next boundaries.** (PR: the pocket tier — the
+      next boundaries ring as notifications, 2026-11-04.) For a phone locked by hand
       or in a pocket, the OS fires the chime. Replace the single reserved alarm id with a reserved
       **range** (`sync` / `cancelAll` taught to step around it), and book the next **K** boundaries
       of the running clock (K small — start at 8 — inside the iOS 64-slot budget shared with plan

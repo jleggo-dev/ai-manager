@@ -20,10 +20,12 @@ export type { ClockKind, RunningClockSpec } from './clockBoundaries.ts';
  *
  * One clock at a time, because one is all a person runs. Registering replaces whatever was there.
  *
- * What this cannot do: ring while iOS has suspended the webview (the app in the background, the
- * phone locked). Keeping the screen on while a watched clock runs covers the gym floor
- * (useKeepAwakeWhile); the pocket tier books notifications for the next boundaries from this same
- * list (Phase 7c).
+ * What the timeouts cannot do: ring while iOS has suspended the webview (the app in the
+ * background, the phone locked). Keeping the screen on while a watched clock runs covers the gym
+ * floor (useKeepAwakeWhile); for the pocket, a subscriber wired at the app root books the next
+ * boundaries as fixed-moment notifications on every registration and cancels them on every
+ * release (tools/timerAlarm.ts, `wirePocketBells`). A subscriber rather than a call from here, so
+ * this store stays free of the capability layer.
  */
 
 let current: RunningClockSpec | null = null;

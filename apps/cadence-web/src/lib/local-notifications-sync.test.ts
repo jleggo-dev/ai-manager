@@ -28,6 +28,7 @@ vi.mock('./capability/index.ts', () => ({
 vi.mock('./coach-identity.ts', () => ({ donateCoachIdentity: () => donate() }));
 
 const { syncPlanLocalNotifications } = await import('./local-notifications-sync.ts');
+const { MAX_LOCAL_NOTIFICATION_ID } = await import('@cadence/shared');
 
 const PLAN = {
   today: '2026-08-10',
@@ -73,6 +74,15 @@ describe('syncPlanLocalNotifications', () => {
     const r = await syncPlanLocalNotifications();
     expect(r.scheduled).toBeGreaterThan(0);
     expect(new Set(scheduledKinds())).toEqual(new Set(['almost_time', 'before_quiet_hours', 'morning_adjust']));
+  });
+
+  it("never hands the OS a reminder id inside the boundary alarms' reserved range (walkthrough v3 7c)", async () => {
+    // The range is the ids above MAX_LOCAL_NOTIFICATION_ID (lib/capability/index.ts); the
+    // native `sync` steps around it, so a reminder landing there would be one it could never clear.
+    await syncPlanLocalNotifications();
+    const ids = ((sync.mock.calls.at(-1)?.[0] ?? []) as Array<{ id: number }>).map((s) => s.id);
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(id).toBeLessThanOrEqual(MAX_LOCAL_NOTIFICATION_ID);
   });
 
   it('drops everything above the tier when the dial is turned down', async () => {

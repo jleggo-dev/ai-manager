@@ -109,19 +109,40 @@ function Inner() {
             />
           )}
           {view === 'trim' && trim && (
-            <StartTrim proposal={trim} onConfirm={() => {}} onTrimMore={() => {}} onBack={() => setView('ask')} />
+            <StartTrim
+              steps={RUN}
+              proposal={trim}
+              onConfirm={() => {}}
+              onTrimMore={() => {}}
+              onBack={() => setView('ask')}
+            />
           )}
           {view === 'clean' && (
-            <WalkthroughDone steps={RUN} logs={CLEAN} title="Easy run" onFinish={() => {}} onTalk={() => {}} />
+            <WalkthroughDone
+              steps={RUN}
+              logs={CLEAN}
+              title="Easy run"
+              onBack={() => {}}
+              onFinish={() => {}}
+              onTalk={() => {}}
+            />
           )}
           {view === 'skipped' && (
-            <WalkthroughDone steps={RUN} logs={SKIPPED} title="Easy run" onFinish={() => {}} onTalk={() => {}} />
+            <WalkthroughDone
+              steps={RUN}
+              logs={SKIPPED}
+              title="Easy run"
+              onBack={() => {}}
+              onFinish={() => {}}
+              onTalk={() => {}}
+            />
           )}
           {view === 'mind' && (
             <WalkthroughDone
               steps={BREATH}
               logs={{ 'Six slow breaths': { kind: 'breathing', roundsDone: 4, totalRounds: 6, pattern: 'box' } }}
               title="Wind-down"
+              onBack={() => {}}
               onFinish={() => {}}
               onTalk={() => {}}
             />
