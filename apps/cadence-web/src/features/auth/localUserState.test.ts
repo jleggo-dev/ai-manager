@@ -1,4 +1,5 @@
 import { syncLocalStateToUser, USER_SCOPED_KEYS } from './localUserState.ts';
+import { BREATH_PACE_KEY } from '../walkthrough/tools/useBreathPace.ts';
 
 const seed = () => USER_SCOPED_KEYS.forEach((k) => window.localStorage.setItem(k, 'from-the-last-person'));
 const survivors = () => USER_SCOPED_KEYS.filter((k) => window.localStorage.getItem(k) !== null);
@@ -63,5 +64,23 @@ describe('syncLocalStateToUser', () => {
 
     expect(window.localStorage.getItem('cadence.deviceAccounts')).not.toBeNull();
     expect(window.localStorage.getItem('cadence.devAccount')).toBe('account-1');
+  });
+});
+
+/** The hook names its own key, so the sweep list and the hook could drift apart without this. */
+describe('the breath pace copy', () => {
+  it('is on the sweep list under the name the card actually writes', () => {
+    expect(USER_SCOPED_KEYS).toContain(BREATH_PACE_KEY);
+  });
+
+  it('does not follow the phone to the next account, and survives the same account coming back', () => {
+    syncLocalStateToUser('user-a');
+    window.localStorage.setItem(BREATH_PACE_KEY, '1.8');
+
+    syncLocalStateToUser('user-a');
+    expect(window.localStorage.getItem(BREATH_PACE_KEY)).toBe('1.8');
+
+    syncLocalStateToUser('user-b');
+    expect(window.localStorage.getItem(BREATH_PACE_KEY)).toBeNull();
   });
 });

@@ -7,7 +7,15 @@ const STEP = 0.01;
 
 /** Both animals look outward, toward the end of the track they stand for. */
 const RabbitIcon = () => (
-  <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden style={{ flexShrink: 0 }}>
+  <svg
+    viewBox="0 0 24 24"
+    width="26"
+    height="26"
+    fill="currentColor"
+    aria-hidden
+    data-testid="pace-quick"
+    style={{ flexShrink: 0 }}
+  >
     <ellipse cx="9.4" cy="6.2" rx="1.5" ry="4.6" transform="rotate(14 9.4 6.2)" />
     <ellipse cx="12.3" cy="7" rx="1.5" ry="4.4" transform="rotate(32 12.3 7)" />
     <circle cx="7.4" cy="12.6" r="3.6" />
@@ -19,7 +27,15 @@ const RabbitIcon = () => (
 );
 
 const TurtleIcon = () => (
-  <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden style={{ flexShrink: 0 }}>
+  <svg
+    viewBox="0 0 24 24"
+    width="26"
+    height="26"
+    fill="currentColor"
+    aria-hidden
+    data-testid="pace-slow"
+    style={{ flexShrink: 0 }}
+  >
     <path d="M2.5 16a8 8 0 0 1 16 0z" />
     <path d="M16.5 16v-2.2l2-1.6h2.1a2.4 2.4 0 0 1 0 4.8h-2.4z" />
     <rect x="5" y="15" width="3.6" height="4.2" rx="1.6" />
