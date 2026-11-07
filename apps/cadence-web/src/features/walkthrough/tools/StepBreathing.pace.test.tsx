@@ -176,12 +176,26 @@ describe('StepBreathing pace', () => {
     expect(screen.queryByText(sides.summary)).toBeNull();
   });
 
-  it('leaves the card when you begin, and tuning does not leak into the pre-roll', () => {
+  it('leaves the card when you begin, and the pre-roll shows instead of the tuning loop', () => {
     card('box', 2);
     setSlider(1.5);
     fireEvent.click(screen.getByText('Begin'));
     expect(slider()).toBeNull();
     expect(screen.getByText('Get settled')).toBeTruthy();
+  });
+
+  it('stopping returns the card to rest: tuning does not start itself up again', () => {
+    card('box', 3);
+    setSlider(1.5);
+    fireEvent.click(screen.getByText('Begin'));
+    tick(PREROLL_MS);
+    fireEvent.click(screen.getByText('Stop here'));
+    tick(1_000);
+
+    expect(slider()).not.toBeNull(); // back, ready to be moved again
+    expect(screen.getByText('Box')).toBeTruthy(); // the resting name, not a phase
+    expect(screen.queryByText('In')).toBeNull();
+    expect(screen.queryByText('Hold')).toBeNull();
   });
 
   it('the footnote minutes follow the pace', () => {
@@ -234,6 +248,18 @@ describe('StepBreathing pace on the account', () => {
     card('box', 2);
     await settle();
     expect(slider()?.value).toBe('1.4');
+  });
+
+  it('a pace set with no connection is still here next time on this phone', async () => {
+    api.save.mockResolvedValue(false);
+    const first = card('box', 2);
+    setSlider(1.62);
+    expect(window.localStorage.getItem(BREATH_PACE_KEY)).toBe('1.62');
+    first.unmount();
+
+    card('box', 2);
+    await settle();
+    expect(slider()?.value).toBe('1.62');
   });
 
   it('a whole drag is one save, of where it settled', () => {

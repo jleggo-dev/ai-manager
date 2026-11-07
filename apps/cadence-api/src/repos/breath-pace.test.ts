@@ -40,6 +40,24 @@ describe('the breath_pace column', () => {
   });
 });
 
+/**
+ * Read from the source on purpose, not run. The DB suite below shares a database with real people,
+ * CI included, so the failure this guards against can only be tested by never letting it execute:
+ * an update that lost its `where` would rewrite everyone's pace the moment a test called it.
+ */
+describe('the queries in breath-pace.ts', () => {
+  const source = readFileSync(path.join(repoRoot, 'apps/cadence-api/src/repos/breath-pace.ts'), 'utf8');
+  const queries = [...source.matchAll(/sql(?:<[^`]*>)?`([^`]*)`/g)].map((m) => m[1] ?? '');
+
+  it('finds the read and the write', () => {
+    expect(queries).toHaveLength(2);
+  });
+
+  it('every one is scoped to a single person', () => {
+    for (const query of queries) expect(query).toMatch(/where\s+id\s*=\s*\$\{userId\}/);
+  });
+});
+
 d('breath pace repo (DB)', () => {
   let sql: (typeof import('../db/sql.ts'))['sql'];
   let ensureUser: (typeof import('./users.ts'))['ensureUser'];
@@ -82,5 +100,6 @@ d('breath pace repo (DB)', () => {
   it('someone with no row reads null, and a save for them creates nothing', async () => {
     await setBreathPace(NOBODY, 1.5);
     expect(await getBreathPace(NOBODY)).toBeNull();
+    expect(await getBreathPace(USER)).toBeNull(); // and it landed on nobody else
   });
 });
