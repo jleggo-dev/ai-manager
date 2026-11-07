@@ -39,6 +39,7 @@ import workoutHistoryRoutes from './routes/workout-history.ts';
 import progressLayoutRoutes from './routes/progress-layout.ts';
 import deviceRoutes from './routes/devices.ts';
 import notificationPrefsRoutes from './routes/notification-prefs.ts';
+import breathPaceRoutes from './routes/breath-pace.ts';
 import coachMomentRoutes from './routes/coach-moments.ts';
 import recapsRoutes from './routes/recaps.ts';
 import answersRoutes from './routes/answers.ts';
@@ -89,6 +90,7 @@ export function createApp() {
   app.use('/me', progressLayoutRoutes);
   app.use('/me', deviceRoutes);
   app.use('/me', notificationPrefsRoutes);
+  app.use('/me', breathPaceRoutes);
   app.use('/me', coachMomentRoutes);
   app.use('/me', recapsRoutes);
   // The answer to a long request the client could not stay for (services/kept-answers.ts).

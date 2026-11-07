@@ -63,6 +63,10 @@ export const USER_SCOPED_KEYS = [
   // The meal read someone is in the middle of (features/food/readInProgress.ts) — their words and
   // the id the answer is kept under. Owner-stamped too; this sweep stops it lingering on disk.
   'cadence.readInProgress',
+  // A copy of how long this person's breath count lasts (features/walkthrough/tools/useBreathPace.ts).
+  // The account holds the real one; this copy was tuned to one person's lungs, so the next account
+  // on the phone starts from its own.
+  'cadence.breathPace',
 ] as const;
 
 function read(key: string): string | null {

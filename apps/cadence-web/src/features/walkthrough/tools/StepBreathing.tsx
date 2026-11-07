@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { type BreathPattern, breathFullness, cycleSeconds, patternCounts, phaseAt } from '@cadence/shared';
+import {
+  type BreathPattern,
+  breathFullness,
+  canSetBreathPace,
+  cycleSeconds,
+  patternCounts,
+  phaseAt,
+} from '@cadence/shared';
 import type { StepLog } from '../state.ts';
 import { TONE, COMMIT } from './tone.ts';
 import { unlockAudio } from './chime.ts';
+import { PaceSlider } from './PaceSlider.tsx';
 import { useBreathClock } from './useBreathClock.ts';
+import { useBreathPace } from './useBreathPace.ts';
+import { useTuningCount } from './useTuningCount.ts';
 import { useRegisteredClock } from '../useRegisteredClock.ts';
 import { unregisterClock } from '../runningClock.ts';
 import type { TimerClock } from './StepTimer.tsx';
@@ -37,6 +47,13 @@ const R_MAX = 96;
  * The running pacer is registered at app level (runningClock.ts), which plays the end chime on
  * any screen. Like a sit, it does not hold the screen unless this phone's "Screen during a sit"
  * says so (owner, 2026-11-03; lib/sit-screen.ts, held from the app root by useClockKeepAwake).
+ *
+ * The coach prescribes the pattern and rounds; the person sets how long a count lasts. The pace
+ * slider lives on the card only until you begin. Touching it starts a loop of the pattern at that
+ * pace, so you can breathe along and judge it by feel before committing: a pace can't be read off
+ * a number. That loop is never logged and never counts a round. The clock stays in plain seconds
+ * and a run divides by pace to find its count, so the app-level store, its pill and a resumed run
+ * all keep measuring real time.
  */
 export function StepBreathing({
   pattern,
@@ -73,9 +90,18 @@ export function StepBreathing({
   const handoff = useHandoff();
   const [voiceOn, setVoiceOn] = useState(false);
   const { elapsed, mark } = useBreathClock(phase === 'running', resumeClock);
+  const { pace: chosenPace, floor, ceiling, setPace } = useBreathPace(pattern, cycles);
+  // Fixed at Begin: the account's answer can land mid-run, and a run must not change speed under
+  // someone who is following it.
+  const [runPace, setRunPace] = useState(chosenPace);
+  const pace = phase === 'idle' ? chosenPace : runPace;
+  const [tuning, setTuning] = useState(false);
+  const isTuning = tuning && phase === 'idle';
+  const tuned = useTuningCount(isTuning, pace);
 
   const per = cycleSeconds(pattern);
-  const at = phaseAt(pattern, cycles, elapsed);
+  // Tuning loops inside the first round, so it can never finish the step or fill a dot.
+  const at = phaseAt(pattern, cycles, isTuning ? (per > 0 ? tuned % per : 0) : elapsed / pace);
   const roundsDone = at.done ? cycles : at.cycle;
 
   useRegisteredClock(
@@ -86,7 +112,7 @@ export function StepBreathing({
           kind: 'breath',
           startedAt: mark.startedAt,
           base: mark.base,
-          targetSec: per * cycles,
+          targetSec: per * cycles * pace, // real seconds, so the end chime lands when the run ends
           chime: true,
         }
       : null,
@@ -114,6 +140,7 @@ export function StepBreathing({
 
   function primary() {
     unlockAudio(); // inside the tap, so the chime at the end — with no finger near the phone — may sound
+    setTuning(false);
     if (phase === 'running') {
       setPhase('idle');
       unregisterClock(stepId);
@@ -123,6 +150,7 @@ export function StepBreathing({
     } else {
       handoff.cancel(); // "Go again" inside the 700 ms hand-off means stay here, don't move on.
       finished.current = false;
+      setRunPace(chosenPace);
       setPreroll(PREROLL);
       setPhase('preroll');
     }
@@ -142,11 +170,13 @@ export function StepBreathing({
 
   const isPre = phase === 'preroll';
   const isRun = phase === 'running';
+  /** Breathing on screen: the real run, or the tuning loop, which looks identical on purpose. */
+  const isLive = isRun || isTuning;
   // The form fills through an in-breath, empties through an out-breath, and holds its size on a
   // hold — so the shape alone tells you what to do, before you read anything. Fullness comes from
   // the shared maths, which treats consecutive inhales as one continuous run (the double breath
   // tops up rather than restarting).
-  const radius = isRun
+  const radius = isLive
     ? R_MIN + (R_MAX - R_MIN) * breathFullness(pattern, at.phaseIndex, at.progress)
     : R_MIN + (R_MAX - R_MIN) * 0.35;
 
@@ -162,7 +192,7 @@ export function StepBreathing({
             fill={isPre ? 'oklch(96% 0.006 250)' : 'oklch(93% 0.05 68)'}
             stroke={isPre ? 'oklch(88% 0.008 250)' : TONE.fillA}
             strokeWidth={2}
-            style={{ transition: isRun ? 'r 240ms linear, fill 600ms linear' : 'r 400ms ease-out' }}
+            style={{ transition: isLive ? 'r 240ms linear, fill 600ms linear' : 'r 400ms ease-out' }}
           />
         </svg>
         <div style={centre}>
@@ -175,8 +205,8 @@ export function StepBreathing({
             <>
               {/* Before you start, the card names the RHYTHM you're about to follow ("4 · 7 · 8"),
                   not the practice — the header (or the title prop) already named that. */}
-              <div style={phaseLabel}>{isRun ? at.phase.label : (title ?? pattern.name)}</div>
-              {isRun ? (
+              <div style={phaseLabel}>{isLive ? at.phase.label : (title ?? pattern.name)}</div>
+              {isLive ? (
                 <div style={bigNum}>{Math.ceil(at.remaining)}</div>
               ) : (
                 /* Counts only — the dot row below already IS the round count, and the pair
@@ -190,13 +220,25 @@ export function StepBreathing({
 
       {/* The per-phase cue — which nostril, the sigh's second inhale. Reserved height so the
           layout never jumps when a pattern has cues on some phases and not others. */}
-      <div style={cueLine}>{isRun && at.phase.cue ? at.phase.cue : isRun ? ' ' : pattern.summary}</div>
+      <div style={cueLine}>{isLive && at.phase.cue ? at.phase.cue : isLive ? ' ' : pattern.summary}</div>
 
       <div style={dots} aria-label={`round ${Math.min(roundsDone + 1, cycles)} of ${cycles}`}>
         {Array.from({ length: cycles }, (_, i) => (
           <span key={i} style={{ ...dot, ...(i < roundsDone ? dotDone : i === roundsDone && isRun ? dotNow : null) }} />
         ))}
       </div>
+
+      {phase === 'idle' && canSetBreathPace(pattern) ? (
+        <PaceSlider
+          min={floor}
+          max={ceiling}
+          value={pace}
+          onChange={(next) => {
+            setPace(next);
+            setTuning(true);
+          }}
+        />
+      ) : null}
 
       {/* "Stop here" writes the rounds done, so it wears the commit green; Begin / Go again stay amber. */}
       <button style={isPre ? greyBtn : isRun ? { ...primaryBtn, ...COMMIT } : primaryBtn} onClick={primary}>
@@ -211,8 +253,8 @@ export function StepBreathing({
       {!isRun && <WhatsThis text={pattern.how} />}
 
       <div style={footnote}>
-        {patternCounts(pattern)} · {cycles} rounds · about {Math.max(1, Math.round((per * cycles) / 60))} min. Stopping
-        early keeps the rounds you did.
+        {patternCounts(pattern)} · {cycles} rounds · about {Math.max(1, Math.round((per * cycles * pace) / 60))} min.
+        Stopping early keeps the rounds you did.
       </div>
     </div>
   );

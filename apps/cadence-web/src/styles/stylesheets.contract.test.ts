@@ -38,6 +38,7 @@ const SHEETS = [
   'src/styles/repertoire-list.css',
   'src/styles/settings-room.css',
   'src/styles/settings-activities.css',
+  'src/styles/pace-slider.css',
 ];
 
 describe('stylesheets', () => {
